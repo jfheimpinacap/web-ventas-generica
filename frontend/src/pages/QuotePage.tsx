@@ -1,9 +1,10 @@
-import { FormEvent, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
-import { createQuoteRequest } from '../services/catalogApi'
-import type { QuoteRequestPayload } from '../types/catalog'
+import { createQuoteRequest, getProducts } from '../services/catalogApi'
+import type { ProductListItem, QuoteRequestPayload } from '../types/catalog'
+import { formatPrice } from '../utils/formatters'
 
 interface QuoteFormState {
   customer_name: string
@@ -28,10 +29,29 @@ export function QuotePage() {
     return Number.isFinite(id) ? id : undefined
   }, [searchParams])
 
+  const [selectedProduct, setSelectedProduct] = useState<ProductListItem | null>(null)
   const [form, setForm] = useState(initialForm)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!productFromQuery) {
+      setSelectedProduct(null)
+      return
+    }
+
+    const run = async () => {
+      try {
+        const products = await getProducts()
+        setSelectedProduct(products.find((product) => product.id === productFromQuery) ?? null)
+      } catch {
+        setSelectedProduct(null)
+      }
+    }
+
+    void run()
+  }, [productFromQuery])
 
   const validate = () => {
     if (!form.customer_name.trim()) return 'El nombre es obligatorio.'
@@ -60,7 +80,7 @@ export function QuotePage() {
     try {
       setLoading(true)
       await createQuoteRequest(payload)
-      setSuccess('Solicitud enviada correctamente. Te contactaremos pronto.')
+      setSuccess('¡Cotización enviada! Nuestro equipo comercial te contactará pronto por WhatsApp o teléfono.')
       setForm(initialForm)
     } catch {
       setError('No se pudo enviar la cotización. Intenta nuevamente.')
@@ -74,7 +94,20 @@ export function QuotePage() {
       <section className="simple-page">
         <h1>Cotizar</h1>
         <p>Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>
-        {productFromQuery ? <p>Producto preseleccionado: #{productFromQuery}</p> : null}
+
+        {productFromQuery ? (
+          <div className="quote-product-banner">
+            <p>
+              <strong>Producto seleccionado:</strong>{' '}
+              {selectedProduct ? `${selectedProduct.name} · ${formatPrice(selectedProduct)}` : `#${productFromQuery}`}
+            </p>
+            {selectedProduct ? (
+              <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
+                Ver detalle del producto
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
 
         <form className="quote-form" onSubmit={onSubmit}>
           <label>
@@ -100,11 +133,12 @@ export function QuotePage() {
             />
           </label>
           <label>
-            Mensaje
+            Mensaje libre
             <textarea
               rows={5}
               value={form.message}
               onChange={(event) => setForm((prev) => ({ ...prev, message: event.target.value }))}
+              placeholder="Cuéntanos qué necesitas, plazos de entrega, ubicación o datos técnicos adicionales."
             />
           </label>
 

@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { FeaturedProducts } from '../components/catalog/FeaturedProducts'
 import { HeroSection } from '../components/catalog/HeroSection'
 import { Layout } from '../components/layout/Layout'
 
 export function HomePage() {
-  const [searchTerm, setSearchTerm] = useState('')
+  const navigate = useNavigate()
 
   return (
-    <Layout onSearch={setSearchTerm}>
+    <Layout onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')}>
       <HeroSection />
-      <FeaturedProducts searchTerm={searchTerm} />
+      <FeaturedProducts />
     </Layout>
   )
 }

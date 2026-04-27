@@ -133,13 +133,18 @@ El comando crea/actualiza categorías, marcas, proveedores, productos demo, spec
 - **Frontend:** `http://localhost:5174`
 - **Backend:** `http://127.0.0.1:8001`
 
-## Frontend público conectado a API (Fase 4)
+## Frontend público conectado a API (Fase 5)
 
 - Home (`/`) consume promociones (`/api/promotions/`), categorías (`/api/categories/`) y productos destacados (`/api/products/?is_featured=true`).
-- Buscador lateral usa `GET /api/products/?search=<texto>`.
-- Detalle de producto (`/producto/:slug`) consume `GET /api/products/<slug>/`.
-- Formulario de cotización (`/cotizar`) consume `POST /api/quote-requests/`.
-- Si backend falla, Home mantiene fallback visual (hero y categorías estáticas, productos de respaldo).
+- Catálogo (`/catalogo`) consume `GET /api/products/` con filtros públicos por `search`, `category`, `brand`, `product_type`, `condition`, `stock_status` y `ordering`.
+- Sidebar y CTA "Ver catálogo" redirigen al catálogo filtrado (`/catalogo?...`).
+- Detalle de producto (`/producto/:slug`) consume `GET /api/products/<slug>/` y sugiere productos relacionados de la misma categoría.
+- Formulario de cotización (`/cotizar`) consume `POST /api/quote-requests/` y puede preseleccionar producto vía query param (`?product=<id>`).
+- Si backend falla, Home mantiene fallback visual (hero/categorías estáticas y productos de respaldo), y catálogo muestra estado de error claro.
+
+### Flujo público recomendado
+
+`Home → Catálogo → Detalle de producto → Cotizar`
 
 ## Próximas fases (preparado, no implementado aún)
 

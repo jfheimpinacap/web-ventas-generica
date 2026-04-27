@@ -1,4 +1,4 @@
-import type { Category, ProductCondition, ProductListItem, StockStatus } from '../types/catalog'
+import type { Category, ProductCondition, ProductListItem, ProductType, StockStatus } from '../types/catalog'
 
 export function formatPrice(product: ProductListItem) {
   if (!product.price_visible || !product.price) return 'Consultar'
@@ -25,13 +25,24 @@ export function formatCondition(condition: ProductCondition) {
 
 const stockMap: Record<StockStatus, string> = {
   available: 'Disponible',
-  on_request: 'Bajo consulta',
+  on_request: 'A pedido',
   sold: 'Vendido',
   reserved: 'Reservado',
 }
 
 export function formatStockStatus(stock: StockStatus) {
   return stockMap[stock] ?? stock
+}
+
+const productTypeMap: Record<ProductType, string> = {
+  machinery: 'Maquinaria',
+  spare_part: 'Repuesto',
+  service: 'Servicio',
+  other: 'Otro',
+}
+
+export function formatProductType(type: ProductType) {
+  return productTypeMap[type] ?? type
 }
 
 export function buildSidebarMenuFromCategories(categories: Category[]) {
@@ -45,15 +56,16 @@ export function buildSidebarMenuFromCategories(categories: Category[]) {
     grouped.get(key)?.push(category)
   })
 
-  const buildNode = (category: Category): { label: string; children?: { label: string }[] } => {
-    const children = (grouped.get(category.id) ?? []).map((child) => ({ label: child.name }))
-    if (children.length === 0) {
-      return { label: category.name }
-    }
+  const buildNode = (category: Category): { label: string; to: string; children?: { label: string; to: string }[] } => {
+    const children = (grouped.get(category.id) ?? []).map((child) => ({
+      label: child.name,
+      to: `/catalogo?category=${child.id}`,
+    }))
 
     return {
       label: category.name,
-      children,
+      to: `/catalogo?category=${category.id}`,
+      ...(children.length > 0 ? { children } : {}),
     }
   }
 

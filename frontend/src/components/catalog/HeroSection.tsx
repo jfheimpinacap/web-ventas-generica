@@ -28,7 +28,7 @@ export function HeroSection() {
       <p>{content.subtitle}</p>
       {error ? <p className="ui-note">No se pudo cargar promoción. Mostrando contenido base.</p> : null}
       <div className="hero-section__actions">
-        <Link to="/" className="btn btn--accent">
+        <Link to="/catalogo" className="btn btn--accent">
           Ver catálogo
         </Link>
         <Link to="/cotizar" className="btn btn--ghost">
