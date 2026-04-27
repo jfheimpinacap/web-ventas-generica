@@ -99,6 +99,16 @@ Muestra guía para levantar backend y frontend en terminales separadas.
 - Ruta `/` con página **Home** básica.
 - Preparado para consumir backend por `VITE_API_BASE_URL`.
 
+## Interfaz pública inicial (frontend)
+
+Se implementó una Home comercial tipo catálogo con:
+- Topbar fija con acciones (Login, Cotizar, WhatsApp y teléfono).
+- Sidebar responsive con buscador y menú multinivel de categorías.
+- Hero section orientada a venta de maquinaria y repuestos.
+- Sección de productos destacados con mock data (6 productos ejemplo).
+- Footer comercial con contacto y enlaces rápidos.
+- Rutas base preparadas: `/`, `/producto/:slug`, `/login`, `/cotizar`.
+
 ## Próximas fases (preparado, no implementado aún)
 
 - Catálogo de productos
