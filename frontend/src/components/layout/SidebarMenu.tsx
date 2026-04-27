@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 
 import type { SidebarMenuItem } from '../../types/catalog'
@@ -11,13 +12,17 @@ function SidebarMenuNode({ item, level = 0 }: { item: SidebarMenuItem; level?: n
   const [isOpen, setIsOpen] = useState(level === 0)
 
   if (!hasChildren) {
-    return <li className="sidebar-menu__leaf">{item.label}</li>
+    return (
+      <li className="sidebar-menu__leaf">
+        {item.to ? <Link to={item.to}>{item.label}</Link> : item.label}
+      </li>
+    )
   }
 
   return (
     <li>
       <button className="sidebar-menu__toggle" onClick={() => setIsOpen((prev) => !prev)} type="button">
-        <span>{item.label}</span>
+        <span>{item.to ? <Link to={item.to} onClick={(event) => event.stopPropagation()}>{item.label}</Link> : item.label}</span>
         <span>{isOpen ? '−' : '+'}</span>
       </button>
       {isOpen && (

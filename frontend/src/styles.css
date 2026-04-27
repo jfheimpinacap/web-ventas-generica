@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: #111827;
-  background: #f3f4f6;
+  background: linear-gradient(180deg, #f3f4f6 0%, #eef2f7 100%);
   line-height: 1.4;
 }
 
@@ -201,7 +201,7 @@ a {
 }
 
 .hero-section {
-  background: linear-gradient(135deg, #111827, #1f2937);
+  background: linear-gradient(135deg, #111827, #1f2937 60%, #334155);
   color: #ffffff;
   border-radius: 18px;
   padding: 2rem;
@@ -229,7 +229,7 @@ a {
 }
 
 .featured-products {
-  background: #f9fafb;
+  background: linear-gradient(180deg, #f8fafc, #f9fafb);
   border-radius: 18px;
   padding: 1.2rem;
 }
@@ -423,4 +423,110 @@ a {
   height: 180px;
   object-fit: cover;
   border-radius: 10px;
+}
+
+
+.catalog-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.catalog-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.catalog-filters input,
+.catalog-filters select {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.55rem;
+  font: inherit;
+  background: #fff;
+}
+
+.product-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+
+.badge--condition {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge--stock {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.product-detail__top-actions {
+  margin-bottom: 0.4rem;
+}
+
+.product-detail__cols {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+
+.product-detail__contact {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8fafc;
+}
+
+.product-detail__specs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.product-detail__specs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.product-detail__specs li:last-child {
+  border-bottom: 0;
+}
+
+.quote-product-banner {
+  margin: 0.8rem 0 1rem;
+  padding: 0.8rem;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  border-radius: 10px;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.sidebar-menu__leaf a {
+  display: block;
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .product-detail__cols {
+    grid-template-columns: 1fr;
+  }
 }

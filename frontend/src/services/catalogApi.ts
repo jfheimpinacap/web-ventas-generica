@@ -1,4 +1,12 @@
-import type { Category, ProductDetail, ProductListItem, Promotion, QuoteRequestPayload } from '../types/catalog'
+import type {
+  Brand,
+  Category,
+  ProductDetail,
+  ProductListItem,
+  ProductQueryParams,
+  Promotion,
+  QuoteRequestPayload,
+} from '../types/catalog'
 import { apiRequest } from './api'
 
 type ApiListResponse<T> = T[] | { results: T[] }
@@ -7,18 +15,17 @@ function normalizeListResponse<T>(response: ApiListResponse<T>): T[] {
   return Array.isArray(response) ? response : response.results
 }
 
-export async function getFeaturedProducts() {
-  const response = await apiRequest<ApiListResponse<ProductListItem>>('/products/', {
-    params: { is_featured: true },
-  })
+export async function getProducts(params?: ProductQueryParams) {
+  const response = await apiRequest<ApiListResponse<ProductListItem>>('/products/', { params })
   return normalizeListResponse(response)
 }
 
+export async function getFeaturedProducts() {
+  return getProducts({ is_featured: true })
+}
+
 export async function searchProducts(search: string) {
-  const response = await apiRequest<ApiListResponse<ProductListItem>>('/products/', {
-    params: { search },
-  })
-  return normalizeListResponse(response)
+  return getProducts({ search })
 }
 
 export async function getProductBySlug(slug: string) {
@@ -27,6 +34,11 @@ export async function getProductBySlug(slug: string) {
 
 export async function getCategories() {
   const response = await apiRequest<ApiListResponse<Category>>('/categories/')
+  return normalizeListResponse(response)
+}
+
+export async function getBrands() {
+  const response = await apiRequest<ApiListResponse<Brand>>('/brands/')
   return normalizeListResponse(response)
 }
 

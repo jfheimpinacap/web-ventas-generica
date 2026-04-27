@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { useCategories } from '../../hooks/useCategories'
 import { sidebarMenu } from '../../data/sidebarMenu'
@@ -12,12 +13,21 @@ interface SidebarProps {
 
 export function Sidebar({ onSearch }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const navigate = useNavigate()
   const { categories, error } = useCategories()
 
   const menuItems = useMemo(() => {
     if (categories.length === 0 || error) return sidebarMenu
     return buildSidebarMenuFromCategories(categories)
   }, [categories, error])
+
+  const handleSearch = (term: string) => {
+    if (onSearch) {
+      onSearch(term)
+      return
+    }
+    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
+  }
 
   return (
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
@@ -26,7 +36,7 @@ export function Sidebar({ onSearch }: SidebarProps) {
       </button>
 
       <div className="sidebar__panel">
-        <SearchBox onSearch={onSearch} />
+        <SearchBox onSearch={handleSearch} />
         {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
         <SidebarMenu items={menuItems} />
       </div>

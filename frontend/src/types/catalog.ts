@@ -52,6 +52,7 @@ export interface ProductSpec {
 
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
+export type ProductType = 'machinery' | 'spare_part' | 'service' | 'other'
 
 export interface ProductListItem {
   id: number
@@ -59,7 +60,7 @@ export interface ProductListItem {
   slug: string
   category: Category
   brand: Brand | null
-  product_type: string
+  product_type: ProductType
   condition: ProductCondition
   short_description: string
   price: string | null
@@ -107,7 +108,21 @@ export interface QuoteRequestPayload {
   message: string
 }
 
+export interface ProductQueryParams {
+  [key: string]: string | boolean | undefined
+
+  search?: string
+  category?: string
+  brand?: string
+  product_type?: ProductType | ''
+  condition?: ProductCondition | ''
+  stock_status?: StockStatus | ''
+  ordering?: 'name' | '-created_at' | 'price' | '-price' | ''
+  is_featured?: boolean
+}
+
 export interface SidebarMenuItem {
   label: string
+  to?: string
   children?: SidebarMenuItem[]
 }
