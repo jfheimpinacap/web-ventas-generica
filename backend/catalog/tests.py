@@ -7,7 +7,7 @@ from catalog.models import Category, Product, QuoteRequest
 class ProductApiTests(APITestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Maquinaria')
-        Product.objects.create(
+        self.published_product = Product.objects.create(
             name='Producto publicado',
             category=self.category,
             product_type=Product.ProductType.MACHINERY,
@@ -36,6 +36,11 @@ class ProductApiTests(APITestCase):
         response = self.client.get(reverse('product-list'), {'include_unpublished': 'true'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
+
+    def test_get_product_detail_by_slug(self):
+        response = self.client.get(reverse('product-detail', kwargs={'slug': self.published_product.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['slug'], self.published_product.slug)
 
 
 class QuoteRequestApiTests(APITestCase):

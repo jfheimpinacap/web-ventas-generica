@@ -28,6 +28,7 @@ class SupplierViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    lookup_field = 'slug'
     queryset = Product.objects.select_related('category', 'brand', 'supplier').prefetch_related('images', 'specs')
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'model', 'sku', 'short_description']

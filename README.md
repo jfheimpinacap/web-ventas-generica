@@ -67,7 +67,8 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 1. Copia archivo de ejemplo:
    - `frontend/.env.example` → `frontend/.env`
 2. Variable disponible:
-   - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8001`)
+   - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8001/api`)
+  - `VITE_WHATSAPP_NUMBER` (ejemplo: `56912345678`)
 
 ## Comandos rápidos con `start.py`
 
@@ -112,6 +113,8 @@ python manage.py seed_catalog
 
 El comando crea/actualiza categorías, marcas, proveedores, productos demo, specs técnicas y promociones sin duplicar registros principales.
 
+> Para ver datos reales en el frontend público, ejecuta `python manage.py seed_catalog` antes de abrir la Home.
+
 ## Endpoints principales del backend
 
 - `GET /api/health/`
@@ -119,6 +122,7 @@ El comando crea/actualiza categorías, marcas, proveedores, productos demo, spec
 - `GET /api/brands/`
 - `GET /api/suppliers/`
 - `GET /api/products/`
+- `GET /api/products/<slug>/`
 - `GET /api/promotions/`
 - `POST /api/quote-requests/`
 
@@ -129,11 +133,13 @@ El comando crea/actualiza categorías, marcas, proveedores, productos demo, spec
 - **Frontend:** `http://localhost:5174`
 - **Backend:** `http://127.0.0.1:8001`
 
-## Frontend inicial
+## Frontend público conectado a API (Fase 4)
 
-- React Router configurado.
-- Ruta `/` con página **Home** pública usando mock data.
-- Preparado para futura conexión real a backend (fase posterior).
+- Home (`/`) consume promociones (`/api/promotions/`), categorías (`/api/categories/`) y productos destacados (`/api/products/?is_featured=true`).
+- Buscador lateral usa `GET /api/products/?search=<texto>`.
+- Detalle de producto (`/producto/:slug`) consume `GET /api/products/<slug>/`.
+- Formulario de cotización (`/cotizar`) consume `POST /api/quote-requests/`.
+- Si backend falla, Home mantiene fallback visual (hero y categorías estáticas, productos de respaldo).
 
 ## Próximas fases (preparado, no implementado aún)
 

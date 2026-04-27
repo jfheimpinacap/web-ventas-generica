@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+import { buildWhatsAppUrl } from '../../utils/whatsapp'
+
 export function Topbar() {
   return (
     <header className="topbar" aria-label="Barra principal">
@@ -15,7 +17,7 @@ export function Topbar() {
         <a className="topbar__phone" href="tel:+51987654321">
           +51 987 654 321
         </a>
-        <a className="whatsapp-btn" href="https://wa.me/51987654321" target="_blank" rel="noreferrer">
+        <a className="whatsapp-btn" href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')} target="_blank" rel="noreferrer">
           WhatsApp
         </a>
         <Link className="btn btn--ghost" to="/login">

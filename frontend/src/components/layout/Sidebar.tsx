@@ -1,11 +1,23 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
+import { useCategories } from '../../hooks/useCategories'
 import { sidebarMenu } from '../../data/sidebarMenu'
+import { buildSidebarMenuFromCategories } from '../../utils/formatters'
 import { SearchBox } from '../common/SearchBox'
 import { SidebarMenu } from './SidebarMenu'
 
-export function Sidebar() {
+interface SidebarProps {
+  onSearch?: (term: string) => void
+}
+
+export function Sidebar({ onSearch }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const { categories, error } = useCategories()
+
+  const menuItems = useMemo(() => {
+    if (categories.length === 0 || error) return sidebarMenu
+    return buildSidebarMenuFromCategories(categories)
+  }, [categories, error])
 
   return (
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
@@ -14,8 +26,9 @@ export function Sidebar() {
       </button>
 
       <div className="sidebar__panel">
-        <SearchBox />
-        <SidebarMenu items={sidebarMenu} />
+        <SearchBox onSearch={onSearch} />
+        {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
+        <SidebarMenu items={menuItems} />
       </div>
     </aside>
   )
