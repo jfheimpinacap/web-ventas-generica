@@ -16,6 +16,9 @@ ROOT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = ROOT_DIR
 BACKEND_DIR = ROOT_DIR / 'backend'
 FRONTEND_DIR = ROOT_DIR / 'frontend'
+DEFAULT_FRONTEND_PORT = '5174'
+DEFAULT_BACKEND_PORT = '8001'
+DEFAULT_APP_OPEN_URL = f'http://localhost:{DEFAULT_FRONTEND_PORT}'
 
 
 def run(command: list[str], cwd: Path | None = None) -> None:
@@ -68,11 +71,11 @@ def setup() -> None:
 
 
 def backend() -> None:
-    run([python_cmd(), 'manage.py', 'runserver'], cwd=BACKEND_DIR)
+    run([python_cmd(), 'manage.py', 'runserver', f'127.0.0.1:{backend_port()}'], cwd=BACKEND_DIR)
 
 
 def frontend() -> None:
-    run([ensure_node_and_npm(), 'run', 'dev'], cwd=FRONTEND_DIR)
+    run([ensure_node_and_npm(), 'run', 'dev', '--', '--port', frontend_port()], cwd=FRONTEND_DIR)
 
 
 def launch_windows_terminal(title: str, command: list[str]) -> None:
@@ -119,27 +122,37 @@ def parse_simple_dotenv_value(raw_value: str) -> str:
     return value
 
 
-def app_open_url() -> str:
-    default_url = 'http://localhost:5173'
-
-    env_url = os.getenv('APP_OPEN_URL')
-    if env_url:
-        return env_url
+def read_env_value(key: str) -> str | None:
+    env_value = os.getenv(key)
+    if env_value:
+        return env_value
 
     dotenv_file = PROJECT_ROOT / '.env'
     if not dotenv_file.exists():
-        return default_url
+        return None
 
     for line in dotenv_file.read_text(encoding='utf-8').splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith('#') or '=' not in stripped:
             continue
-        key, value = stripped.split('=', 1)
-        if key.strip() == 'APP_OPEN_URL':
-            parsed = parse_simple_dotenv_value(value)
-            return parsed or default_url
+        parsed_key, value = stripped.split('=', 1)
+        if parsed_key.strip() == key:
+            parsed_value = parse_simple_dotenv_value(value)
+            return parsed_value or None
 
-    return default_url
+    return None
+
+
+def backend_port() -> str:
+    return read_env_value('BACKEND_PORT') or DEFAULT_BACKEND_PORT
+
+
+def frontend_port() -> str:
+    return read_env_value('FRONTEND_PORT') or DEFAULT_FRONTEND_PORT
+
+
+def app_open_url() -> str:
+    return read_env_value('APP_OPEN_URL') or DEFAULT_APP_OPEN_URL
 
 
 def open_app_browser() -> None:

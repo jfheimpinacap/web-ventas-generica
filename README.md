@@ -10,6 +10,7 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 - **Estructura:**
   - `/backend`
   - `/frontend`
+  - `/.env.example` (puertos del launcher `start.py`)
 
 ## Estructura de carpetas
 
@@ -41,6 +42,15 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 
 ## Variables de entorno
 
+### Launcher (`start.py`)
+
+1. Copia archivo de ejemplo:
+   - `.env.example` → `.env`
+2. Variables disponibles:
+   - `APP_OPEN_URL` (default: `http://localhost:5174`)
+   - `FRONTEND_PORT` (default: `5174`)
+   - `BACKEND_PORT` (default: `8001`)
+
 ### Backend
 
 1. Copia archivo de ejemplo:
@@ -56,7 +66,7 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 1. Copia archivo de ejemplo:
    - `frontend/.env.example` → `frontend/.env`
 2. Variable disponible:
-   - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8000`)
+   - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8001`)
 
 ## Comandos rápidos con `start.py`
 
@@ -70,12 +80,12 @@ Instala dependencias del backend/frontend y ejecuta migraciones.
 ```bash
 py start.py backend
 ```
-Levanta Django en `http://127.0.0.1:8000`.
+Levanta Django en `http://127.0.0.1:8001`.
 
 ```bash
 py start.py frontend
 ```
-Levanta Vite en `http://127.0.0.1:5173`.
+Levanta Vite en `http://127.0.0.1:5174`.
 
 ```bash
 py start.py dev
@@ -125,4 +135,19 @@ Se implementó una Home comercial tipo catálogo con:
 3. Abre dos terminales:
    - Terminal A: `py start.py backend`
    - Terminal B: `py start.py frontend`
-4. Abre `http://localhost:5173`.
+4. Abre `http://localhost:5174`.
+
+## Ejecutar en paralelo con `market-trading-bot`
+
+Este proyecto queda configurado para no colisionar con `market-trading-bot`:
+
+- `market-trading-bot` (ocupado): frontend `5173`, backend `8000`
+- `web-ventas-generica` (este repo): frontend `5174`, backend `8001`
+
+Pasos recomendados:
+
+1. Mantén `market-trading-bot` ejecutándose sin tocar sus procesos.
+2. En este repo, ejecuta:
+   - `py start.py backend` → `http://127.0.0.1:8001`
+   - `py start.py frontend` → `http://127.0.0.1:5174`
+3. Navega a `http://localhost:5174` (el launcher ya evita abrir `5173`).
