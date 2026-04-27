@@ -17,6 +17,7 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 ```text
 .
 ├── backend/
+│   ├── catalog/          # Catálogo comercial (modelos, API, seed)
 │   ├── config/           # Settings, urls, wsgi/asgi
 │   ├── core/             # App base con endpoint de health
 │   ├── manage.py
@@ -92,41 +93,54 @@ py start.py dev
 ```
 Muestra guía para levantar backend y frontend en terminales separadas.
 
-## Endpoint inicial
+## Base de datos y migraciones
+
+Desde `backend/`:
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
+
+## Seed de catálogo demo
+
+Desde `backend/`:
+
+```bash
+python manage.py seed_catalog
+```
+
+El comando crea/actualiza categorías, marcas, proveedores, productos demo, specs técnicas y promociones sin duplicar registros principales.
+
+## Endpoints principales del backend
 
 - `GET /api/health/`
-- Respuesta esperada:
+- `GET /api/categories/`
+- `GET /api/brands/`
+- `GET /api/suppliers/`
+- `GET /api/products/`
+- `GET /api/promotions/`
+- `POST /api/quote-requests/`
 
-```json
-{
-  "status": "ok"
-}
-```
+> Por defecto `GET /api/products/` devuelve solo productos publicados (`is_published=True`).
+
+## Puertos del proyecto
+
+- **Frontend:** `http://localhost:5174`
+- **Backend:** `http://127.0.0.1:8001`
 
 ## Frontend inicial
 
 - React Router configurado.
-- Ruta `/` con página **Home** básica.
-- Preparado para consumir backend por `VITE_API_BASE_URL`.
-
-## Interfaz pública inicial (frontend)
-
-Se implementó una Home comercial tipo catálogo con:
-- Topbar fija con acciones (Login, Cotizar, WhatsApp y teléfono).
-- Sidebar responsive con buscador y menú multinivel de categorías.
-- Hero section orientada a venta de maquinaria y repuestos.
-- Sección de productos destacados con mock data (6 productos ejemplo).
-- Footer comercial con contacto y enlaces rápidos.
-- Rutas base preparadas: `/`, `/producto/:slug`, `/login`, `/cotizar`.
+- Ruta `/` con página **Home** pública usando mock data.
+- Preparado para futura conexión real a backend (fase posterior).
 
 ## Próximas fases (preparado, no implementado aún)
 
-- Catálogo de productos
-- Categorías y subcategorías
-- Productos destacados
-- Cotizaciones
-- Login de vendedor
-- Panel de administración personalizado (base Django Admin)
+- Login/JWT
+- Panel vendedor personalizado
+- CRUD frontend conectado a API
+- Carrito y pagos
 
 ## Desarrollo recomendado en VS Code
 
@@ -150,4 +164,4 @@ Pasos recomendados:
 2. En este repo, ejecuta:
    - `py start.py backend` → `http://127.0.0.1:8001`
    - `py start.py frontend` → `http://127.0.0.1:5174`
-3. Navega a `http://localhost:5174` (el launcher ya evita abrir `5173`).
+3. Navega a `http://localhost:5174`.

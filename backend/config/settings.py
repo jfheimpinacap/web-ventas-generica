@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'core',
+    'catalog',
 ]
 
 MIDDLEWARE = [
@@ -86,3 +87,6 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ]
 }
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
