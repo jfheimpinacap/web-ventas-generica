@@ -109,14 +109,20 @@ Desde `backend/`:
 
 ```bash
 python manage.py seed_catalog
+python manage.py seed_demo_user
 ```
 
-El comando crea/actualiza categorías, marcas, proveedores, productos demo, specs técnicas y promociones sin duplicar registros principales.
+- `seed_catalog` crea/actualiza categorías, marcas, proveedores, productos demo, specs técnicas y promociones sin duplicar registros principales.
+- `seed_demo_user` crea (o actualiza) el usuario vendedor demo de forma idempotente:
+  - username: `vendedor`
+  - password: `vendedor123`
+  - email: `vendedor@example.com`
 
 > Para ver datos reales en el frontend público, ejecuta `python manage.py seed_catalog` antes de abrir la Home.
 
 ## Endpoints principales del backend
 
+Públicos:
 - `GET /api/health/`
 - `GET /api/categories/`
 - `GET /api/brands/`
@@ -125,6 +131,16 @@ El comando crea/actualiza categorías, marcas, proveedores, productos demo, spec
 - `GET /api/products/<slug>/`
 - `GET /api/promotions/`
 - `POST /api/quote-requests/`
+
+Auth JWT:
+- `POST /api/auth/login/`
+- `POST /api/auth/refresh/`
+- `GET /api/auth/me/`
+
+Privados (requieren token):
+- Escritura (`POST/PUT/PATCH/DELETE`) de productos, categorías, marcas, proveedores y promociones.
+- `GET /api/quote-requests/` (listado para panel vendedor).
+- `GET /api/products/?include_unpublished=true` para ver productos no publicados en panel.
 
 > Por defecto `GET /api/products/` devuelve solo productos publicados (`is_published=True`).
 
@@ -146,11 +162,29 @@ El comando crea/actualiza categorías, marcas, proveedores, productos demo, spec
 
 `Home → Catálogo → Detalle de producto → Cotizar`
 
+## Panel vendedor (Fase 6)
+
+Rutas privadas frontend:
+- `/login`
+- `/admin`
+- `/admin/productos`
+- `/admin/cotizaciones`
+- `/admin/promociones`
+
+Flujo recomendado:
+
+```bash
+py start.py
+cd backend
+python manage.py seed_catalog
+python manage.py seed_demo_user
+```
+
+Luego inicia sesión en `http://localhost:5174/login` con el usuario demo y accede al panel vendedor.
+
 ## Próximas fases (preparado, no implementado aún)
 
-- Login/JWT
-- Panel vendedor personalizado
-- CRUD frontend conectado a API
+- CRUD completo desde panel vendedor
 - Carrito y pagos
 
 ## Desarrollo recomendado en VS Code

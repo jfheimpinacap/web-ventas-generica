@@ -1,4 +1,4 @@
-from rest_framework import filters, mixins, viewsets
+from rest_framework import filters, mixins, permissions, viewsets
 
 from .models import Brand, Category, Product, Promotion, QuoteRequest, Supplier
 from .serializers import (
@@ -12,24 +12,43 @@ from .serializers import (
 )
 
 
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Category.objects.filter(is_active=True).select_related('parent')
+class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Category.objects.select_related('parent')
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset.filter(is_active=True)
 
 
-class BrandViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Brand.objects.filter(is_active=True)
+class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Brand.objects.all()
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset.filter(is_active=True)
 
 
-class SupplierViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Supplier.objects.filter(is_active=True)
+class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Supplier.objects.all()
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset.filter(is_active=True)
 
 
-class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+class ProductViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
     queryset = Product.objects.select_related('category', 'brand', 'supplier').prefetch_related('images', 'specs')
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'model', 'sku', 'short_description']
     ordering_fields = ['name', 'created_at', 'updated_at', 'price']
@@ -45,7 +64,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         params = self.request.query_params
 
         include_unpublished = params.get('include_unpublished') in {'1', 'true', 'True'}
-        if not include_unpublished:
+        if not (self.request.user.is_authenticated and include_unpublished):
             queryset = queryset.filter(is_published=True)
 
         filters_map = {
@@ -70,19 +89,22 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class PromotionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Promotion.objects.filter(is_active=True).select_related('product__category', 'product__brand')
+class PromotionViewSet(viewsets.ModelViewSet):
     serializer_class = PromotionSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Promotion.objects.select_related('product__category', 'product__brand')
+        if self.request.user.is_authenticated:
+            return queryset
+        return queryset.filter(is_active=True)
 
 
 class QuoteRequestViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = QuoteRequest.objects.select_related('product')
     serializer_class = QuoteRequestSerializer
 
-    def get_queryset(self):
-        params = self.request.query_params
-        queryset = self.queryset
-        include_all = params.get('include_all') in {'1', 'true', 'True'}
-        if not include_all:
-            return queryset.none()
-        return queryset
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]

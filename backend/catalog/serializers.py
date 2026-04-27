@@ -91,6 +91,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'price_visible',
             'stock_status',
             'is_featured',
+            'is_published',
             'main_image',
         ]
 
@@ -158,11 +159,14 @@ class PromotionSerializer(serializers.ModelSerializer):
 
 
 class QuoteRequestSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
     class Meta:
         model = QuoteRequest
         fields = [
             'id',
             'product',
+            'product_name',
             'customer_name',
             'customer_phone',
             'customer_email',

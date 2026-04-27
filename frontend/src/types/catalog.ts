@@ -67,6 +67,7 @@ export interface ProductListItem {
   price_visible: boolean
   stock_status: StockStatus
   is_featured: boolean
+  is_published?: boolean
   main_image: ProductImage | null
 }
 
@@ -100,12 +101,35 @@ export interface Promotion {
   updated_at: string
 }
 
+export interface QuoteRequest {
+  id: number
+  product: number | null
+  product_name?: string
+  customer_name: string
+  customer_phone: string
+  customer_email: string
+  message: string
+  status: 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded'
+  created_at: string
+  updated_at: string
+}
+
 export interface QuoteRequestPayload {
   product?: number
   customer_name: string
   customer_phone: string
   customer_email?: string
   message: string
+}
+
+export interface AuthUser {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  is_staff: boolean
+  is_superuser: boolean
 }
 
 export interface ProductQueryParams {
