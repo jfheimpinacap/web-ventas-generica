@@ -75,9 +75,26 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
 Desde la raíz del proyecto:
 
 ```bash
+py start.py
+```
+Flujo recomendado (comando maestro): prepara backend/frontend y luego inicia el entorno completo. Este comando:
+- instala dependencias Python (`pip install -r backend/requirements.txt`)
+- aplica migraciones (`python manage.py migrate`)
+- carga catálogo demo (`python manage.py seed_catalog`)
+- crea/actualiza usuario demo (`python manage.py seed_demo_user`)
+- verifica backend (`python manage.py check`)
+- instala dependencias frontend (`npm install`)
+- levanta backend + frontend y abre navegador en `APP_OPEN_URL` (default `http://localhost:5174`)
+
+```bash
 py start.py setup
 ```
-Instala dependencias del backend/frontend y ejecuta migraciones.
+Ejecuta preparación completa sin abrir servidores (equivale a `py start.py prepare`).
+
+```bash
+py start.py prepare
+```
+Alias de `setup`: prepara todo el entorno sin abrir backend/frontend.
 
 ```bash
 py start.py backend
@@ -92,7 +109,7 @@ Levanta Vite en `http://127.0.0.1:5174`.
 ```bash
 py start.py dev
 ```
-Muestra guía para levantar backend y frontend en terminales separadas.
+Abre backend y frontend en terminales separadas y abre navegador, sin instalar dependencias ni correr migraciones.
 
 ## Base de datos y migraciones
 
@@ -175,9 +192,6 @@ Flujo recomendado:
 
 ```bash
 py start.py
-cd backend
-python manage.py seed_catalog
-python manage.py seed_demo_user
 ```
 
 Luego inicia sesión en `http://localhost:5174/login` con el usuario demo y accede al panel vendedor.
@@ -190,11 +204,9 @@ Luego inicia sesión en `http://localhost:5174/login` con el usuario demo y acce
 ## Desarrollo recomendado en VS Code
 
 1. Abre la carpeta raíz en VS Code.
-2. Ejecuta `py start.py setup` en terminal integrada.
-3. Abre dos terminales:
-   - Terminal A: `py start.py backend`
-   - Terminal B: `py start.py frontend`
-4. Abre `http://localhost:5174`.
+2. Ejecuta `py start.py` en terminal integrada.
+3. Espera a que el launcher termine preparación y abra backend/frontend.
+4. Abre `http://localhost:5174` (o la URL configurada en `APP_OPEN_URL`).
 
 ## Ejecutar en paralelo con `market-trading-bot`
 

@@ -26,6 +26,15 @@ def run(command: list[str], cwd: Path | None = None) -> None:
     subprocess.run(command, cwd=cwd, check=True)
 
 
+def run_or_exit(command: list[str], cwd: Path | None = None, error_message: str = '') -> None:
+    try:
+        run(command, cwd=cwd)
+    except subprocess.CalledProcessError as exc:
+        if error_message:
+            print(error_message)
+        raise SystemExit(exc.returncode) from exc
+
+
 def python_cmd() -> str:
     return sys.executable
 
@@ -64,10 +73,86 @@ def ensure_node_and_npm() -> str:
     return npm_binary
 
 
+def ensure_backend_dependencies() -> None:
+    print('Preparando backend...')
+    print('Instalando dependencias Python...')
+    run_or_exit(
+        [python_cmd(), '-m', 'pip', 'install', '-r', 'requirements.txt'],
+        cwd=BACKEND_DIR,
+        error_message=(
+            'Error instalando dependencias del backend. '
+            'Revisa tu conexión/red, proxy o el archivo backend/requirements.txt.'
+        ),
+    )
+
+
+def migrate() -> None:
+    print('Aplicando migraciones...')
+    run_or_exit(
+        [python_cmd(), 'manage.py', 'migrate'],
+        cwd=BACKEND_DIR,
+        error_message='Error aplicando migraciones de Django.',
+    )
+
+
+def seed_catalog() -> None:
+    print('Cargando catálogo demo...')
+    run_or_exit(
+        [python_cmd(), 'manage.py', 'seed_catalog'],
+        cwd=BACKEND_DIR,
+        error_message=(
+            'Error ejecutando seed_catalog. '
+            'Verifica que el comando exista y no tenga errores.'
+        ),
+    )
+
+
+def seed_demo_user() -> None:
+    print('Creando usuario demo...')
+    run_or_exit(
+        [python_cmd(), 'manage.py', 'seed_demo_user'],
+        cwd=BACKEND_DIR,
+        error_message=(
+            'Error ejecutando seed_demo_user. '
+            'Verifica que el comando exista y no tenga errores.'
+        ),
+    )
+
+
+def backend_check() -> None:
+    print('Verificando backend (manage.py check)...')
+    run_or_exit(
+        [python_cmd(), 'manage.py', 'check'],
+        cwd=BACKEND_DIR,
+        error_message='Error en validación de Django (manage.py check).',
+    )
+
+
+def ensure_frontend_dependencies() -> None:
+    print('Preparando frontend...')
+    print('Instalando dependencias npm...')
+    npm_binary = ensure_node_and_npm()
+    run_or_exit(
+        [npm_binary, 'install'],
+        cwd=FRONTEND_DIR,
+        error_message=(
+            'Error instalando dependencias del frontend con npm install. '
+            'Revisa tu conexión/red, proxy o package.json.'
+        ),
+    )
+
+
+def prepare() -> None:
+    ensure_backend_dependencies()
+    migrate()
+    seed_catalog()
+    seed_demo_user()
+    backend_check()
+    ensure_frontend_dependencies()
+
+
 def setup() -> None:
-    run([python_cmd(), '-m', 'pip', 'install', '-r', 'requirements.txt'], cwd=BACKEND_DIR)
-    run([python_cmd(), 'manage.py', 'migrate'], cwd=BACKEND_DIR)
-    run([ensure_node_and_npm(), 'install'], cwd=FRONTEND_DIR)
+    prepare()
 
 
 def backend() -> None:
@@ -167,6 +252,7 @@ def dev() -> None:
     frontend_command = [python_executable, 'start.py', 'frontend']
 
     print('Iniciando entorno de desarrollo...')
+    ensure_node_and_npm()
 
     system = platform.system()
     if system == 'Windows':
@@ -201,20 +287,27 @@ def dev() -> None:
     print(f'  2) {python_executable} start.py frontend')
 
 
+def start() -> None:
+    prepare()
+    dev()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Monorepo starter commands')
     commands = {
         'setup': setup,
+        'prepare': prepare,
         'backend': backend,
         'frontend': frontend,
         'dev': dev,
+        'start': start,
     }
     parser.add_argument(
         'command',
         nargs='?',
-        default='dev',
+        default='start',
         choices=commands.keys(),
-        help='Comando a ejecutar (default: dev).',
+        help='Comando a ejecutar (default: start).',
     )
     args = parser.parse_args()
     commands[args.command]()
