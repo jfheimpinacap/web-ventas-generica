@@ -148,15 +148,20 @@ def dev() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Monorepo starter commands')
-    parser.add_argument('command', choices=['setup', 'backend', 'frontend', 'dev'])
-    args = parser.parse_args()
-
     commands = {
         'setup': setup,
         'backend': backend,
         'frontend': frontend,
         'dev': dev,
     }
+    parser.add_argument(
+        'command',
+        nargs='?',
+        default='dev',
+        choices=commands.keys(),
+        help='Comando a ejecutar (default: dev).',
+    )
+    args = parser.parse_args()
     commands[args.command]()
 
 
