@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -71,10 +72,78 @@ def frontend() -> None:
     run([ensure_node_and_npm(), 'run', 'dev'], cwd=FRONTEND_DIR)
 
 
+def launch_windows_terminal(title: str, command: list[str]) -> None:
+    quoted_command = subprocess.list2cmdline(command)
+    subprocess.Popen(
+        ['cmd', '/c', 'start', title, 'cmd', '/k', quoted_command],
+        cwd=ROOT_DIR,
+    )
+
+
+def launch_macos_terminal(command: list[str]) -> bool:
+    if not shutil.which('osascript'):
+        return False
+
+    quoted_command = ' '.join(shlex.quote(part) for part in command)
+    command_with_cd = f'cd {shlex.quote(str(ROOT_DIR))} && {quoted_command}'
+    applescript = f'tell application "Terminal" to do script "{command_with_cd}"'
+    subprocess.Popen(['osascript', '-e', applescript])
+    return True
+
+
+def launch_linux_terminal(title: str, command: list[str]) -> bool:
+    quoted_command = ' '.join(shlex.quote(part) for part in command)
+    terminals: list[tuple[str, list[str]]] = [
+        ('x-terminal-emulator', ['-T', title, '-e', quoted_command]),
+        ('gnome-terminal', ['--title', title, '--', 'bash', '-lc', quoted_command]),
+        ('konsole', ['--new-tab', '-p', f'tabtitle={title}', '-e', 'bash', '-lc', quoted_command]),
+        ('xterm', ['-T', title, '-e', quoted_command]),
+    ]
+
+    for binary, args in terminals:
+        resolved = shutil.which(binary)
+        if resolved:
+            subprocess.Popen([resolved, *args], cwd=ROOT_DIR)
+            return True
+
+    return False
+
+
 def dev() -> None:
-    print('Inicia backend y frontend en terminales separadas:')
-    print('  1) py start.py backend')
-    print('  2) py start.py frontend')
+    python_executable = python_cmd()
+    backend_command = [python_executable, 'start.py', 'backend']
+    frontend_command = [python_executable, 'start.py', 'frontend']
+
+    print('Iniciando entorno de desarrollo...')
+
+    system = platform.system()
+    if system == 'Windows':
+        print('Abriendo terminal para backend...')
+        launch_windows_terminal('Backend', backend_command)
+        print('Abriendo terminal para frontend...')
+        launch_windows_terminal('Frontend', frontend_command)
+        return
+
+    if system == 'Darwin':
+        print('Abriendo Terminal para backend...')
+        backend_ok = launch_macos_terminal(backend_command)
+        print('Abriendo Terminal para frontend...')
+        frontend_ok = launch_macos_terminal(frontend_command)
+        if backend_ok and frontend_ok:
+            return
+
+    if system == 'Linux':
+        print('Abriendo terminal para backend...')
+        backend_ok = launch_linux_terminal('Backend', backend_command)
+        print('Abriendo terminal para frontend...')
+        frontend_ok = launch_linux_terminal('Frontend', frontend_command)
+        if backend_ok and frontend_ok:
+            return
+
+    print('No se pudo abrir terminales automáticamente en este sistema.')
+    print('Ejecuta manualmente en terminales separadas:')
+    print(f'  1) {python_executable} start.py backend')
+    print(f'  2) {python_executable} start.py frontend')
 
 
 def main() -> None:
