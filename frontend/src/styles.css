@@ -1,7 +1,8 @@
 :root {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #e5e7eb;
-  background: #0f172a;
+  color: #111827;
+  background: #f3f4f6;
+  line-height: 1.4;
 }
 
 * {
@@ -11,20 +12,364 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: #f3f4f6;
 }
 
-.home-layout {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem;
-  line-height: 1.6;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-h1,
-h2 {
-  color: #f8fafc;
+.app-shell {
+  min-height: 100vh;
 }
 
-code {
-  color: #93c5fd;
+.topbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  min-height: 76px;
+  background: #111827;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  z-index: 1000;
+  border-bottom: 1px solid #1f2937;
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.topbar__logo {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #f59e0b;
+  color: #111827;
+  font-weight: 700;
+}
+
+.topbar__brand small {
+  display: block;
+  color: #d1d5db;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar__phone {
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.whatsapp-btn {
+  background: #25d366;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 700;
+}
+
+.btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.2);
+}
+
+.btn--ghost {
+  background: #ffffff;
+  color: #111827;
+}
+
+.btn--accent {
+  background: #ea580c;
+  color: #ffffff;
+}
+
+.app-shell__body {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1rem;
+  padding: 92px 1rem 1rem;
+}
+
+.sidebar {
+  position: sticky;
+  top: 92px;
+  height: fit-content;
+}
+
+.sidebar__mobile-toggle {
+  width: 100%;
+  margin-bottom: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: #ffffff;
+  font-weight: 600;
+  display: none;
+}
+
+.sidebar__panel {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.search-box {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.search-box input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.6rem;
+}
+
+.search-box button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  background: #111827;
+  color: #fff;
+}
+
+.sidebar-menu,
+.sidebar-menu--nested {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-menu__toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: #f3f4f6;
+  margin: 0.3rem 0;
+  padding: 0.55rem 0.7rem;
+  font-weight: 600;
+}
+
+.sidebar-menu__leaf {
+  padding: 0.35rem 0.65rem;
+  margin-left: 0.4rem;
+  color: #374151;
+}
+
+.sidebar-menu--nested {
+  margin-left: 0.65rem;
+  border-left: 2px solid #e5e7eb;
+  padding-left: 0.3rem;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.hero-section {
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #ffffff;
+  border-radius: 18px;
+  padding: 2rem;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
+}
+
+.hero-section__tag {
+  color: #f59e0b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.76rem;
+}
+
+.hero-section h1 {
+  margin: 0.35rem 0 0.65rem;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+}
+
+.hero-section__actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.featured-products {
+  background: #f9fafb;
+  border-radius: 18px;
+  padding: 1.2rem;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #111827;
+}
+
+.section-heading p {
+  color: #4b5563;
+}
+
+.featured-products__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.product-card {
+  background: #ffffff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.product-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.product-card__content {
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.product-card__content h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.product-card__content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.product-card__price {
+  color: #ea580c !important;
+  font-size: 1rem !important;
+  font-weight: 800;
+  margin-top: 0.35rem !important;
+}
+
+.product-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0 0.9rem 0.9rem;
+}
+
+.footer {
+  margin-top: 1.2rem;
+  background: #1f2937;
+  color: #f3f4f6;
+  padding: 1.5rem 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.footer h4 {
+  margin: 0 0 0.55rem;
+  color: #ffffff;
+}
+
+.footer p,
+.footer li,
+.footer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #d1d5db;
+}
+
+.footer li {
+  margin-bottom: 0.3rem;
+}
+
+.simple-page {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  padding: 1.5rem;
+}
+
+@media (max-width: 960px) {
+  .app-shell__body {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .sidebar__mobile-toggle {
+    display: block;
+  }
+
+  .sidebar__panel {
+    display: none;
+  }
+
+  .sidebar--open .sidebar__panel {
+    display: block;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-shell__body {
+    padding-top: 138px;
+  }
 }
