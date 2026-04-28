@@ -9,7 +9,7 @@ import type { HomeSectionItem, ProductListItem, ProductType } from '../../types/
 import { formatPrice } from '../../utils/formatters'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
-const CAROUSEL_STEP = 1
+const CAROUSEL_GROUP_SIZE = 4
 
 function buildFallbackProducts(type: ProductType, count: number, titleBase: string): ProductListItem[] {
   return Array.from({ length: count }, (_, index) => {
@@ -75,7 +75,7 @@ export function FeaturedProducts() {
   const servicesConfigured = useMemo(() => fromSection(homeItems, 'repair_services'), [homeItems])
 
   const machineryProducts = useMemo(
-    () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 10) : pickProducts(sourceProducts, 'machinery', 10, 'Maquinaria promocional')),
+    () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 12) : pickProducts(sourceProducts, 'machinery', 12, 'Maquinaria promocional')),
     [machineryConfigured, sourceProducts],
   )
   const sparePartProducts = useMemo(
@@ -88,12 +88,24 @@ export function FeaturedProducts() {
     [servicesConfigured, sourceProducts],
   )
 
-  const maxIndex = Math.max(0, machineryProducts.length - 1)
+  const machineryGroups = useMemo(() => {
+    return Array.from({ length: Math.ceil(machineryProducts.length / CAROUSEL_GROUP_SIZE) }, (_, index) =>
+      machineryProducts.slice(index * CAROUSEL_GROUP_SIZE, index * CAROUSEL_GROUP_SIZE + CAROUSEL_GROUP_SIZE),
+    )
+  }, [machineryProducts])
 
-  const goPrev = () => setCarouselIndex((prev) => (prev - CAROUSEL_STEP + machineryProducts.length) % machineryProducts.length)
-  const goNext = () => setCarouselIndex((prev) => (prev + CAROUSEL_STEP) % machineryProducts.length)
+  useEffect(() => {
+    setCarouselIndex((current) => Math.min(current, Math.max(0, machineryGroups.length - 1)))
+  }, [machineryGroups.length])
 
-  const orderedMachinery = [...machineryProducts.slice(carouselIndex), ...machineryProducts.slice(0, carouselIndex)]
+  const goPrev = () => {
+    if (machineryGroups.length === 0) return
+    setCarouselIndex((prev) => (prev - 1 + machineryGroups.length) % machineryGroups.length)
+  }
+  const goNext = () => {
+    if (machineryGroups.length === 0) return
+    setCarouselIndex((prev) => (prev + 1) % machineryGroups.length)
+  }
 
   return (
     <div className="home-commercial-sections">
@@ -111,33 +123,35 @@ export function FeaturedProducts() {
             ‹
           </button>
 
-          <div className="machinery-carousel__track">
-            {orderedMachinery.map((product) => {
-              const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
-              return (
-                <article className="promo-product-card" key={product.id}>
-                  <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
-                  <div className="promo-product-card__content">
-                    <p className="promo-product-card__tag">Maquinaria destacada</p>
-                    <h3>{product.name}</h3>
-                    <p className="promo-product-card__price">{formatPrice(product)}</p>
-                    <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
-                      Ver detalle
-                    </Link>
-                  </div>
-                </article>
-              )
-            })}
+          <div className="machinery-carousel__viewport">
+            <div className="machinery-carousel__track" style={{ transform: `translateX(-${carouselIndex * 100}%)` }}>
+              {machineryGroups.map((group, groupIndex) => (
+                <div className="machinery-carousel__slide" key={`machinery-group-${groupIndex}`}>
+                  {group.map((product) => {
+                    const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
+                    return (
+                      <article className="promo-product-card" key={product.id}>
+                        <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+                        <div className="promo-product-card__content">
+                          <p className="promo-product-card__tag">Maquinaria destacada</p>
+                          <h3>{product.name}</h3>
+                          <p className="promo-product-card__price">{formatPrice(product)}</p>
+                          <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+                            Ver detalle
+                          </Link>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
 
           <button className="carousel-control carousel-control--next" type="button" onClick={goNext} aria-label="Ver más maquinarias">
             ›
           </button>
         </div>
-
-        <p className="carousel-counter" aria-live="polite">
-          Producto {carouselIndex + 1} de {maxIndex + 1}
-        </p>
       </section>
 
       <section className="spare-offers">
@@ -149,7 +163,7 @@ export function FeaturedProducts() {
           {sparePartProducts.map((product, index) => {
             const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
             return (
-              <article key={product.id} className={`spare-offer-card ${index === 0 || index === 3 ? 'spare-offer-card--large' : ''}`}>
+              <article key={product.id} className={`spare-offer-card ${index === 0 || index === 5 ? 'spare-offer-card--large' : ''}`}>
                 <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
                 <div className="spare-offer-card__content">
                   <span>Oferta destacada</span>

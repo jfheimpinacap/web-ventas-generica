@@ -11,7 +11,7 @@ import {
 import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
 
 const SECTION_CONFIG: Array<{ key: HomeSection; title: string; limit: number }> = [
-  { key: 'machinery_promotions', title: 'Promociones en maquinarias', limit: 10 },
+  { key: 'machinery_promotions', title: 'Promociones en maquinarias', limit: 12 },
   { key: 'spare_parts_offers', title: 'Oferta en repuestos', limit: 6 },
   { key: 'repair_services', title: 'Servicios de reparación', limit: 12 },
 ]
