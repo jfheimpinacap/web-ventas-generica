@@ -140,15 +140,19 @@ a {
 
 .app-shell__body {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: minmax(250px, 280px) minmax(0, 1fr);
   gap: 1rem;
   padding: calc(var(--topbar-height) + 1rem) 1rem 1rem;
+  align-items: start;
 }
 
 .sidebar {
   position: sticky;
   top: calc(var(--topbar-height) + 1rem);
   height: fit-content;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .sidebar__mobile-toggle {
@@ -165,8 +169,11 @@ a {
 .sidebar__panel {
   background: #ffffff;
   border-radius: 14px;
-  padding: 1rem;
+  padding: 0.9rem;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .sidebar__heading h2 {
@@ -175,8 +182,9 @@ a {
 }
 
 .sidebar__heading p {
-  margin: 0.3rem 0 0.8rem;
+  margin: 0.25rem 0 0.65rem;
   color: #4b5563;
+  font-size: 0.86rem;
 }
 
 .sidebar__meta {
@@ -187,25 +195,35 @@ a {
 
 .sidebar-filters {
   display: grid;
-  gap: 0.55rem;
-  margin: 0.3rem 0 0.9rem;
-  padding: 0.8rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0.7rem;
+  padding: 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   background: #f8fafc;
+  width: 100%;
+  max-width: 100%;
 }
 
 .sidebar-filters h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
 }
 
 .sidebar-filters select {
   border: 1px solid #d1d5db;
-  border-radius: 10px;
-  padding: 0.5rem;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
   font: inherit;
   background: #fff;
+  min-height: 34px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 0.86rem;
 }
 
 .search-box {
@@ -220,6 +238,7 @@ a {
   border-radius: 10px;
   padding: 0.5rem 0.65rem;
   min-height: 38px;
+  min-width: 0;
 }
 
 .search-box button {
@@ -246,15 +265,18 @@ a {
   border: 0;
   border-radius: 10px;
   background: #f3f4f6;
-  margin: 0.3rem 0;
-  padding: 0.55rem 0.7rem;
+  margin: 0.25rem 0;
+  padding: 0.45rem 0.6rem;
   font-weight: 600;
+  font-size: 0.9rem;
+  text-align: left;
 }
 
 .sidebar-menu__leaf {
-  padding: 0.35rem 0.65rem;
+  padding: 0.28rem 0.55rem;
   margin-left: 0.4rem;
   color: #374151;
+  font-size: 0.88rem;
 }
 
 .sidebar-menu--nested {
@@ -717,6 +739,10 @@ a {
 
   .sidebar--open .sidebar__panel {
     display: block;
+  }
+
+  .sidebar-filters select {
+    min-height: 36px;
   }
 }
 

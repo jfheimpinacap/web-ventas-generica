@@ -54,6 +54,7 @@ export function Sidebar({ onSearch }: SidebarProps) {
     } else {
       navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     setIsOpen(false)
   }
 
@@ -65,6 +66,7 @@ export function Sidebar({ onSearch }: SidebarProps) {
       next.set(key, value)
     }
     setSearchParams(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -138,7 +140,6 @@ export function Sidebar({ onSearch }: SidebarProps) {
         ) : null}
 
         {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
-        <p className="sidebar__meta">Categorías visibles: {menuItems.length}</p>
         <SidebarMenu items={menuItems} />
       </div>
     </aside>
