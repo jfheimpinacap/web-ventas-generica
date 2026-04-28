@@ -121,25 +121,53 @@ export interface Promotion {
   updated_at: string
 }
 
-export interface QuoteRequest {
+export type QuoteStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded'
+export type PreferredContactMethod = 'phone' | 'email' | 'whatsapp'
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  new: 'Nueva',
+  contacted: 'Contactada',
+  quoted: 'Cotizada',
+  closed: 'Cerrada',
+  discarded: 'Descartada',
+}
+
+export const PREFERRED_CONTACT_METHOD_LABELS: Record<PreferredContactMethod, string> = {
+  phone: 'Teléfono',
+  email: 'Email',
+  whatsapp: 'WhatsApp',
+}
+
+export interface QuoteRequestPublicPayload {
+  product?: number
+  customer_name: string
+  customer_phone: string
+  customer_email?: string
+  company_name?: string
+  city?: string
+  preferred_contact_method?: PreferredContactMethod | ''
+  message: string
+}
+
+export interface QuoteRequestAdmin {
   id: number
   product: number | null
   product_name?: string
   customer_name: string
   customer_phone: string
   customer_email: string
+  company_name: string
+  city: string
+  preferred_contact_method: PreferredContactMethod | ''
   message: string
-  status: 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded'
+  status: QuoteStatus
+  internal_notes: string
+  seller_response: string
   created_at: string
   updated_at: string
-}
-
-export interface QuoteRequestPayload {
-  product?: number
-  customer_name: string
-  customer_phone: string
-  customer_email?: string
-  message: string
+  contacted_at: string | null
+  quoted_at: string | null
+  closed_at: string | null
 }
 
 export interface AuthUser {

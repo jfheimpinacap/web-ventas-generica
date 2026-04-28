@@ -12,7 +12,8 @@ import type {
   ProductSpecWritePayload,
   Promotion,
   PromotionFormValues,
-  QuoteRequest,
+  QuoteRequestAdmin,
+  QuoteStatus,
   SupplierFormValues,
   SupplierSummary,
 } from '../types/catalog'
@@ -124,9 +125,33 @@ export async function deleteProductSpec(id: number) {
   })
 }
 
-export async function getAdminQuoteRequests() {
-  const response = await authFetch<ApiListResponse<QuoteRequest>>('/quote-requests/')
+type AdminQuotesParams = Record<string, string | number | boolean | undefined> & {
+  status?: QuoteStatus | ''
+  search?: string
+  ordering?: 'created_at' | '-created_at' | 'updated_at' | '-updated_at' | 'status' | '-status' | ''
+  product?: number
+}
+
+export async function getAdminQuotes(params?: AdminQuotesParams) {
+  const response = await authFetch<ApiListResponse<QuoteRequestAdmin>>('/quote-requests/', { params })
   return normalizeListResponse(response)
+}
+
+export async function getAdminQuote(id: number) {
+  return authFetch<QuoteRequestAdmin>(`/quote-requests/${id}/`)
+}
+
+export async function updateQuote(id: number, payload: Partial<QuoteRequestAdmin>) {
+  return authFetch<QuoteRequestAdmin>(`/quote-requests/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteQuote(id: number) {
+  return authFetch<void>(`/quote-requests/${id}/`, {
+    method: 'DELETE',
+  })
 }
 
 const includeInactiveParams = { include_inactive: true }

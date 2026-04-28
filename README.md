@@ -61,6 +61,9 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
    - `DJANGO_SECRET_KEY`
    - `DJANGO_ALLOWED_HOSTS`
    - `CORS_ALLOWED_ORIGINS`
+   - `DEFAULT_FROM_EMAIL`
+   - `QUOTE_NOTIFICATION_EMAIL`
+   - `EMAIL_BACKEND` (por defecto consola en desarrollo)
 
 ### Frontend
 
@@ -160,7 +163,10 @@ Privados (requieren token):
 - Escritura (`POST/PUT/PATCH/DELETE`) de productos, categorías, marcas, proveedores y promociones.
 - Gestión de imágenes de producto (`/api/product-images/`) con upload `multipart/form-data`.
 - Gestión de especificaciones técnicas (`/api/product-specs/`).
-- `GET /api/quote-requests/` (listado para panel vendedor).
+- `GET /api/quote-requests/` (listado para panel vendedor, con filtros `status`, `product`, `search` y `ordering`).
+- `GET /api/quote-requests/<id>/` (detalle privado para gestión comercial).
+- `PATCH /api/quote-requests/<id>/` (actualizar estado, notas internas y respuesta comercial).
+- `DELETE /api/quote-requests/<id>/` (eliminar cotización desde panel privado).
 - `GET /api/products/?include_unpublished=true` para ver productos no publicados en panel.
 - `GET /api/categories|brands|suppliers|promotions/?include_inactive=true` para que panel admin vea entidades activas e inactivas (requiere token).
 
@@ -193,6 +199,7 @@ Rutas privadas frontend:
 - `/admin/productos/nuevo`
 - `/admin/productos/:slug/editar`
 - `/admin/cotizaciones`
+- `/admin/cotizaciones/:id`
 - `/admin/promociones`
 - `/admin/promociones/nueva`
 - `/admin/promociones/:id/editar`
@@ -225,6 +232,23 @@ py start.py
 ```
 
 Luego inicia sesión en `http://localhost:5174/login` con el usuario demo y accede al panel vendedor.
+
+
+### Flujo de cotizaciones (Fase 10)
+
+- Público (`/cotizar`): el cliente puede enviar nombre, teléfono, email, mensaje y opcionalmente empresa, ciudad y método preferido (WhatsApp/teléfono/email).
+- Backend guarda la solicitud en `QuoteRequest` con estado inicial `new`.
+- Al crear una cotización pública se dispara un servicio de notificación por email:
+  - aviso al vendedor (`QUOTE_NOTIFICATION_EMAIL`)
+  - comprobante al cliente (`customer_email`)
+- En desarrollo, los correos se ven en consola usando `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend`.
+- Privado (`/admin/cotizaciones`): el vendedor puede filtrar/buscar/ordenar, revisar resumen por estado y abrir el detalle comercial.
+- Privado (`/admin/cotizaciones/:id`): editar estado, notas internas y respuesta comercial.
+
+Reglas de fecha por estado:
+- `contacted` completa `contacted_at` (solo si estaba vacío).
+- `quoted` completa `quoted_at` (solo si estaba vacío).
+- `closed` completa `closed_at` (solo si estaba vacío).
 
 ## Próximas fases (preparado, no implementado aún)
 

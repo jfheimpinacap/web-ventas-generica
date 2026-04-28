@@ -1,6 +1,9 @@
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import filters, mixins, permissions, viewsets
 
 from .models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
+from .services import send_quote_request_notifications
 from .serializers import (
     BrandSerializer,
     BrandWriteSerializer,
@@ -15,7 +18,8 @@ from .serializers import (
     ProductWriteSerializer,
     PromotionSerializer,
     PromotionWriteSerializer,
-    QuoteRequestSerializer,
+    QuoteRequestAdminSerializer,
+    QuoteRequestPublicSerializer,
     SupplierSerializer,
     SupplierWriteSerializer,
 )
@@ -176,11 +180,79 @@ class PromotionViewSet(viewsets.ModelViewSet):
         return queryset.filter(is_active=True)
 
 
-class QuoteRequestViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+class QuoteRequestViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
     queryset = QuoteRequest.objects.select_related('product')
-    serializer_class = QuoteRequestSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return QuoteRequestPublicSerializer
+        return QuoteRequestAdminSerializer
 
     def get_permissions(self):
         if self.action == 'create':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        queryset = self.queryset
+        if not self.request.user.is_authenticated:
+            return queryset.none()
+
+        params = self.request.query_params
+        status_value = params.get('status')
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+
+        product_value = params.get('product')
+        if product_value:
+            queryset = queryset.filter(product_id=product_value)
+
+        search = params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(customer_name__icontains=search)
+                | Q(customer_email__icontains=search)
+                | Q(customer_phone__icontains=search)
+                | Q(company_name__icontains=search)
+                | Q(message__icontains=search)
+            )
+
+        ordering = params.get('ordering', '-created_at')
+        allowed_ordering = {'created_at', '-created_at', 'updated_at', '-updated_at', 'status', '-status'}
+        if ordering in allowed_ordering:
+            queryset = queryset.order_by(ordering)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        quote_request = serializer.save()
+        send_quote_request_notifications(quote_request)
+
+    def perform_update(self, serializer):
+        previous_status = serializer.instance.status
+        quote_request = serializer.save()
+        next_status = quote_request.status
+
+        if previous_status == next_status:
+            return
+
+        updates = []
+        if next_status == QuoteRequest.QuoteStatus.CONTACTED and quote_request.contacted_at is None:
+            quote_request.contacted_at = timezone.now()
+            updates.append('contacted_at')
+        if next_status == QuoteRequest.QuoteStatus.QUOTED and quote_request.quoted_at is None:
+            quote_request.quoted_at = timezone.now()
+            updates.append('quoted_at')
+        if next_status == QuoteRequest.QuoteStatus.CLOSED and quote_request.closed_at is None:
+            quote_request.closed_at = timezone.now()
+            updates.append('closed_at')
+
+        if updates:
+            quote_request.save(update_fields=updates)

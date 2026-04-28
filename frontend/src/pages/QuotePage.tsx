@@ -3,13 +3,16 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
-import type { ProductListItem, QuoteRequestPayload } from '../types/catalog'
+import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
 
 interface QuoteFormState {
   customer_name: string
   customer_phone: string
   customer_email: string
+  company_name: string
+  city: string
+  preferred_contact_method: PreferredContactMethod | ''
   message: string
 }
 
@@ -17,6 +20,9 @@ const initialForm: QuoteFormState = {
   customer_name: '',
   customer_phone: '',
   customer_email: '',
+  company_name: '',
+  city: '',
+  preferred_contact_method: '',
   message: '',
 }
 
@@ -71,16 +77,21 @@ export function QuotePage() {
       return
     }
 
-    const payload: QuoteRequestPayload = {
-      ...form,
+    const payload: QuoteRequestPublicPayload = {
+      customer_name: form.customer_name.trim(),
+      customer_phone: form.customer_phone.trim(),
       customer_email: form.customer_email.trim(),
+      company_name: form.company_name.trim(),
+      city: form.city.trim(),
+      preferred_contact_method: form.preferred_contact_method,
+      message: form.message.trim(),
       ...(productFromQuery ? { product: productFromQuery } : {}),
     }
 
     try {
       setLoading(true)
       await createQuoteRequest(payload)
-      setSuccess('¡Cotización enviada! Nuestro equipo comercial te contactará pronto por WhatsApp o teléfono.')
+      setSuccess('¡Solicitud enviada! Un vendedor te contactará pronto para continuar con tu cotización.')
       setForm(initialForm)
     } catch {
       setError('No se pudo enviar la cotización. Intenta nuevamente.')
@@ -131,6 +142,31 @@ export function QuotePage() {
               value={form.customer_email}
               onChange={(event) => setForm((prev) => ({ ...prev, customer_email: event.target.value }))}
             />
+          </label>
+          <label>
+            Empresa (opcional)
+            <input
+              value={form.company_name}
+              onChange={(event) => setForm((prev) => ({ ...prev, company_name: event.target.value }))}
+            />
+          </label>
+          <label>
+            Ciudad / comuna (opcional)
+            <input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} />
+          </label>
+          <label>
+            Método de contacto preferido (opcional)
+            <select
+              value={form.preferred_contact_method}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, preferred_contact_method: event.target.value as PreferredContactMethod | '' }))
+              }
+            >
+              <option value="">Selecciona una opción</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="phone">Teléfono</option>
+              <option value="email">Email</option>
+            </select>
           </label>
           <label>
             Mensaje libre

@@ -194,12 +194,29 @@ class QuoteRequest(TimestampedModel):
         CLOSED = 'closed', 'Closed'
         DISCARDED = 'discarded', 'Discarded'
 
+    class PreferredContactMethod(models.TextChoices):
+        PHONE = 'phone', 'Phone'
+        EMAIL = 'email', 'Email'
+        WHATSAPP = 'whatsapp', 'WhatsApp'
+
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, related_name='quote_requests')
     customer_name = models.CharField(max_length=160)
     customer_phone = models.CharField(max_length=40)
     customer_email = models.EmailField(blank=True)
+    company_name = models.CharField(max_length=160, blank=True)
+    city = models.CharField(max_length=120, blank=True)
+    preferred_contact_method = models.CharField(
+        max_length=20,
+        choices=PreferredContactMethod.choices,
+        blank=True,
+    )
     message = models.TextField()
     status = models.CharField(max_length=20, choices=QuoteStatus.choices, default=QuoteStatus.NEW)
+    internal_notes = models.TextField(blank=True)
+    seller_response = models.TextField(blank=True)
+    contacted_at = models.DateTimeField(null=True, blank=True)
+    quoted_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']

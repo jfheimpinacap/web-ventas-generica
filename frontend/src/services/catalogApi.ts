@@ -5,7 +5,7 @@ import type {
   ProductListItem,
   ProductQueryParams,
   Promotion,
-  QuoteRequestPayload,
+  QuoteRequestPublicPayload,
   SupplierSummary,
 } from '../types/catalog'
 import { apiRequest } from './api'
@@ -53,7 +53,7 @@ export async function getPromotions() {
   return normalizeListResponse(response)
 }
 
-export async function createQuoteRequest(payload: QuoteRequestPayload) {
+export async function createQuoteRequest(payload: QuoteRequestPublicPayload) {
   return apiRequest('/quote-requests/', {
     method: 'POST',
     body: JSON.stringify(payload),

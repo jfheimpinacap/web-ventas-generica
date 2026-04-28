@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { getAdminProducts, getAdminPromotions, getAdminQuoteRequests } from '../../services/adminApi'
+import { getAdminProducts, getAdminPromotions, getAdminQuotes } from '../../services/adminApi'
 
 interface DashboardStats {
   publishedProducts: number
@@ -20,7 +20,7 @@ export function AdminDashboardPage() {
         setError(null)
         const [products, quotes, promotions] = await Promise.all([
           getAdminProducts(),
-          getAdminQuoteRequests(),
+          getAdminQuotes(),
           getAdminPromotions(),
         ])
         setStats({
