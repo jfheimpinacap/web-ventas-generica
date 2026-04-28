@@ -71,17 +71,18 @@ export function AdminProductsPage() {
     <AdminLayout>
       <div className="admin-products-header">
         <h1>Productos</h1>
-        <Link className="btn btn--accent" to="/admin/productos/nuevo">
-          Nuevo producto
-        </Link>
+        <div className="admin-list-toolbar">
+          <input
+            className="admin-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por nombre, marca, categoría o SKU"
+          />
+          <Link className="btn btn--accent" to="/admin/productos/nuevo">
+            Nuevo producto
+          </Link>
+        </div>
       </div>
-
-      <input
-        className="admin-search"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Buscar por nombre, marca, categoría o SKU"
-      />
 
       {loading ? <p className="ui-note">Cargando productos...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}

@@ -24,9 +24,14 @@ export function AdminCategoriesPage() {
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    void load()
+  }, [])
 
-  const filtered = useMemo(() => items.filter((i) => `${i.name} ${i.slug}`.toLowerCase().includes(search.toLowerCase())), [items, search])
+  const filtered = useMemo(
+    () => items.filter((i) => `${i.name} ${i.slug}`.toLowerCase().includes(search.toLowerCase())),
+    [items, search],
+  )
 
   const handleDelete = async (item: Category) => {
     if (!window.confirm(`¿Eliminar categoría "${item.name}"?`)) return
@@ -39,13 +44,64 @@ export function AdminCategoriesPage() {
     }
   }
 
-  return <AdminLayout>
-    <div className="admin-products-header"><h1>Categorías</h1><Link to="/admin/categorias/nueva" className="btn btn--accent">Nueva categoría</Link></div>
-    <input className="admin-search" placeholder="Buscar por nombre o slug" value={search} onChange={(e) => setSearch(e.target.value)} />
-    {loading ? <p className="ui-note">Cargando categorías...</p> : null}
-    {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-    {success ? <p className="ui-note ui-note--success">{success}</p> : null}
-    {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin categorías.</p> : null}
-    {!loading && !error && filtered.length > 0 ? <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Padre</th><th>Activa</th><th>Orden</th><th>Acciones</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td>{item.name}</td><td>{items.find((i) => i.id === item.parent)?.name ?? '-'}</td><td><span className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}>{item.is_active ? 'Sí' : 'No'}</span></td><td>{item.order}</td><td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Eliminar</button></td></tr>)}</tbody></table></div> : null}
-  </AdminLayout>
+  return (
+    <AdminLayout>
+      <div className="admin-products-header">
+        <h1>Categorías</h1>
+        <div className="admin-list-toolbar">
+          <input
+            className="admin-search"
+            placeholder="Buscar por nombre o slug"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Link to="/admin/categorias/nueva" className="btn btn--accent">
+            Nueva categoría
+          </Link>
+        </div>
+      </div>
+
+      {loading ? <p className="ui-note">Cargando categorías...</p> : null}
+      {error ? <p className="ui-note ui-note--error">{error}</p> : null}
+      {success ? <p className="ui-note ui-note--success">{success}</p> : null}
+      {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin categorías.</p> : null}
+      {!loading && !error && filtered.length > 0 ? (
+        <div className="admin-table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Padre</th>
+                <th>Activa</th>
+                <th>Orden</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.name}</td>
+                  <td>{items.find((i) => i.id === item.parent)?.name ?? '-'}</td>
+                  <td>
+                    <span className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}>
+                      {item.is_active ? 'Sí' : 'No'}
+                    </span>
+                  </td>
+                  <td>{item.order}</td>
+                  <td>
+                    <Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>
+                      Editar
+                    </Link>{' '}
+                    <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </AdminLayout>
+  )
 }

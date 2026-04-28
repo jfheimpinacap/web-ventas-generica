@@ -4,7 +4,6 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../../services/authApi'
 
 const adminMenu = [
-  { to: '/admin', label: 'Dashboard' },
   { to: '/admin/productos', label: 'Productos' },
   { to: '/admin/categorias', label: 'Categorías' },
   { to: '/admin/marcas', label: 'Marcas' },
@@ -27,22 +26,20 @@ export function AdminLayout({ children }: PropsWithChildren) {
         <h2>Panel vendedor</h2>
         <nav>
           {adminMenu.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/admin'} className="admin-nav-link">
+            <NavLink key={item.to} to={item.to} className="admin-nav-link">
               {item.label}
             </NavLink>
           ))}
           <NavLink to="/" className="admin-nav-link">
             Volver al sitio
           </NavLink>
+          <button type="button" className="admin-logout-button" onClick={handleLogout}>
+            Cerrar sesión
+          </button>
         </nav>
       </aside>
 
       <section className="admin-main">
-        <header className="admin-topbar">
-          <button type="button" className="btn btn--accent" onClick={handleLogout}>
-            Cerrar sesión
-          </button>
-        </header>
         <main className="admin-content">{children}</main>
       </section>
     </div>

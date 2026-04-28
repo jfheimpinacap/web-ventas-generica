@@ -10,7 +10,6 @@ import { AdminBrandFormPage } from '../pages/admin/AdminBrandFormPage'
 import { AdminBrandsPage } from '../pages/admin/AdminBrandsPage'
 import { AdminCategoriesPage } from '../pages/admin/AdminCategoriesPage'
 import { AdminCategoryFormPage } from '../pages/admin/AdminCategoryFormPage'
-import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
 import { AdminProductCreatePage } from '../pages/admin/AdminProductCreatePage'
 import { AdminProductEditPage } from '../pages/admin/AdminProductEditPage'
 import { AdminProductsPage } from '../pages/admin/AdminProductsPage'
@@ -31,7 +30,7 @@ export function AppRouter() {
       <Route path="/cotizar" element={<QuotePage />} />
 
       <Route element={<ProtectedRoute />}>
-        <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route path="/admin" element={<Navigate to="/admin/productos" replace />} />
         <Route path="/admin/productos" element={<AdminProductsPage />} />
         <Route path="/admin/productos/nuevo" element={<AdminProductCreatePage />} />
         <Route path="/admin/productos/:slug/editar" element={<AdminProductEditPage />} />

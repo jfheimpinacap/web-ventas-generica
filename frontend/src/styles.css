@@ -997,31 +997,31 @@ a {
   color: #ffffff;
 }
 
+.admin-logout-button {
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  background: #991b1b;
+  color: #fee2e2;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-logout-button:hover {
+  background: #7f1d1d;
+  color: #ffffff;
+}
+
 .admin-main {
-  display: grid;
-  grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
 
-.admin-topbar {
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 52px;
-  padding: 0.4rem 0.85rem;
-}
-
-.admin-topbar .btn {
-  min-height: 34px;
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-}
-
 .admin-content {
-  padding: 0.75rem 0.9rem 0.9rem;
+  padding: 0.5rem 0.9rem 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -1117,19 +1117,44 @@ a {
 
 .admin-products-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.7rem;
   margin-bottom: 0.1rem;
 }
 
+.admin-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
 .admin-search {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0.45rem 0.65rem;
   min-height: 38px;
   font: inherit;
+}
+
+@media (max-width: 700px) {
+  .admin-list-toolbar {
+    width: 100%;
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-list-toolbar .btn {
+    width: 100%;
+  }
+
+  .admin-search {
+    width: 100%;
+  }
 }
 
 .badge--ok {
