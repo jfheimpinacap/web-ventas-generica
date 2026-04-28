@@ -4,6 +4,8 @@ import { Link, NavLink } from 'react-router-dom'
 import { isAuthenticated } from '../../services/authApi'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 
+const WHATSAPP_PHONE = '+51 987 654 321'
+
 export function Topbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const hasSession = isAuthenticated()
@@ -37,30 +39,31 @@ export function Topbar() {
           <NavLink to="/catalogo" onClick={() => setIsMenuOpen(false)}>
             Catálogo
           </NavLink>
-          <NavLink className="btn btn--accent" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
-            Cotizar
-          </NavLink>
         </nav>
 
         <div className={`topbar__actions ${isMenuOpen ? 'topbar__actions--open' : ''}`}>
-          <a className="topbar__phone" href="tel:+51987654321" aria-label="Llamar al asesor comercial">
-            +51 987 654 321
-          </a>
           <a
-            className="btn btn--whatsapp"
+            className="topbar__whatsapp-contact"
             href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
             target="_blank"
             rel="noreferrer"
+            aria-label="Abrir WhatsApp con asesor comercial"
           >
-            WhatsApp
+            <span className="topbar__whatsapp-icon" aria-hidden="true">
+              ✆
+            </span>
+            <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           </a>
+          <Link className="btn btn--accent" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
+            Cotizar
+          </Link>
           {hasSession ? (
-            <Link className="btn btn--ghost" to="/admin" onClick={() => setIsMenuOpen(false)}>
+            <Link className="topbar__panel-link" to="/admin" onClick={() => setIsMenuOpen(false)}>
               Volver al panel
             </Link>
           ) : (
-            <Link className="btn btn--ghost" to="/login" onClick={() => setIsMenuOpen(false)}>
-              Login
+            <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor" onClick={() => setIsMenuOpen(false)}>
+              <span aria-hidden="true">👤</span>
             </Link>
           )}
         </div>

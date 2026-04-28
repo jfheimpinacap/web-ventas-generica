@@ -1,16 +1,11 @@
 import { useMemo, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { useBrands } from '../../hooks/useBrands'
 import { useCategories } from '../../hooks/useCategories'
 import { sidebarMenu } from '../../data/sidebarMenu'
 import { buildSidebarMenuFromCategories } from '../../utils/formatters'
-import { SearchBox } from '../common/SearchBox'
 import { SidebarMenu } from './SidebarMenu'
-
-interface SidebarProps {
-  onSearch?: (term: string) => void
-}
 
 const PRODUCT_TYPE_OPTIONS = [
   { value: 'machinery', label: 'Maquinaria' },
@@ -33,9 +28,8 @@ const STOCK_OPTIONS = [
   { value: 'sold', label: 'Vendido' },
 ]
 
-export function Sidebar({ onSearch }: SidebarProps) {
+export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
-  const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { categories, error } = useCategories()
@@ -47,16 +41,6 @@ export function Sidebar({ onSearch }: SidebarProps) {
     if (categories.length === 0 || error) return sidebarMenu
     return buildSidebarMenuFromCategories(categories)
   }, [categories, error])
-
-  const handleSearch = (term: string) => {
-    if (onSearch) {
-      onSearch(term)
-    } else {
-      navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-    setIsOpen(false)
-  }
 
   const updateFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -82,13 +66,6 @@ export function Sidebar({ onSearch }: SidebarProps) {
       </button>
 
       <div className="sidebar__panel" id="sidebar-panel">
-        <div className="sidebar__heading">
-          <h2>Buscador comercial</h2>
-          <p>Encuentra maquinaria, repuestos y servicios por nombre o categoría.</p>
-        </div>
-
-        <SearchBox onSearch={handleSearch} />
-
         {isCatalogPage ? (
           <div className="sidebar-filters">
             <h3>Filtros</h3>
