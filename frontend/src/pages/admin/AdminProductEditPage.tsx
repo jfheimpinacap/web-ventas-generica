@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
 import {
   createProductImage,
@@ -88,9 +89,6 @@ export function AdminProductEditPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imageAltText, setImageAltText] = useState('')
-  const [imageOrder, setImageOrder] = useState(0)
-  const [imageIsMain, setImageIsMain] = useState(false)
   const [imageSaving, setImageSaving] = useState(false)
   const [imageStatus, setImageStatus] = useState<string | null>(null)
   const [imageError, setImageError] = useState<string | null>(null)
@@ -121,10 +119,7 @@ export function AdminProductEditPage() {
           getSuppliers(),
         ])
 
-        const [imagesData, specsData] = await Promise.all([
-          getProductImages(product.id),
-          getProductSpecs(product.id),
-        ])
+        const [imagesData, specsData] = await Promise.all([getProductImages(product.id), getProductSpecs(product.id)])
 
         const mappedValues = mapProductToFormValues(product)
         setInitialValues(mappedValues)
@@ -158,7 +153,6 @@ export function AdminProductEditPage() {
       setIsSubmitting(true)
       setError(null)
       await updateProduct(slug, values)
-      setError(null)
     } catch {
       setError('No se pudo actualizar el producto.')
     } finally {
@@ -180,15 +174,10 @@ export function AdminProductEditPage() {
       await createProductImage({
         product: productId,
         image: imageFile,
-        alt_text: imageAltText,
-        order: imageOrder,
-        is_main: imageIsMain,
+        is_main: sortedImages.length === 0,
       })
       await refreshMediaData(productId)
       setImageFile(null)
-      setImageAltText('')
-      setImageOrder(0)
-      setImageIsMain(false)
       setImageStatus('Imagen agregada correctamente.')
     } catch {
       setImageError('No se pudo guardar la imagen.')
@@ -197,18 +186,17 @@ export function AdminProductEditPage() {
     }
   }
 
-  const handleUpdateImage = async (imageId: number, payload: { alt_text?: string; is_main?: boolean; order?: number }) => {
+  const handleSetMainImage = async (imageId: number) => {
     if (!productId) return
-
     try {
       setImageSaving(true)
       setImageError(null)
       setImageStatus(null)
-      await updateProductImage(imageId, payload)
+      await updateProductImage(imageId, { is_main: true })
       await refreshMediaData(productId)
-      setImageStatus('Imagen actualizada.')
+      setImageStatus('Imagen principal actualizada.')
     } catch {
-      setImageError('No se pudo actualizar la imagen.')
+      setImageError('No se pudo actualizar la imagen principal.')
     } finally {
       setImageSaving(false)
     }
@@ -292,23 +280,19 @@ export function AdminProductEditPage() {
     }
   }
 
-  const previewCategoryName = categories.find((item) => item.id === formValues?.category)?.name ?? 'Sin categoría'
-  const previewBrandName = brands.find((item) => item.id === formValues?.brand)?.name ?? 'Sin marca'
+  const previewValues = formValues ?? initialValues
+  const previewCategoryName = categories.find((item) => item.id === previewValues?.category)?.name ?? 'Sin categoría'
+  const previewBrandName = brands.find((item) => item.id === previewValues?.brand)?.name ?? 'Sin marca'
 
   return (
     <AdminLayout>
-      <div className="admin-products-header">
-        <h1>Editar producto</h1>
-        <button type="button" className="btn btn--ghost" onClick={() => navigate('/admin/productos')}>
-          Volver
-        </button>
-      </div>
-
       {loading ? <p className="ui-note">Cargando formulario...</p> : null}
 
       {!loading && initialValues ? (
-        <section className="admin-edit-layout">
-          <div className="admin-edit-layout__form">
+        <ProductEditorLayout
+          title="Editar producto"
+          onBack={() => navigate('/admin/productos')}
+          form={
             <ProductForm
               initialValues={initialValues}
               categories={categories}
@@ -320,108 +304,93 @@ export function AdminProductEditPage() {
               error={error}
               onValuesChange={setFormValues}
             />
-          </div>
-
-          {productId ? (
-            <aside className="admin-edit-layout__side">
+          }
+          sidebar={
+            <>
               <section className="admin-block admin-block--compact">
                 <h2>Imagen principal</h2>
                 {imageError ? <p className="ui-note ui-note--error">{imageError}</p> : null}
                 {imageStatus ? <p className="ui-note ui-note--success">{imageStatus}</p> : null}
 
-                <form className="admin-inline-form admin-inline-form--compact" onSubmit={handleCreateImage}>
-                  <label>
+                <form className="admin-image-upload-form" onSubmit={handleCreateImage}>
+                  <label className="admin-image-upload-field">
                     Archivo
                     <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} required />
                   </label>
-                  <label>
-                    Texto alternativo
-                    <input value={imageAltText} onChange={(e) => setImageAltText(e.target.value)} />
-                  </label>
-                  <div className="admin-inline-form__row">
-                    <label>
-                      Orden
-                      <input
-                        type="number"
-                        value={imageOrder}
-                        onChange={(e) => setImageOrder(Number(e.target.value) || 0)}
-                        min={0}
-                      />
-                    </label>
-                    <label className="admin-checkbox">
-                      <input type="checkbox" checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} />
-                      Principal
-                    </label>
-                    <button type="submit" className="btn btn--accent" disabled={imageSaving}>
-                      {imageSaving ? 'Guardando...' : 'Subir imagen'}
-                    </button>
-                  </div>
+                  <button type="submit" className="btn btn--accent" disabled={imageSaving}>
+                    {imageSaving ? 'Guardando...' : 'Subir imagen'}
+                  </button>
                 </form>
-
-                <div className="admin-image-mini-list">
-                  {sortedImages.length === 0 ? (
-                    <p className="ui-note">Aún no hay imágenes para este producto.</p>
-                  ) : (
-                    sortedImages.map((image) => (
-                      <article key={image.id} className="admin-image-mini-item">
-                        <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
-                        <div>
-                          <p>{image.alt_text || 'Sin texto alternativo'}</p>
-                          <div className="admin-media-item__actions">
-                            <button
-                              type="button"
-                              className="btn btn--ghost"
-                              onClick={() => handleUpdateImage(image.id, { is_main: true })}
-                              disabled={imageSaving || image.is_main}
-                            >
-                              {image.is_main ? 'Principal' : 'Marcar principal'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--ghost"
-                              onClick={() => handleDeleteImage(image.id)}
-                              disabled={imageSaving}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
               </section>
 
               <section className="admin-block admin-block--compact">
                 <h2>Vista previa pública</h2>
-                <article className="admin-product-preview">
-                  <img src={resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE} alt={mainImage?.alt_text || formValues?.name || 'Producto'} />
-                  <div className="admin-product-preview__content">
-                    <div className="admin-product-preview__badges">
-                      <span className="badge badge--condition">{formatCondition(formValues?.condition ?? initialValues.condition)}</span>
-                      <span className="badge badge--stock">{formatStockStatus(formValues?.stock_status ?? initialValues.stock_status)}</span>
-                      {(formValues?.is_published ?? initialValues.is_published) ? <span className="badge badge--ok">Publicado</span> : null}
-                      {(formValues?.is_featured ?? initialValues.is_featured) ? <span className="badge">Destacado</span> : null}
+                <article className="product-card admin-product-preview-card">
+                  <img src={resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE} alt={mainImage?.alt_text || previewValues?.name || 'Producto'} />
+                  <div className="product-card__content">
+                    <div className="product-card__badges">
+                      <span className="badge badge--condition">{formatCondition(previewValues?.condition ?? initialValues.condition)}</span>
+                      <span className="badge badge--stock">{formatStockStatus(previewValues?.stock_status ?? initialValues.stock_status)}</span>
                     </div>
-                    <h3>{formValues?.name || initialValues.name || 'Producto sin nombre'}</h3>
-                    <p>
+                    <h3>{previewValues?.name || 'Producto sin nombre'}</h3>
+                    <p className="product-card__meta">
                       <strong>Marca:</strong> {previewBrandName}
                     </p>
-                    <p>
+                    <p className="product-card__meta">
                       <strong>Categoría:</strong> {previewCategoryName}
                     </p>
-                    <p>
-                      <strong>Condición:</strong> {formatCondition(formValues?.condition ?? initialValues.condition)}
+                    <p className="product-card__meta">
+                      <strong>Condición:</strong> {formatCondition(previewValues?.condition ?? initialValues.condition)}
                     </p>
-                    <p>
-                      <strong>Stock:</strong> {formatStockStatus(formValues?.stock_status ?? initialValues.stock_status)}
+                    <p className="product-card__meta">
+                      <strong>Stock:</strong> {formatStockStatus(previewValues?.stock_status ?? initialValues.stock_status)}
                     </p>
-                    <p className="admin-product-preview__price">{formatPreviewPrice(formValues?.price ?? initialValues.price, formValues?.price_visible ?? initialValues.price_visible)}</p>
+                    <p className="product-card__price">
+                      {formatPreviewPrice(previewValues?.price ?? initialValues.price, previewValues?.price_visible ?? initialValues.price_visible)}
+                    </p>
+                  </div>
+                  <div className="product-card__actions">
+                    <button type="button" className="btn btn--accent" disabled>
+                      Ver detalle
+                    </button>
                   </div>
                 </article>
               </section>
-            </aside>
-          ) : null}
+            </>
+          }
+        />
+      ) : null}
+
+      {!loading && productId ? (
+        <section className="admin-block admin-block--compact">
+          <h2>Galería de imágenes</h2>
+          {sortedImages.length === 0 ? (
+            <p className="ui-note">Aún no hay imágenes para este producto.</p>
+          ) : (
+            <div className="admin-image-mini-list">
+              {sortedImages.map((image) => (
+                <article key={image.id} className="admin-image-mini-item">
+                  <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
+                  <div>
+                    <p>{image.alt_text || 'Sin texto alternativo'}</p>
+                    <div className="admin-media-item__actions">
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => handleSetMainImage(image.id)}
+                        disabled={imageSaving || image.is_main}
+                      >
+                        {image.is_main ? 'Principal' : 'Marcar principal'}
+                      </button>
+                      <button type="button" className="btn btn--ghost" onClick={() => handleDeleteImage(image.id)} disabled={imageSaving}>
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
 
