@@ -2,6 +2,7 @@ import type {
   Brand,
   Category,
   ProductDetail,
+  HomeSectionItem,
   ProductListItem,
   ProductQueryParams,
   Promotion,
@@ -58,4 +59,11 @@ export async function createQuoteRequest(payload: QuoteRequestPublicPayload) {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export async function getHomeSectionItems(section?: string) {
+  const response = await apiRequest<ApiListResponse<HomeSectionItem>>('/home-section-items/', {
+    params: section ? { section } : undefined,
+  })
+  return normalizeListResponse(response)
 }

@@ -1,30 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { mockProducts } from '../../data/mockProducts'
 import { useProducts } from '../../hooks/useProducts'
+import { getHomeSectionItems } from '../../services/catalogApi'
 import { resolveMediaUrl } from '../../services/api'
-import type { ProductListItem, ProductType } from '../../types/catalog'
+import type { HomeSectionItem, ProductListItem, ProductType } from '../../types/catalog'
 import { formatPrice } from '../../utils/formatters'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
 const CAROUSEL_STEP = 1
-
-const MALLA_REPUESTOS: Array<{ name: string; badge: string }> = [
-  { name: 'Kit sellos hidráulicos premium', badge: 'Precio especial' },
-  { name: 'Motor de tracción reacondicionado', badge: 'Stock limitado' },
-  { name: 'Control de plataforma multi-marca', badge: 'Top venta' },
-  { name: 'Set de ruedas no marcantes', badge: 'Despacho rápido' },
-  { name: 'Pack mangueras hidráulicas', badge: 'Desde 2 unidades' },
-  { name: 'Batería ciclo profundo AGM', badge: 'Oferta semanal' },
-]
-
-const SERVICIOS_REPARACION = [
-  { title: 'Diagnóstico eléctrico', description: 'Revisión de tableros, sensores y circuitos de seguridad.' },
-  { title: 'Mantención preventiva', description: 'Planes periódicos para extender la vida útil de tus equipos.' },
-  { title: 'Reparación de bombas', description: 'Ajuste, sellado y pruebas de funcionamiento en banco.' },
-  { title: 'Recuperación de motores', description: 'Servicio técnico en motores eléctricos y reductores.' },
-]
 
 function buildFallbackProducts(type: ProductType, count: number, titleBase: string): ProductListItem[] {
   return Array.from({ length: count }, (_, index) => {
@@ -61,19 +46,46 @@ function pickProducts(source: ProductListItem[], type: ProductType, count: numbe
   return [...filtered, ...fallback]
 }
 
+function fromSection(items: HomeSectionItem[], section: HomeSectionItem['section']) {
+  return items.filter((item) => item.section === section).sort((a, b) => a.position - b.position).map((item) => item.product)
+}
+
 export function FeaturedProducts() {
   const { products, loading, error } = useProducts()
+  const [homeItems, setHomeItems] = useState<HomeSectionItem[]>([])
+  const [homeConfigError, setHomeConfigError] = useState(false)
   const [carouselIndex, setCarouselIndex] = useState(0)
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setHomeItems(await getHomeSectionItems())
+      } catch {
+        setHomeConfigError(true)
+      }
+    }
+
+    void run()
+  }, [])
 
   const sourceProducts = !loading && !error && products.length > 0 ? products : mockProducts
 
+  const machineryConfigured = useMemo(() => fromSection(homeItems, 'machinery_promotions'), [homeItems])
+  const sparePartsConfigured = useMemo(() => fromSection(homeItems, 'spare_parts_offers'), [homeItems])
+  const servicesConfigured = useMemo(() => fromSection(homeItems, 'repair_services'), [homeItems])
+
   const machineryProducts = useMemo(
-    () => pickProducts(sourceProducts, 'machinery', 10, 'Maquinaria promocional'),
-    [sourceProducts],
+    () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 10) : pickProducts(sourceProducts, 'machinery', 10, 'Maquinaria promocional')),
+    [machineryConfigured, sourceProducts],
   )
   const sparePartProducts = useMemo(
-    () => pickProducts(sourceProducts, 'spare_part', 6, 'Repuesto en oferta'),
-    [sourceProducts],
+    () => (sparePartsConfigured.length > 0 ? sparePartsConfigured.slice(0, 6) : pickProducts(sourceProducts, 'spare_part', 6, 'Repuesto en oferta')),
+    [sparePartsConfigured, sourceProducts],
+  )
+
+  const serviceProducts = useMemo(
+    () => (servicesConfigured.length > 0 ? servicesConfigured : pickProducts(sourceProducts, 'service', 4, 'Servicio de reparación')),
+    [servicesConfigured, sourceProducts],
   )
 
   const maxIndex = Math.max(0, machineryProducts.length - 1)
@@ -92,14 +104,10 @@ export function FeaturedProducts() {
 
         {loading ? <p className="ui-note">Cargando productos...</p> : null}
         {!loading && error ? <p className="ui-note ui-note--error">{error} Mostrando respaldo local.</p> : null}
+        {homeConfigError ? <p className="ui-note">Usando selección automática para la Home.</p> : null}
 
         <div className="machinery-carousel" aria-label="Carrusel manual de maquinarias en promoción">
-          <button
-            className="carousel-control carousel-control--prev"
-            type="button"
-            onClick={goPrev}
-            aria-label="Ver maquinarias anteriores"
-          >
+          <button className="carousel-control carousel-control--prev" type="button" onClick={goPrev} aria-label="Ver maquinarias anteriores">
             ‹
           </button>
 
@@ -122,12 +130,7 @@ export function FeaturedProducts() {
             })}
           </div>
 
-          <button
-            className="carousel-control carousel-control--next"
-            type="button"
-            onClick={goNext}
-            aria-label="Ver más maquinarias"
-          >
+          <button className="carousel-control carousel-control--next" type="button" onClick={goNext} aria-label="Ver más maquinarias">
             ›
           </button>
         </div>
@@ -143,18 +146,14 @@ export function FeaturedProducts() {
         </div>
 
         <div className="spare-offers__grid">
-          {MALLA_REPUESTOS.map((item, index) => {
-            const product = sparePartProducts[index]
+          {sparePartProducts.map((product, index) => {
             const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
             return (
-              <article
-                key={item.name}
-                className={`spare-offer-card ${index === 0 || index === 3 ? 'spare-offer-card--large' : ''}`}
-              >
-                <img src={imageUrl} alt={product?.main_image?.alt_text || item.name} loading="lazy" />
+              <article key={product.id} className={`spare-offer-card ${index === 0 || index === 3 ? 'spare-offer-card--large' : ''}`}>
+                <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
                 <div className="spare-offer-card__content">
-                  <span>{item.badge}</span>
-                  <h3>{product?.name || item.name}</h3>
+                  <span>Oferta destacada</span>
+                  <h3>{product.name}</h3>
                   <p>{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                 </div>
               </article>
@@ -169,16 +168,15 @@ export function FeaturedProducts() {
         </div>
 
         <div className="repair-services__grid">
-          {SERVICIOS_REPARACION.map((service, index) => {
-            const product = sourceProducts.find((item) => item.product_type === 'service')
-            const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
+          {serviceProducts.map((product, index) => {
+            const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
 
             return (
-              <article className="repair-service-card" key={`${service.title}-${index}`}>
-                <img src={imageUrl} alt={service.title} loading="lazy" />
+              <article className="repair-service-card" key={`${product.slug}-${index}`}>
+                <img src={imageUrl} alt={product.name} loading="lazy" />
                 <div>
-                  <h3>{service.title}</h3>
-                  <p>{service.description}</p>
+                  <h3>{product.name}</h3>
+                  <p>{product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
                 </div>
               </article>
             )

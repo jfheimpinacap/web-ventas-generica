@@ -3,6 +3,9 @@ import type {
   BrandFormValues,
   Category,
   CategoryFormValues,
+  HomeSection,
+  HomeSectionItem,
+  HomeSectionItemFormValues,
   ProductDetail,
   ProductFormValues,
   ProductImage,
@@ -273,4 +276,32 @@ export async function updatePromotion(id: number, payload: Partial<PromotionForm
 
 export async function deletePromotion(id: number) {
   return authFetch<void>(`/promotions/${id}/`, { method: 'DELETE' })
+}
+
+export async function getAdminHomeSectionItems(section?: HomeSection) {
+  const response = await authFetch<ApiListResponse<HomeSectionItem>>('/home-section-items/', {
+    params: {
+      include_inactive: true,
+      ...(section ? { section } : {}),
+    },
+  })
+  return normalizeListResponse(response)
+}
+
+export async function createHomeSectionItem(payload: HomeSectionItemFormValues) {
+  return authFetch<HomeSectionItem>('/home-section-items/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateHomeSectionItem(id: number, payload: Partial<HomeSectionItemFormValues>) {
+  return authFetch<HomeSectionItem>(`/home-section-items/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteHomeSectionItem(id: number) {
+  return authFetch<void>(`/home-section-items/${id}/`, { method: 'DELETE' })
 }

@@ -121,6 +121,26 @@ export interface Promotion {
   updated_at: string
 }
 
+export type HomeSection = 'machinery_promotions' | 'spare_parts_offers' | 'repair_services'
+
+export interface HomeSectionItem {
+  id: number
+  section: HomeSection
+  section_label: string
+  position: number
+  product: ProductListItem
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface HomeSectionItemFormValues {
+  section: HomeSection
+  position: number
+  product: number
+  is_active: boolean
+}
+
 export type QuoteStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded'
 export type PreferredContactMethod = 'phone' | 'email' | 'whatsapp'
 

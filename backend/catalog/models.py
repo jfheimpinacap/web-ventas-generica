@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
@@ -184,6 +185,44 @@ class Promotion(TimestampedModel):
 
     def __str__(self):
         return self.title
+
+
+class HomeSectionItem(TimestampedModel):
+    class Section(models.TextChoices):
+        MACHINERY_PROMOTIONS = 'machinery_promotions', 'Promociones en maquinarias'
+        SPARE_PARTS_OFFERS = 'spare_parts_offers', 'Oferta en repuestos'
+        REPAIR_SERVICES = 'repair_services', 'Servicios de reparación'
+
+    SECTION_LIMITS = {
+        Section.MACHINERY_PROMOTIONS: 10,
+        Section.SPARE_PARTS_OFFERS: 6,
+        Section.REPAIR_SERVICES: 12,
+    }
+
+    section = models.CharField(max_length=40, choices=Section.choices)
+    position = models.PositiveIntegerField(default=1)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='home_section_items')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['section', 'position', 'id']
+        unique_together = [('section', 'position'), ('section', 'product')]
+
+    def clean(self):
+        super().clean()
+        max_items = self.SECTION_LIMITS.get(self.section)
+        if not max_items:
+            return
+
+        total_items = HomeSectionItem.objects.filter(section=self.section, is_active=True).exclude(pk=self.pk).count()
+        if self.is_active and total_items >= max_items:
+            raise ValidationError({'section': f'La sección "{self.get_section_display()}" permite máximo {max_items} elementos activos.'})
+
+        if self.position > max_items:
+            raise ValidationError({'position': f'La posición máxima para esta sección es {max_items}.'})
+
+    def __str__(self):
+        return f'{self.get_section_display()} - {self.position} - {self.product.name}'
 
 
 class QuoteRequest(TimestampedModel):

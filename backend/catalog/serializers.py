@@ -1,8 +1,10 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .models import (
     Brand,
     Category,
+    HomeSectionItem,
     Product,
     ProductImage,
     ProductSpec,
@@ -289,6 +291,48 @@ class PromotionWriteSerializer(serializers.ModelSerializer):
             'starts_at': {'required': False, 'allow_null': True},
             'ends_at': {'required': False, 'allow_null': True},
         }
+
+
+class HomeSectionItemSerializer(serializers.ModelSerializer):
+    product = ProductListSerializer(read_only=True)
+    section_label = serializers.CharField(source='get_section_display', read_only=True)
+
+    class Meta:
+        model = HomeSectionItem
+        fields = [
+            'id',
+            'section',
+            'section_label',
+            'position',
+            'product',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class HomeSectionItemWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HomeSectionItem
+        fields = ['section', 'position', 'product', 'is_active']
+        extra_kwargs = {
+            'section': {'required': True},
+            'product': {'required': True},
+        }
+
+    def validate(self, attrs):
+        data = attrs.copy()
+        if self.instance:
+            for field in ['section', 'position', 'product', 'is_active']:
+                data.setdefault(field, getattr(self.instance, field))
+        candidate = HomeSectionItem(**data)
+        if self.instance:
+            candidate.pk = self.instance.pk
+        try:
+            candidate.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs
 
 
 class QuoteRequestPublicSerializer(serializers.ModelSerializer):
