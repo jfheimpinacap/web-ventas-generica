@@ -92,6 +92,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'stock_status',
             'is_featured',
             'is_published',
+            'updated_at',
             'main_image',
         ]
 
@@ -134,6 +135,41 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class ProductWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = [
+            'name',
+            'slug',
+            'category',
+            'brand',
+            'supplier',
+            'product_type',
+            'condition',
+            'short_description',
+            'description',
+            'model',
+            'sku',
+            'year',
+            'hours_meter',
+            'price',
+            'price_visible',
+            'stock_status',
+            'is_featured',
+            'is_published',
+        ]
+        extra_kwargs = {
+            'name': {'required': True},
+            'category': {'required': True},
+            'product_type': {'required': True},
+            'condition': {'required': True},
+            'stock_status': {'required': True},
+            'price': {'required': False, 'allow_null': True},
+            'year': {'required': False, 'allow_null': True},
+            'hours_meter': {'required': False, 'allow_null': True},
+        }
 
 
 class PromotionSerializer(serializers.ModelSerializer):

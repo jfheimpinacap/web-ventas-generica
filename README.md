@@ -179,14 +179,18 @@ Privados (requieren token):
 
 `Home → Catálogo → Detalle de producto → Cotizar`
 
-## Panel vendedor (Fase 6)
+## Panel vendedor (Fase 7)
 
 Rutas privadas frontend:
 - `/login`
 - `/admin`
 - `/admin/productos`
+- `/admin/productos/nuevo`
+- `/admin/productos/:slug/editar`
 - `/admin/cotizaciones`
 - `/admin/promociones`
+
+El CRUD inicial de productos ya está disponible para usuario autenticado: crear, editar, publicar/despublicar, destacar y eliminar desde el panel vendedor.
 
 Flujo recomendado:
 
@@ -198,7 +202,6 @@ Luego inicia sesión en `http://localhost:5174/login` con el usuario demo y acce
 
 ## Próximas fases (preparado, no implementado aún)
 
-- CRUD completo desde panel vendedor
 - Carrito y pagos
 
 ## Desarrollo recomendado en VS Code

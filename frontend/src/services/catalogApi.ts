@@ -6,6 +6,7 @@ import type {
   ProductQueryParams,
   Promotion,
   QuoteRequestPayload,
+  SupplierSummary,
 } from '../types/catalog'
 import { apiRequest } from './api'
 
@@ -39,6 +40,11 @@ export async function getCategories() {
 
 export async function getBrands() {
   const response = await apiRequest<ApiListResponse<Brand>>('/brands/')
+  return normalizeListResponse(response)
+}
+
+export async function getSuppliers() {
+  const response = await apiRequest<ApiListResponse<SupplierSummary>>('/suppliers/')
   return normalizeListResponse(response)
 }
 

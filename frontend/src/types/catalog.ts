@@ -69,6 +69,7 @@ export interface ProductListItem {
   is_featured: boolean
   is_published?: boolean
   main_image: ProductImage | null
+  updated_at?: string
 }
 
 export interface ProductDetail extends ProductListItem {
@@ -78,7 +79,7 @@ export interface ProductDetail extends ProductListItem {
   sku: string
   year: number | null
   hours_meter: number | null
-  is_published: boolean
+  is_published?: boolean
   images: ProductImage[]
   specs: ProductSpec[]
   created_at: string
@@ -149,4 +150,24 @@ export interface SidebarMenuItem {
   label: string
   to?: string
   children?: SidebarMenuItem[]
+}
+
+export interface ProductFormValues {
+  name: string
+  category: number
+  brand: number | null
+  supplier: number | null
+  product_type: ProductType
+  condition: ProductCondition
+  short_description: string
+  description: string
+  model: string
+  sku: string
+  year: number | null
+  hours_meter: number | null
+  price: string | null
+  price_visible: boolean
+  stock_status: StockStatus
+  is_featured: boolean
+  is_published?: boolean
 }

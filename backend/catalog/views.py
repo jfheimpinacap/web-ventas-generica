@@ -6,6 +6,7 @@ from .serializers import (
     CategorySerializer,
     ProductDetailSerializer,
     ProductListSerializer,
+    ProductWriteSerializer,
     PromotionSerializer,
     QuoteRequestSerializer,
     SupplierSerializer,
@@ -57,6 +58,8 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return ProductDetailSerializer
+        if self.action in {'create', 'update', 'partial_update'}:
+            return ProductWriteSerializer
         return ProductListSerializer
 
     def get_queryset(self):

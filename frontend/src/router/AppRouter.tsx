@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '../components/admin/ProtectedRoute'
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
+import { AdminProductCreatePage } from '../pages/admin/AdminProductCreatePage'
+import { AdminProductEditPage } from '../pages/admin/AdminProductEditPage'
 import { AdminProductsPage } from '../pages/admin/AdminProductsPage'
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage'
 import { AdminQuotesPage } from '../pages/admin/AdminQuotesPage'
@@ -23,6 +25,8 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/admin/productos" element={<AdminProductsPage />} />
+        <Route path="/admin/productos/nuevo" element={<AdminProductCreatePage />} />
+        <Route path="/admin/productos/:slug/editar" element={<AdminProductEditPage />} />
         <Route path="/admin/cotizaciones" element={<AdminQuotesPage />} />
         <Route path="/admin/promociones" element={<AdminPromotionsPage />} />
       </Route>
