@@ -24,20 +24,32 @@ export function Sidebar({ onSearch }: SidebarProps) {
   const handleSearch = (term: string) => {
     if (onSearch) {
       onSearch(term)
-      return
+    } else {
+      navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
     }
-    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
+    setIsOpen(false)
   }
 
   return (
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
-      <button className="sidebar__mobile-toggle" type="button" onClick={() => setIsOpen((prev) => !prev)}>
-        {isOpen ? 'Cerrar menú' : 'Explorar categorías'}
+      <button
+        className="sidebar__mobile-toggle"
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        aria-controls="sidebar-panel"
+      >
+        {isOpen ? 'Cerrar categorías' : 'Explorar categorías'}
       </button>
 
-      <div className="sidebar__panel">
+      <div className="sidebar__panel" id="sidebar-panel">
+        <div className="sidebar__heading">
+          <h2>Buscador comercial</h2>
+          <p>Encuentra maquinaria, repuestos y servicios por nombre o categoría.</p>
+        </div>
         <SearchBox onSearch={handleSearch} />
         {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
+        <p className="sidebar__meta">Categorías visibles: {menuItems.length}</p>
         <SidebarMenu items={menuItems} />
       </div>
     </aside>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { getPromotions } from '../services/catalogApi'
 import type { Promotion } from '../types/catalog'
@@ -15,7 +15,7 @@ function isActiveNow(promotion: Promotion) {
 }
 
 export function usePromotions() {
-  const [promotion, setPromotion] = useState<Promotion | null>(null)
+  const [promotions, setPromotions] = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,8 +24,7 @@ export function usePromotions() {
       setLoading(true)
       setError(null)
       try {
-        const promotions = await getPromotions()
-        setPromotion(promotions.find(isActiveNow) ?? promotions[0] ?? null)
+        setPromotions(await getPromotions())
       } catch {
         setError('No fue posible cargar promociones.')
       } finally {
@@ -36,5 +35,10 @@ export function usePromotions() {
     void run()
   }, [])
 
-  return { promotion, loading, error }
+  const activePromotions = useMemo(() => {
+    const current = promotions.filter(isActiveNow)
+    return current.length > 0 ? current : promotions
+  }, [promotions])
+
+  return { promotions: activePromotions, loading, error }
 }
