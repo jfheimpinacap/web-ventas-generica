@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from catalog.models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
+from catalog.models import Brand, Category, HomeSectionItem, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 
 
 class ProductApiTests(APITestCase):
@@ -417,6 +417,123 @@ class QuoteRequestApiTests(APITestCase):
         self.assertEqual(len(response_email.data), 1)
         self.assertEqual(len(response_phone.data), 1)
 
+
+class HomeSectionItemApiTests(APITestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name='Catálogo home')
+        self.machinery = Product.objects.create(
+            name='Excavadora',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.USED,
+            sku='MACH-1',
+            is_published=True,
+        )
+        self.spare_part = Product.objects.create(
+            name='Bomba hidráulica',
+            category=self.category,
+            product_type=Product.ProductType.SPARE_PART,
+            condition=Product.ProductCondition.NEW,
+            sku='REP-1',
+            is_published=True,
+        )
+        self.service = Product.objects.create(
+            name='Servicio técnico en terreno',
+            category=self.category,
+            product_type=Product.ProductType.SERVICE,
+            condition=Product.ProductCondition.NOT_APPLICABLE,
+            sku='SER-1',
+            is_published=True,
+        )
+
+        User = get_user_model()
+        self.user = User.objects.create_user(username='seller_home', password='seller123', is_staff=True)
+
+    def authenticate(self):
+        token_response = self.client.post(
+            reverse('token-obtain-pair'),
+            {'username': 'seller_home', 'password': 'seller123'},
+            format='json',
+        )
+        token = token_response.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    def test_public_list_returns_only_active_items(self):
+        HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.MACHINERY_PROMOTIONS,
+            position=1,
+            product=self.machinery,
+            is_active=True,
+        )
+        HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=1,
+            product=self.spare_part,
+            is_active=False,
+        )
+
+        response = self.client.get(reverse('home-section-item-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['section'], HomeSectionItem.Section.MACHINERY_PROMOTIONS)
+
+    def test_create_requires_authentication(self):
+        payload = {
+            'section': HomeSectionItem.Section.REPAIR_SERVICES,
+            'position': 1,
+            'product': self.service.id,
+            'is_active': True,
+        }
+        response = self.client.post(reverse('home-section-item-list'), payload, format='json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_with_authentication(self):
+        self.authenticate()
+        payload = {
+            'section': HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            'position': 1,
+            'product': self.spare_part.id,
+            'is_active': True,
+        }
+        response = self.client.post(reverse('home-section-item-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(HomeSectionItem.objects.count(), 1)
+
+    def test_machinery_limit_validation(self):
+        self.authenticate()
+        for index in range(1, 11):
+            product = Product.objects.create(
+                name=f'Maquinaria {index}',
+                category=self.category,
+                product_type=Product.ProductType.MACHINERY,
+                condition=Product.ProductCondition.NEW,
+                sku=f'MAQ-{index}',
+                is_published=True,
+            )
+            HomeSectionItem.objects.create(
+                section=HomeSectionItem.Section.MACHINERY_PROMOTIONS,
+                position=index,
+                product=product,
+                is_active=True,
+            )
+
+        extra_product = Product.objects.create(
+            name='Maquinaria extra',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            sku='MAQ-EXTRA',
+            is_published=True,
+        )
+        payload = {
+            'section': HomeSectionItem.Section.MACHINERY_PROMOTIONS,
+            'position': 11,
+            'product': extra_product.id,
+            'is_active': True,
+        }
+        response = self.client.post(reverse('home-section-item-list'), payload, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue('section' in response.data or 'position' in response.data)
 
 class CatalogEntitiesAdminApiTests(APITestCase):
     def setUp(self):

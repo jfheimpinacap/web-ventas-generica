@@ -13,6 +13,7 @@ import { AdminCategoryFormPage } from '../pages/admin/AdminCategoryFormPage'
 import { AdminProductCreatePage } from '../pages/admin/AdminProductCreatePage'
 import { AdminProductEditPage } from '../pages/admin/AdminProductEditPage'
 import { AdminProductsPage } from '../pages/admin/AdminProductsPage'
+import { AdminHomeSectionsPage } from '../pages/admin/AdminHomeSectionsPage'
 import { AdminPromotionFormPage } from '../pages/admin/AdminPromotionFormPage'
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage'
 import { AdminQuoteDetailPage } from '../pages/admin/AdminQuoteDetailPage'
@@ -48,6 +49,7 @@ export function AppRouter() {
         <Route path="/admin/promociones" element={<AdminPromotionsPage />} />
         <Route path="/admin/promociones/nueva" element={<AdminPromotionFormPage />} />
         <Route path="/admin/promociones/:id/editar" element={<AdminPromotionFormPage />} />
+        <Route path="/admin/home-secciones" element={<AdminHomeSectionsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

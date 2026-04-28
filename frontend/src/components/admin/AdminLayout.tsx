@@ -10,6 +10,7 @@ const adminMenu = [
   { to: '/admin/proveedores', label: 'Proveedores' },
   { to: '/admin/cotizaciones', label: 'Cotizaciones' },
   { to: '/admin/promociones', label: 'Promociones' },
+  { to: '/admin/home-secciones', label: 'Secciones Home' },
 ]
 
 export function AdminLayout({ children }: PropsWithChildren) {

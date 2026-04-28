@@ -2,13 +2,15 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, mixins, permissions, viewsets
 
-from .models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
+from .models import Brand, Category, HomeSectionItem, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 from .services import send_quote_request_notifications
 from .serializers import (
     BrandSerializer,
     BrandWriteSerializer,
     CategorySerializer,
     CategoryWriteSerializer,
+    HomeSectionItemSerializer,
+    HomeSectionItemWriteSerializer,
     ProductDetailSerializer,
     ProductImageSerializer,
     ProductImageWriteSerializer,
@@ -282,3 +284,23 @@ class QuoteRequestViewSet(
 
         if updates:
             quote_request.save(update_fields=updates)
+
+
+class HomeSectionItemViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return HomeSectionItemWriteSerializer
+        return HomeSectionItemSerializer
+
+    def get_queryset(self):
+        queryset = HomeSectionItem.objects.select_related('product__category', 'product__brand', 'product__supplier', 'product')
+        if not _include_inactive_for_authenticated(self.request):
+            queryset = queryset.filter(is_active=True, product__is_published=True)
+
+        section = self.request.query_params.get('section')
+        if section:
+            queryset = queryset.filter(section=section)
+
+        return queryset.order_by('section', 'position', 'id')
