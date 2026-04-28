@@ -25,6 +25,7 @@ export function AdminPromotionFormPage() {
   const isEdit = Boolean(id)
   const [products, setProducts] = useState<ProductListItem[]>([])
   const [initialValues, setInitialValues] = useState(INITIAL_VALUES)
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,6 +37,7 @@ export function AdminPromotionFormPage() {
         setProducts(productList)
         if (id) {
           const item = await getAdminPromotion(Number(id))
+          setExistingImageUrl(item.image)
           setInitialValues({
             title: item.title,
             subtitle: item.subtitle,
@@ -49,6 +51,7 @@ export function AdminPromotionFormPage() {
             ends_at: item.ends_at,
           })
         }
+        if (!id) setExistingImageUrl(null)
       } catch {
         setError('No se pudo cargar el formulario de promoción.')
       } finally {
@@ -73,5 +76,5 @@ export function AdminPromotionFormPage() {
     }
   }
 
-  return <AdminLayout><h1>{isEdit ? 'Editar promoción' : 'Nueva promoción'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <PromotionForm initialValues={initialValues} products={products} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear promoción'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
+  return <AdminLayout><h1>{isEdit ? 'Editar promoción' : 'Nueva promoción'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <PromotionForm initialValues={initialValues} products={products} existingImageUrl={existingImageUrl} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear promoción'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
 }
