@@ -107,12 +107,13 @@ a {
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .topbar__seller-access {
   display: inline-flex;
   align-items: center;
-  margin-left: 0.4rem;
+  margin-left: 0.8rem;
 }
 
 .topbar__whatsapp-contact {
@@ -135,6 +136,34 @@ a {
   color: #f3f4f6;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+.topbar__top-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.42rem 0.68rem;
+  border-radius: 10px;
+  border: 1px solid #374151;
+  background: #111827;
+  color: #e5e7eb;
+  font-weight: 600;
+  line-height: 1.1;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.topbar__top-link:hover,
+.topbar__top-link.active {
+  background: #374151;
+  border-color: #4b5563;
+  color: #ffffff;
+}
+
+.topbar__top-link--quote {
+  border-color: #9a3412;
+  color: #ffedd5;
+  font-weight: 700;
 }
 
 .topbar__user-link {
@@ -951,7 +980,7 @@ a {
 
   .topbar__nav,
   .topbar__actions {
-    display: none;
+    display: flex;
     grid-column: 1 / -1;
     width: 100%;
   }
@@ -964,28 +993,43 @@ a {
   }
 
   .topbar__actions {
+    justify-content: space-between;
     gap: 0.6rem;
   }
 
   .topbar__actions-main {
-    display: contents;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .topbar__seller-access {
-    margin-left: 0;
+    margin-left: auto;
+    padding-left: 0.35rem;
   }
 
   .topbar__whatsapp-contact {
     order: 1;
   }
 
-  .topbar__actions .btn--accent {
+  .topbar__top-link--quote {
     order: 2;
   }
 
   .topbar__user-link,
   .topbar__panel-link {
     order: 3;
+  }
+
+  .topbar__top-link--home,
+  .topbar__top-link--contact {
+    display: none;
+  }
+
+  .topbar__actions--open .topbar__top-link--home,
+  .topbar__actions--open .topbar__top-link--contact {
+    display: inline-flex;
+    order: 4;
   }
 
   .hero-section {

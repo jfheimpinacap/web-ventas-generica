@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 export function Footer() {
   return (
     <footer className="footer">
-      <div>
+      <div id="contacto">
         <h4>Contacto</h4>
         <p>WhatsApp: +51 987 654 321</p>
         <p>Correo: ventas@alturacomercial.com</p>
