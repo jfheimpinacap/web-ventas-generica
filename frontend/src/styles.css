@@ -97,9 +97,22 @@ a {
 .topbar__actions {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  flex-wrap: wrap;
+  gap: 1.15rem;
   justify-content: flex-end;
+  min-width: 0;
+}
+
+.topbar__actions-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.topbar__seller-access {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4rem;
 }
 
 .topbar__whatsapp-contact {
@@ -772,6 +785,18 @@ a {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .topbar__actions {
+    gap: 0.6rem;
+  }
+
+  .topbar__actions-main {
+    display: contents;
+  }
+
+  .topbar__seller-access {
+    margin-left: 0;
   }
 
   .topbar__whatsapp-contact {
