@@ -294,6 +294,20 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
             return HomeSectionItemWriteSerializer
         return HomeSectionItemSerializer
 
+
+    def _next_position(self, section: str):
+        section_items = HomeSectionItem.objects.filter(section=section).order_by('position').values_list('position', flat=True)
+        used_positions = set(section_items)
+        max_items = HomeSectionItem.SECTION_LIMITS.get(section, 1)
+        for position in range(1, max_items + 1):
+            if position not in used_positions:
+                return position
+        return max_items + 1
+
+    def perform_create(self, serializer):
+        section = serializer.validated_data['section']
+        serializer.save(position=self._next_position(section), is_active=True)
+
     def get_queryset(self):
         queryset = HomeSectionItem.objects.select_related('product__category', 'product__brand', 'product__supplier', 'product')
         if not _include_inactive_for_authenticated(self.request):

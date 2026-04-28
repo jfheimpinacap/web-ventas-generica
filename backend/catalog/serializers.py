@@ -315,9 +315,12 @@ class HomeSectionItemWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = HomeSectionItem
         fields = ['section', 'position', 'product', 'is_active']
+        validators = []
         extra_kwargs = {
             'section': {'required': True},
             'product': {'required': True},
+            'position': {'required': False},
+            'is_active': {'required': False},
         }
 
     def validate(self, attrs):
@@ -325,6 +328,28 @@ class HomeSectionItemWriteSerializer(serializers.ModelSerializer):
         if self.instance:
             for field in ['section', 'position', 'product', 'is_active']:
                 data.setdefault(field, getattr(self.instance, field))
+        else:
+            data.setdefault('is_active', True)
+            data.setdefault('position', 1)
+
+        product = data['product']
+        section = data['section']
+        valid_types_by_section = {
+            HomeSectionItem.Section.MACHINERY_PROMOTIONS: {Product.ProductType.MACHINERY},
+            HomeSectionItem.Section.SPARE_PARTS_OFFERS: {Product.ProductType.SPARE_PART},
+            HomeSectionItem.Section.REPAIR_SERVICES: {Product.ProductType.SERVICE},
+        }
+
+        valid_types = valid_types_by_section.get(section, set())
+        category_name = (product.category.name or '').lower()
+        category_slug = (product.category.slug or '').lower()
+        is_services_category = 'servicio' in category_name or 'service' in category_name or 'servicio' in category_slug or 'service' in category_slug
+
+        if product.product_type not in valid_types and not (
+            section == HomeSectionItem.Section.REPAIR_SERVICES and is_services_category
+        ):
+            raise serializers.ValidationError({'product': 'El producto no es compatible con la sección seleccionada.'})
+
         candidate = HomeSectionItem(**data)
         if self.instance:
             candidate.pk = self.instance.pk

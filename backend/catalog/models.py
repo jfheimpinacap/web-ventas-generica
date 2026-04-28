@@ -194,7 +194,7 @@ class HomeSectionItem(TimestampedModel):
         REPAIR_SERVICES = 'repair_services', 'Servicios de reparación'
 
     SECTION_LIMITS = {
-        Section.MACHINERY_PROMOTIONS: 10,
+        Section.MACHINERY_PROMOTIONS: 12,
         Section.SPARE_PARTS_OFFERS: 6,
         Section.REPAIR_SERVICES: 12,
     }

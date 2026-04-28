@@ -501,7 +501,7 @@ class HomeSectionItemApiTests(APITestCase):
 
     def test_machinery_limit_validation(self):
         self.authenticate()
-        for index in range(1, 11):
+        for index in range(1, 13):
             product = Product.objects.create(
                 name=f'Maquinaria {index}',
                 category=self.category,
@@ -527,13 +527,101 @@ class HomeSectionItemApiTests(APITestCase):
         )
         payload = {
             'section': HomeSectionItem.Section.MACHINERY_PROMOTIONS,
-            'position': 11,
+            'position': 13,
             'product': extra_product.id,
             'is_active': True,
         }
         response = self.client.post(reverse('home-section-item-list'), payload, format='json')
         self.assertEqual(response.status_code, 400)
         self.assertTrue('section' in response.data or 'position' in response.data)
+
+    def test_patch_is_active_false_with_authentication(self):
+        self.authenticate()
+        item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=1,
+            product=self.spare_part,
+            is_active=True,
+        )
+
+        response = self.client.patch(
+            reverse('home-section-item-detail', kwargs={'pk': item.pk}),
+            {'is_active': False},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertFalse(item.is_active)
+
+    def test_delete_home_section_item_with_authentication(self):
+        self.authenticate()
+        item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.REPAIR_SERVICES,
+            position=1,
+            product=self.service,
+            is_active=True,
+        )
+
+        response = self.client.delete(reverse('home-section-item-detail', kwargs={'pk': item.pk}))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(HomeSectionItem.objects.filter(pk=item.pk).exists())
+
+    def test_delete_requires_authentication(self):
+        item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.REPAIR_SERVICES,
+            position=1,
+            product=self.service,
+            is_active=True,
+        )
+
+        response = self.client.delete(reverse('home-section-item-detail', kwargs={'pk': item.pk}))
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_assigns_next_available_position(self):
+        self.authenticate()
+        HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.MACHINERY_PROMOTIONS,
+            position=1,
+            product=self.machinery,
+            is_active=True,
+        )
+        extra_product = Product.objects.create(
+            name='Excavadora 2',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            sku='MACH-2',
+            is_published=True,
+        )
+
+        response = self.client.post(
+            reverse('home-section-item-list'),
+            {
+                'section': HomeSectionItem.Section.MACHINERY_PROMOTIONS,
+                'product': extra_product.id,
+                'is_active': True,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['position'], 2)
+
+    def test_section_compatibility_validation(self):
+        self.authenticate()
+        response = self.client.post(
+            reverse('home-section-item-list'),
+            {
+                'section': HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+                'product': self.service.id,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('product', response.data)
 
 class CatalogEntitiesAdminApiTests(APITestCase):
     def setUp(self):
