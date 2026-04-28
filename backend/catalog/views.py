@@ -1,11 +1,15 @@
 from rest_framework import filters, mixins, permissions, viewsets
 
-from .models import Brand, Category, Product, Promotion, QuoteRequest, Supplier
+from .models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 from .serializers import (
     BrandSerializer,
     CategorySerializer,
     ProductDetailSerializer,
+    ProductImageSerializer,
+    ProductImageWriteSerializer,
     ProductListSerializer,
+    ProductSpecSerializer,
+    ProductSpecWriteSerializer,
     ProductWriteSerializer,
     PromotionSerializer,
     QuoteRequestSerializer,
@@ -89,6 +93,50 @@ class ProductViewSet(viewsets.ModelViewSet):
             elif value in {'false', 'False', '0'}:
                 queryset = queryset.filter(**{bool_param: False})
 
+        return queryset
+
+
+class ProductImageViewSet(viewsets.ModelViewSet):
+    queryset = ProductImage.objects.select_related('product').order_by('order', 'id')
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return ProductImageWriteSerializer
+        return ProductImageSerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        product_id = self.request.query_params.get('product')
+        if product_id:
+            queryset = queryset.filter(product_id=product_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        image = serializer.save()
+        if image.is_main:
+            ProductImage.objects.filter(product=image.product, is_main=True).exclude(pk=image.pk).update(is_main=False)
+
+    def perform_update(self, serializer):
+        image = serializer.save()
+        if image.is_main:
+            ProductImage.objects.filter(product=image.product, is_main=True).exclude(pk=image.pk).update(is_main=False)
+
+
+class ProductSpecViewSet(viewsets.ModelViewSet):
+    queryset = ProductSpec.objects.select_related('product').order_by('order', 'id')
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return ProductSpecWriteSerializer
+        return ProductSpecSerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        product_id = self.request.query_params.get('product')
+        if product_id:
+            queryset = queryset.filter(product_id=product_id)
         return queryset
 
 

@@ -36,12 +36,15 @@ export async function apiRequest<T>(
   const { params, headers, ...rest } = options
   const url = buildUrl(path, params)
 
+  const isFormData = typeof FormData !== 'undefined' && rest.body instanceof FormData
+  const requestHeaders = new Headers(headers ?? undefined)
+  if (!isFormData && !requestHeaders.has('Content-Type')) {
+    requestHeaders.set('Content-Type', 'application/json')
+  }
+
   const response = await fetch(url, {
     ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
+    headers: requestHeaders,
   })
 
   const rawText = await response.text()

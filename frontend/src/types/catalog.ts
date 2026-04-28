@@ -35,6 +35,7 @@ export interface SupplierSummary {
 
 export interface ProductImage {
   id: number
+  product?: number
   image: string
   alt_text: string
   is_main: boolean
@@ -44,10 +45,28 @@ export interface ProductImage {
 
 export interface ProductSpec {
   id: number
+  product?: number
   name: string
   value: string
   unit: string
   order: number
+}
+
+
+export interface ProductImageWritePayload {
+  product: number
+  image?: File
+  alt_text?: string
+  is_main?: boolean
+  order?: number
+}
+
+export interface ProductSpecWritePayload {
+  product: number
+  name: string
+  value: string
+  unit?: string
+  order?: number
 }
 
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'

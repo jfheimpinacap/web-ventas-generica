@@ -1,4 +1,14 @@
-import type { ProductDetail, ProductFormValues, ProductListItem, Promotion, QuoteRequest } from '../types/catalog'
+import type {
+  ProductDetail,
+  ProductFormValues,
+  ProductImage,
+  ProductImageWritePayload,
+  ProductListItem,
+  ProductSpec,
+  ProductSpecWritePayload,
+  Promotion,
+  QuoteRequest,
+} from '../types/catalog'
 import { authFetch } from './authApi'
 
 type ApiListResponse<T> = T[] | { results: T[] }
@@ -34,6 +44,75 @@ export async function updateProduct(slug: string, payload: Partial<ProductFormVa
 
 export async function deleteProduct(slug: string) {
   return authFetch<void>(`/products/${slug}/`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getProductImages(productId: number) {
+  const response = await authFetch<ApiListResponse<ProductImage>>('/product-images/', {
+    params: { product: productId },
+  })
+  return normalizeListResponse(response)
+}
+
+export async function createProductImage(payload: ProductImageWritePayload) {
+  const formData = new FormData()
+  formData.append('product', String(payload.product))
+  if (payload.image) {
+    formData.append('image', payload.image)
+  }
+  if (payload.alt_text !== undefined) {
+    formData.append('alt_text', payload.alt_text)
+  }
+  if (payload.order !== undefined) {
+    formData.append('order', String(payload.order))
+  }
+  if (payload.is_main !== undefined) {
+    formData.append('is_main', String(payload.is_main))
+  }
+
+  return authFetch<ProductImage>('/product-images/', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function updateProductImage(id: number, payload: Partial<ProductImageWritePayload>) {
+  return authFetch<ProductImage>(`/product-images/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteProductImage(id: number) {
+  return authFetch<void>(`/product-images/${id}/`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getProductSpecs(productId: number) {
+  const response = await authFetch<ApiListResponse<ProductSpec>>('/product-specs/', {
+    params: { product: productId },
+  })
+  return normalizeListResponse(response)
+}
+
+export async function createProductSpec(payload: ProductSpecWritePayload) {
+  return authFetch<ProductSpec>('/product-specs/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateProductSpec(id: number, payload: Partial<ProductSpecWritePayload>) {
+  return authFetch<ProductSpec>(`/product-specs/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteProductSpec(id: number) {
+  return authFetch<void>(`/product-specs/${id}/`, {
     method: 'DELETE',
   })
 }
