@@ -25,38 +25,55 @@ export function CategoryForm({ initialValues, categories, onSubmit, submitLabel,
 
   return (
     <form className="admin-product-form" onSubmit={handleSubmit}>
-      {error ? <p className="ui-note ui-note--error admin-product-form__full">{error}</p> : null}
-      <label>
-        Nombre
-        <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
-      </label>
-      <label>
-        Slug (opcional)
-        <input value={values.slug ?? ''} onChange={(e) => setField('slug', e.target.value)} />
-      </label>
-      <label>
-        Categoría padre
-        <select value={values.parent ?? ''} onChange={(e) => setField('parent', e.target.value ? Number(e.target.value) : null)}>
-          <option value="">Sin padre</option>
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>{item.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Orden
-        <input type="number" value={values.order} onChange={(e) => setField('order', Number(e.target.value) || 0)} />
-      </label>
-      <label className="admin-product-form__full">
-        Descripción
-        <textarea rows={4} value={values.description} onChange={(e) => setField('description', e.target.value)} />
-      </label>
-      <label className="admin-checkbox">
-        <input type="checkbox" checked={values.is_active} onChange={(e) => setField('is_active', e.target.checked)} />
-        Activa
-      </label>
+      {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
+
+      <section className="admin-form-panel admin-form-panel--columns-4">
+        <h3>Datos de categoría</h3>
+
+        <label>
+          Nombre
+          <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
+        </label>
+
+        <label>
+          Slug (opcional)
+          <input value={values.slug ?? ''} onChange={(e) => setField('slug', e.target.value)} />
+        </label>
+
+        <label>
+          Categoría padre
+          <select value={values.parent ?? ''} onChange={(e) => setField('parent', e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Sin padre</option>
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Orden
+          <input type="number" value={values.order} onChange={(e) => setField('order', Number(e.target.value) || 0)} />
+        </label>
+
+        <label className="admin-form-panel__full">
+          Descripción
+          <textarea rows={4} value={values.description} onChange={(e) => setField('description', e.target.value)} />
+        </label>
+
+        <div className="admin-form-panel__full admin-form-switches">
+          <label className="admin-checkbox">
+            <input type="checkbox" checked={values.is_active} onChange={(e) => setField('is_active', e.target.checked)} />
+            Activa
+          </label>
+        </div>
+      </section>
+
       <div className="admin-product-form__actions">
-        <button className="btn btn--accent" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : submitLabel}</button>
+        <button className="btn btn--accent" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Guardando...' : submitLabel}
+        </button>
       </div>
     </form>
   )
