@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { SupplierForm } from '../../components/admin/SupplierForm'
 import { createSupplier, getAdminSupplier, updateSupplier } from '../../services/adminApi'
@@ -60,5 +61,31 @@ export function AdminSupplierFormPage() {
     }
   }
 
-  return <AdminLayout><h1>{isEdit ? 'Editar proveedor' : 'Nuevo proveedor'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <SupplierForm initialValues={initialValues} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear proveedor'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
+  return (
+    <AdminLayout>
+      {loading ? <p className="ui-note">Cargando formulario...</p> : null}
+      {!loading ? (
+        <AdminEditorLayout
+          title={isEdit ? 'Editar proveedor' : 'Nuevo proveedor'}
+          onBack={() => navigate('/admin/proveedores')}
+          form={
+            <SupplierForm
+              initialValues={initialValues}
+              onSubmit={handleSubmit}
+              submitLabel={isEdit ? 'Guardar cambios' : 'Crear proveedor'}
+              isSubmitting={isSubmitting}
+              error={error}
+            />
+          }
+          sidebar={
+            <section className="admin-block admin-block--compact">
+              <h2>Gestión</h2>
+              <p className="ui-note">Consolida los datos clave de contacto para compras y reposición.</p>
+              <p className="ui-note">Desactiva proveedores inactivos para limpiar las opciones del catálogo.</p>
+            </section>
+          }
+        />
+      ) : null}
+    </AdminLayout>
+  )
 }

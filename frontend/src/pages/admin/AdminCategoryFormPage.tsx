@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { CategoryForm } from '../../components/admin/CategoryForm'
 import { createCategory, getAdminCategories, getAdminCategory, updateCategory } from '../../services/adminApi'
@@ -25,7 +26,14 @@ export function AdminCategoryFormPage() {
         setCategories(list)
         if (id) {
           const entity = await getAdminCategory(Number(id))
-          setInitialValues({ name: entity.name, slug: entity.slug, parent: entity.parent, description: entity.description, is_active: entity.is_active, order: entity.order })
+          setInitialValues({
+            name: entity.name,
+            slug: entity.slug,
+            parent: entity.parent,
+            description: entity.description,
+            is_active: entity.is_active,
+            order: entity.order,
+          })
         }
       } catch {
         setError('No se pudo cargar el formulario de categoría.')
@@ -50,5 +58,32 @@ export function AdminCategoryFormPage() {
     }
   }
 
-  return <AdminLayout><h1>{isEdit ? 'Editar categoría' : 'Nueva categoría'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <CategoryForm initialValues={initialValues} categories={categories.filter((item) => String(item.id) !== id)} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear categoría'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
+  return (
+    <AdminLayout>
+      {loading ? <p className="ui-note">Cargando formulario...</p> : null}
+      {!loading ? (
+        <AdminEditorLayout
+          title={isEdit ? 'Editar categoría' : 'Nueva categoría'}
+          onBack={() => navigate('/admin/categorias')}
+          form={
+            <CategoryForm
+              initialValues={initialValues}
+              categories={categories.filter((item) => String(item.id) !== id)}
+              onSubmit={handleSubmit}
+              submitLabel={isEdit ? 'Guardar cambios' : 'Crear categoría'}
+              isSubmitting={isSubmitting}
+              error={error}
+            />
+          }
+          sidebar={
+            <section className="admin-block admin-block--compact">
+              <h2>Gestión</h2>
+              <p className="ui-note">Define nombre, jerarquía y orden para mantener el catálogo organizado.</p>
+              <p className="ui-note">Recuerda guardar para aplicar los cambios en filtros y navegación.</p>
+            </section>
+          }
+        />
+      ) : null}
+    </AdminLayout>
+  )
 }
