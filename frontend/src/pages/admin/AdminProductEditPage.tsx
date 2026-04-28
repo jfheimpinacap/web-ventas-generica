@@ -26,6 +26,7 @@ import type {
   ProductSpecWritePayload,
   SupplierSummary,
 } from '../../types/catalog'
+import { formatCondition, formatStockStatus } from '../../utils/formatters'
 
 function mapProductToFormValues(product: Awaited<ReturnType<typeof getAdminProduct>>): ProductFormValues {
   return {
@@ -56,6 +57,20 @@ const initialSpecForm = {
   order: 0,
 }
 
+const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
+
+function formatPreviewPrice(price: string | null, priceVisible: boolean) {
+  if (!priceVisible || !price) return 'Consultar'
+  const amount = Number(price)
+  if (Number.isNaN(amount)) return 'Consultar'
+
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 export function AdminProductEditPage() {
   const navigate = useNavigate()
   const { slug } = useParams<{ slug: string }>()
@@ -64,6 +79,7 @@ export function AdminProductEditPage() {
   const [brands, setBrands] = useState<Brand[]>([])
   const [suppliers, setSuppliers] = useState<SupplierSummary[]>([])
   const [initialValues, setInitialValues] = useState<ProductFormValues | null>(null)
+  const [formValues, setFormValues] = useState<ProductFormValues | null>(null)
 
   const [images, setImages] = useState<ProductImage[]>([])
   const [specs, setSpecs] = useState<ProductSpec[]>([])
@@ -86,6 +102,7 @@ export function AdminProductEditPage() {
 
   const sortedImages = useMemo(() => [...images].sort((a, b) => a.order - b.order || a.id - b.id), [images])
   const sortedSpecs = useMemo(() => [...specs].sort((a, b) => a.order - b.order || a.id - b.id), [specs])
+  const mainImage = useMemo(() => sortedImages.find((image) => image.is_main) ?? sortedImages[0] ?? null, [sortedImages])
 
   useEffect(() => {
     if (!slug) {
@@ -109,7 +126,9 @@ export function AdminProductEditPage() {
           getProductSpecs(product.id),
         ])
 
-        setInitialValues(mapProductToFormValues(product))
+        const mappedValues = mapProductToFormValues(product)
+        setInitialValues(mappedValues)
+        setFormValues(mappedValues)
         setProductId(product.id)
         setCategories(categoriesData)
         setBrands(brandsData)
@@ -273,6 +292,9 @@ export function AdminProductEditPage() {
     }
   }
 
+  const previewCategoryName = categories.find((item) => item.id === formValues?.category)?.name ?? 'Sin categoría'
+  const previewBrandName = brands.find((item) => item.id === formValues?.brand)?.name ?? 'Sin marca'
+
   return (
     <AdminLayout>
       <div className="admin-products-header">
@@ -285,131 +307,131 @@ export function AdminProductEditPage() {
       {loading ? <p className="ui-note">Cargando formulario...</p> : null}
 
       {!loading && initialValues ? (
-        <section className="admin-block">
-          <h2>Información general</h2>
-          <ProductForm
-            initialValues={initialValues}
-            categories={categories}
-            brands={brands}
-            suppliers={suppliers}
-            onSubmit={handleSubmit}
-            submitLabel="Guardar cambios"
-            isSubmitting={isSubmitting}
-            error={error}
-          />
-        </section>
-      ) : null}
+        <section className="admin-edit-layout">
+          <div className="admin-edit-layout__form">
+            <ProductForm
+              initialValues={initialValues}
+              categories={categories}
+              brands={brands}
+              suppliers={suppliers}
+              onSubmit={handleSubmit}
+              submitLabel="Guardar cambios"
+              isSubmitting={isSubmitting}
+              error={error}
+              onValuesChange={setFormValues}
+            />
+          </div>
 
-      {!loading && productId ? (
-        <section className="admin-block">
-          <h2>Imágenes</h2>
-          {imageError ? <p className="ui-note ui-note--error">{imageError}</p> : null}
-          {imageStatus ? <p className="ui-note ui-note--success">{imageStatus}</p> : null}
+          {productId ? (
+            <aside className="admin-edit-layout__side">
+              <section className="admin-block admin-block--compact">
+                <h2>Imagen principal</h2>
+                {imageError ? <p className="ui-note ui-note--error">{imageError}</p> : null}
+                {imageStatus ? <p className="ui-note ui-note--success">{imageStatus}</p> : null}
 
-          <form className="admin-inline-form" onSubmit={handleCreateImage}>
-            <label>
-              Archivo
-              <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} required />
-            </label>
-            <label>
-              Texto alternativo
-              <input value={imageAltText} onChange={(e) => setImageAltText(e.target.value)} />
-            </label>
-            <label>
-              Orden
-              <input
-                type="number"
-                value={imageOrder}
-                onChange={(e) => setImageOrder(Number(e.target.value) || 0)}
-                min={0}
-              />
-            </label>
-            <label className="admin-checkbox">
-              <input type="checkbox" checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} />
-              Marcar principal
-            </label>
-            <button type="submit" className="btn btn--accent" disabled={imageSaving}>
-              {imageSaving ? 'Guardando...' : 'Agregar imagen'}
-            </button>
-          </form>
-
-          {sortedImages.length === 0 ? (
-            <p className="ui-note">Aún no hay imágenes para este producto.</p>
-          ) : (
-            <div className="admin-media-list">
-              {sortedImages.map((image) => (
-                <article key={image.id} className="admin-media-item">
-                  <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
-                  <div className="admin-media-item__fields">
-                    <label>
-                      Alt text
-                      <input
-                        value={image.alt_text}
-                        onChange={(e) =>
-                          setImages((prev) => prev.map((item) => (item.id === image.id ? { ...item, alt_text: e.target.value } : item)))
-                        }
-                      />
-                    </label>
+                <form className="admin-inline-form admin-inline-form--compact" onSubmit={handleCreateImage}>
+                  <label>
+                    Archivo
+                    <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} required />
+                  </label>
+                  <label>
+                    Texto alternativo
+                    <input value={imageAltText} onChange={(e) => setImageAltText(e.target.value)} />
+                  </label>
+                  <div className="admin-inline-form__row">
                     <label>
                       Orden
                       <input
                         type="number"
-                        value={image.order}
-                        onChange={(e) =>
-                          setImages((prev) =>
-                            prev.map((item) => (item.id === image.id ? { ...item, order: Number(e.target.value) || 0 } : item)),
-                          )
-                        }
+                        value={imageOrder}
+                        onChange={(e) => setImageOrder(Number(e.target.value) || 0)}
                         min={0}
                       />
                     </label>
-                    <div className="admin-media-item__actions">
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() =>
-                          handleUpdateImage(image.id, {
-                            alt_text: image.alt_text,
-                            order: image.order,
-                            is_main: image.is_main,
-                          })
-                        }
-                        disabled={imageSaving}
-                      >
-                        Guardar imagen
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => handleUpdateImage(image.id, { is_main: true })}
-                        disabled={imageSaving || image.is_main}
-                      >
-                        {image.is_main ? 'Principal' : 'Marcar principal'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => handleDeleteImage(image.id)}
-                        disabled={imageSaving}
-                      >
-                        Eliminar
-                      </button>
+                    <label className="admin-checkbox">
+                      <input type="checkbox" checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} />
+                      Principal
+                    </label>
+                    <button type="submit" className="btn btn--accent" disabled={imageSaving}>
+                      {imageSaving ? 'Guardando...' : 'Subir imagen'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="admin-image-mini-list">
+                  {sortedImages.length === 0 ? (
+                    <p className="ui-note">Aún no hay imágenes para este producto.</p>
+                  ) : (
+                    sortedImages.map((image) => (
+                      <article key={image.id} className="admin-image-mini-item">
+                        <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
+                        <div>
+                          <p>{image.alt_text || 'Sin texto alternativo'}</p>
+                          <div className="admin-media-item__actions">
+                            <button
+                              type="button"
+                              className="btn btn--ghost"
+                              onClick={() => handleUpdateImage(image.id, { is_main: true })}
+                              disabled={imageSaving || image.is_main}
+                            >
+                              {image.is_main ? 'Principal' : 'Marcar principal'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--ghost"
+                              onClick={() => handleDeleteImage(image.id)}
+                              disabled={imageSaving}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="admin-block admin-block--compact">
+                <h2>Vista previa pública</h2>
+                <article className="admin-product-preview">
+                  <img src={resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE} alt={mainImage?.alt_text || formValues?.name || 'Producto'} />
+                  <div className="admin-product-preview__content">
+                    <div className="admin-product-preview__badges">
+                      <span className="badge badge--condition">{formatCondition(formValues?.condition ?? initialValues.condition)}</span>
+                      <span className="badge badge--stock">{formatStockStatus(formValues?.stock_status ?? initialValues.stock_status)}</span>
+                      {(formValues?.is_published ?? initialValues.is_published) ? <span className="badge badge--ok">Publicado</span> : null}
+                      {(formValues?.is_featured ?? initialValues.is_featured) ? <span className="badge">Destacado</span> : null}
                     </div>
+                    <h3>{formValues?.name || initialValues.name || 'Producto sin nombre'}</h3>
+                    <p>
+                      <strong>Marca:</strong> {previewBrandName}
+                    </p>
+                    <p>
+                      <strong>Categoría:</strong> {previewCategoryName}
+                    </p>
+                    <p>
+                      <strong>Condición:</strong> {formatCondition(formValues?.condition ?? initialValues.condition)}
+                    </p>
+                    <p>
+                      <strong>Stock:</strong> {formatStockStatus(formValues?.stock_status ?? initialValues.stock_status)}
+                    </p>
+                    <p className="admin-product-preview__price">{formatPreviewPrice(formValues?.price ?? initialValues.price, formValues?.price_visible ?? initialValues.price_visible)}</p>
                   </div>
                 </article>
-              ))}
-            </div>
-          )}
+              </section>
+            </aside>
+          ) : null}
         </section>
       ) : null}
 
       {!loading && productId ? (
-        <section className="admin-block">
+        <section className="admin-block admin-block--compact">
           <h2>Especificaciones técnicas</h2>
           {specError ? <p className="ui-note ui-note--error">{specError}</p> : null}
           {specStatus ? <p className="ui-note ui-note--success">{specStatus}</p> : null}
 
-          <form className="admin-inline-form" onSubmit={handleCreateSpec}>
+          <form className="admin-inline-form admin-inline-form--compact" onSubmit={handleCreateSpec}>
             <label>
               Nombre
               <input
@@ -440,7 +462,7 @@ export function AdminProductEditPage() {
               />
             </label>
             <button type="submit" className="btn btn--accent" disabled={specSaving}>
-              {specSaving ? 'Guardando...' : 'Agregar especificación'}
+              {specSaving ? 'Guardando...' : 'Agregar spec'}
             </button>
           </form>
 
