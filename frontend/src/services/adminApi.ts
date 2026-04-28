@@ -28,9 +28,9 @@ function normalizeListResponse<T>(response: ApiListResponse<T>): T[] {
   return Array.isArray(response) ? response : response.results
 }
 
-export async function getAdminProducts() {
+export async function getAdminProducts(params?: Record<string, string | number | boolean | undefined>) {
   const response = await authFetch<ApiListResponse<ProductListItem>>('/products/', {
-    params: { include_unpublished: true },
+    params: { include_unpublished: true, ...(params ?? {}) },
   })
   return normalizeListResponse(response)
 }
@@ -276,6 +276,17 @@ export async function updatePromotion(id: number, payload: Partial<PromotionForm
 
 export async function deletePromotion(id: number) {
   return authFetch<void>(`/promotions/${id}/`, { method: 'DELETE' })
+}
+
+
+export async function getProductsForHomeSection(section: HomeSection) {
+  const sectionParams: Record<HomeSection, Record<string, string>> = {
+    machinery_promotions: { product_type: 'machinery' },
+    spare_parts_offers: { product_type: 'spare_part' },
+    repair_services: { product_type: 'service' },
+  }
+
+  return getAdminProducts(sectionParams[section])
 }
 
 export async function getAdminHomeSectionItems(section?: HomeSection) {

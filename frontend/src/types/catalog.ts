@@ -136,9 +136,9 @@ export interface HomeSectionItem {
 
 export interface HomeSectionItemFormValues {
   section: HomeSection
-  position: number
+  position?: number
   product: number
-  is_active: boolean
+  is_active?: boolean
 }
 
 export type QuoteStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded'
