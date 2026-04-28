@@ -62,13 +62,40 @@ class SupplierSerializer(serializers.ModelSerializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
-        fields = ['id', 'image', 'alt_text', 'is_main', 'order', 'created_at']
+        fields = ['id', 'product', 'image', 'alt_text', 'is_main', 'order', 'created_at']
+
+
+class ProductImageWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ['id', 'product', 'image', 'alt_text', 'is_main', 'order', 'created_at']
+        read_only_fields = ['created_at']
+        extra_kwargs = {
+            'product': {'required': True},
+            'image': {'required': True},
+            'alt_text': {'required': False, 'allow_blank': True},
+            'is_main': {'required': False},
+            'order': {'required': False},
+        }
 
 
 class ProductSpecSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSpec
-        fields = ['id', 'name', 'value', 'unit', 'order']
+        fields = ['id', 'product', 'name', 'value', 'unit', 'order']
+
+
+class ProductSpecWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductSpec
+        fields = ['id', 'product', 'name', 'value', 'unit', 'order']
+        extra_kwargs = {
+            'product': {'required': True},
+            'name': {'required': True},
+            'value': {'required': True},
+            'unit': {'required': False, 'allow_blank': True},
+            'order': {'required': False},
+        }
 
 
 class ProductListSerializer(serializers.ModelSerializer):

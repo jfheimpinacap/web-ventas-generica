@@ -148,6 +148,8 @@ Públicos:
 - `GET /api/products/<slug>/`
 - `GET /api/promotions/`
 - `POST /api/quote-requests/`
+- `GET /api/product-images/?product=<id>`
+- `GET /api/product-specs/?product=<id>`
 
 Auth JWT:
 - `POST /api/auth/login/`
@@ -156,6 +158,8 @@ Auth JWT:
 
 Privados (requieren token):
 - Escritura (`POST/PUT/PATCH/DELETE`) de productos, categorías, marcas, proveedores y promociones.
+- Gestión de imágenes de producto (`/api/product-images/`) con upload `multipart/form-data`.
+- Gestión de especificaciones técnicas (`/api/product-specs/`).
 - `GET /api/quote-requests/` (listado para panel vendedor).
 - `GET /api/products/?include_unpublished=true` para ver productos no publicados en panel.
 
@@ -179,7 +183,7 @@ Privados (requieren token):
 
 `Home → Catálogo → Detalle de producto → Cotizar`
 
-## Panel vendedor (Fase 7)
+## Panel vendedor (Fase 8)
 
 Rutas privadas frontend:
 - `/login`
@@ -190,7 +194,16 @@ Rutas privadas frontend:
 - `/admin/cotizaciones`
 - `/admin/promociones`
 
-El CRUD inicial de productos ya está disponible para usuario autenticado: crear, editar, publicar/despublicar, destacar y eliminar desde el panel vendedor.
+El panel vendedor ahora permite:
+- CRUD de productos (crear, editar, publicar/despublicar, destacar y eliminar).
+- Gestión de imágenes por producto en la vista de edición:
+  - agregar imagen
+  - editar `alt_text`, `order` y bandera `is_main`
+  - eliminar imagen
+- Gestión de especificaciones técnicas por producto en la vista de edición:
+  - agregar especificación (`name`, `value`, `unit`, `order`)
+  - editar especificación
+  - eliminar especificación
 
 Flujo recomendado:
 
@@ -225,3 +238,12 @@ Pasos recomendados:
    - `py start.py backend` → `http://127.0.0.1:8001`
    - `py start.py frontend` → `http://127.0.0.1:5174`
 3. Navega a `http://localhost:5174`.
+
+
+## Archivos media en desarrollo
+
+- `MEDIA_URL` está configurado como `/media/`.
+- `MEDIA_ROOT` apunta a `backend/media/`.
+- En modo `DEBUG=True`, Django sirve archivos media automáticamente desde `config/urls.py`.
+- Para carga de imágenes de productos en API admin usa `multipart/form-data` contra `POST /api/product-images/`.
+

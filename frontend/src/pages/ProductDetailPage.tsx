@@ -45,7 +45,10 @@ export function ProductDetailPage() {
 
   const imageUrls = useMemo(() => {
     if (!product) return []
-    return product.images.map((image) => resolveMediaUrl(image.image)).filter(Boolean)
+    return [...product.images]
+      .sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.order - b.order || a.id - b.id)
+      .map((image) => resolveMediaUrl(image.image))
+      .filter(Boolean)
   }, [product])
 
   return (
