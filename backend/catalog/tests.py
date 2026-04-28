@@ -1,7 +1,10 @@
+from io import StringIO
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -543,3 +546,44 @@ class CatalogEntitiesAdminApiTests(APITestCase):
             self.assertEqual(response.status_code, 200)
             ids = [item['id'] for item in response.data]
             self.assertIn(inactive_id, ids)
+
+class GenerateDemoProductsCommandTests(TestCase):
+    def test_non_interactive_command_creates_products_specs_categories_and_brands(self):
+        out = StringIO()
+
+        call_command(
+            'generate_demo_products',
+            '--no-input',
+            '--tijeras',
+            '2',
+            '--brazos',
+            '1',
+            '--baterias',
+            '3',
+            '--ruedas',
+            '2',
+            '--controles',
+            '1',
+            stdout=out,
+        )
+
+        self.assertEqual(Product.objects.count(), 9)
+        self.assertEqual(ProductSpec.objects.count(), 30)
+
+        for category_name in [
+            'Maquinaria',
+            'Elevadores tipo tijera',
+            'Brazos articulados',
+            'Repuestos',
+            'Baterías',
+            'Ruedas',
+            'Controles',
+        ]:
+            self.assertTrue(Category.objects.filter(name=category_name).exists())
+
+        for brand_name in ['Genie', 'JLG', 'Haulotte', 'Skyjack', 'Sinoboom', 'Dingli', 'Manitou']:
+            self.assertTrue(Brand.objects.filter(name=brand_name).exists())
+
+        output = out.getvalue()
+        self.assertIn('Generación demo completada.', output)
+        self.assertIn('- total: 9', output)
