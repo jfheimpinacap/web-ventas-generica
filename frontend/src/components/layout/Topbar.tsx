@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
+import { isAuthenticated } from '../../services/authApi'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 
 export function Topbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const hasSession = isAuthenticated()
 
   return (
     <header className="topbar" aria-label="Barra principal">
@@ -52,9 +54,15 @@ export function Topbar() {
           >
             WhatsApp
           </a>
-          <Link className="btn btn--ghost" to="/login" onClick={() => setIsMenuOpen(false)}>
-            Login
-          </Link>
+          {hasSession ? (
+            <Link className="btn btn--ghost" to="/admin" onClick={() => setIsMenuOpen(false)}>
+              Volver al panel
+            </Link>
+          ) : (
+            <Link className="btn btn--ghost" to="/login" onClick={() => setIsMenuOpen(false)}>
+              Login
+            </Link>
+          )}
         </div>
       </div>
     </header>

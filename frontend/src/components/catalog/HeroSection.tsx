@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom'
 import { usePromotions } from '../../hooks/usePromotions'
 import { resolveMediaUrl } from '../../services/api'
 import type { Promotion } from '../../types/catalog'
-import { buildWhatsAppUrl } from '../../utils/whatsapp'
 
 const AUTO_ADVANCE_MS = 6000
 const FALLBACK_IMAGE = 'https://placehold.co/1200x700/111827/F3F4F6?text=Promociones+Industriales'
@@ -82,7 +81,9 @@ export function HeroSection() {
         </div>
         <p className="hero-section__tag">Promociones comerciales</p>
         <h1>{currentSlide.title}</h1>
-        <p>{currentSlide.subtitle || 'Consulta disponibilidad y tiempos de entrega con nuestro equipo comercial.'}</p>
+        <p className="hero-section__subtitle">
+          {currentSlide.subtitle || 'Consulta disponibilidad y tiempos de entrega con nuestro equipo comercial.'}
+        </p>
         {currentSlide.product ? (
           <p className="hero-section__product">Producto asociado: {currentSlide.product.name}</p>
         ) : null}
@@ -95,14 +96,6 @@ export function HeroSection() {
           <Link to="/cotizar" className="btn btn--ghost">
             Cotizar ahora
           </Link>
-          <a
-            className="btn btn--whatsapp"
-            href={buildWhatsAppUrl('Hola, quiero información sobre promociones y disponibilidad de equipos.')}
-            target="_blank"
-            rel="noreferrer"
-          >
-            WhatsApp
-          </a>
           {externalCta ? (
             <a className="btn btn--ghost" href={ctaUrl} target="_blank" rel="noreferrer">
               {currentSlide.button_text || 'Ver promoción'}

@@ -13,7 +13,7 @@ class Command(BaseCommand):
         products = self._seed_products(categories, brands, suppliers)
         self._seed_specs(products)
         self._seed_promotions(products)
-        self.stdout.write(self.style.SUCCESS('Seed de catálogo completado.'))
+        self.stdout.write(self.style.SUCCESS(f'Seed de catálogo completado. Productos demo: {len(products)} | Promociones demo: 5'))
 
     def _seed_categories(self):
         maquinaria, _ = Category.objects.update_or_create(
@@ -27,6 +27,10 @@ class Command(BaseCommand):
         brazos, _ = Category.objects.update_or_create(
             slug='brazos-articulados',
             defaults={'name': 'Brazos articulados', 'parent': maquinaria, 'description': 'Brazos para acceso de alto alcance', 'order': 2, 'is_active': True},
+        )
+        plataformas, _ = Category.objects.update_or_create(
+            slug='plataformas-telescopicas',
+            defaults={'name': 'Plataformas telescópicas', 'parent': maquinaria, 'description': 'Plataformas de alto alcance y trabajo exterior', 'order': 3, 'is_active': True},
         )
 
         repuestos, _ = Category.objects.update_or_create(
@@ -45,17 +49,40 @@ class Command(BaseCommand):
             slug='controles',
             defaults={'name': 'Controles', 'parent': repuestos, 'description': 'Controles y joysticks', 'order': 3, 'is_active': True},
         )
+        cargadores, _ = Category.objects.update_or_create(
+            slug='cargadores',
+            defaults={'name': 'Cargadores', 'parent': repuestos, 'description': 'Cargadores y fuentes de energía', 'order': 4, 'is_active': True},
+        )
+        componentes, _ = Category.objects.update_or_create(
+            slug='componentes-electricos-hidraulicos',
+            defaults={
+                'name': 'Componentes eléctricos e hidráulicos',
+                'parent': repuestos,
+                'description': 'Módulos, válvulas, sensores y cableado para equipos de altura',
+                'order': 5,
+                'is_active': True,
+            },
+        )
+
+        varios, _ = Category.objects.update_or_create(
+            slug='servicios-y-accesorios',
+            defaults={'name': 'Servicios y accesorios', 'parent': None, 'description': 'Servicios técnicos, kits y accesorios', 'order': 3, 'is_active': True},
+        )
 
         return {
             'elevadores': elevadores,
             'brazos': brazos,
+            'plataformas': plataformas,
             'baterias': baterias,
             'ruedas': ruedas,
             'controles': controles,
+            'cargadores': cargadores,
+            'componentes': componentes,
+            'varios': varios,
         }
 
     def _seed_brands(self):
-        names = ['Genie', 'JLG', 'Haulotte', 'Skyjack']
+        names = ['Genie', 'JLG', 'Haulotte', 'Skyjack', 'Snorkel', 'LGMG', 'Zoomlion', 'Hyster']
         result = {}
         for name in names:
             brand, _ = Brand.objects.update_or_create(
@@ -86,162 +113,168 @@ class Command(BaseCommand):
                 'is_active': True,
             },
         )
-        return {'a': supplier_a, 'b': supplier_b}
+        supplier_c, _ = Supplier.objects.update_or_create(
+            name='Servicio Técnico Altura 360',
+            defaults={
+                'contact_name': 'María Salazar',
+                'phone': '+56 9 3333 3333',
+                'email': 'maria@altura360.test',
+                'notes': 'Servicios de mantenimiento, inspección y despacho de accesorios.',
+                'is_active': True,
+            },
+        )
+        return {'a': supplier_a, 'b': supplier_b, 'c': supplier_c}
 
     def _seed_products(self, categories, brands, suppliers):
-        products_data = [
-            {
-                'sku': 'GENIE-GS1930',
-                'name': 'Elevador tijera Genie GS-1930',
-                'category': categories['elevadores'],
-                'brand': brands['Genie'],
-                'supplier': suppliers['a'],
-                'product_type': Product.ProductType.MACHINERY,
-                'condition': Product.ProductCondition.USED,
-                'short_description': 'Compacto y eficiente para interior.',
-                'description': 'Equipo ideal para tareas de mantención y bodegas.',
-                'model': 'GS-1930',
-                'year': 2019,
-                'hours_meter': 890,
-                'price': '9800.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.AVAILABLE,
-                'is_featured': True,
-                'is_published': True,
-            },
-            {
-                'sku': 'JLG-450AJ',
-                'name': 'Brazo articulado JLG 450AJ',
-                'category': categories['brazos'],
-                'brand': brands['JLG'],
-                'supplier': suppliers['a'],
-                'product_type': Product.ProductType.MACHINERY,
-                'condition': Product.ProductCondition.USED,
-                'short_description': 'Gran alcance para trabajos en altura.',
-                'description': 'Brazo articulado robusto para aplicaciones exigentes.',
-                'model': '450AJ',
-                'year': 2018,
-                'hours_meter': 1540,
-                'price': '24500.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.ON_REQUEST,
-                'is_featured': True,
-                'is_published': True,
-            },
-            {
-                'sku': 'HAULOTTE-C12',
-                'name': 'Elevador tijera Haulotte Compact 12',
-                'category': categories['elevadores'],
-                'brand': brands['Haulotte'],
-                'supplier': suppliers['a'],
-                'product_type': Product.ProductType.MACHINERY,
-                'condition': Product.ProductCondition.REFURBISHED,
-                'short_description': 'Altura extra y excelente maniobrabilidad.',
-                'description': 'Plataforma con reacondicionamiento reciente.',
-                'model': 'Compact 12',
-                'year': 2017,
-                'hours_meter': 1260,
-                'price': '16900.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.AVAILABLE,
-                'is_featured': True,
-                'is_published': True,
-            },
-            {
-                'sku': 'PART-BAT-EL-001',
-                'name': 'Batería para elevador eléctrico',
-                'category': categories['baterias'],
-                'brand': brands['Skyjack'],
-                'supplier': suppliers['b'],
-                'product_type': Product.ProductType.SPARE_PART,
-                'condition': Product.ProductCondition.NEW,
-                'short_description': 'Batería de ciclo profundo 48V.',
-                'description': 'Compatible con múltiples plataformas eléctricas.',
-                'model': 'BAT-48V-220AH',
-                'price': '990.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.AVAILABLE,
-                'is_featured': False,
-                'is_published': True,
-            },
-            {
-                'sku': 'PART-RUE-PLAT-002',
-                'name': 'Rueda sólida para plataforma',
-                'category': categories['ruedas'],
-                'brand': brands['Genie'],
-                'supplier': suppliers['b'],
-                'product_type': Product.ProductType.SPARE_PART,
-                'condition': Product.ProductCondition.NEW,
-                'short_description': 'Rueda no marcante para uso industrial.',
-                'description': 'Resistente al desgaste y fácil instalación.',
-                'model': 'WH-16-SOLID',
-                'price': '180.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.AVAILABLE,
-                'is_featured': False,
-                'is_published': True,
-            },
-            {
-                'sku': 'PART-CTRL-JOY-003',
-                'name': 'Control joystick plataforma aérea',
-                'category': categories['controles'],
-                'brand': brands['JLG'],
-                'supplier': suppliers['b'],
-                'product_type': Product.ProductType.SPARE_PART,
-                'condition': Product.ProductCondition.NEW,
-                'short_description': 'Joystick proporcional para maniobras precisas.',
-                'description': 'Repuesto compatible con controladores estándar.',
-                'model': 'JOY-PRO-10',
-                'price': '320.00',
-                'price_visible': True,
-                'stock_status': Product.StockStatus.ON_REQUEST,
-                'is_featured': True,
-                'is_published': True,
-            },
-            {
-                'sku': 'INTERNAL-HIDDEN-001',
-                'name': 'Producto no publicado demo',
-                'category': categories['controles'],
-                'brand': brands['Skyjack'],
-                'supplier': suppliers['b'],
-                'product_type': Product.ProductType.OTHER,
-                'condition': Product.ProductCondition.NOT_APPLICABLE,
-                'short_description': 'No debe verse en catálogo público.',
-                'description': 'Solo para comprobar filtros públicos.',
-                'model': 'HIDDEN-1',
-                'price_visible': False,
-                'stock_status': Product.StockStatus.RESERVED,
-                'is_featured': False,
-                'is_published': False,
-            },
+        products_data = []
+
+        machinery_items = [
+            ('GENIE', 'GS-1930', 'Elevador tijera'), ('GENIE', 'GS-2632', 'Elevador tijera'), ('GENIE', 'GS-3246', 'Elevador tijera'),
+            ('JLG', '1932R', 'Elevador tijera'), ('JLG', '2646ES', 'Elevador tijera'), ('JLG', '3394RT', 'Elevador tijera'),
+            ('HAULOTTE', 'Compact 12', 'Elevador tijera'), ('HAULOTTE', 'Optimum 8', 'Elevador tijera'), ('SKYJACK', 'SJIII 3219', 'Elevador tijera'), ('SKYJACK', 'SJ6832RT', 'Elevador tijera'),
+            ('JLG', '450AJ', 'Brazo articulado'), ('JLG', '600AJ', 'Brazo articulado'), ('GENIE', 'Z-45/25J', 'Brazo articulado'), ('GENIE', 'Z-60/34', 'Brazo articulado'),
+            ('HAULOTTE', 'HA16 RTJ', 'Brazo articulado'), ('SNORKEL', 'A46JE', 'Brazo articulado'),
+            ('JLG', '860SJ', 'Plataforma telescópica'), ('GENIE', 'S-65', 'Plataforma telescópica'), ('LGMG', 'T26J', 'Plataforma telescópica'), ('ZOOMLION', 'ZT34J', 'Plataforma telescópica'),
         ]
+        machinery_brand_map = {
+            'GENIE': 'Genie',
+            'JLG': 'JLG',
+            'HAULOTTE': 'Haulotte',
+            'SKYJACK': 'Skyjack',
+            'SNORKEL': 'Snorkel',
+            'LGMG': 'LGMG',
+            'ZOOMLION': 'Zoomlion',
+        }
+
+        for index, (brand_key, model, label) in enumerate(machinery_items, start=1):
+            product_type = Product.ProductType.MACHINERY
+            category_key = 'elevadores' if 'tijera' in label.lower() else 'brazos' if 'brazo' in label.lower() else 'plataformas'
+            brand_name = machinery_brand_map[brand_key]
+            condition = Product.ProductCondition.USED if index % 3 else Product.ProductCondition.REFURBISHED
+            show_price = index % 4 != 0
+            products_data.append(
+                {
+                    'sku': f'MAQ-{brand_key}-{index:03d}',
+                    'name': f'{label} {brand_name} {model}',
+                    'category': categories[category_key],
+                    'brand': brands[brand_name],
+                    'supplier': suppliers['a'],
+                    'product_type': product_type,
+                    'condition': condition,
+                    'short_description': f'{label} confiable para operación continua en faena y bodega.',
+                    'description': f'{label} modelo {model} con mantención al día, revisión mecánica y respaldo comercial para entrega rápida.',
+                    'model': model,
+                    'year': 2016 + (index % 8),
+                    'hours_meter': 680 + (index * 73),
+                    'price': f'{12000 + index * 950:.2f}' if show_price else None,
+                    'price_visible': show_price,
+                    'stock_status': Product.StockStatus.AVAILABLE if index % 5 else Product.StockStatus.ON_REQUEST,
+                    'is_featured': index in {1, 5, 11, 17},
+                    'is_published': True,
+                }
+            )
+
+        spare_parts = [
+            ('BAT', 'Batería tracción 48V 220Ah', 'BAT-48V-220AH', 'baterias', 'new', 1150),
+            ('BAT', 'Batería AGM 24V 180Ah', 'BAT-24V-180AH', 'baterias', 'new', 760),
+            ('BAT', 'Batería litio 48V 150Ah', 'BAT-LI-48V-150', 'baterias', 'new', 2490),
+            ('BAT', 'Kit cableado batería industrial', 'KIT-BAT-CAB-01', 'baterias', 'new', 210),
+            ('RUE', 'Rueda sólida no marcante 16"', 'WH-16-SOLID', 'ruedas', 'new', 180),
+            ('RUE', 'Rueda tracción reforzada 18"', 'WH-18-TRAC', 'ruedas', 'new', 265),
+            ('RUE', 'Rueda directriz poliuretano 12"', 'WH-12-PU', 'ruedas', 'new', 145),
+            ('CTRL', 'Joystick proporcional multifunción', 'JOY-PRO-10', 'controles', 'new', 320),
+            ('CTRL', 'Control de plataforma superior', 'CTRL-TOP-220', 'controles', 'new', 540),
+            ('CTRL', 'Tarjeta electrónica de mando', 'PCB-CMD-804', 'componentes', 'refurbished', 680),
+            ('CHG', 'Cargador inteligente 48V 30A', 'CHG-48V-30A', 'cargadores', 'new', 590),
+            ('CHG', 'Cargador rápido 24V 40A', 'CHG-24V-40A', 'cargadores', 'new', 460),
+            ('CHG', 'Fuente de poder panel control', 'PSU-PANEL-24', 'componentes', 'new', 190),
+            ('ELE', 'Sensor inclinación plataforma', 'SNS-INCL-01', 'componentes', 'new', 215),
+            ('ELE', 'Relé de potencia principal', 'RLY-PWR-80', 'componentes', 'new', 78),
+            ('ELE', 'Arnés eléctrico completo', 'HRN-EL-SET', 'componentes', 'new', 355),
+            ('HYD', 'Válvula hidráulica proporcional', 'VLV-HYD-PRO', 'componentes', 'new', 420),
+            ('HYD', 'Cilindro elevación compacto', 'CYL-LIFT-C12', 'componentes', 'refurbished', 610),
+            ('HYD', 'Filtro hidráulico retorno', 'FLT-HYD-RET', 'componentes', 'new', 55),
+            ('ELE', 'Botonera paro emergencia', 'ESTOP-RED-01', 'controles', 'new', 68),
+        ]
+
+        for index, (prefix, name, model, category_key, condition, price) in enumerate(spare_parts, start=1):
+            brand_name = ['Genie', 'JLG', 'Haulotte', 'Skyjack', 'Snorkel'][index % 5]
+            show_price = index % 6 != 0
+            products_data.append(
+                {
+                    'sku': f'REP-{prefix}-{index:03d}',
+                    'name': name,
+                    'category': categories[category_key],
+                    'brand': brands[brand_name],
+                    'supplier': suppliers['b'],
+                    'product_type': Product.ProductType.SPARE_PART,
+                    'condition': Product.ProductCondition.NEW if condition == 'new' else Product.ProductCondition.REFURBISHED,
+                    'short_description': f'{name} para plataformas elevadoras y equipos de altura.',
+                    'description': f'Repuesto demo {name.lower()} con compatibilidades múltiples y disponibilidad sujeta a verificación comercial.',
+                    'model': model,
+                    'price': f'{price:.2f}' if show_price else None,
+                    'price_visible': show_price,
+                    'stock_status': Product.StockStatus.AVAILABLE if index % 4 else Product.StockStatus.ON_REQUEST,
+                    'is_featured': index in {1, 8, 14},
+                    'is_published': True,
+                }
+            )
+
+        extras = [
+            ('VAR-SRV-001', 'Servicio de mantención preventiva trimestral', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 890),
+            ('VAR-SRV-002', 'Inspección preoperacional certificada', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 320),
+            ('VAR-SRV-003', 'Diagnóstico eléctrico en terreno', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 420),
+            ('VAR-ACC-004', 'Kit baliza y alarma de movimiento', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 160),
+            ('VAR-ACC-005', 'Arnés seguridad doble cabo', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 95),
+            ('VAR-ACC-006', 'Canastillo porta herramientas', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 210),
+            ('VAR-EQP-007', 'Torre de iluminación LED portátil', Product.ProductType.MACHINERY, Product.ProductCondition.USED, 'plataformas', 4800),
+            ('VAR-EQP-008', 'Compresor industrial móvil 185 CFM', Product.ProductType.MACHINERY, Product.ProductCondition.USED, 'plataformas', 7300),
+            ('VAR-REP-009', 'Pack mangueras hidráulicas alta presión', Product.ProductType.SPARE_PART, Product.ProductCondition.NEW, 'componentes', 280),
+            ('VAR-INT-010', 'Producto interno no publicado demo', Product.ProductType.OTHER, Product.ProductCondition.NOT_APPLICABLE, 'varios', 0),
+        ]
+
+        for index, (sku, name, product_type, condition, category_key, price) in enumerate(extras, start=1):
+            is_internal = sku == 'VAR-INT-010'
+            show_price = not is_internal and index % 3 != 0
+            products_data.append(
+                {
+                    'sku': sku,
+                    'name': name,
+                    'category': categories[category_key],
+                    'brand': brands[['Genie', 'JLG', 'Haulotte', 'Skyjack', 'Snorkel', 'Hyster'][index % 6]],
+                    'supplier': suppliers['c'] if product_type == Product.ProductType.SERVICE else suppliers['b'],
+                    'product_type': product_type,
+                    'condition': condition,
+                    'short_description': f'{name} disponible para cotización comercial.',
+                    'description': f'{name} incluido como dataset demo para validar listados, filtros y tarjetas con volumen realista.',
+                    'model': f'VAR-{index:03d}',
+                    'price': f'{price:.2f}' if show_price else None,
+                    'price_visible': show_price,
+                    'stock_status': Product.StockStatus.RESERVED if is_internal else Product.StockStatus.AVAILABLE,
+                    'is_featured': index in {1, 7},
+                    'is_published': not is_internal,
+                }
+            )
 
         products = {}
         for product_data in products_data:
             sku = product_data['sku']
-            product, _ = Product.objects.update_or_create(
-                sku=sku,
-                defaults=product_data,
-            )
+            product, _ = Product.objects.update_or_create(sku=sku, defaults=product_data)
             products[sku] = product
         return products
 
     def _seed_specs(self, products):
         specs_map = {
-            'GENIE-GS1930': [
-                ('Altura de trabajo', '7.8', 'm', 1),
-                ('Capacidad', '227', 'kg', 2),
-                ('Energía', 'Eléctrico', '', 3),
-            ],
-            'JLG-450AJ': [
-                ('Altura de trabajo', '15.7', 'm', 1),
-                ('Alcance horizontal', '7.6', 'm', 2),
-                ('Capacidad', '250', 'kg', 3),
-            ],
-            'HAULOTTE-C12': [
-                ('Altura de trabajo', '12', 'm', 1),
-                ('Capacidad', '300', 'kg', 2),
-            ],
+            'MAQ-GENIE-001': [('Altura de trabajo', '7.8', 'm', 1), ('Capacidad de carga', '227', 'kg', 2), ('Energía', 'Eléctrico', '', 3)],
+            'MAQ-JLG-011': [('Altura de trabajo', '15.7', 'm', 1), ('Alcance horizontal', '7.6', 'm', 2), ('Capacidad', '250', 'kg', 3)],
+            'MAQ-HAULOTTE-007': [('Altura de trabajo', '12', 'm', 1), ('Ancho de equipo', '1.2', 'm', 2), ('Peso operativo', '2720', 'kg', 3)],
+            'MAQ-GENIE-018': [('Altura de plataforma', '19.8', 'm', 1), ('Tracción', '4x4', '', 2), ('Motor', 'Diésel', '', 3)],
+            'REP-BAT-001': [('Voltaje', '48', 'V', 1), ('Capacidad', '220', 'Ah', 2), ('Tipo', 'Ciclo profundo', '', 3)],
+            'REP-CTRL-008': [('Tipo de señal', 'Proporcional', '', 1), ('Compatibilidad', 'Controladores CAN', '', 2)],
+            'REP-CHG-011': [('Entrada', '220', 'V', 1), ('Salida', '48V / 30A', '', 2), ('Protección', 'IP54', '', 3)],
+            'REP-HYD-017': [('Presión máx.', '250', 'bar', 1), ('Caudal nominal', '60', 'L/min', 2)],
+            'VAR-EQP-007': [('Potencia de torre', '4x350', 'W', 1), ('Autonomía', '10', 'h', 2)],
+            'VAR-SRV-001': [('Cobertura', '3 visitas', '', 1), ('Tiempo de respuesta', '24', 'h', 2)],
         }
 
         for sku, specs in specs_map.items():
@@ -256,25 +289,59 @@ class Command(BaseCommand):
                 )
 
     def _seed_promotions(self, products):
-        Promotion.objects.update_or_create(
-            title='Plataformas listas para despacho',
-            defaults={
-                'subtitle': 'Equipos revisados y con entrega rápida.',
-                'product': products.get('GENIE-GS1930'),
-                'button_text': 'Ver equipos',
-                'button_url': 'http://localhost:5174/',
-                'is_active': True,
+        promotions_data = [
+            {
+                'title': 'Campaña maquinaria lista para despacho',
+                'subtitle': 'Stock seleccionado de elevadores y brazos articulados con revisión técnica al día.',
+                'product': products.get('MAQ-GENIE-001'),
+                'button_text': 'Ver maquinaria',
+                'button_url': 'http://localhost:5174/catalogo?product_type=machinery',
                 'order': 1,
             },
-        )
-        Promotion.objects.update_or_create(
-            title='Repuestos y soporte técnico',
-            defaults={
-                'subtitle': 'Stock de partes para mantener tu operación activa.',
-                'product': products.get('PART-BAT-EL-001'),
-                'button_text': 'Cotizar ahora',
-                'button_url': 'http://localhost:5174/cotizar',
-                'is_active': True,
+            {
+                'title': 'Semana de repuestos críticos',
+                'subtitle': 'Baterías, joysticks, cargadores y componentes con disponibilidad prioritaria.',
+                'product': products.get('REP-BAT-001'),
+                'button_text': 'Revisar repuestos',
+                'button_url': 'http://localhost:5174/catalogo?product_type=spare_part',
                 'order': 2,
             },
-        )
+            {
+                'title': 'Oferta temporal por renovación de flota',
+                'subtitle': 'Equipos reacondicionados con condiciones comerciales preferentes por tiempo limitado.',
+                'product': products.get('MAQ-JLG-011'),
+                'button_text': 'Cotizar promoción',
+                'button_url': 'http://localhost:5174/cotizar',
+                'order': 3,
+            },
+            {
+                'title': 'Mantenimiento y soporte en terreno',
+                'subtitle': 'Servicio técnico preventivo/correctivo para mantener tu operación activa y segura.',
+                'product': products.get('VAR-SRV-001'),
+                'button_text': 'Solicitar soporte',
+                'button_url': 'http://localhost:5174/cotizar',
+                'order': 4,
+            },
+            {
+                'title': 'Cotización rápida con asesor dedicado',
+                'subtitle': 'Comparte tu requerimiento y recibe recomendación de equipo/repuesto en el mismo día hábil.',
+                'product': None,
+                'button_text': 'Iniciar cotización',
+                'button_url': 'http://localhost:5174/cotizar',
+                'order': 5,
+            },
+        ]
+
+        for promo in promotions_data:
+            title = promo['title']
+            Promotion.objects.update_or_create(
+                title=title,
+                defaults={
+                    'subtitle': promo['subtitle'],
+                    'product': promo['product'],
+                    'button_text': promo['button_text'],
+                    'button_url': promo['button_url'],
+                    'is_active': True,
+                    'order': promo['order'],
+                },
+            )

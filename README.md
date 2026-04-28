@@ -133,6 +133,8 @@ python manage.py seed_demo_user
 ```
 
 - `seed_catalog` crea/actualiza categorías, marcas, proveedores, productos demo, specs técnicas y promociones sin duplicar registros principales.
+  - dataset demo ampliado a ~50 productos (maquinaria, repuestos, servicios/accesorios y algunos no publicados para validar filtros).
+  - crea/actualiza 5 promociones demo activas para probar carrusel Hero y CTAs.
 - `seed_demo_user` crea (o actualiza) el usuario vendedor demo de forma idempotente:
   - username: `vendedor`
   - password: `vendedor123`
@@ -182,6 +184,7 @@ Privados (requieren token):
 - Home (`/`) ahora incluye hero comercial con carrusel de promociones (`/api/promotions/`) y fallback estático cuando no hay datos.
 - Catálogo (`/catalogo`) consume `GET /api/products/` con filtros públicos por `search`, `category`, `brand`, `product_type`, `condition`, `stock_status` y `ordering`.
 - Topbar pública fija con navegación visible (`Inicio`, `Catálogo`, `Cotizar`), teléfono/WhatsApp y acceso a login.
+- Si existe sesión de vendedor activa, la topbar pública muestra acceso rápido **`Volver al panel`** hacia `/admin`.
 - Sidebar pública reforzada con buscador comercial y categorías reales/fallback que redirigen a `/catalogo?...`.
 - Detalle de producto (`/producto/:slug`) consume `GET /api/products/<slug>/` y sugiere productos relacionados de la misma categoría.
 - Formulario de cotización (`/cotizar`) consume `POST /api/quote-requests/` y puede preseleccionar producto vía query param (`?product=<id>`).
@@ -225,6 +228,7 @@ El panel vendedor ahora permite:
   - agregar especificación (`name`, `value`, `unit`, `order`)
   - editar especificación
   - eliminar especificación
+- Interfaz compactada visualmente para reducir espacios vacíos, mostrar más contenido arriba y facilitar la operación diaria.
 
 Flujo recomendado:
 
