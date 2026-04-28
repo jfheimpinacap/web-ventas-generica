@@ -139,6 +139,19 @@ python manage.py seed_demo_user
   - username: `vendedor`
   - password: `vendedor123`
   - email: `vendedor@example.com`
+- `generate_demo_products` genera productos demo variables por tipo (maquinaria y repuestos), incluyendo especificaciones técnicas por producto.
+
+Uso interactivo:
+
+```bash
+python manage.py generate_demo_products
+```
+
+Uso no interactivo (ideal para pruebas/CI):
+
+```bash
+python manage.py generate_demo_products --tijeras 10 --brazos 8 --baterias 20 --ruedas 20 --controles 15 --no-input
+```
 
 > Para ver datos reales en el frontend público, ejecuta `python manage.py seed_catalog` antes de abrir la Home.
 
