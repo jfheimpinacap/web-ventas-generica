@@ -64,9 +64,51 @@ class Command(BaseCommand):
             },
         )
 
-        varios, _ = Category.objects.update_or_create(
-            slug='servicios-y-accesorios',
-            defaults={'name': 'Servicios y accesorios', 'parent': None, 'description': 'Servicios técnicos, kits y accesorios', 'order': 3, 'is_active': True},
+        legacy_services = Category.objects.filter(slug='servicios-y-accesorios').first()
+        servicios, _ = Category.objects.update_or_create(
+            slug='servicios',
+            defaults={
+                'name': 'Servicios',
+                'parent': None,
+                'description': 'Servicios técnicos especializados para equipos industriales.',
+                'order': 3,
+                'is_active': True,
+            },
+        )
+        if legacy_services and legacy_services.id != servicios.id:
+            Product.objects.filter(category=legacy_services).update(category=servicios)
+            Category.objects.filter(parent=legacy_services).update(parent=servicios)
+            legacy_services.delete()
+
+        reparacion_motores, _ = Category.objects.update_or_create(
+            slug='reparacion-motores-electricos',
+            defaults={
+                'name': 'Reparación motores eléctricos',
+                'parent': servicios,
+                'description': 'Diagnóstico, bobinado y reparación de motores eléctricos industriales.',
+                'order': 1,
+                'is_active': True,
+            },
+        )
+        reparacion_bombas, _ = Category.objects.update_or_create(
+            slug='reparacion-bombas',
+            defaults={
+                'name': 'Reparación bombas',
+                'parent': servicios,
+                'description': 'Reparación y calibración de bombas hidráulicas e industriales.',
+                'order': 2,
+                'is_active': True,
+            },
+        )
+        mantenciones, _ = Category.objects.update_or_create(
+            slug='mantenciones-general',
+            defaults={
+                'name': 'Mantenciones general',
+                'parent': servicios,
+                'description': 'Mantenciones preventivas y correctivas de equipos en terreno y taller.',
+                'order': 3,
+                'is_active': True,
+            },
         )
 
         return {
@@ -78,7 +120,10 @@ class Command(BaseCommand):
             'controles': controles,
             'cargadores': cargadores,
             'componentes': componentes,
-            'varios': varios,
+            'servicios': servicios,
+            'servicios_motores': reparacion_motores,
+            'servicios_bombas': reparacion_bombas,
+            'servicios_mantenciones': mantenciones,
         }
 
     def _seed_brands(self):
@@ -119,7 +164,7 @@ class Command(BaseCommand):
                 'contact_name': 'María Salazar',
                 'phone': '+56 9 3333 3333',
                 'email': 'maria@altura360.test',
-                'notes': 'Servicios de mantenimiento, inspección y despacho de accesorios.',
+                'notes': 'Servicios de mantenimiento, inspección y soporte técnico especializado.',
                 'is_active': True,
             },
         )
@@ -221,16 +266,16 @@ class Command(BaseCommand):
             )
 
         extras = [
-            ('VAR-SRV-001', 'Servicio de mantención preventiva trimestral', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 890),
-            ('VAR-SRV-002', 'Inspección preoperacional certificada', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 320),
-            ('VAR-SRV-003', 'Diagnóstico eléctrico en terreno', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'varios', 420),
-            ('VAR-ACC-004', 'Kit baliza y alarma de movimiento', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 160),
-            ('VAR-ACC-005', 'Arnés seguridad doble cabo', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 95),
-            ('VAR-ACC-006', 'Canastillo porta herramientas', Product.ProductType.OTHER, Product.ProductCondition.NEW, 'varios', 210),
+            ('SRV-MOT-001', 'Diagnóstico y rebobinado de motor trifásico', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_motores', 890),
+            ('SRV-BOM-002', 'Reparación integral de bomba hidráulica', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_bombas', 620),
+            ('SRV-MAN-003', 'Mantención general preventiva en planta', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_mantenciones', 420),
+            ('SRV-MOT-004', 'Alineación y pruebas de motor eléctrico en banco', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_motores', 360),
+            ('SRV-BOM-005', 'Inspección y cambio de sello mecánico de bomba', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_bombas', 280),
+            ('SRV-MAN-006', 'Programa trimestral de mantenciones general', Product.ProductType.SERVICE, Product.ProductCondition.NOT_APPLICABLE, 'servicios_mantenciones', 1120),
             ('VAR-EQP-007', 'Torre de iluminación LED portátil', Product.ProductType.MACHINERY, Product.ProductCondition.USED, 'plataformas', 4800),
             ('VAR-EQP-008', 'Compresor industrial móvil 185 CFM', Product.ProductType.MACHINERY, Product.ProductCondition.USED, 'plataformas', 7300),
             ('VAR-REP-009', 'Pack mangueras hidráulicas alta presión', Product.ProductType.SPARE_PART, Product.ProductCondition.NEW, 'componentes', 280),
-            ('VAR-INT-010', 'Producto interno no publicado demo', Product.ProductType.OTHER, Product.ProductCondition.NOT_APPLICABLE, 'varios', 0),
+            ('VAR-INT-010', 'Producto interno no publicado demo', Product.ProductType.OTHER, Product.ProductCondition.NOT_APPLICABLE, 'servicios', 0),
         ]
 
         for index, (sku, name, product_type, condition, category_key, price) in enumerate(extras, start=1):
@@ -274,7 +319,7 @@ class Command(BaseCommand):
             'REP-CHG-011': [('Entrada', '220', 'V', 1), ('Salida', '48V / 30A', '', 2), ('Protección', 'IP54', '', 3)],
             'REP-HYD-017': [('Presión máx.', '250', 'bar', 1), ('Caudal nominal', '60', 'L/min', 2)],
             'VAR-EQP-007': [('Potencia de torre', '4x350', 'W', 1), ('Autonomía', '10', 'h', 2)],
-            'VAR-SRV-001': [('Cobertura', '3 visitas', '', 1), ('Tiempo de respuesta', '24', 'h', 2)],
+            'SRV-MOT-001': [('Cobertura', 'Motor hasta 75HP', '', 1), ('Tiempo de respuesta', '48', 'h', 2)],
         }
 
         for sku, specs in specs_map.items():
@@ -317,7 +362,7 @@ class Command(BaseCommand):
             {
                 'title': 'Mantenimiento y soporte en terreno',
                 'subtitle': 'Servicio técnico preventivo/correctivo para mantener tu operación activa y segura.',
-                'product': products.get('VAR-SRV-001'),
+                'product': products.get('SRV-MOT-001'),
                 'button_text': 'Solicitar soporte',
                 'button_url': 'http://localhost:5174/cotizar',
                 'order': 4,

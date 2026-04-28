@@ -712,6 +712,10 @@ class GenerateDemoProductsCommandTests(TestCase):
             'Baterías',
             'Ruedas',
             'Controles',
+            'Servicios',
+            'Reparación motores eléctricos',
+            'Reparación bombas',
+            'Mantenciones general',
         ]:
             self.assertTrue(Category.objects.filter(name=category_name).exists())
 
