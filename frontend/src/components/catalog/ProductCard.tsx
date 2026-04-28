@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { resolveMediaUrl } from '../../services/api'
 import type { ProductListItem } from '../../types/catalog'
 import { formatCondition, formatPrice, formatStockStatus } from '../../utils/formatters'
-import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../../utils/whatsapp'
 
 interface ProductCardProps {
   product: ProductListItem
@@ -33,15 +32,9 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="product-card__price">{formatPrice(product)}</p>
       </div>
       <div className="product-card__actions">
-        <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
+        <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
           Ver detalle
         </Link>
-        <Link className="btn btn--accent" to={`/cotizar?product=${product.id}`}>
-          Cotizar
-        </Link>
-        <a className="btn btn--ghost" href={buildWhatsAppUrl(buildProductWhatsAppMessage(product.name))} target="_blank" rel="noreferrer">
-          WhatsApp
-        </a>
       </div>
     </article>
   )
