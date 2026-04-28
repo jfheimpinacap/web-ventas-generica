@@ -29,9 +29,13 @@ const fallbackSlides: Promotion[] = [
 ]
 
 function resolvePromotionUrl(promotion: Promotion) {
-  if (promotion.button_url) return promotion.button_url
+  if (promotion.button_url?.trim()) return promotion.button_url.trim()
   if (promotion.product) return `/producto/${promotion.product.slug}`
   return '/catalogo'
+}
+
+function isExternalUrl(url: string) {
+  return /^https?:\/\//i.test(url)
 }
 
 export function HeroSection() {
@@ -56,6 +60,7 @@ export function HeroSection() {
   const currentSlide = slides[currentIndex]
   const imageUrl = resolveMediaUrl(currentSlide.image) || FALLBACK_IMAGE
   const ctaUrl = resolvePromotionUrl(currentSlide)
+  const externalCta = isExternalUrl(ctaUrl)
 
   const badges = useMemo(() => {
     const tags = ['Oferta vigente', 'Cotización rápida']
@@ -98,9 +103,15 @@ export function HeroSection() {
           >
             WhatsApp
           </a>
-          <a className="btn btn--ghost" href={ctaUrl} target={ctaUrl.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
-            {currentSlide.button_text || 'Ver promoción'}
-          </a>
+          {externalCta ? (
+            <a className="btn btn--ghost" href={ctaUrl} target="_blank" rel="noreferrer">
+              {currentSlide.button_text || 'Ver promoción'}
+            </a>
+          ) : (
+            <Link className="btn btn--ghost" to={ctaUrl}>
+              {currentSlide.button_text || 'Ver promoción'}
+            </Link>
+          )}
         </div>
       </div>
 

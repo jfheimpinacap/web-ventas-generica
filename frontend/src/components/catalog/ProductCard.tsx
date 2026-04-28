@@ -27,7 +27,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <strong>Marca:</strong> {product.brand?.name ?? 'Sin marca'}
         </p>
         <p>
-          <strong>Categoría:</strong> {product.category.name}
+          <strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}
         </p>
         <p>{product.short_description || 'Sin descripción breve.'}</p>
         <p className="product-card__price">{formatPrice(product)}</p>
