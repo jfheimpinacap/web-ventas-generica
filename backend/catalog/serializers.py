@@ -291,7 +291,25 @@ class PromotionWriteSerializer(serializers.ModelSerializer):
         }
 
 
-class QuoteRequestSerializer(serializers.ModelSerializer):
+class QuoteRequestPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuoteRequest
+        fields = [
+            'id',
+            'product',
+            'customer_name',
+            'customer_phone',
+            'customer_email',
+            'company_name',
+            'city',
+            'preferred_contact_method',
+            'message',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class QuoteRequestAdminSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
 
     class Meta:
@@ -303,9 +321,17 @@ class QuoteRequestSerializer(serializers.ModelSerializer):
             'customer_name',
             'customer_phone',
             'customer_email',
+            'company_name',
+            'city',
+            'preferred_contact_method',
             'message',
             'status',
+            'internal_notes',
+            'seller_response',
             'created_at',
             'updated_at',
+            'contacted_at',
+            'quoted_at',
+            'closed_at',
         ]
-        read_only_fields = ['status', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'contacted_at', 'quoted_at', 'closed_at']

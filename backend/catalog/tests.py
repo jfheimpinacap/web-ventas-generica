@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -249,6 +251,7 @@ class ProductMediaAndSpecsApiTests(APITestCase):
         self.assertEqual(response.status_code, 401)
 
 
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', QUOTE_NOTIFICATION_EMAIL='vendedor@example.com')
 class QuoteRequestApiTests(APITestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Repuestos')
@@ -260,13 +263,27 @@ class QuoteRequestApiTests(APITestCase):
             sku='SKU-QUOTE-1',
             is_published=True,
         )
+        User = get_user_model()
+        self.user = User.objects.create_user(username='seller_quotes', password='seller123', is_staff=True)
 
-    def test_create_quote_request(self):
+    def authenticate(self):
+        token_response = self.client.post(
+            reverse('token-obtain-pair'),
+            {'username': 'seller_quotes', 'password': 'seller123'},
+            format='json',
+        )
+        token = token_response.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    def test_create_quote_request_with_new_fields(self):
         payload = {
             'product': self.product.id,
             'customer_name': 'Juan Perez',
             'customer_phone': '+56 9 8888 9999',
             'customer_email': 'juan@example.com',
+            'company_name': 'Agro Juan',
+            'city': 'Talca',
+            'preferred_contact_method': 'whatsapp',
             'message': 'Necesito precio y plazo de entrega.',
         }
         response = self.client.post(reverse('quote-request-list'), payload, format='json')
@@ -275,6 +292,110 @@ class QuoteRequestApiTests(APITestCase):
         self.assertEqual(QuoteRequest.objects.count(), 1)
         created = QuoteRequest.objects.first()
         self.assertEqual(created.status, QuoteRequest.QuoteStatus.NEW)
+        self.assertEqual(created.company_name, 'Agro Juan')
+        self.assertEqual(created.preferred_contact_method, 'whatsapp')
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_get_quote_requests_without_token_fails(self):
+        response = self.client.get(reverse('quote-request-list'))
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_quote_requests_with_token_works(self):
+        QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Mario',
+            customer_phone='12345',
+            message='Demo',
+        )
+        self.authenticate()
+        response = self.client.get(reverse('quote-request-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+    def test_patch_status_to_contacted_sets_contacted_at(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Pedro',
+            customer_phone='321',
+            message='contactar',
+        )
+        self.authenticate()
+        response = self.client.patch(
+            reverse('quote-request-detail', kwargs={'pk': quote.pk}),
+            {'status': QuoteRequest.QuoteStatus.CONTACTED},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        quote.refresh_from_db()
+        self.assertIsNotNone(quote.contacted_at)
+
+    def test_patch_status_to_quoted_sets_quoted_at(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Pedro',
+            customer_phone='321',
+            message='cotizar',
+        )
+        self.authenticate()
+        response = self.client.patch(
+            reverse('quote-request-detail', kwargs={'pk': quote.pk}),
+            {'status': QuoteRequest.QuoteStatus.QUOTED},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        quote.refresh_from_db()
+        self.assertIsNotNone(quote.quoted_at)
+
+    def test_patch_status_to_closed_sets_closed_at(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Pedro',
+            customer_phone='321',
+            message='cerrar',
+        )
+        self.authenticate()
+        response = self.client.patch(
+            reverse('quote-request-detail', kwargs={'pk': quote.pk}),
+            {'status': QuoteRequest.QuoteStatus.CLOSED},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        quote.refresh_from_db()
+        self.assertIsNotNone(quote.closed_at)
+
+    def test_filter_by_status(self):
+        QuoteRequest.objects.create(product=self.product, customer_name='A', customer_phone='1', message='x', status='new')
+        QuoteRequest.objects.create(product=self.product, customer_name='B', customer_phone='2', message='y', status='quoted')
+        self.authenticate()
+        response = self.client.get(reverse('quote-request-list'), {'status': 'quoted'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['status'], 'quoted')
+
+    def test_search_by_name_email_phone(self):
+        QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Cliente Uno',
+            customer_phone='999111',
+            customer_email='uno@example.com',
+            message='Solicitud uno',
+        )
+        QuoteRequest.objects.create(
+            product=self.product,
+            customer_name='Cliente Dos',
+            customer_phone='888222',
+            customer_email='dos@example.com',
+            message='Solicitud dos',
+        )
+        self.authenticate()
+
+        response_name = self.client.get(reverse('quote-request-list'), {'search': 'Uno'})
+        response_email = self.client.get(reverse('quote-request-list'), {'search': 'dos@example.com'})
+        response_phone = self.client.get(reverse('quote-request-list'), {'search': '999111'})
+
+        self.assertEqual(len(response_name.data), 1)
+        self.assertEqual(len(response_email.data), 1)
+        self.assertEqual(len(response_phone.data), 1)
 
 
 class CatalogEntitiesAdminApiTests(APITestCase):

@@ -16,6 +16,7 @@ import { AdminProductEditPage } from '../pages/admin/AdminProductEditPage'
 import { AdminProductsPage } from '../pages/admin/AdminProductsPage'
 import { AdminPromotionFormPage } from '../pages/admin/AdminPromotionFormPage'
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage'
+import { AdminQuoteDetailPage } from '../pages/admin/AdminQuoteDetailPage'
 import { AdminQuotesPage } from '../pages/admin/AdminQuotesPage'
 import { AdminSupplierFormPage } from '../pages/admin/AdminSupplierFormPage'
 import { AdminSuppliersPage } from '../pages/admin/AdminSuppliersPage'
@@ -44,6 +45,7 @@ export function AppRouter() {
         <Route path="/admin/proveedores/nuevo" element={<AdminSupplierFormPage />} />
         <Route path="/admin/proveedores/:id/editar" element={<AdminSupplierFormPage />} />
         <Route path="/admin/cotizaciones" element={<AdminQuotesPage />} />
+        <Route path="/admin/cotizaciones/:id" element={<AdminQuoteDetailPage />} />
         <Route path="/admin/promociones" element={<AdminPromotionsPage />} />
         <Route path="/admin/promociones/nueva" element={<AdminPromotionFormPage />} />
         <Route path="/admin/promociones/:id/editar" element={<AdminPromotionFormPage />} />
