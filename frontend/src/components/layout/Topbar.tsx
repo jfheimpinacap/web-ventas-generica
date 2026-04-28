@@ -32,12 +32,6 @@ export function Topbar() {
           {isMenuOpen ? '✕' : '☰'}
         </button>
 
-        <nav className={`topbar__nav ${isMenuOpen ? 'topbar__nav--open' : ''}`} aria-label="Navegación pública">
-          <NavLink to="/" onClick={() => setIsMenuOpen(false)}>
-            Inicio
-          </NavLink>
-        </nav>
-
         <div className={`topbar__actions ${isMenuOpen ? 'topbar__actions--open' : ''}`}>
           <div className="topbar__actions-main">
             <a
@@ -52,7 +46,13 @@ export function Topbar() {
               </span>
               <span className="topbar__phone">{WHATSAPP_PHONE}</span>
             </a>
-            <Link className="btn btn--accent" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
+            <NavLink className="topbar__top-link topbar__top-link--home" to="/" onClick={() => setIsMenuOpen(false)}>
+              Volver al inicio
+            </NavLink>
+            <a className="topbar__top-link topbar__top-link--contact" href="#contacto" onClick={() => setIsMenuOpen(false)}>
+              Contacto
+            </a>
+            <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
               Cotizar
             </Link>
           </div>
