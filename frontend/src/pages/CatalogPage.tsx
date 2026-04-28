@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Layout } from '../components/layout/Layout'
@@ -43,6 +43,7 @@ function getNumericPrice(product: ProductListItem) {
 
 export function CatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const { categories } = useCategories()
   const { brands } = useBrands()
 
@@ -131,6 +132,10 @@ export function CatalogPage() {
   }, [categoryPath, selectedBrand, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [location.pathname, location.search])
 
   const displayedProducts = useMemo(() => {
     if (!query.ordering || (query.ordering !== 'price' && query.ordering !== '-price')) {
