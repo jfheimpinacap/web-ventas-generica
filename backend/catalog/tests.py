@@ -3,7 +3,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from catalog.models import Category, Product, ProductImage, ProductSpec, QuoteRequest
+from catalog.models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 
 
 class ProductApiTests(APITestCase):
@@ -275,3 +275,150 @@ class QuoteRequestApiTests(APITestCase):
         self.assertEqual(QuoteRequest.objects.count(), 1)
         created = QuoteRequest.objects.first()
         self.assertEqual(created.status, QuoteRequest.QuoteStatus.NEW)
+
+
+class CatalogEntitiesAdminApiTests(APITestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='seller_entities', password='seller123', is_staff=True)
+        self.parent_category = Category.objects.create(name='Padre', is_active=True)
+        self.inactive_category = Category.objects.create(name='Categoria inactiva', is_active=False)
+        self.inactive_brand = Brand.objects.create(name='Marca inactiva', is_active=False)
+        self.inactive_supplier = Supplier.objects.create(name='Proveedor inactivo', is_active=False)
+        self.category = Category.objects.create(name='Categoria activa', is_active=True)
+        self.product = Product.objects.create(
+            name='Producto promo',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            stock_status=Product.StockStatus.AVAILABLE,
+            is_published=True,
+        )
+        self.active_promotion = Promotion.objects.create(title='Promo activa', is_active=True, order=1)
+        self.inactive_promotion = Promotion.objects.create(title='Promo inactiva', is_active=False, order=2)
+
+    def authenticate(self):
+        token_response = self.client.post(
+            reverse('token-obtain-pair'),
+            {'username': 'seller_entities', 'password': 'seller123'},
+            format='json',
+        )
+        token = token_response.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    def test_create_category_authenticated(self):
+        self.authenticate()
+        response = self.client.post(
+            reverse('category-list'),
+            {
+                'name': 'Nueva categoria',
+                'parent': self.parent_category.id,
+                'description': 'Descripcion',
+                'is_active': True,
+                'order': 3,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        created = Category.objects.get(name='Nueva categoria')
+        self.assertTrue(created.slug)
+
+    def test_edit_category_authenticated(self):
+        self.authenticate()
+        category = Category.objects.create(name='Editar categoria', is_active=True)
+        original_slug = category.slug
+        response = self.client.patch(
+            reverse('category-detail', kwargs={'pk': category.pk}),
+            {'name': 'Categoria editada', 'order': 8},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        category.refresh_from_db()
+        self.assertEqual(category.name, 'Categoria editada')
+        self.assertEqual(category.order, 8)
+        self.assertEqual(category.slug, original_slug)
+
+    def test_create_category_without_token_fails(self):
+        response = self.client.post(reverse('category-list'), {'name': 'Sin token'}, format='json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_brand_authenticated(self):
+        self.authenticate()
+        response = self.client.post(reverse('brand-list'), {'name': 'Marca admin', 'is_active': True}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Brand.objects.filter(name='Marca admin').count(), 1)
+
+    def test_create_supplier_authenticated(self):
+        self.authenticate()
+        payload = {
+            'name': 'Proveedor admin',
+            'contact_name': 'Ana',
+            'phone': '12345',
+            'email': 'ana@example.com',
+            'notes': 'Preferente',
+            'is_active': True,
+        }
+        response = self.client.post(reverse('supplier-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Supplier.objects.filter(name='Proveedor admin').count(), 1)
+
+    def test_create_promotion_authenticated(self):
+        self.authenticate()
+        payload = {
+            'title': 'Promo admin',
+            'subtitle': 'Subtitulo',
+            'product': self.product.id,
+            'button_text': 'Cotizar',
+            'button_url': 'https://example.com/promo',
+            'is_active': True,
+            'order': 5,
+        }
+        response = self.client.post(reverse('promotion-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Promotion.objects.filter(title='Promo admin').count(), 1)
+
+    def test_edit_promotion_authenticated(self):
+        self.authenticate()
+        response = self.client.patch(
+            reverse('promotion-detail', kwargs={'pk': self.active_promotion.pk}),
+            {'title': 'Promo editada', 'is_active': False},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.active_promotion.refresh_from_db()
+        self.assertEqual(self.active_promotion.title, 'Promo editada')
+        self.assertFalse(self.active_promotion.is_active)
+
+    def test_inactive_promotions_are_hidden_for_public(self):
+        response = self.client.get(reverse('promotion-list'))
+        self.assertEqual(response.status_code, 200)
+        ids = [item['id'] for item in response.data]
+        self.assertIn(self.active_promotion.id, ids)
+        self.assertNotIn(self.inactive_promotion.id, ids)
+
+    def test_include_inactive_without_token_does_not_expose_restricted_data(self):
+        checks = [
+            ('category-list', self.inactive_category.id),
+            ('brand-list', self.inactive_brand.id),
+            ('supplier-list', self.inactive_supplier.id),
+            ('promotion-list', self.inactive_promotion.id),
+        ]
+        for route_name, inactive_id in checks:
+            response = self.client.get(reverse(route_name), {'include_inactive': 'true'})
+            self.assertEqual(response.status_code, 200)
+            ids = [item['id'] for item in response.data]
+            self.assertNotIn(inactive_id, ids)
+
+    def test_include_inactive_with_token_allows_admin_panel(self):
+        self.authenticate()
+        checks = [
+            ('category-list', self.inactive_category.id),
+            ('brand-list', self.inactive_brand.id),
+            ('supplier-list', self.inactive_supplier.id),
+            ('promotion-list', self.inactive_promotion.id),
+        ]
+        for route_name, inactive_id in checks:
+            response = self.client.get(reverse(route_name), {'include_inactive': 'true'})
+            self.assertEqual(response.status_code, 200)
+            ids = [item['id'] for item in response.data]
+            self.assertIn(inactive_id, ids)

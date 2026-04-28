@@ -3,7 +3,9 @@ from rest_framework import filters, mixins, permissions, viewsets
 from .models import Brand, Category, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 from .serializers import (
     BrandSerializer,
+    BrandWriteSerializer,
     CategorySerializer,
+    CategoryWriteSerializer,
     ProductDetailSerializer,
     ProductImageSerializer,
     ProductImageWriteSerializer,
@@ -12,40 +14,59 @@ from .serializers import (
     ProductSpecWriteSerializer,
     ProductWriteSerializer,
     PromotionSerializer,
+    PromotionWriteSerializer,
     QuoteRequestSerializer,
     SupplierSerializer,
+    SupplierWriteSerializer,
 )
 
 
+def _include_inactive_for_authenticated(request):
+    include_inactive = request.query_params.get('include_inactive') in {'1', 'true', 'True'}
+    return request.user.is_authenticated and include_inactive
+
+
 class CategoryViewSet(viewsets.ModelViewSet):
-    serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return CategoryWriteSerializer
+        return CategorySerializer
 
     def get_queryset(self):
         queryset = Category.objects.select_related('parent')
-        if self.request.user.is_authenticated:
+        if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
 
 
 class BrandViewSet(viewsets.ModelViewSet):
-    serializer_class = BrandSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return BrandWriteSerializer
+        return BrandSerializer
 
     def get_queryset(self):
         queryset = Brand.objects.all()
-        if self.request.user.is_authenticated:
+        if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
-    serializer_class = SupplierSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return SupplierWriteSerializer
+        return SupplierSerializer
 
     def get_queryset(self):
         queryset = Supplier.objects.all()
-        if self.request.user.is_authenticated:
+        if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
 
@@ -141,12 +162,16 @@ class ProductSpecViewSet(viewsets.ModelViewSet):
 
 
 class PromotionViewSet(viewsets.ModelViewSet):
-    serializer_class = PromotionSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action in {'create', 'update', 'partial_update'}:
+            return PromotionWriteSerializer
+        return PromotionSerializer
 
     def get_queryset(self):
         queryset = Promotion.objects.select_related('product__category', 'product__brand')
-        if self.request.user.is_authenticated:
+        if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
 

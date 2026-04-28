@@ -162,6 +162,7 @@ Privados (requieren token):
 - Gestión de especificaciones técnicas (`/api/product-specs/`).
 - `GET /api/quote-requests/` (listado para panel vendedor).
 - `GET /api/products/?include_unpublished=true` para ver productos no publicados en panel.
+- `GET /api/categories|brands|suppliers|promotions/?include_inactive=true` para que panel admin vea entidades activas e inactivas (requiere token).
 
 > Por defecto `GET /api/products/` devuelve solo productos publicados (`is_published=True`).
 
@@ -193,9 +194,21 @@ Rutas privadas frontend:
 - `/admin/productos/:slug/editar`
 - `/admin/cotizaciones`
 - `/admin/promociones`
+- `/admin/promociones/nueva`
+- `/admin/promociones/:id/editar`
+- `/admin/categorias`
+- `/admin/categorias/nueva`
+- `/admin/categorias/:id/editar`
+- `/admin/marcas`
+- `/admin/marcas/nueva`
+- `/admin/marcas/:id/editar`
+- `/admin/proveedores`
+- `/admin/proveedores/nuevo`
+- `/admin/proveedores/:id/editar`
 
 El panel vendedor ahora permite:
 - CRUD de productos (crear, editar, publicar/despublicar, destacar y eliminar).
+- CRUD inicial de categorías, marcas, proveedores y promociones desde rutas privadas del panel vendedor.
 - Gestión de imágenes por producto en la vista de edición:
   - agregar imagen
   - editar `alt_text`, `order` y bandera `is_main`

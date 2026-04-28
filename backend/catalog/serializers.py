@@ -28,6 +28,20 @@ class CategorySerializer(serializers.ModelSerializer):
         ]
 
 
+class CategoryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['name', 'slug', 'parent', 'description', 'is_active', 'order']
+        extra_kwargs = {
+            'name': {'required': True},
+            'slug': {'required': False, 'allow_blank': True},
+            'parent': {'required': False, 'allow_null': True},
+            'description': {'required': False, 'allow_blank': True},
+            'is_active': {'required': False},
+            'order': {'required': False},
+        }
+
+
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
@@ -41,6 +55,19 @@ class BrandSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class BrandWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = ['name', 'slug', 'logo', 'description', 'is_active']
+        extra_kwargs = {
+            'name': {'required': True},
+            'slug': {'required': False, 'allow_blank': True},
+            'logo': {'required': False, 'allow_null': True},
+            'description': {'required': False, 'allow_blank': True},
+            'is_active': {'required': False},
+        }
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -57,6 +84,20 @@ class SupplierSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class SupplierWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ['name', 'contact_name', 'phone', 'email', 'notes', 'is_active']
+        extra_kwargs = {
+            'name': {'required': True},
+            'contact_name': {'required': False, 'allow_blank': True},
+            'phone': {'required': False, 'allow_blank': True},
+            'email': {'required': False, 'allow_blank': True},
+            'notes': {'required': False, 'allow_blank': True},
+            'is_active': {'required': False},
+        }
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -219,6 +260,35 @@ class PromotionSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class PromotionWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Promotion
+        fields = [
+            'title',
+            'subtitle',
+            'product',
+            'image',
+            'button_text',
+            'button_url',
+            'is_active',
+            'order',
+            'starts_at',
+            'ends_at',
+        ]
+        extra_kwargs = {
+            'title': {'required': True},
+            'subtitle': {'required': False, 'allow_blank': True},
+            'product': {'required': False, 'allow_null': True},
+            'image': {'required': False, 'allow_null': True},
+            'button_text': {'required': False, 'allow_blank': True},
+            'button_url': {'required': False, 'allow_blank': True},
+            'is_active': {'required': False},
+            'order': {'required': False},
+            'starts_at': {'required': False, 'allow_null': True},
+            'ends_at': {'required': False, 'allow_null': True},
+        }
 
 
 class QuoteRequestSerializer(serializers.ModelSerializer):
