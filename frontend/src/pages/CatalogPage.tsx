@@ -174,13 +174,11 @@ export function CatalogPage() {
           ))}
         </nav>
 
-        <div className="section-heading">
+        <div className="section-heading catalog-page__heading">
           <h1>{pageTitle}</h1>
         </div>
 
         <div className="catalog-toolbar">
-          <p className="catalog-toolbar__results">{loading ? 'Cargando resultados...' : `${displayedProducts.length} resultados`}</p>
-
           <label className="catalog-toolbar__sort">
             <span>Ordenar por</span>
             <select value={sortValue} onChange={(event) => updateFilter('ordering', event.target.value)}>
