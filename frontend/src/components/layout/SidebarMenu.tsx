@@ -27,7 +27,11 @@ function SidebarMenuNode({
     return (
       <li className="sidebar-menu__leaf">
         {item.to ? (
-          <Link to={item.to} className={isActive ? 'sidebar-menu__link sidebar-menu__link--active' : 'sidebar-menu__link'} onClick={handleNavigate}>
+          <Link
+            to={item.to}
+            className={isActive ? 'sidebar-menu__link sidebar-menu__link--active' : 'sidebar-menu__link'}
+            onClick={handleNavigate}
+          >
             {item.label}
           </Link>
         ) : (
@@ -44,13 +48,15 @@ function SidebarMenuNode({
           {item.to ? (
             <Link
               to={item.to}
-              className={isActive ? 'sidebar-menu__link sidebar-menu__link--active' : 'sidebar-menu__link'}
+              className={`sidebar-menu__link ${level === 0 ? 'sidebar-menu__link--parent' : ''} ${
+                isActive ? 'sidebar-menu__link--active' : ''
+              }`.trim()}
               onClick={handleNavigate}
             >
               {item.label}
             </Link>
           ) : (
-            item.label
+            <span className={level === 0 ? 'sidebar-menu__label sidebar-menu__label--parent' : 'sidebar-menu__label'}>{item.label}</span>
           )}
         </span>
         <button
