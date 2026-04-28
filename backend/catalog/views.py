@@ -96,7 +96,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
 
         include_unpublished = params.get('include_unpublished') in {'1', 'true', 'True'}
-        if not (self.request.user.is_authenticated and include_unpublished):
+        can_see_unpublished = self.request.user.is_authenticated and (
+            include_unpublished or self.action in {'retrieve', 'update', 'partial_update', 'destroy'}
+        )
+        if not can_see_unpublished:
             queryset = queryset.filter(is_published=True)
 
         filters_map = {

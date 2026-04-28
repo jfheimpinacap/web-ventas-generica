@@ -31,8 +31,12 @@ export function ProductDetailPage() {
       try {
         const detail = await getProductBySlug(slug)
         setProduct(detail)
-        const related = await getProducts({ category: String(detail.category.id), ordering: '-created_at' })
-        setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
+        if (detail.category?.id) {
+          const related = await getProducts({ category: String(detail.category.id), ordering: '-created_at' })
+          setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
+        } else {
+          setRelatedProducts([])
+        }
       } catch {
         setError('No se pudo cargar el detalle del producto.')
       } finally {
@@ -88,7 +92,7 @@ export function ProductDetailPage() {
                     <strong>Marca:</strong> {product.brand?.name ?? 'Sin marca'}
                   </li>
                   <li>
-                    <strong>Categoría:</strong> {product.category.name}
+                    <strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}
                   </li>
                   <li>
                     <strong>Tipo:</strong> {formatProductType(product.product_type)}
@@ -129,7 +133,9 @@ export function ProductDetailPage() {
                 <p>Sin especificaciones cargadas.</p>
               ) : (
                 <ul className="product-detail__specs">
-                  {product.specs.map((spec) => (
+                  {[...product.specs]
+                    .sort((a, b) => a.order - b.order || a.id - b.id)
+                    .map((spec) => (
                     <li key={spec.id}>
                       <span>{spec.name}</span>
                       <strong>
