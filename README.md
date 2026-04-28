@@ -177,18 +177,19 @@ Privados (requieren token):
 - **Frontend:** `http://localhost:5174`
 - **Backend:** `http://127.0.0.1:8001`
 
-## Frontend público conectado a API (Fase 5)
+## Frontend público conectado a API (Fase 11 visual pública)
 
-- Home (`/`) consume promociones (`/api/promotions/`), categorías (`/api/categories/`) y productos destacados (`/api/products/?is_featured=true`).
+- Home (`/`) ahora incluye hero comercial con carrusel de promociones (`/api/promotions/`) y fallback estático cuando no hay datos.
 - Catálogo (`/catalogo`) consume `GET /api/products/` con filtros públicos por `search`, `category`, `brand`, `product_type`, `condition`, `stock_status` y `ordering`.
-- Sidebar y CTA "Ver catálogo" redirigen al catálogo filtrado (`/catalogo?...`).
+- Topbar pública fija con navegación visible (`Inicio`, `Catálogo`, `Cotizar`), teléfono/WhatsApp y acceso a login.
+- Sidebar pública reforzada con buscador comercial y categorías reales/fallback que redirigen a `/catalogo?...`.
 - Detalle de producto (`/producto/:slug`) consume `GET /api/products/<slug>/` y sugiere productos relacionados de la misma categoría.
 - Formulario de cotización (`/cotizar`) consume `POST /api/quote-requests/` y puede preseleccionar producto vía query param (`?product=<id>`).
 - Si backend falla, Home mantiene fallback visual (hero/categorías estáticas y productos de respaldo), y catálogo muestra estado de error claro.
 
 ### Flujo público recomendado
 
-`Home → Catálogo → Detalle de producto → Cotizar`
+`Inicio → Catálogo → Producto → Cotizar / WhatsApp`
 
 ## Panel vendedor (Fase 8)
 
@@ -283,4 +284,3 @@ Pasos recomendados:
 - `MEDIA_ROOT` apunta a `backend/media/`.
 - En modo `DEBUG=True`, Django sirve archivos media automáticamente desde `config/urls.py`.
 - Para carga de imágenes de productos en API admin usa `multipart/form-data` contra `POST /api/product-images/`.
-
