@@ -22,13 +22,13 @@ export function ProductCard({ product }: ProductCardProps) {
           <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
         </div>
         <h3>{product.name}</h3>
-        <p>
+        <p className="product-card__meta">
           <strong>Marca:</strong> {product.brand?.name ?? 'Sin marca'}
         </p>
-        <p>
+        <p className="product-card__meta">
           <strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}
         </p>
-        <p>{product.short_description || 'Sin descripción breve.'}</p>
+        <p className="product-card__description">{product.short_description || 'Sin descripción breve.'}</p>
         <p className="product-card__price">{formatPrice(product)}</p>
       </div>
       <div className="product-card__actions">
