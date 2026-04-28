@@ -19,7 +19,7 @@ export function LoginPage() {
     try {
       await login(username, password)
       await getMe()
-      navigate('/admin', { replace: true })
+      navigate('/admin/productos', { replace: true })
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError('Credenciales inválidas. Verifica usuario y contraseña.')
