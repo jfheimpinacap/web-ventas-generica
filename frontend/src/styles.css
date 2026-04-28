@@ -190,10 +190,11 @@ a {
 .sidebar {
   position: sticky;
   top: calc(var(--topbar-height) + 1rem);
-  height: fit-content;
+  max-height: calc(100vh - var(--topbar-height) - 1.5rem);
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .sidebar__mobile-toggle {
@@ -214,7 +215,9 @@ a {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  max-height: calc(100vh - var(--topbar-height) - 1.5rem);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar__meta {
@@ -321,23 +324,38 @@ a {
   padding: 0;
 }
 
-.sidebar-menu__toggle {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
+.sidebar-menu__group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  border: 0;
-  border-radius: 10px;
-  background: #f3f4f6;
+  gap: 0.4rem;
   margin: 0.25rem 0;
-  padding: 0.45rem 0.6rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-  text-align: left;
+  padding: 0.2rem 0.3rem;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.sidebar-menu__group-label {
+  min-width: 0;
+}
+
+.sidebar-menu__toggle {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .sidebar-menu__leaf {
-  padding: 0.28rem 0.55rem;
+  padding: 0.2rem 0.55rem;
   margin-left: 0.4rem;
   color: #374151;
   font-size: 0.88rem;
@@ -808,6 +826,8 @@ a {
 
   .sidebar {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .search-box--primary {
@@ -826,6 +846,7 @@ a {
 
   .sidebar__panel {
     display: none;
+    max-height: min(65vh, 560px);
   }
 
   .sidebar--open .sidebar__panel {
@@ -1025,6 +1046,26 @@ a {
 .sidebar-menu__leaf a {
   display: block;
   width: 100%;
+}
+
+.sidebar-menu__link {
+  display: inline-block;
+  color: #1f2937;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.sidebar-menu__link:hover,
+.sidebar-menu__link:focus-visible {
+  color: #111827;
+  text-decoration-color: currentColor;
+}
+
+.sidebar-menu__link--active {
+  font-weight: 700;
+  text-decoration-color: currentColor;
 }
 
 @media (max-width: 960px) {

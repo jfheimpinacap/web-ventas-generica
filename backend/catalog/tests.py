@@ -53,6 +53,23 @@ class ProductApiTests(APITestCase):
         response = self.client.get(reverse('product-detail', kwargs={'slug': self.hidden_product.slug}))
         self.assertEqual(response.status_code, 404)
 
+    def test_filter_by_parent_category_includes_products_from_children(self):
+        child_category = Category.objects.create(name='Elevadores tipo tijera', parent=self.category)
+        Product.objects.create(
+            name='Elevador de prueba',
+            category=child_category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.USED,
+            short_description='Subcategoría',
+            is_published=True,
+            sku='SKU-CHILD-1',
+        )
+
+        response = self.client.get(reverse('product-list'), {'category': self.category.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertSetEqual({product['name'] for product in response.data}, {'Producto publicado', 'Elevador de prueba'})
+
 
 class ProductWritePermissionsTests(APITestCase):
     def setUp(self):
