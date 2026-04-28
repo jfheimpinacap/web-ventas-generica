@@ -30,6 +30,20 @@ def _include_inactive_for_authenticated(request):
     return request.user.is_authenticated and include_inactive
 
 
+def _get_category_descendant_ids(category_id: int):
+    descendants = [category_id]
+    pending_ids = [category_id]
+
+    while pending_ids:
+        child_ids = list(Category.objects.filter(parent_id__in=pending_ids).values_list('id', flat=True))
+        if not child_ids:
+            break
+        descendants.extend(child_ids)
+        pending_ids = child_ids
+
+    return descendants
+
+
 class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -103,12 +117,21 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_published=True)
 
         filters_map = {
-            'category': 'category_id',
             'brand': 'brand_id',
             'product_type': 'product_type',
             'condition': 'condition',
             'stock_status': 'stock_status',
         }
+
+        category_filter = params.get('category')
+        if category_filter:
+            try:
+                category_id = int(category_filter)
+            except (TypeError, ValueError):
+                queryset = queryset.none()
+            else:
+                queryset = queryset.filter(category_id__in=_get_category_descendant_ids(category_id))
+
         for param_name, model_lookup in filters_map.items():
             value = params.get(param_name)
             if value:
