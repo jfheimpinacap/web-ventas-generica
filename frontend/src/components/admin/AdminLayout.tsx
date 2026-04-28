@@ -39,7 +39,6 @@ export function AdminLayout({ children }: PropsWithChildren) {
 
       <section className="admin-main">
         <header className="admin-topbar">
-          <p>Administración comercial</p>
           <button type="button" className="btn btn--accent" onClick={handleLogout}>
             Cerrar sesión
           </button>
