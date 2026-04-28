@@ -174,8 +174,48 @@ class Command(BaseCommand):
             slug='repuestos',
             defaults={'name': 'Repuestos', 'parent': None, 'description': 'Repuestos y consumibles para plataformas.', 'order': 2, 'is_active': True},
         )
+        servicios, _ = Category.objects.update_or_create(
+            slug='servicios',
+            defaults={'name': 'Servicios', 'parent': None, 'description': 'Servicios técnicos especializados para equipos industriales.', 'order': 3, 'is_active': True},
+        )
+        legacy_services = Category.objects.filter(slug='servicios-y-accesorios').first()
+        if legacy_services and legacy_services.id != servicios.id:
+            Product.objects.filter(category=legacy_services).update(category=servicios)
+            Category.objects.filter(parent=legacy_services).update(parent=servicios)
+            legacy_services.delete()
 
-        data = {'maquinaria': maquinaria, 'repuestos': repuestos}
+        Category.objects.update_or_create(
+            slug='reparacion-motores-electricos',
+            defaults={
+                'name': 'Reparación motores eléctricos',
+                'parent': servicios,
+                'description': 'Diagnóstico, bobinado y reparación de motores eléctricos industriales.',
+                'is_active': True,
+                'order': 1,
+            },
+        )
+        Category.objects.update_or_create(
+            slug='reparacion-bombas',
+            defaults={
+                'name': 'Reparación bombas',
+                'parent': servicios,
+                'description': 'Reparación y calibración de bombas hidráulicas e industriales.',
+                'is_active': True,
+                'order': 2,
+            },
+        )
+        Category.objects.update_or_create(
+            slug='mantenciones-general',
+            defaults={
+                'name': 'Mantenciones general',
+                'parent': servicios,
+                'description': 'Mantenciones preventivas y correctivas de equipos en terreno y taller.',
+                'is_active': True,
+                'order': 3,
+            },
+        )
+
+        data = {'maquinaria': maquinaria, 'repuestos': repuestos, 'servicios': servicios}
         for type_key, config in self.TYPE_CONFIG.items():
             parent = maquinaria if config['parent_slug'] == 'maquinaria' else repuestos
             category, _ = Category.objects.update_or_create(
