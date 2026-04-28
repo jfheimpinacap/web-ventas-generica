@@ -1,4 +1,8 @@
 import type {
+  Brand,
+  BrandFormValues,
+  Category,
+  CategoryFormValues,
   ProductDetail,
   ProductFormValues,
   ProductImage,
@@ -7,7 +11,10 @@ import type {
   ProductSpec,
   ProductSpecWritePayload,
   Promotion,
+  PromotionFormValues,
   QuoteRequest,
+  SupplierFormValues,
+  SupplierSummary,
 } from '../types/catalog'
 import { authFetch } from './authApi'
 
@@ -122,7 +129,123 @@ export async function getAdminQuoteRequests() {
   return normalizeListResponse(response)
 }
 
-export async function getAdminPromotions() {
-  const response = await authFetch<ApiListResponse<Promotion>>('/promotions/')
+const includeInactiveParams = { include_inactive: true }
+
+export async function getAdminCategories() {
+  const response = await authFetch<ApiListResponse<Category>>('/categories/', { params: includeInactiveParams })
   return normalizeListResponse(response)
+}
+
+export async function getAdminCategory(id: number) {
+  return authFetch<Category>(`/categories/${id}/`, { params: includeInactiveParams })
+}
+
+export async function createCategory(payload: CategoryFormValues) {
+  return authFetch<Category>('/categories/', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateCategory(id: number, payload: Partial<CategoryFormValues>) {
+  return authFetch<Category>(`/categories/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+export async function deleteCategory(id: number) {
+  return authFetch<void>(`/categories/${id}/`, { method: 'DELETE' })
+}
+
+export async function getAdminBrands() {
+  const response = await authFetch<ApiListResponse<Brand>>('/brands/', { params: includeInactiveParams })
+  return normalizeListResponse(response)
+}
+
+export async function getAdminBrand(id: number) {
+  return authFetch<Brand>(`/brands/${id}/`, { params: includeInactiveParams })
+}
+
+export async function createBrand(payload: BrandFormValues) {
+  const formData = new FormData()
+  formData.append('name', payload.name)
+  if (payload.slug) formData.append('slug', payload.slug)
+  if (payload.description) formData.append('description', payload.description)
+  formData.append('is_active', String(payload.is_active))
+  if (payload.logo) formData.append('logo', payload.logo)
+
+  return authFetch<Brand>('/brands/', { method: 'POST', body: formData })
+}
+
+export async function updateBrand(id: number, payload: Partial<BrandFormValues>) {
+  const formData = new FormData()
+  if (payload.name !== undefined) formData.append('name', payload.name)
+  if (payload.slug !== undefined) formData.append('slug', payload.slug)
+  if (payload.description !== undefined) formData.append('description', payload.description)
+  if (payload.is_active !== undefined) formData.append('is_active', String(payload.is_active))
+  if (payload.logo instanceof File) formData.append('logo', payload.logo)
+
+  return authFetch<Brand>(`/brands/${id}/`, { method: 'PATCH', body: formData })
+}
+
+export async function deleteBrand(id: number) {
+  return authFetch<void>(`/brands/${id}/`, { method: 'DELETE' })
+}
+
+export async function getAdminSuppliers() {
+  const response = await authFetch<ApiListResponse<SupplierSummary>>('/suppliers/', { params: includeInactiveParams })
+  return normalizeListResponse(response)
+}
+
+export async function getAdminSupplier(id: number) {
+  return authFetch<SupplierSummary>(`/suppliers/${id}/`, { params: includeInactiveParams })
+}
+
+export async function createSupplier(payload: SupplierFormValues) {
+  return authFetch<SupplierSummary>('/suppliers/', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateSupplier(id: number, payload: Partial<SupplierFormValues>) {
+  return authFetch<SupplierSummary>(`/suppliers/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+export async function deleteSupplier(id: number) {
+  return authFetch<void>(`/suppliers/${id}/`, { method: 'DELETE' })
+}
+
+export async function getAdminPromotions() {
+  const response = await authFetch<ApiListResponse<Promotion>>('/promotions/', { params: includeInactiveParams })
+  return normalizeListResponse(response)
+}
+
+export async function getAdminPromotion(id: number) {
+  return authFetch<Promotion>(`/promotions/${id}/`, { params: includeInactiveParams })
+}
+
+function toPromotionBody(payload: PromotionFormValues | Partial<PromotionFormValues>) {
+  const formData = new FormData()
+  if (payload.title !== undefined) formData.append('title', payload.title)
+  if (payload.subtitle !== undefined) formData.append('subtitle', payload.subtitle)
+  if (payload.product !== undefined) formData.append('product', payload.product === null ? '' : String(payload.product))
+  if (payload.button_text !== undefined) formData.append('button_text', payload.button_text)
+  if (payload.button_url !== undefined) formData.append('button_url', payload.button_url)
+  if (payload.is_active !== undefined) formData.append('is_active', String(payload.is_active))
+  if (payload.order !== undefined) formData.append('order', String(payload.order))
+  if (payload.starts_at !== undefined) formData.append('starts_at', payload.starts_at || '')
+  if (payload.ends_at !== undefined) formData.append('ends_at', payload.ends_at || '')
+  if (payload.image) formData.append('image', payload.image)
+  return formData
+}
+
+export async function createPromotion(payload: PromotionFormValues) {
+  return authFetch<Promotion>('/promotions/', {
+    method: 'POST',
+    body: toPromotionBody(payload),
+  })
+}
+
+export async function updatePromotion(id: number, payload: Partial<PromotionFormValues>) {
+  return authFetch<Promotion>(`/promotions/${id}/`, {
+    method: 'PATCH',
+    body: toPromotionBody(payload),
+  })
+}
+
+export async function deletePromotion(id: number) {
+  return authFetch<void>(`/promotions/${id}/`, { method: 'DELETE' })
 }

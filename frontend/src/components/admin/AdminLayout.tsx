@@ -6,6 +6,9 @@ import { logout } from '../../services/authApi'
 const adminMenu = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/productos', label: 'Productos' },
+  { to: '/admin/categorias', label: 'Categorías' },
+  { to: '/admin/marcas', label: 'Marcas' },
+  { to: '/admin/proveedores', label: 'Proveedores' },
   { to: '/admin/cotizaciones', label: 'Cotizaciones' },
   { to: '/admin/promociones', label: 'Promociones' },
 ]

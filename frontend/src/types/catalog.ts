@@ -171,6 +171,46 @@ export interface SidebarMenuItem {
   children?: SidebarMenuItem[]
 }
 
+
+export interface CategoryFormValues {
+  name: string
+  slug?: string
+  parent: number | null
+  description: string
+  is_active: boolean
+  order: number
+}
+
+export interface BrandFormValues {
+  name: string
+  slug?: string
+  logo?: File | null
+  description: string
+  is_active: boolean
+}
+
+export interface SupplierFormValues {
+  name: string
+  contact_name: string
+  phone: string
+  email: string
+  notes: string
+  is_active: boolean
+}
+
+export interface PromotionFormValues {
+  title: string
+  subtitle: string
+  product: number | null
+  image?: File | null
+  button_text: string
+  button_url: string
+  is_active: boolean
+  order: number
+  starts_at: string | null
+  ends_at: string | null
+}
+
 export interface ProductFormValues {
   name: string
   category: number
