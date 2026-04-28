@@ -36,36 +36,37 @@ export function Topbar() {
           <NavLink to="/" onClick={() => setIsMenuOpen(false)}>
             Inicio
           </NavLink>
-          <NavLink to="/catalogo" onClick={() => setIsMenuOpen(false)}>
-            Catálogo
-          </NavLink>
         </nav>
 
         <div className={`topbar__actions ${isMenuOpen ? 'topbar__actions--open' : ''}`}>
-          <a
-            className="topbar__whatsapp-contact"
-            href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Abrir WhatsApp con asesor comercial"
-          >
-            <span className="topbar__whatsapp-icon" aria-hidden="true">
-              ✆
-            </span>
-            <span className="topbar__phone">{WHATSAPP_PHONE}</span>
-          </a>
-          <Link className="btn btn--accent" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
-            Cotizar
-          </Link>
-          {hasSession ? (
-            <Link className="topbar__panel-link" to="/admin" onClick={() => setIsMenuOpen(false)}>
-              Volver al panel
+          <div className="topbar__actions-main">
+            <a
+              className="topbar__whatsapp-contact"
+              href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Abrir WhatsApp con asesor comercial"
+            >
+              <span className="topbar__whatsapp-icon" aria-hidden="true">
+                ✆
+              </span>
+              <span className="topbar__phone">{WHATSAPP_PHONE}</span>
+            </a>
+            <Link className="btn btn--accent" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
+              Cotizar
             </Link>
-          ) : (
-            <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor" onClick={() => setIsMenuOpen(false)}>
-              <span aria-hidden="true">👤</span>
-            </Link>
-          )}
+          </div>
+          <div className="topbar__seller-access">
+            {hasSession ? (
+              <Link className="topbar__panel-link" to="/admin" onClick={() => setIsMenuOpen(false)}>
+                Volver al panel
+              </Link>
+            ) : (
+              <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor" onClick={() => setIsMenuOpen(false)}>
+                <span aria-hidden="true">👤</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </header>
