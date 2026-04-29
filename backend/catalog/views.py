@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, mixins, permissions, viewsets
@@ -294,6 +295,11 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
             return HomeSectionItemWriteSerializer
         return HomeSectionItemSerializer
 
+    def _reindex_section(self, section: str):
+        section_items = list(HomeSectionItem.objects.filter(section=section).order_by('position', 'id'))
+        for index, entry in enumerate(section_items, start=1):
+            if entry.position != index:
+                HomeSectionItem.objects.filter(pk=entry.pk).update(position=index)
 
     def _next_position(self, section: str):
         section_items = HomeSectionItem.objects.filter(section=section).order_by('position').values_list('position', flat=True)
@@ -307,6 +313,43 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         section = serializer.validated_data['section']
         serializer.save(position=self._next_position(section), is_active=True)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        original_section = instance.section
+        original_position = instance.position
+
+        section = serializer.validated_data.get('section', instance.section)
+        target_position = serializer.validated_data.get('position', instance.position)
+
+        if section != original_section:
+            serializer.save(position=self._next_position(section))
+            self._reindex_section(original_section)
+            self._reindex_section(section)
+            return
+
+        if target_position != original_position:
+            section_items = list(HomeSectionItem.objects.filter(section=section).exclude(pk=instance.pk).order_by('position', 'id'))
+            target_position = max(1, min(target_position, len(section_items) + 1))
+            HomeSectionItem.objects.filter(pk=instance.pk).update(position=9999)
+
+            ordered_ids = [entry.pk for entry in section_items]
+            ordered_ids.insert(target_position - 1, instance.pk)
+            for index, entry_id in enumerate(ordered_ids, start=1):
+                HomeSectionItem.objects.filter(pk=entry_id).update(position=index)
+
+            serializer.save(position=target_position)
+            self._reindex_section(section)
+            return
+
+        serializer.save()
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        section = instance.section
+        instance.delete()
+        self._reindex_section(section)
 
     def get_queryset(self):
         queryset = HomeSectionItem.objects.select_related('product__category', 'product__brand', 'product__supplier', 'product')
