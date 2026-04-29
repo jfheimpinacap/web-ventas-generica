@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { type FormEvent, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { isAuthenticated } from '../../services/authApi'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
@@ -8,7 +8,17 @@ const WHATSAPP_PHONE = '+51 987 654 321'
 
 export function Topbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
+  const navigate = useNavigate()
   const hasSession = isAuthenticated()
+
+  const handleSearch = (event: FormEvent) => {
+    event.preventDefault()
+    const term = searchValue.trim()
+    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
+    setIsMenuOpen(false)
+  }
 
   return (
     <header className="topbar" aria-label="Barra principal">
@@ -24,6 +34,30 @@ export function Topbar() {
         </Link>
 
         <button
+          className="topbar__categories-btn"
+          type="button"
+          aria-expanded={isCategoriesOpen}
+          aria-label="Abrir categorías"
+          onClick={() => setIsCategoriesOpen((prev) => !prev)}
+        >
+          <span aria-hidden="true">☰</span>
+          <span>Categorías</span>
+        </button>
+
+        <form className="topbar__search" role="search" onSubmit={handleSearch}>
+          <input
+            type="search"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="Busca maquinaria, repuestos y servicios"
+            aria-label="Buscar en el catálogo"
+          />
+          <button type="submit" aria-label="Buscar">
+            🔍
+          </button>
+        </form>
+
+        <button
           className="topbar__menu-toggle"
           type="button"
           aria-label={isMenuOpen ? 'Cerrar navegación' : 'Abrir navegación'}
@@ -34,6 +68,12 @@ export function Topbar() {
 
         <div className={`topbar__actions ${isMenuOpen ? 'topbar__actions--open' : ''}`}>
           <div className="topbar__actions-main">
+            <a className="topbar__top-link topbar__top-link--contact" href="#contacto" onClick={() => setIsMenuOpen(false)}>
+              Contacto
+            </a>
+            <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
+              Cotizar
+            </Link>
             <a
               className="topbar__whatsapp-contact"
               href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
@@ -46,20 +86,11 @@ export function Topbar() {
               </span>
               <span className="topbar__phone">{WHATSAPP_PHONE}</span>
             </a>
-            <NavLink className="topbar__top-link topbar__top-link--home" to="/" onClick={() => setIsMenuOpen(false)}>
-              Volver al inicio
-            </NavLink>
-            <a className="topbar__top-link topbar__top-link--contact" href="#contacto" onClick={() => setIsMenuOpen(false)}>
-              Contacto
-            </a>
-            <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
-              Cotizar
-            </Link>
           </div>
           <div className="topbar__seller-access">
             {hasSession ? (
               <Link className="topbar__panel-link" to="/admin" onClick={() => setIsMenuOpen(false)}>
-                Volver al panel
+                Panel
               </Link>
             ) : (
               <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor" onClick={() => setIsMenuOpen(false)}>

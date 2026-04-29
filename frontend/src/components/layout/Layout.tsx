@@ -1,21 +1,23 @@
 import type { PropsWithChildren } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { Footer } from './Footer'
 import { Sidebar } from './Sidebar'
-import { PublicSearchStrip } from './PublicSearchStrip'
 import { Topbar } from './Topbar'
 
 interface LayoutProps extends PropsWithChildren {
   onSearch?: (term: string) => void
 }
 
-export function Layout({ children, onSearch }: LayoutProps) {
+export function Layout({ children }: LayoutProps) {
+  const location = useLocation()
+  const showSidebar = location.pathname.startsWith('/catalogo')
+
   return (
     <div className="app-shell">
       <Topbar />
-      <PublicSearchStrip onSearch={onSearch} />
-      <div className="app-shell__body">
-        <Sidebar />
+      <div className={`app-shell__body ${showSidebar ? "" : "app-shell__body--full"}`.trim()}>
+        {showSidebar ? <Sidebar /> : null}
         <main className="main-content">{children}</main>
       </div>
       <Footer />
