@@ -330,16 +330,18 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
             return
 
         if target_position != original_position:
-            section_items = list(HomeSectionItem.objects.filter(section=section).exclude(pk=instance.pk).order_by('position', 'id'))
-            target_position = max(1, min(target_position, len(section_items) + 1))
-            HomeSectionItem.objects.filter(pk=instance.pk).update(position=9999)
+            section_limit = HomeSectionItem.SECTION_LIMITS.get(section, 1)
+            target_position = max(1, min(target_position, section_limit))
+            occupied_item = HomeSectionItem.objects.filter(section=section, position=target_position).exclude(pk=instance.pk).first()
 
-            ordered_ids = [entry.pk for entry in section_items]
-            ordered_ids.insert(target_position - 1, instance.pk)
-            for index, entry_id in enumerate(ordered_ids, start=1):
-                HomeSectionItem.objects.filter(pk=entry_id).update(position=index)
+            # Swap positions when target slot is already occupied (mainly for "Oferta en repuestos").
+            if occupied_item:
+                HomeSectionItem.objects.filter(pk=instance.pk).update(position=0)
+                HomeSectionItem.objects.filter(pk=occupied_item.pk).update(position=original_position)
+                serializer.save(position=target_position)
+            else:
+                serializer.save(position=target_position)
 
-            serializer.save(position=target_position)
             self._reindex_section(section)
             return
 
