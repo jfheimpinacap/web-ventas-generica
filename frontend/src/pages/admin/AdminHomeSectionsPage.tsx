@@ -67,7 +67,7 @@ export function AdminHomeSectionsPage() {
       setProductsBySection({ machinery_promotions: machineryProducts, spare_parts_offers: sparePartProducts, repair_services: serviceProducts })
       setSelectedBySection({ machinery_promotions: machineryProducts[0]?.id ?? '', spare_parts_offers: sparePartProducts[0]?.id ?? '', repair_services: serviceProducts[0]?.id ?? '' })
     } catch {
-      setGlobalError('No se pudo cargar la configuración de Secciones Home.')
+      setGlobalError('No se pudo cargar la configuración de Promociones.')
     } finally { setLoading(false) }
   })() }, [])
 
@@ -106,7 +106,7 @@ export function AdminHomeSectionsPage() {
   }
 
   return <AdminLayout>
-    <div className="admin-products-header"><h1>Secciones Home</h1><p className="ui-note">Administra cada bloque de la Home de forma independiente.</p></div>
+    <div className="admin-products-header"><h1>Promociones</h1><p className="ui-note">Administra cada bloque de la Home de forma independiente.</p></div>
     {loading ? <p className="ui-note">Cargando configuración...</p> : null}
     {globalError ? <p className="ui-note ui-note--error">{globalError}</p> : null}
     {!loading && !globalError ? <div className="home-sections-rows">{SECTION_CONFIG.map((section) => {

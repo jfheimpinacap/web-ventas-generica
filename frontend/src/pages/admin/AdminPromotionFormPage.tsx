@@ -53,7 +53,7 @@ export function AdminPromotionFormPage() {
         }
         if (!id) setExistingImageUrl(null)
       } catch {
-        setError('No se pudo cargar el formulario de promoción.')
+        setError('No se pudo cargar el formulario de oferta.')
       } finally {
         setLoading(false)
       }
@@ -70,11 +70,11 @@ export function AdminPromotionFormPage() {
       else await createPromotion(values)
       navigate('/admin/promociones')
     } catch {
-      setError('No se pudo guardar la promoción.')
+      setError('No se pudo guardar la oferta.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  return <AdminLayout><h1>{isEdit ? 'Editar promoción' : 'Nueva promoción'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <PromotionForm initialValues={initialValues} products={products} existingImageUrl={existingImageUrl} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear promoción'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
+  return <AdminLayout><h1>{isEdit ? 'Editar oferta' : 'Nueva oferta'}</h1>{loading ? <p className="ui-note">Cargando formulario...</p> : <PromotionForm initialValues={initialValues} products={products} existingImageUrl={existingImageUrl} onSubmit={handleSubmit} submitLabel={isEdit ? 'Guardar cambios' : 'Crear oferta'} isSubmitting={isSubmitting} error={error} />}</AdminLayout>
 }

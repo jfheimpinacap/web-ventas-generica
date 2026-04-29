@@ -83,7 +83,7 @@ export function PromotionForm({
       </form>
 
       <aside className="admin-promotion-editor__preview">
-        <h3>Vista previa</h3>
+        <h3>Vista previa miniatura (Hero section)</h3>
         <PromotionPreviewCard
           title={values.title}
           subtitle={values.subtitle}
@@ -92,6 +92,7 @@ export function PromotionForm({
           buttonText={values.button_text}
           isActive={values.is_active}
           order={values.order}
+          compact
         />
       </aside>
     </section>

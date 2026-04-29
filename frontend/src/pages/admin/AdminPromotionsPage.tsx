@@ -19,7 +19,7 @@ export function AdminPromotionsPage() {
       setError(null)
       setItems(await getAdminPromotions())
     } catch {
-      setError('No se pudieron cargar las promociones.')
+      setError('No se pudieron cargar las ofertas de Hero.')
     } finally {
       setLoading(false)
     }
@@ -39,7 +39,7 @@ export function AdminPromotionsPage() {
   )
 
   const handleDelete = async (item: Promotion) => {
-    if (!window.confirm(`¿Eliminar promoción "${item.title}"?`)) return
+    if (!window.confirm(`¿Eliminar oferta "${item.title}"?`)) return
     await deletePromotion(item.id)
     await load()
   }
@@ -47,17 +47,17 @@ export function AdminPromotionsPage() {
   return (
     <AdminLayout>
       <div className="admin-products-header">
-        <h1>Promociones</h1>
+        <h1>Ofertas en Hero section</h1>
         <div className="admin-list-toolbar">
-          <input className="admin-search" placeholder="Buscar promoción" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="admin-search" placeholder="Buscar oferta" value={search} onChange={(e) => setSearch(e.target.value)} />
           <Link className="btn btn--accent" to="/admin/promociones/nueva">
-            Nueva promoción
+            Nueva oferta
           </Link>
         </div>
       </div>
-      {loading ? <p className="ui-note">Cargando promociones...</p> : null}
+      {loading ? <p className="ui-note">Cargando ofertas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-      {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin promociones.</p> : null}
+      {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin ofertas.</p> : null}
       {!loading && !error && filtered.length > 0 ? (
         <div className="admin-table-wrapper">
           <table className="admin-table">
