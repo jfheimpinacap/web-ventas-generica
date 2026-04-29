@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts } from '../../services/adminApi'
+import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts, updateHomeSectionItem } from '../../services/adminApi'
 import { ApiError } from '../../services/api'
 import { resolveMediaUrl } from '../../services/api'
 import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
@@ -22,6 +22,17 @@ const SECTION_CONFIG: SectionConfig[] = [
   { key: 'repair_services', title: 'Servicios de reparación', limit: 12, description: 'Servicios para destacar capacidades de reparación en Home.', selectPlaceholder: 'Seleccionar servicio...', emptyProductsText: 'No hay servicios compatibles disponibles.' },
 ]
 const PREVIEW_PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
+
+const SPARE_SLOT_COUNT = 6
+
+function buildSpareSlots(sectionItems: HomeSectionItem[]) {
+  const slots: Array<HomeSectionItem | null> = Array.from({ length: SPARE_SLOT_COUNT }, () => null)
+  for (const item of sectionItems) {
+    if (item.position >= 1 && item.position <= SPARE_SLOT_COUNT) slots[item.position - 1] = item
+  }
+  return slots
+}
+
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -87,6 +98,18 @@ export function AdminHomeSectionsPage() {
     finally { setSectionFeedback(section, { loading: false }) }
   }
 
+  const moveItemToPosition = async (section: HomeSection, item: HomeSectionItem, nextPosition: number) => {
+    if (item.position === nextPosition) return
+    setSectionFeedback(section, { loading: true, error: null, success: null })
+    try {
+      await updateHomeSectionItem(item.id, { position: nextPosition })
+      await refreshItems()
+      setSectionFeedback(section, { success: `Producto movido a la posición ${nextPosition}.` })
+    }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible mover el producto.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
+  }
+
   const removeItem = async (section: HomeSection, item: HomeSectionItem) => {
     setSectionFeedback(section, { loading: true, error: null, success: null })
     try {
@@ -122,7 +145,12 @@ export function AdminHomeSectionsPage() {
             return <article
               className="home-section-item home-section-item--compact"
               key={item.id}
-            ><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span></div><div className="home-section-item__actions home-section-item__actions--single">{isConfirmingRemoval ? <div className="home-section-confirm"><span>¿Quitar este producto de la sección?</span><button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval(null)} disabled={status.loading}>Cancelar</button><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div> : <button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval({ section: section.key, item })} disabled={status.loading}>Quitar</button>}</div></article>
+            ><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span></div><div className="home-section-item__actions">
+                {section.key === 'spare_parts_offers' ? <select className="home-section-slot-select" value={item.position} onChange={(event) => void moveItemToPosition(section.key, item, Number(event.target.value))} disabled={status.loading}>
+                  {Array.from({ length: SPARE_SLOT_COUNT }, (_, index) => <option key={index + 1} value={index + 1}>Slot {index + 1}</option>)}
+                </select> : null}
+                <div className="home-section-item__actions home-section-item__actions--single">{isConfirmingRemoval ? <div className="home-section-confirm"><span>¿Quitar este producto de la sección?</span><button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval(null)} disabled={status.loading}>Cancelar</button><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div> : <button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval({ section: section.key, item })} disabled={status.loading}>Quitar</button>}</div>
+              </div></article>
           })}</div>
         </div>
         <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
@@ -137,7 +165,10 @@ export function AdminHomeSectionsPage() {
               </div> : null}
               {section.key === 'spare_parts_offers' ? <div className="home-preview-spares">
                 <div className="home-preview-spares__grid">
-                  {sectionItems.slice(0, 6).map((item, index) => <article className={`home-preview-spares__card ${index === 0 || index === 5 ? 'is-large' : ''}`} key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><span>Oferta destacada</span><strong>{item.product.name}</strong></div></article>)}
+                  {buildSpareSlots(sectionItems).map((item, index) => <article className={`home-preview-spares__slot ${index === 0 || index === 5 ? 'is-large' : ''}`} key={index + 1}>
+                    <header>Slot {index + 1}</header>
+                    {item ? <div className="home-preview-spares__compact-card"><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar'}</span><small>{formatStockStatus(item.product.stock_status)}</small></div></div> : <p>Espacio disponible</p>}
+                  </article>)}
                 </div>
               </div> : null}
               {section.key === 'repair_services' ? <div className="home-preview-services">
