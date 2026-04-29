@@ -21,30 +21,9 @@ type SectionConfig = {
 }
 
 const SECTION_CONFIG: SectionConfig[] = [
-  {
-    key: 'machinery_promotions',
-    title: 'Promociones en maquinarias',
-    limit: 12,
-    description: 'Productos tipo maquinaria para destacar en la Home pública.',
-    selectPlaceholder: 'Seleccionar maquinaria...',
-    emptyProductsText: 'No hay maquinarias compatibles disponibles.',
-  },
-  {
-    key: 'spare_parts_offers',
-    title: 'Oferta en repuestos',
-    limit: 6,
-    description: 'Repuestos publicados para mostrar como ofertas destacadas.',
-    selectPlaceholder: 'Seleccionar repuesto...',
-    emptyProductsText: 'No hay repuestos compatibles disponibles.',
-  },
-  {
-    key: 'repair_services',
-    title: 'Servicios de reparación',
-    limit: 12,
-    description: 'Servicios para destacar capacidades de reparación en Home.',
-    selectPlaceholder: 'Seleccionar servicio...',
-    emptyProductsText: 'No hay servicios compatibles disponibles.',
-  },
+  { key: 'machinery_promotions', title: 'Promociones en maquinarias', limit: 12, description: 'Productos tipo maquinaria para destacar en la Home pública.', selectPlaceholder: 'Seleccionar maquinaria...', emptyProductsText: 'No hay maquinarias compatibles disponibles.' },
+  { key: 'spare_parts_offers', title: 'Oferta en repuestos', limit: 6, description: 'Repuestos publicados para mostrar como ofertas destacadas.', selectPlaceholder: 'Seleccionar repuesto...', emptyProductsText: 'No hay repuestos compatibles disponibles.' },
+  { key: 'repair_services', title: 'Servicios de reparación', limit: 12, description: 'Servicios para destacar capacidades de reparación en Home.', selectPlaceholder: 'Seleccionar servicio...', emptyProductsText: 'No hay servicios compatibles disponibles.' },
 ]
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -57,261 +36,103 @@ function getErrorMessage(error: unknown, fallback: string) {
       if (typeof firstValue === 'string') return firstValue
     }
   }
-
   return fallback
 }
 
 export function AdminHomeSectionsPage() {
   const [items, setItems] = useState<HomeSectionItem[]>([])
-  const [productsBySection, setProductsBySection] = useState<Record<HomeSection, ProductListItem[]>>({
-    machinery_promotions: [],
-    spare_parts_offers: [],
-    repair_services: [],
-  })
-  const [selectedBySection, setSelectedBySection] = useState<Record<HomeSection, number | ''>>({
-    machinery_promotions: '',
-    spare_parts_offers: '',
-    repair_services: '',
-  })
+  const [productsBySection, setProductsBySection] = useState<Record<HomeSection, ProductListItem[]>>({ machinery_promotions: [], spare_parts_offers: [], repair_services: [] })
+  const [selectedBySection, setSelectedBySection] = useState<Record<HomeSection, number | ''>>({ machinery_promotions: '', spare_parts_offers: '', repair_services: '' })
   const [loading, setLoading] = useState(true)
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [sectionStatus, setSectionStatus] = useState<Record<HomeSection, { loading: boolean; error: string | null; success: string | null }>>({
-    machinery_promotions: { loading: false, error: null, success: null },
-    spare_parts_offers: { loading: false, error: null, success: null },
-    repair_services: { loading: false, error: null, success: null },
+    machinery_promotions: { loading: false, error: null, success: null }, spare_parts_offers: { loading: false, error: null, success: null }, repair_services: { loading: false, error: null, success: null },
   })
 
-  const refreshItems = async () => {
-    const homeItems = await getAdminHomeSectionItems()
-    setItems(homeItems)
-  }
+  const grouped = useMemo(() => SECTION_CONFIG.reduce((acc, section) => {
+    acc[section.key] = items.filter((item) => item.section === section.key).sort((a, b) => a.position - b.position)
+    return acc
+  }, { machinery_promotions: [] as HomeSectionItem[], spare_parts_offers: [] as HomeSectionItem[], repair_services: [] as HomeSectionItem[] }), [items])
 
-  const load = async () => {
-    setLoading(true)
-    setGlobalError(null)
+  const setSectionFeedback = (section: HomeSection, next: Partial<{ loading: boolean; error: string | null; success: string | null }>) => setSectionStatus((current) => ({ ...current, [section]: { ...current[section], ...next } }))
+  const refreshItems = async () => setItems(await getAdminHomeSectionItems())
 
+  useEffect(() => { void (async () => {
+    setLoading(true); setGlobalError(null)
     try {
       const [homeItems, machineryProducts, sparePartProducts, serviceProducts] = await Promise.all([
-        getAdminHomeSectionItems(),
-        getProductsForHomeSection('machinery_promotions'),
-        getProductsForHomeSection('spare_parts_offers'),
-        getProductsForHomeSection('repair_services'),
+        getAdminHomeSectionItems(), getProductsForHomeSection('machinery_promotions'), getProductsForHomeSection('spare_parts_offers'), getProductsForHomeSection('repair_services'),
       ])
-
       setItems(homeItems)
-      setProductsBySection({
-        machinery_promotions: machineryProducts,
-        spare_parts_offers: sparePartProducts,
-        repair_services: serviceProducts,
-      })
-      setSelectedBySection({
-        machinery_promotions: machineryProducts[0]?.id ?? '',
-        spare_parts_offers: sparePartProducts[0]?.id ?? '',
-        repair_services: serviceProducts[0]?.id ?? '',
-      })
+      setProductsBySection({ machinery_promotions: machineryProducts, spare_parts_offers: sparePartProducts, repair_services: serviceProducts })
+      setSelectedBySection({ machinery_promotions: machineryProducts[0]?.id ?? '', spare_parts_offers: sparePartProducts[0]?.id ?? '', repair_services: serviceProducts[0]?.id ?? '' })
     } catch {
       setGlobalError('No se pudo cargar la configuración de Secciones Home.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void load()
-  }, [])
-
-  const grouped = useMemo(() => {
-    return SECTION_CONFIG.reduce(
-      (acc, section) => {
-        acc[section.key] = items.filter((item) => item.section === section.key).sort((a, b) => a.position - b.position)
-        return acc
-      },
-      {
-        machinery_promotions: [] as HomeSectionItem[],
-        spare_parts_offers: [] as HomeSectionItem[],
-        repair_services: [] as HomeSectionItem[],
-      },
-    )
-  }, [items])
-
-  const setSectionFeedback = (section: HomeSection, next: Partial<{ loading: boolean; error: string | null; success: string | null }>) => {
-    setSectionStatus((current) => ({
-      ...current,
-      [section]: {
-        ...current[section],
-        ...next,
-      },
-    }))
-  }
+    } finally { setLoading(false) }
+  })() }, [])
 
   const addProductToSection = async (section: HomeSection, limit: number) => {
     const selectedProductId = selectedBySection[section]
     if (!selectedProductId) return
-
     const sectionItems = grouped[section]
-    if (sectionItems.length >= limit) {
-      setSectionFeedback(section, { error: `Límite alcanzado: máximo ${limit} productos.`, success: null })
-      return
-    }
-
-    const alreadyExists = sectionItems.some((item) => item.product.id === selectedProductId)
-    if (alreadyExists) {
-      setSectionFeedback(section, { error: 'El producto ya está asignado en esta sección.', success: null })
-      return
-    }
-
+    if (sectionItems.length >= limit) return setSectionFeedback(section, { error: `Límite alcanzado: máximo ${limit} productos.`, success: null })
+    if (sectionItems.some((item) => item.product.id === selectedProductId)) return setSectionFeedback(section, { error: 'El producto ya está asignado en esta sección.', success: null })
     setSectionFeedback(section, { loading: true, error: null, success: null })
-    try {
-      await createHomeSectionItem({ section, product: selectedProductId, position: 1, is_active: true })
-      await refreshItems()
-      setSectionFeedback(section, { success: 'Producto agregado correctamente.' })
-    } catch (error) {
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible agregar el producto.'), success: null })
-    } finally {
-      setSectionFeedback(section, { loading: false })
-    }
+    try { await createHomeSectionItem({ section, product: selectedProductId, position: 1, is_active: true }); await refreshItems(); setSectionFeedback(section, { success: 'Producto agregado correctamente.' }) }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible agregar el producto.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
   }
 
   const moveItem = async (section: HomeSection, item: HomeSectionItem, direction: -1 | 1) => {
-    const sectionItems = grouped[section]
-    const index = sectionItems.findIndex((entry) => entry.id === item.id)
-    const target = sectionItems[index + direction]
-    if (!target) return
-
     setSectionFeedback(section, { loading: true, error: null, success: null })
-    try {
-      await Promise.all([
-        updateHomeSectionItem(item.id, { position: target.position }),
-        updateHomeSectionItem(target.id, { position: item.position }),
-      ])
-      await refreshItems()
-      setSectionFeedback(section, { success: 'Orden actualizado.' })
-    } catch {
-      setSectionFeedback(section, { error: 'No fue posible reordenar los productos.', success: null })
-    } finally {
-      setSectionFeedback(section, { loading: false })
-    }
+    try { await updateHomeSectionItem(item.id, { position: item.position + direction }); await refreshItems(); setSectionFeedback(section, { success: 'Orden actualizado.' }) }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible reordenar los productos.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
   }
 
   const toggleActive = async (section: HomeSection, item: HomeSectionItem) => {
     setSectionFeedback(section, { loading: true, error: null, success: null })
-    try {
-      await updateHomeSectionItem(item.id, { is_active: !item.is_active })
-      await refreshItems()
-      setSectionFeedback(section, { success: item.is_active ? 'Producto desactivado.' : 'Producto activado.' })
-    } catch (error) {
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible actualizar el estado.'), success: null })
-    } finally {
-      setSectionFeedback(section, { loading: false })
-    }
+    try { await updateHomeSectionItem(item.id, { is_active: !item.is_active }); await refreshItems(); setSectionFeedback(section, { success: item.is_active ? 'Producto desactivado.' : 'Producto activado.' }) }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible actualizar el estado.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
   }
 
   const removeItem = async (section: HomeSection, item: HomeSectionItem) => {
     if (!window.confirm(`¿Quitar "${item.product.name}" de la sección?`)) return
-
     setSectionFeedback(section, { loading: true, error: null, success: null })
-    try {
-      await deleteHomeSectionItem(item.id)
-      await refreshItems()
-      setSectionFeedback(section, { success: 'Producto quitado de la sección.' })
-    } catch (error) {
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible quitar el producto.'), success: null })
-    } finally {
-      setSectionFeedback(section, { loading: false })
-    }
+    try { await deleteHomeSectionItem(item.id); await refreshItems(); setSectionFeedback(section, { success: 'Producto quitado de la sección.' }) }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible quitar el producto.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
   }
 
-  return (
-    <AdminLayout>
-      <div className="admin-products-header">
-        <h1>Secciones Home</h1>
-        <p className="ui-note">Administra cada bloque de la Home de forma independiente.</p>
-      </div>
-
-      {loading ? <p className="ui-note">Cargando configuración...</p> : null}
-      {globalError ? <p className="ui-note ui-note--error">{globalError}</p> : null}
-
-      {!loading && !globalError ? (
-        <div className="home-sections-grid">
-          {SECTION_CONFIG.map((section) => {
-            const sectionItems = grouped[section.key]
-            const sectionProducts = productsBySection[section.key]
-            const status = sectionStatus[section.key]
-
-            return (
-              <section className="home-section-card" key={section.key}>
-                <div className="home-section-card__header">
-                  <div>
-                    <h2>{section.title}</h2>
-                    <p className="ui-note">{section.description}</p>
-                  </div>
-                  <p>
-                    {sectionItems.length} / {section.limit}
-                  </p>
-                </div>
-
-                <div className="home-section-add-row">
-                  <select
-                    value={selectedBySection[section.key]}
-                    onChange={(event) => setSelectedBySection((current) => ({ ...current, [section.key]: Number(event.target.value) }))}
-                    disabled={sectionProducts.length === 0 || status.loading}
-                  >
-                    {sectionProducts.length > 0 ? null : <option value="">{section.emptyProductsText}</option>}
-                    {sectionProducts.length > 0 ? <option value="">{section.selectPlaceholder}</option> : null}
-                    {sectionProducts.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="btn btn--accent"
-                    type="button"
-                    onClick={() => void addProductToSection(section.key, section.limit)}
-                    disabled={status.loading || sectionProducts.length === 0 || !selectedBySection[section.key]}
-                  >
-                    Agregar
-                  </button>
-                </div>
-
-                {status.error ? <p className="ui-note ui-note--error">{status.error}</p> : null}
-                {status.success ? <p className="ui-note">{status.success}</p> : null}
-
-                {sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : null}
-
-                {sectionItems.map((item, index) => (
-                  <article className="home-section-item" key={item.id}>
-                    <div className="home-section-item__summary">
-                      <strong>{item.product.name}</strong>
-                      <span>Posición: {item.position}</span>
-                      <span>Estado: {item.is_active ? 'Activo' : 'Inactivo'}</span>
-                    </div>
-                    <div className="home-section-item__actions">
-                      <button type="button" className="table-action table-action--button" onClick={() => void moveItem(section.key, item, -1)} disabled={index === 0 || status.loading}>
-                        Subir
-                      </button>
-                      <button
-                        type="button"
-                        className="table-action table-action--button"
-                        onClick={() => void moveItem(section.key, item, 1)}
-                        disabled={index === sectionItems.length - 1 || status.loading}
-                      >
-                        Bajar
-                      </button>
-                      <button type="button" className="table-action table-action--button" onClick={() => void toggleActive(section.key, item)} disabled={status.loading}>
-                        {item.is_active ? 'Desactivar' : 'Activar'}
-                      </button>
-                      <button type="button" className="table-action table-action--button" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>
-                        Quitar
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </section>
-            )
-          })}
+  return <AdminLayout>
+    <div className="admin-products-header"><h1>Secciones Home</h1><p className="ui-note">Administra cada bloque de la Home de forma independiente.</p></div>
+    {loading ? <p className="ui-note">Cargando configuración...</p> : null}
+    {globalError ? <p className="ui-note ui-note--error">{globalError}</p> : null}
+    {!loading && !globalError ? <div className="home-sections-rows">{SECTION_CONFIG.map((section) => {
+      const sectionItems = grouped[section.key]; const sectionProducts = productsBySection[section.key]; const status = sectionStatus[section.key]
+      return <section className="home-section-row" key={section.key}>
+        <div className="home-section-row__main">
+          <div className="home-section-card__header"><div><h2>{section.title}</h2><p className="ui-note">{section.description}</p></div><p>{sectionItems.length} / {section.limit}</p></div>
+          <div className="home-section-add-row">
+            <select className="home-section-select" value={selectedBySection[section.key]} onChange={(event) => setSelectedBySection((current) => ({ ...current, [section.key]: Number(event.target.value) }))} disabled={sectionProducts.length === 0 || status.loading}>
+              {sectionProducts.length > 0 ? <option value="">{section.selectPlaceholder}</option> : <option value="">{section.emptyProductsText}</option>}
+              {sectionProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <button className="btn btn--accent" type="button" onClick={() => void addProductToSection(section.key, section.limit)} disabled={status.loading || sectionProducts.length === 0 || !selectedBySection[section.key]}>Agregar</button>
+          </div>
+          {status.error ? <p className="ui-note ui-note--error">{status.error}</p> : null}
+          {status.success ? <p className="ui-note">{status.success}</p> : null}
+          <div className="home-section-list">{sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : sectionItems.map((item, index) => <article className="home-section-item home-section-item--compact" key={item.id}><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span><span>Estado: {item.is_active ? 'Activo' : 'Inactivo'}</span></div><div className="home-section-item__actions"><button type="button" className="table-action table-action--button" onClick={() => void moveItem(section.key, item, -1)} disabled={index === 0 || status.loading}>Subir</button><button type="button" className="table-action table-action--button" onClick={() => void moveItem(section.key, item, 1)} disabled={index === sectionItems.length - 1 || status.loading}>Bajar</button><button type="button" className="table-action table-action--button" onClick={() => void toggleActive(section.key, item)} disabled={status.loading}>{item.is_active ? 'Desactivar' : 'Activar'}</button><button type="button" className="table-action table-action--button" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div></article>)}</div>
         </div>
-      ) : null}
-    </AdminLayout>
-  )
+        <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
+          <h3>Vista previa</h3>
+          <div className={`home-preview home-preview--${section.key}`}>
+            {sectionItems.slice(0, 4).map((item) => <span key={item.id}>{item.product.name}</span>)}
+            {sectionItems.length === 0 ? <span className="home-preview__empty">Sin ítems</span> : null}
+          </div>
+        </aside>
+      </section>
+    })}</div> : null}
+  </AdminLayout>
 }
