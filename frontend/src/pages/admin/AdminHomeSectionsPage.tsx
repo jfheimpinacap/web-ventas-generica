@@ -160,7 +160,7 @@ export function AdminHomeSectionsPage() {
               {section.key === 'machinery_promotions' ? <div className="home-preview-machinery">
                 <div className="home-preview-machinery__controls"><span>‹</span><span>›</span></div>
                 <div className="home-preview-machinery__grid">
-                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><p>Maquinaria destacada</p><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar precio'}</span><small>{formatStockStatus(item.product.stock_status)}</small><small>{item.product.brand?.name || item.product.category.name}</small></div></article>)}
+                  {sectionItems.slice(0, 12).map((item) => <article className="home-preview-card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><p>Maquinaria destacada</p><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar precio'}</span><small>{formatStockStatus(item.product.stock_status)}</small><small>{item.product.brand?.name || item.product.category.name}</small></div></article>)}
                 </div>
               </div> : null}
               {section.key === 'spare_parts_offers' ? <div className="home-preview-spares">
@@ -173,7 +173,7 @@ export function AdminHomeSectionsPage() {
               </div> : null}
               {section.key === 'repair_services' ? <div className="home-preview-services">
                 <div className="home-preview-services__grid">
-                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-services__card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><strong>{item.product.name}</strong><span>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</span></div></article>)}
+                  {sectionItems.slice(0, 6).map((item) => <article className="home-preview-services__card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><strong>{item.product.name}</strong><span>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</span></div></article>)}
                 </div>
               </div> : null}
               {sectionItems.length === 0 ? <span className="home-preview__empty">Sin ítems</span> : null}
