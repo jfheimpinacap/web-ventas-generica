@@ -16,7 +16,14 @@ export function AdminProductsPage() {
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<ProductListItem[]>([])
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [brandFilter, setBrandFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [conditionFilter, setConditionFilter] = useState('')
+  const [stockFilter, setStockFilter] = useState('')
+  const [publishedFilter, setPublishedFilter] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(
     searchParams.get('status') === 'created'
@@ -28,9 +35,11 @@ export function AdminProductsPage() {
 
   const loadProducts = async () => {
     try {
+      setLoading(true)
       setError(null)
       const response = await getAdminProducts()
       setProducts(response)
+      setHasLoadedProducts(true)
     } catch {
       setError('No se pudo cargar el listado de productos.')
     } finally {
@@ -38,21 +47,55 @@ export function AdminProductsPage() {
     }
   }
 
+  const hasCriteria = useMemo(
+    () => [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter].some((value) => value.trim() !== ''),
+    [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter],
+  )
+
   useEffect(() => {
-    void loadProducts()
-  }, [])
+    if (hasCriteria && !hasLoadedProducts && !loading) {
+      void loadProducts()
+    }
+  }, [hasCriteria, hasLoadedProducts, loading])
+
+  const categoryOptions = useMemo(() => Array.from(new Set(products.map((p) => p.category?.name).filter(Boolean))), [products])
+  const brandOptions = useMemo(() => Array.from(new Set(products.map((p) => p.brand?.name).filter(Boolean))), [products])
 
   const filteredProducts = useMemo(() => {
+    if (!hasCriteria) return []
+
     const query = search.trim().toLowerCase()
-    if (!query) return products
 
     return products.filter((product) => {
-      return [product.name, product.slug, product.brand?.name ?? '', product.category?.name ?? '']
+      const matchesText =
+        !query ||
+        [product.name, product.slug, product.brand?.name ?? '', product.category?.name ?? '']
         .join(' ')
         .toLowerCase()
         .includes(query)
+
+      const matchesCategory = !categoryFilter || product.category?.name === categoryFilter
+      const matchesBrand = !brandFilter || product.brand?.name === brandFilter
+      const matchesType = !typeFilter || product.product_type === typeFilter
+      const matchesCondition = !conditionFilter || product.condition === conditionFilter
+      const matchesStock = !stockFilter || product.stock_status === stockFilter
+      const matchesPublished =
+        !publishedFilter ||
+        (publishedFilter === 'published' ? product.is_published : !product.is_published)
+
+      return matchesText && matchesCategory && matchesBrand && matchesType && matchesCondition && matchesStock && matchesPublished
     })
-  }, [products, search])
+  }, [products, search, hasCriteria, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter])
+
+  const clearFilters = () => {
+    setSearch('')
+    setCategoryFilter('')
+    setBrandFilter('')
+    setTypeFilter('')
+    setConditionFilter('')
+    setStockFilter('')
+    setPublishedFilter('')
+  }
 
   const handleDelete = async (product: ProductListItem) => {
     const confirmed = window.confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`)
@@ -83,13 +126,56 @@ export function AdminProductsPage() {
           </Link>
         </div>
       </div>
+      <div className="admin-filter-strip">
+        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option value="">Categoría</option>
+          {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
+          <option value="">Marca</option>
+          {brandOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+          <option value="">Tipo</option>
+          <option value="machinery">Maquinaria</option>
+          <option value="spare_part">Repuesto</option>
+          <option value="service">Servicio</option>
+          <option value="other">Otro</option>
+        </select>
+        <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}>
+          <option value="">Condición</option>
+          <option value="new">Nuevo</option>
+          <option value="used">Usado</option>
+          <option value="refurbished">Reacondicionado</option>
+          <option value="not_applicable">No aplica</option>
+        </select>
+        <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
+          <option value="">Stock</option>
+          <option value="available">Disponible</option>
+          <option value="on_request">A pedido</option>
+          <option value="reserved">Reservado</option>
+          <option value="sold">Vendido</option>
+        </select>
+        <select value={publishedFilter} onChange={(event) => setPublishedFilter(event.target.value)}>
+          <option value="">Publicación</option>
+          <option value="published">Publicado</option>
+          <option value="unpublished">No publicado</option>
+        </select>
+        <button type="button" className="btn btn--ghost" onClick={clearFilters}>
+          Limpiar filtros
+        </button>
+      </div>
 
       {loading ? <p className="ui-note">Cargando productos...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
       {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
-      {!loading && !error && filteredProducts.length === 0 ? (
-        <p className="ui-note">No hay productos para mostrar.</p>
+      {!loading && !error && !hasCriteria ? (
+        <p className="ui-note">Usa el buscador o selecciona filtros para ver productos.</p>
+      ) : null}
+
+      {!loading && !error && hasCriteria && filteredProducts.length === 0 ? (
+        <p className="ui-note">No hay productos para los criterios seleccionados.</p>
       ) : null}
 
       {!loading && !error && filteredProducts.length > 0 ? (
