@@ -2445,20 +2445,22 @@ a {
 }
 
 .categories-modal__panel {
-  width: min(1180px, 100%);
+  width: fit-content;
+  min-width: min(620px, 100%);
+  max-width: min(980px, 100%);
   border-radius: 16px;
   border: 1px solid #d1d5db;
   background: #ffffff;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
   max-height: calc(100vh - var(--topbar-height) - 1.6rem);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .categories-modal__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -2476,14 +2478,15 @@ a {
 
 .categories-modal__content {
   display: grid;
-  grid-template-columns: minmax(210px, 290px) minmax(0, 1fr);
-  min-height: 420px;
+  grid-template-columns: clamp(210px, 24vw, 260px) minmax(340px, 1fr);
+  max-height: min(66vh, 620px);
 }
 
 .categories-modal__roots {
   border-right: 1px solid #e5e7eb;
-  padding: 0.75rem;
+  padding: 0.65rem;
   background: #f8fafc;
+  overflow-y: auto;
 }
 
 .categories-modal__root-link {
@@ -2504,7 +2507,8 @@ a {
 }
 
 .categories-modal__subs {
-  padding: 1rem 1.2rem;
+  padding: 0.85rem 1rem 1rem;
+  overflow-y: auto;
 }
 
 .categories-modal__subs-header {
@@ -2528,8 +2532,9 @@ a {
 
 .categories-modal__sub-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 220px));
+  gap: 0.45rem 0.85rem;
+  align-content: start;
 }
 
 .categories-modal__sub-grid ul {
@@ -2537,12 +2542,12 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .categories-modal__sub-grid a {
   display: block;
-  padding: 0.45rem 0.25rem;
+  padding: 0.36rem 0.3rem;
   border-radius: 8px;
   color: #1f2937;
 }
@@ -2554,6 +2559,7 @@ a {
 
 .categories-modal__empty {
   color: #64748b;
+  margin: 0.3rem 0;
 }
 
 @media (max-width: 960px) {
@@ -2563,6 +2569,8 @@ a {
   }
 
   .categories-modal__panel {
+    width: 100%;
+    min-width: 0;
     border-radius: 14px;
     max-height: calc(100vh - var(--topbar-height) - 0.85rem);
   }
@@ -2580,7 +2588,11 @@ a {
   }
 
   .categories-modal__subs {
-    max-height: 42vh;
+    max-height: 48vh;
     overflow: auto;
+  }
+
+  .categories-modal__sub-grid {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 }
