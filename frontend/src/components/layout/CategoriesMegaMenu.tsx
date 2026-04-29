@@ -71,12 +71,9 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
         aria-label="Navegación de categorías"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="categories-modal__header">
-          <h2>Categorías</h2>
-          <button type="button" className="categories-modal__close" onClick={onClose} aria-label="Cerrar categorías">
-            ✕
-          </button>
-        </header>
+        <button type="button" className="categories-modal__close" onClick={onClose} aria-label="Cerrar categorías">
+          ✕
+        </button>
 
         <div className="categories-modal__content">
           <nav className="categories-modal__roots" aria-label="Categorías principales">
@@ -99,15 +96,6 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
           </nav>
 
           <div className="categories-modal__subs" aria-live="polite">
-            <div className="categories-modal__subs-header">
-              <h3>{selectedCategory?.name ?? 'Subcategorías'}</h3>
-              {selectedCategory ? (
-                <Link to={`/catalogo?category=${selectedCategory.id}`} className="categories-modal__view-all" onClick={onClose}>
-                  Ver todo
-                </Link>
-              ) : null}
-            </div>
-
             {columns.length > 0 ? (
               <div className="categories-modal__sub-grid">
                 {columns.map((column, index) => (

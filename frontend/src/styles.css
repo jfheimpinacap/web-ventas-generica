@@ -2507,32 +2507,29 @@ a {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
   max-height: calc(100vh - var(--topbar-height) - 1.6rem);
   overflow: hidden;
-}
-
-.categories-modal__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.categories-modal__header h2 {
-  margin: 0;
+  position: relative;
 }
 
 .categories-modal__close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
   border: 1px solid #d1d5db;
   background: #f9fafb;
-  border-radius: 10px;
-  width: 36px;
-  height: 36px;
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  z-index: 2;
 }
 
 .categories-modal__content {
   display: grid;
   grid-template-columns: clamp(210px, 24vw, 260px) minmax(340px, 1fr);
   max-height: min(66vh, 620px);
+  min-height: 0;
 }
 
 .categories-modal__roots {
@@ -2560,27 +2557,8 @@ a {
 }
 
 .categories-modal__subs {
-  padding: 0.85rem 1rem 1rem;
+  padding: 0.65rem 1rem 1rem;
   overflow-y: auto;
-}
-
-.categories-modal__subs-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.8rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.categories-modal__subs-header h3 {
-  margin: 0;
-}
-
-.categories-modal__view-all {
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  padding: 0.35rem 0.7rem;
-  font-weight: 600;
 }
 
 .categories-modal__sub-grid {
