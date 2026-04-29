@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts, updateHomeSectionItem } from '../../services/adminApi'
+import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts } from '../../services/adminApi'
 import { ApiError } from '../../services/api'
 import { resolveMediaUrl } from '../../services/api'
 import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
-import { formatPrice } from '../../utils/formatters'
+import { formatPrice, formatStockStatus } from '../../utils/formatters'
 
 type SectionConfig = {
   key: HomeSection
@@ -45,7 +45,7 @@ export function AdminHomeSectionsPage() {
   const [sectionStatus, setSectionStatus] = useState<Record<HomeSection, { loading: boolean; error: string | null; success: string | null }>>({
     machinery_promotions: { loading: false, error: null, success: null }, spare_parts_offers: { loading: false, error: null, success: null }, repair_services: { loading: false, error: null, success: null },
   })
-  const [dragState, setDragState] = useState<{ section: HomeSection; itemId: number } | null>(null)
+  const [pendingRemoval, setPendingRemoval] = useState<{ section: HomeSection; item: HomeSectionItem } | null>(null)
 
   const grouped = useMemo(() => SECTION_CONFIG.reduce((acc, section) => {
     acc[section.key] = items.filter((item) => item.section === section.key).sort((a, b) => a.position - b.position)
@@ -88,43 +88,15 @@ export function AdminHomeSectionsPage() {
   }
 
   const removeItem = async (section: HomeSection, item: HomeSectionItem) => {
-    if (!window.confirm(`¿Quitar "${item.product.name}" de la sección?`)) return
-    setSectionFeedback(section, { loading: true, error: null, success: null })
-    try { await deleteHomeSectionItem(item.id); await refreshItems(); setSectionFeedback(section, { success: 'Producto quitado de la sección.' }) }
-    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible quitar el producto.'), success: null }) }
-    finally { setSectionFeedback(section, { loading: false }) }
-  }
-
-  const persistSectionOrder = async (section: HomeSection, orderedItems: HomeSectionItem[]) => {
-    await Promise.all(orderedItems.map((item, index) => updateHomeSectionItem(item.id, { position: index + 1 })))
-  }
-
-  const moveItemWithinSection = async (section: HomeSection, draggedId: number, targetId: number) => {
-    if (draggedId === targetId) return
-    const currentSectionItems = grouped[section]
-    const sourceIndex = currentSectionItems.findIndex((item) => item.id === draggedId)
-    const targetIndex = currentSectionItems.findIndex((item) => item.id === targetId)
-    if (sourceIndex === -1 || targetIndex === -1) return
-
-    const reordered = [...currentSectionItems]
-    const [draggedItem] = reordered.splice(sourceIndex, 1)
-    reordered.splice(targetIndex, 0, draggedItem)
-    const normalized = reordered.map((item, index) => ({ ...item, position: index + 1 }))
-
-    setItems((current) => current.map((item) => {
-      if (item.section !== section) return item
-      return normalized.find((nextItem) => nextItem.id === item.id) ?? item
-    }))
     setSectionFeedback(section, { loading: true, error: null, success: null })
     try {
-      await persistSectionOrder(section, normalized)
-      setSectionFeedback(section, { success: 'Orden actualizado correctamente.' })
-    } catch (error) {
+      await deleteHomeSectionItem(item.id)
       await refreshItems()
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible guardar el nuevo orden.'), success: null })
-    } finally {
-      setSectionFeedback(section, { loading: false })
+      setPendingRemoval((current) => (current?.item.id === item.id ? null : current))
+      setSectionFeedback(section, { success: 'Producto quitado de la sección.' })
     }
+    catch (error) { setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible quitar el producto.'), success: null }) }
+    finally { setSectionFeedback(section, { loading: false }) }
   }
 
   return <AdminLayout>
@@ -146,20 +118,11 @@ export function AdminHomeSectionsPage() {
           {status.error ? <p className="ui-note ui-note--error">{status.error}</p> : null}
           {status.success ? <p className="ui-note">{status.success}</p> : null}
           <div className="home-section-list">{sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : sectionItems.map((item) => {
-            const isDragging = dragState?.itemId === item.id && dragState.section === section.key
+            const isConfirmingRemoval = pendingRemoval?.item.id === item.id && pendingRemoval.section === section.key
             return <article
-              className={`home-section-item home-section-item--compact ${isDragging ? 'is-dragging' : ''}`}
+              className="home-section-item home-section-item--compact"
               key={item.id}
-              draggable={!status.loading}
-              onDragStart={() => setDragState({ section: section.key, itemId: item.id })}
-              onDragEnd={() => setDragState(null)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (!dragState || dragState.section !== section.key || status.loading) return
-                void moveItemWithinSection(section.key, dragState.itemId, item.id)
-                setDragState(null)
-              }}
-            ><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span></div><div className="home-section-item__actions home-section-item__actions--single"><button type="button" className="table-action table-action--button" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div></article>
+            ><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span></div><div className="home-section-item__actions home-section-item__actions--single">{isConfirmingRemoval ? <div className="home-section-confirm"><span>¿Quitar este producto de la sección?</span><button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval(null)} disabled={status.loading}>Cancelar</button><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div> : <button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval({ section: section.key, item })} disabled={status.loading}>Quitar</button>}</div></article>
           })}</div>
         </div>
         <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
@@ -169,7 +132,7 @@ export function AdminHomeSectionsPage() {
               {section.key === 'machinery_promotions' ? <div className="home-preview-machinery">
                 <div className="home-preview-machinery__controls"><span>‹</span><span>›</span></div>
                 <div className="home-preview-machinery__grid">
-                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><p>Maquinaria destacada</p><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar precio'}</span></div></article>)}
+                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><p>Maquinaria destacada</p><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar precio'}</span><small>{formatStockStatus(item.product.stock_status)}</small><small>{item.product.brand?.name || item.product.category.name}</small></div></article>)}
                 </div>
               </div> : null}
               {section.key === 'spare_parts_offers' ? <div className="home-preview-spares">
