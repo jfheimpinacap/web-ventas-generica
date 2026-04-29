@@ -9,7 +9,9 @@ import {
   updateHomeSectionItem,
 } from '../../services/adminApi'
 import { ApiError } from '../../services/api'
+import { resolveMediaUrl } from '../../services/api'
 import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
+import { formatPrice } from '../../utils/formatters'
 
 type SectionConfig = {
   key: HomeSection
@@ -25,6 +27,7 @@ const SECTION_CONFIG: SectionConfig[] = [
   { key: 'spare_parts_offers', title: 'Oferta en repuestos', limit: 6, description: 'Repuestos publicados para mostrar como ofertas destacadas.', selectPlaceholder: 'Seleccionar repuesto...', emptyProductsText: 'No hay repuestos compatibles disponibles.' },
   { key: 'repair_services', title: 'Servicios de reparación', limit: 12, description: 'Servicios para destacar capacidades de reparación en Home.', selectPlaceholder: 'Seleccionar servicio...', emptyProductsText: 'No hay servicios compatibles disponibles.' },
 ]
+const PREVIEW_PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -128,8 +131,25 @@ export function AdminHomeSectionsPage() {
         <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
           <h3>Vista previa</h3>
           <div className={`home-preview home-preview--${section.key}`}>
-            {sectionItems.slice(0, 4).map((item) => <span key={item.id}>{item.product.name}</span>)}
-            {sectionItems.length === 0 ? <span className="home-preview__empty">Sin ítems</span> : null}
+            <div className="home-preview__scale">
+              {section.key === 'machinery_promotions' ? <div className="home-preview-machinery">
+                <div className="home-preview-machinery__controls"><span>‹</span><span>›</span></div>
+                <div className="home-preview-machinery__grid">
+                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><p>Maquinaria destacada</p><strong>{item.product.name}</strong><span>{formatPrice(item.product) || 'Consultar precio'}</span></div></article>)}
+                </div>
+              </div> : null}
+              {section.key === 'spare_parts_offers' ? <div className="home-preview-spares">
+                <div className="home-preview-spares__grid">
+                  {sectionItems.slice(0, 6).map((item, index) => <article className={`home-preview-spares__card ${index === 0 || index === 5 ? 'is-large' : ''}`} key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><span>Oferta destacada</span><strong>{item.product.name}</strong></div></article>)}
+                </div>
+              </div> : null}
+              {section.key === 'repair_services' ? <div className="home-preview-services">
+                <div className="home-preview-services__grid">
+                  {sectionItems.slice(0, 4).map((item) => <article className="home-preview-services__card" key={item.id}><img src={resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE} alt={item.product.name} /><div><strong>{item.product.name}</strong><span>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</span></div></article>)}
+                </div>
+              </div> : null}
+              {sectionItems.length === 0 ? <span className="home-preview__empty">Sin ítems</span> : null}
+            </div>
           </div>
         </aside>
       </section>
