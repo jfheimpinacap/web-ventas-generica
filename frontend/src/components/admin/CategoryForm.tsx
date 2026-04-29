@@ -27,7 +27,7 @@ export function CategoryForm({ initialValues, categories, onSubmit, submitLabel,
     <form className="admin-product-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
-      <section className="admin-form-panel admin-form-panel--columns-4">
+      <section className="admin-form-panel admin-form-panel--stack">
         <h3>Datos de categoría</h3>
 
         <label>

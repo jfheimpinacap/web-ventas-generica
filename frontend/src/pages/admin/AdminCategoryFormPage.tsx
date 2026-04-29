@@ -75,13 +75,6 @@ export function AdminCategoryFormPage() {
               error={error}
             />
           }
-          sidebar={
-            <section className="admin-block admin-block--compact">
-              <h2>Gestión</h2>
-              <p className="ui-note">Define nombre, jerarquía y orden para mantener el catálogo organizado.</p>
-              <p className="ui-note">Recuerda guardar para aplicar los cambios en filtros y navegación.</p>
-            </section>
-          }
         />
       ) : null}
     </AdminLayout>

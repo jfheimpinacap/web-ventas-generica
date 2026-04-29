@@ -22,7 +22,7 @@ export function SupplierForm({ initialValues, onSubmit, submitLabel, isSubmittin
     <form className="admin-product-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
-      <section className="admin-form-panel admin-form-panel--columns-3">
+      <section className="admin-form-panel admin-form-panel--stack">
         <h3>Datos de proveedor</h3>
 
         <label>
