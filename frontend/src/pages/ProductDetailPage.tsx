@@ -111,7 +111,7 @@ export function ProductDetailPage() {
               <div className="product-detail__contact">
                 <h2>Contacto rápido</h2>
                 <p>¿Necesitas asesoría inmediata? Te ayudamos por WhatsApp o cotización directa.</p>
-                <div className="hero-section__actions">
+                <div className="product-detail__contact-actions">
                   <Link className="btn btn--accent" to={`/cotizar?product=${product.id}`}>
                     Cotizar este producto
                   </Link>
