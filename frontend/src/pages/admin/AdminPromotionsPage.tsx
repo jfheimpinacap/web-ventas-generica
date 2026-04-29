@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { PromotionPreviewCard } from '../../components/admin/PromotionPreviewCard'
-import { resolveMediaUrl } from '../../services/api'
 import { deletePromotion, getAdminPromotions } from '../../services/adminApi'
 import type { Promotion } from '../../types/catalog'
 
@@ -12,7 +10,6 @@ export function AdminPromotionsPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [previewPromotionId, setPreviewPromotionId] = useState<number | null>(null)
 
   const load = async () => {
     try {
@@ -33,11 +30,6 @@ export function AdminPromotionsPage() {
     () => items.filter((item) => `${item.title} ${item.subtitle}`.toLowerCase().includes(search.toLowerCase())),
     [items, search],
   )
-  const previewPromotion = useMemo(
-    () => filtered.find((item) => item.id === previewPromotionId) ?? filtered[0] ?? null,
-    [filtered, previewPromotionId],
-  )
-
   const handleDelete = async (item: Promotion) => {
     if (!window.confirm(`¿Eliminar oferta "${item.title}"?`)) return
     await deletePromotion(item.id)
@@ -87,9 +79,6 @@ export function AdminPromotionsPage() {
                     <Link className="table-action" to={`/admin/promociones/${item.id}/editar`}>
                       Editar
                     </Link>{' '}
-                    <button type="button" className="table-action table-action--button" onClick={() => setPreviewPromotionId(item.id)}>
-                      Vista previa
-                    </button>{' '}
                     <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>
                       Eliminar
                     </button>
@@ -99,20 +88,6 @@ export function AdminPromotionsPage() {
             </tbody>
           </table>
         </div>
-      ) : null}
-      {!loading && !error && previewPromotion ? (
-        <section className="admin-promotion-list-preview">
-          <h2>Vista previa rápida</h2>
-          <PromotionPreviewCard
-            title={previewPromotion.title}
-            subtitle={previewPromotion.subtitle}
-            imageUrl={resolveMediaUrl(previewPromotion.image)}
-            productName={previewPromotion.product?.name}
-            buttonText={previewPromotion.button_text}
-            isActive={previewPromotion.is_active}
-            order={previewPromotion.order}
-          />
-        </section>
       ) : null}
     </AdminLayout>
   )

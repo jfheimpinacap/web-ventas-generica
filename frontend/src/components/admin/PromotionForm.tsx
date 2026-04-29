@@ -92,7 +92,6 @@ export function PromotionForm({
           buttonText={values.button_text}
           isActive={values.is_active}
           order={values.order}
-          compact
         />
       </aside>
     </section>
