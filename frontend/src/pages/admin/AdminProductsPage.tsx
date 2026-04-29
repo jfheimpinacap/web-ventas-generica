@@ -5,6 +5,51 @@ import { AdminLayout } from '../../components/admin/AdminLayout'
 import { deleteProduct, getAdminProducts } from '../../services/adminApi'
 import type { ProductListItem } from '../../types/catalog'
 
+
+const PRODUCT_FILTERS_STORAGE_KEY = 'admin-products-filters'
+
+type ProductFiltersState = {
+  search: string
+  categoryFilter: string
+  brandFilter: string
+  typeFilter: string
+  conditionFilter: string
+  stockFilter: string
+  publishedFilter: string
+}
+
+const defaultFilters: ProductFiltersState = {
+  search: '',
+  categoryFilter: '',
+  brandFilter: '',
+  typeFilter: '',
+  conditionFilter: '',
+  stockFilter: '',
+  publishedFilter: '',
+}
+
+function readStoredFilters(): ProductFiltersState {
+  if (typeof window === 'undefined') return defaultFilters
+
+  const rawFilters = window.sessionStorage.getItem(PRODUCT_FILTERS_STORAGE_KEY)
+  if (!rawFilters) return defaultFilters
+
+  try {
+    const parsed = JSON.parse(rawFilters) as Partial<ProductFiltersState>
+    return {
+      search: parsed.search ?? '',
+      categoryFilter: parsed.categoryFilter ?? '',
+      brandFilter: parsed.brandFilter ?? '',
+      typeFilter: parsed.typeFilter ?? '',
+      conditionFilter: parsed.conditionFilter ?? '',
+      stockFilter: parsed.stockFilter ?? '',
+      publishedFilter: parsed.publishedFilter ?? '',
+    }
+  } catch {
+    return defaultFilters
+  }
+}
+
 function stockLabel(stock: ProductListItem['stock_status']) {
   if (stock === 'available') return 'Disponible'
   if (stock === 'on_request') return 'A pedido'
@@ -15,13 +60,14 @@ function stockLabel(stock: ProductListItem['stock_status']) {
 export function AdminProductsPage() {
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<ProductListItem[]>([])
-  const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [brandFilter, setBrandFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [conditionFilter, setConditionFilter] = useState('')
-  const [stockFilter, setStockFilter] = useState('')
-  const [publishedFilter, setPublishedFilter] = useState('')
+  const storedFilters = useMemo(() => readStoredFilters(), [])
+  const [search, setSearch] = useState(storedFilters.search)
+  const [categoryFilter, setCategoryFilter] = useState(storedFilters.categoryFilter)
+  const [brandFilter, setBrandFilter] = useState(storedFilters.brandFilter)
+  const [typeFilter, setTypeFilter] = useState(storedFilters.typeFilter)
+  const [conditionFilter, setConditionFilter] = useState(storedFilters.conditionFilter)
+  const [stockFilter, setStockFilter] = useState(storedFilters.stockFilter)
+  const [publishedFilter, setPublishedFilter] = useState(storedFilters.publishedFilter)
   const [loading, setLoading] = useState(false)
   const [hasLoadedProducts, setHasLoadedProducts] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,6 +103,22 @@ export function AdminProductsPage() {
       void loadProducts()
     }
   }, [hasCriteria, hasLoadedProducts, loading])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const filtersToStore: ProductFiltersState = {
+      search,
+      categoryFilter,
+      brandFilter,
+      typeFilter,
+      conditionFilter,
+      stockFilter,
+      publishedFilter,
+    }
+
+    window.sessionStorage.setItem(PRODUCT_FILTERS_STORAGE_KEY, JSON.stringify(filtersToStore))
+  }, [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter])
 
   const categoryOptions = useMemo(() => Array.from(new Set(products.map((p) => p.category?.name).filter(Boolean))), [products])
   const brandOptions = useMemo(() => Array.from(new Set(products.map((p) => p.brand?.name).filter(Boolean))), [products])
@@ -127,6 +189,13 @@ export function AdminProductsPage() {
         </div>
       </div>
       <div className="admin-filter-strip">
+        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+          <option value="">Tipo</option>
+          <option value="machinery">Maquinaria</option>
+          <option value="spare_part">Repuesto</option>
+          <option value="service">Servicio</option>
+          <option value="other">Otro</option>
+        </select>
         <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
           <option value="">Categoría</option>
           {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -134,13 +203,6 @@ export function AdminProductsPage() {
         <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
           <option value="">Marca</option>
           {brandOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-          <option value="">Tipo</option>
-          <option value="machinery">Maquinaria</option>
-          <option value="spare_part">Repuesto</option>
-          <option value="service">Servicio</option>
-          <option value="other">Otro</option>
         </select>
         <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}>
           <option value="">Condición</option>
@@ -218,11 +280,6 @@ export function AdminProductsPage() {
                   </td>
                   <td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString() : '-'}</td>
                   <td>
-                    {product.is_published ? (
-                      <Link className="table-action" to={`/producto/${product.slug}`}>
-                        Ver público
-                      </Link>
-                    ) : null}{' '}
                     <Link className="table-action" to={`/admin/productos/${product.slug}/editar`}>
                       Editar
                     </Link>{' '}
