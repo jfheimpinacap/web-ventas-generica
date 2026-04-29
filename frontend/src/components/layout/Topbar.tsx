@@ -1,8 +1,10 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { useCategories } from '../../hooks/useCategories'
 import { isAuthenticated } from '../../services/authApi'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
+import { CategoriesMegaMenu } from './CategoriesMegaMenu'
 
 const WHATSAPP_PHONE = '+51 987 654 321'
 
@@ -12,6 +14,26 @@ export function Topbar() {
   const [searchValue, setSearchValue] = useState('')
   const navigate = useNavigate()
   const hasSession = isAuthenticated()
+  const { categories } = useCategories()
+
+
+  useEffect(() => {
+    if (!isCategoriesOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsCategoriesOpen(false)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isCategoriesOpen])
 
   const handleSearch = (event: FormEvent) => {
     event.preventDefault()
@@ -39,6 +61,7 @@ export function Topbar() {
           aria-expanded={isCategoriesOpen}
           aria-label="Abrir categorías"
           onClick={() => setIsCategoriesOpen((prev) => !prev)}
+          aria-controls="categories-mega-menu"
         >
           <span aria-hidden="true">☰</span>
           <span>Categorías</span>
@@ -100,6 +123,11 @@ export function Topbar() {
           </div>
         </div>
       </div>
+      <CategoriesMegaMenu
+        isOpen={isCategoriesOpen}
+        categories={categories}
+        onClose={() => setIsCategoriesOpen(false)}
+      />
     </header>
   )
 }
