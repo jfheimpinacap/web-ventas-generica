@@ -98,6 +98,16 @@ export function FeaturedProducts() {
     setCarouselIndex((current) => Math.min(current, Math.max(0, machineryGroups.length - 1)))
   }, [machineryGroups.length])
 
+  useEffect(() => {
+    if (machineryGroups.length <= 1) return
+
+    const intervalId = window.setInterval(() => {
+      setCarouselIndex((prev) => (prev + 1) % machineryGroups.length)
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [machineryGroups.length])
+
   const goPrev = () => {
     if (machineryGroups.length === 0) return
     setCarouselIndex((prev) => (prev - 1 + machineryGroups.length) % machineryGroups.length)
@@ -136,9 +146,15 @@ export function FeaturedProducts() {
                           <p className="promo-product-card__tag">Maquinaria destacada</p>
                           <h3>{product.name}</h3>
                           <p className="promo-product-card__price">{formatPrice(product)}</p>
-                          <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
-                            Ver detalle
-                          </Link>
+                          {product.slug ? (
+                            <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+                              Ver detalle
+                            </Link>
+                          ) : (
+                            <span className="btn btn--accent btn--disabled" aria-disabled="true">
+                              Ver detalle
+                            </span>
+                          )}
                         </div>
                       </article>
                     )
@@ -169,6 +185,11 @@ export function FeaturedProducts() {
                   <span>Oferta destacada</span>
                   <h3>{product.name}</h3>
                   <p>{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
+                  {product.slug ? (
+                    <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
+                      Ver detalle
+                    </Link>
+                  ) : null}
                 </div>
               </article>
             )
@@ -191,6 +212,11 @@ export function FeaturedProducts() {
                 <div>
                   <h3>{product.name}</h3>
                   <p>{product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
+                  {product.slug ? (
+                    <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
+                      Ver detalle
+                    </Link>
+                  ) : null}
                 </div>
               </article>
             )
