@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts } from '../../services/adminApi'
+import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getAdminProducts, updateHomeSectionItem } from '../../services/adminApi'
 import { ApiError } from '../../services/api'
 import { resolveMediaUrl } from '../../services/api'
 import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
@@ -45,6 +45,7 @@ export function AdminHomeSectionsPage() {
   const [sectionStatus, setSectionStatus] = useState<Record<HomeSection, { loading: boolean; error: string | null; success: string | null }>>({
     machinery_promotions: { loading: false, error: null, success: null }, spare_parts_offers: { loading: false, error: null, success: null }, repair_services: { loading: false, error: null, success: null },
   })
+  const [dragState, setDragState] = useState<{ section: HomeSection; itemId: number } | null>(null)
 
   const grouped = useMemo(() => SECTION_CONFIG.reduce((acc, section) => {
     acc[section.key] = items.filter((item) => item.section === section.key).sort((a, b) => a.position - b.position)
@@ -94,6 +95,38 @@ export function AdminHomeSectionsPage() {
     finally { setSectionFeedback(section, { loading: false }) }
   }
 
+  const persistSectionOrder = async (section: HomeSection, orderedItems: HomeSectionItem[]) => {
+    await Promise.all(orderedItems.map((item, index) => updateHomeSectionItem(item.id, { position: index + 1 })))
+  }
+
+  const moveItemWithinSection = async (section: HomeSection, draggedId: number, targetId: number) => {
+    if (draggedId === targetId) return
+    const currentSectionItems = grouped[section]
+    const sourceIndex = currentSectionItems.findIndex((item) => item.id === draggedId)
+    const targetIndex = currentSectionItems.findIndex((item) => item.id === targetId)
+    if (sourceIndex === -1 || targetIndex === -1) return
+
+    const reordered = [...currentSectionItems]
+    const [draggedItem] = reordered.splice(sourceIndex, 1)
+    reordered.splice(targetIndex, 0, draggedItem)
+    const normalized = reordered.map((item, index) => ({ ...item, position: index + 1 }))
+
+    setItems((current) => current.map((item) => {
+      if (item.section !== section) return item
+      return normalized.find((nextItem) => nextItem.id === item.id) ?? item
+    }))
+    setSectionFeedback(section, { loading: true, error: null, success: null })
+    try {
+      await persistSectionOrder(section, normalized)
+      setSectionFeedback(section, { success: 'Orden actualizado correctamente.' })
+    } catch (error) {
+      await refreshItems()
+      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible guardar el nuevo orden.'), success: null })
+    } finally {
+      setSectionFeedback(section, { loading: false })
+    }
+  }
+
   return <AdminLayout>
     <div className="admin-products-header"><h1>Promociones</h1><p className="ui-note">Administra cada bloque de la Home de forma independiente.</p></div>
     {loading ? <p className="ui-note">Cargando configuración...</p> : null}
@@ -112,7 +145,22 @@ export function AdminHomeSectionsPage() {
           </div>
           {status.error ? <p className="ui-note ui-note--error">{status.error}</p> : null}
           {status.success ? <p className="ui-note">{status.success}</p> : null}
-          <div className="home-section-list">{sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : sectionItems.map((item) => <article className="home-section-item home-section-item--compact" key={item.id}><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span><span>Estado: {item.is_active ? 'Activo' : 'Inactivo'}</span></div><div className="home-section-item__actions home-section-item__actions--single"><button type="button" className="table-action table-action--button" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div></article>)}</div>
+          <div className="home-section-list">{sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : sectionItems.map((item) => {
+            const isDragging = dragState?.itemId === item.id && dragState.section === section.key
+            return <article
+              className={`home-section-item home-section-item--compact ${isDragging ? 'is-dragging' : ''}`}
+              key={item.id}
+              draggable={!status.loading}
+              onDragStart={() => setDragState({ section: section.key, itemId: item.id })}
+              onDragEnd={() => setDragState(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (!dragState || dragState.section !== section.key || status.loading) return
+                void moveItemWithinSection(section.key, dragState.itemId, item.id)
+                setDragState(null)
+              }}
+            ><div className="home-section-item__summary"><strong>{item.product.name}</strong><span>Posición: {item.position}</span></div><div className="home-section-item__actions home-section-item__actions--single"><button type="button" className="table-action table-action--button" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button></div></article>
+          })}</div>
         </div>
         <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
           <h3>Vista previa</h3>
