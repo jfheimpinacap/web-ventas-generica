@@ -17,8 +17,8 @@ export function Layout({ children }: LayoutProps) {
     <div className="app-shell">
       <Topbar />
       <div className={`app-shell__body ${showSidebar ? "" : "app-shell__body--full"}`.trim()}>
-        <main className="main-content">{children}</main>
         {showSidebar ? <Sidebar /> : null}
+        <main className="main-content">{children}</main>
       </div>
       <Footer />
     </div>
