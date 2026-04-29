@@ -1435,13 +1435,18 @@ a {
 }
 
 .admin-shell {
+  --admin-sidebar-width: 250px;
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 250px 1fr;
   background: #f1f5f9;
 }
 
 .admin-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--admin-sidebar-width);
+  height: 100vh;
+  overflow-y: auto;
   background: #0f172a;
   color: #e2e8f0;
   padding: 1rem 0.9rem;
@@ -1489,6 +1494,7 @@ a {
 
 .admin-main {
   min-height: 100vh;
+  margin-left: var(--admin-sidebar-width);
 }
 
 .admin-content {
@@ -1582,7 +1588,18 @@ a {
 
 @media (max-width: 900px) {
   .admin-shell {
-    grid-template-columns: 1fr;
+    --admin-sidebar-width: 100%;
+  }
+
+  .admin-sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-main {
+    margin-left: 0;
   }
 }
 
