@@ -77,13 +77,6 @@ export function AdminSupplierFormPage() {
               error={error}
             />
           }
-          sidebar={
-            <section className="admin-block admin-block--compact">
-              <h2>Gestión</h2>
-              <p className="ui-note">Consolida los datos clave de contacto para compras y reposición.</p>
-              <p className="ui-note">Desactiva proveedores inactivos para limpiar las opciones del catálogo.</p>
-            </section>
-          }
         />
       ) : null}
     </AdminLayout>

@@ -66,13 +66,6 @@ export function AdminBrandFormPage() {
               error={error}
             />
           }
-          sidebar={
-            <section className="admin-block admin-block--compact">
-              <h2>Gestión</h2>
-              <p className="ui-note">Mantén logos livianos y homogéneos para una administración más ordenada.</p>
-              <p className="ui-note">La marca activa estará disponible al crear o editar productos.</p>
-            </section>
-          }
         />
       ) : null}
     </AdminLayout>
