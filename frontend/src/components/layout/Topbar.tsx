@@ -9,7 +9,6 @@ import { CategoriesMegaMenu } from './CategoriesMegaMenu'
 const WHATSAPP_PHONE = '+51 987 654 321'
 
 export function Topbar() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const navigate = useNavigate()
@@ -39,7 +38,6 @@ export function Topbar() {
     event.preventDefault()
     const term = searchValue.trim()
     navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
-    setIsMenuOpen(false)
   }
 
   return (
@@ -80,21 +78,12 @@ export function Topbar() {
           </button>
         </form>
 
-        <button
-          className="topbar__menu-toggle"
-          type="button"
-          aria-label={isMenuOpen ? 'Cerrar navegación' : 'Abrir navegación'}
-          onClick={() => setIsMenuOpen((prev) => !prev)}
-        >
-          {isMenuOpen ? '✕' : '☰'}
-        </button>
-
-        <div className={`topbar__actions ${isMenuOpen ? 'topbar__actions--open' : ''}`}>
+        <div className="topbar__actions">
           <div className="topbar__actions-main">
-            <a className="topbar__top-link topbar__top-link--contact" href="#contacto" onClick={() => setIsMenuOpen(false)}>
+            <a className="topbar__top-link topbar__top-link--contact" href="#contacto">
               Contacto
             </a>
-            <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar" onClick={() => setIsMenuOpen(false)}>
+            <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
               Cotizar
             </Link>
             <a
@@ -112,11 +101,11 @@ export function Topbar() {
           </div>
           <div className="topbar__seller-access">
             {hasSession ? (
-              <Link className="topbar__panel-link" to="/admin" onClick={() => setIsMenuOpen(false)}>
+              <Link className="topbar__panel-link" to="/admin">
                 Panel
               </Link>
             ) : (
-              <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor" onClick={() => setIsMenuOpen(false)}>
+              <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor">
                 <span aria-hidden="true">👤</span>
               </Link>
             )}
