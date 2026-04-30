@@ -186,7 +186,7 @@ export function FeaturedProducts() {
                   <h3>{product.name}</h3>
                   <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                   {product.slug ? (
-                    <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
+                    <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
                       Ver detalle
                     </Link>
                   ) : null}
@@ -214,7 +214,7 @@ export function FeaturedProducts() {
                   <p>{product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
                   <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                   {product.slug ? (
-                    <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
+                    <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
                       Ver detalle
                     </Link>
                   ) : null}

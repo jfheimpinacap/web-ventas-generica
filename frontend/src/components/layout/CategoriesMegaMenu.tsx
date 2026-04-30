@@ -151,8 +151,12 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                   ) : null}
                 </div>
 
-                {subcategoriesForCategory.length > 0 && isExpanded ? (
-                  <ul id={`mobile-subs-${category.id}`} className="categories-modal__mobile-subs">
+                {subcategoriesForCategory.length > 0 ? (
+                  <ul
+                    id={`mobile-subs-${category.id}`}
+                    className={`categories-modal__mobile-subs ${isExpanded ? 'is-expanded' : ''}`.trim()}
+                    aria-hidden={!isExpanded}
+                  >
                     {subcategoriesForCategory.map((subcategory) => (
                       <li key={subcategory.id}>
                         <Link to={`/catalogo?category=${subcategory.id}`} onClick={onClose}>
