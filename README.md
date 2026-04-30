@@ -301,3 +301,54 @@ Pasos recomendados:
 - `MEDIA_ROOT` apunta a `backend/media/`.
 - En modo `DEBUG=True`, Django sirve archivos media automáticamente desde `config/urls.py`.
 - Para carga de imágenes de productos en API admin usa `multipart/form-data` contra `POST /api/product-images/`.
+
+## Deploy en Render (backend + frontend)
+
+### 1) Backend Django/DRF como **Web Service**
+
+- **Root Directory:** `backend`
+- **Build Command:** `./build.sh`
+- **Start Command:** `gunicorn config.wsgi:application`
+
+> `build.sh` instala dependencias y ejecuta `collectstatic`. No ejecuta seeds automáticos para evitar duplicación de datos demo.
+
+Variables de entorno recomendadas para el backend:
+
+- `SECRET_KEY` (obligatoria en producción)
+- `DEBUG=False`
+- `ALLOWED_HOSTS=tu-backend.onrender.com`
+- `DATABASE_URL` (entregada por Render PostgreSQL)
+- `CORS_ALLOWED_ORIGINS=https://tu-frontend.onrender.com,http://localhost:5174`
+- `CSRF_TRUSTED_ORIGINS=https://tu-backend.onrender.com,https://tu-frontend.onrender.com`
+- `DEFAULT_FROM_EMAIL` (opcional)
+- `QUOTE_NOTIFICATION_EMAIL` (opcional)
+- `EMAIL_BACKEND` (opcional)
+
+Comandos manuales post-deploy (Shell de Render en backend):
+
+```bash
+python manage.py migrate
+python manage.py seed_catalog
+```
+
+- `seed_catalog` es idempotente y puede ejecutarse manualmente.
+- **No** usar `generate_demo_products` en cada deploy automático.
+
+### 2) Base de datos como **Render PostgreSQL**
+
+- Crear una instancia PostgreSQL en Render.
+- Vincular su `DATABASE_URL` al servicio backend.
+- En local, si `DATABASE_URL` no existe, el proyecto sigue usando SQLite.
+
+### 3) Frontend React/Vite como **Static Site**
+
+- **Root Directory:** `frontend`
+- **Build Command:** `npm install && npm run build`
+- **Publish Directory:** `dist`
+
+Variable de entorno del frontend:
+
+- `VITE_API_BASE_URL=https://TU-BACKEND.onrender.com/api`
+- `VITE_WHATSAPP_NUMBER=<tu_numero>`
+
+El frontend ya consume la API desde `VITE_API_BASE_URL` (con fallback local para desarrollo).
