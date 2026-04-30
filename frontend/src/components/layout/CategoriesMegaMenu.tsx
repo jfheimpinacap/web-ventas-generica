@@ -21,6 +21,7 @@ function chunkByCount<T>(items: T[], columns: number) {
 
 export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null, onClose }: CategoriesMegaMenuProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(activeCategoryId)
+  const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<number[]>([])
 
   const roots = useMemo(
     () => categories.filter((category) => category.parent === null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
@@ -54,6 +55,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
     const fallbackCategory = roots[0]?.id ?? null
     const nextCategoryId = activeCategoryId && roots.some((category) => category.id === activeCategoryId) ? activeCategoryId : fallbackCategory
     setSelectedCategoryId(nextCategoryId)
+    setExpandedMobileCategoryIds(nextCategoryId ? [nextCategoryId] : [])
   }, [activeCategoryId, isOpen, roots])
 
   if (!isOpen) return null
@@ -61,6 +63,11 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
   const selectedCategory = roots.find((category) => category.id === selectedCategoryId) ?? roots[0] ?? null
   const subcategories = selectedCategory ? childrenByParent.get(selectedCategory.id) ?? [] : []
   const columns = chunkByCount(subcategories, subcategories.length > 18 ? 3 : subcategories.length > 8 ? 2 : 1)
+  const toggleMobileCategory = (categoryId: number) => {
+    setExpandedMobileCategoryIds((current) =>
+      current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId],
+    )
+  }
 
   return (
     <div className="categories-modal" role="presentation" onClick={onClose}>
@@ -115,6 +122,50 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
             )}
           </div>
         </div>
+
+        <nav className="categories-modal__mobile-accordion" aria-label="Categorías principales para móvil">
+          {roots.map((category) => {
+            const subcategoriesForCategory = childrenByParent.get(category.id) ?? []
+            const isExpanded = expandedMobileCategoryIds.includes(category.id)
+
+            return (
+              <div className="categories-modal__mobile-item" key={`mobile-${category.id}`}>
+                <div className="categories-modal__mobile-header">
+                  <Link
+                    to={`/catalogo?category=${category.id}`}
+                    className="categories-modal__mobile-link"
+                    onClick={onClose}
+                  >
+                    {category.name}
+                  </Link>
+                  {subcategoriesForCategory.length > 0 ? (
+                    <button
+                      type="button"
+                      className="categories-modal__mobile-toggle"
+                      aria-expanded={isExpanded}
+                      aria-controls={`mobile-subs-${category.id}`}
+                      onClick={() => toggleMobileCategory(category.id)}
+                    >
+                      <span aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>
+                    </button>
+                  ) : null}
+                </div>
+
+                {subcategoriesForCategory.length > 0 && isExpanded ? (
+                  <ul id={`mobile-subs-${category.id}`} className="categories-modal__mobile-subs">
+                    {subcategoriesForCategory.map((subcategory) => (
+                      <li key={subcategory.id}>
+                        <Link to={`/catalogo?category=${subcategory.id}`} onClick={onClose}>
+                          {subcategory.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )
+          })}
+        </nav>
       </section>
     </div>
   )
