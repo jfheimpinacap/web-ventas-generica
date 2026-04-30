@@ -871,7 +871,7 @@ a {
   margin: 0;
 }
 
-.spare-offer-card__content p,
+.spare-offer-card__content p:not(.home-product-price),
 .repair-service-card p:not(.home-product-price) {
   margin: 0;
   color: #4b5563;
@@ -1079,7 +1079,7 @@ a {
   }
 
   .topbar__row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-height: calc(var(--topbar-height) - 10px);
     gap: 0.45rem;
     align-items: center;
@@ -1126,39 +1126,23 @@ a {
     padding: 0.42rem 0.65rem;
   }
 
-  .topbar__search {
-    grid-column: 1 / 2;
-    gap: 0.35rem;
-    order: 1;
-  }
-
-  .topbar__categories-btn {
-    grid-column: 2 / 3;
-    justify-self: end;
-    align-self: stretch;
-    order: 2;
-  }
-
   .topbar__actions {
     display: grid;
     grid-column: 1 / -1;
     width: 100%;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 0.35rem;
+    order: 3;
   }
 
   .topbar__actions-main {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
-  }
-
-  .topbar__seller-access {
-    margin-left: 0;
-    padding-left: 0;
+    justify-content: space-between;
   }
 
   .topbar__top-link {
@@ -1187,6 +1171,29 @@ a {
   .topbar__panel-link {
     padding: 0.3rem 0.58rem;
     font-size: 0.76rem;
+  }
+
+  .topbar__whatsapp-contact {
+    justify-self: end;
+  }
+
+  .topbar__seller-link {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+
+  .topbar__categories-btn {
+    grid-column: 1 / 2;
+    justify-self: start;
+    align-self: stretch;
+    order: 4;
+  }
+
+  .topbar__search {
+    grid-column: 2 / 3;
+    gap: 0.35rem;
+    order: 5;
+    width: 100%;
   }
 
   .hero-section {

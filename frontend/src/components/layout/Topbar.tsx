@@ -52,6 +52,18 @@ export function Topbar() {
             <small>Equipos y repuestos industriales</small>
           </div>
         </Link>
+        <a
+          className="topbar__whatsapp-contact"
+          href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Abrir WhatsApp con asesor comercial"
+        >
+          <span className="topbar__whatsapp-icon" aria-hidden="true">
+            ✆
+          </span>
+          <span className="topbar__phone">{WHATSAPP_PHONE}</span>
+        </a>
 
         <button
           className="topbar__categories-btn"
@@ -86,26 +98,12 @@ export function Topbar() {
             <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
               Cotizar
             </Link>
-            <a
-              className="topbar__whatsapp-contact"
-              href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Abrir WhatsApp con asesor comercial"
-            >
-              <span className="topbar__whatsapp-icon" aria-hidden="true">
-                ✆
-              </span>
-              <span className="topbar__phone">{WHATSAPP_PHONE}</span>
-            </a>
-          </div>
-          <div className="topbar__seller-access">
             {hasSession ? (
-              <Link className="topbar__panel-link" to="/admin">
+              <Link className="topbar__panel-link topbar__seller-link" to="/admin">
                 Panel
               </Link>
             ) : (
-              <Link className="topbar__user-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor">
+              <Link className="topbar__user-link topbar__seller-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor">
                 <span aria-hidden="true">👤</span>
               </Link>
             )}

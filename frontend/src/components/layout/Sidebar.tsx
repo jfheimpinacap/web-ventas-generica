@@ -62,7 +62,7 @@ export function Sidebar() {
         aria-expanded={isOpen}
         aria-controls="sidebar-panel"
       >
-        {isOpen ? 'Cerrar categorías' : 'Explorar categorías'}
+        {isOpen ? 'Cerrar categorías' : 'Filtro'}
       </button>
 
       <div className="sidebar__panel" id="sidebar-panel">
