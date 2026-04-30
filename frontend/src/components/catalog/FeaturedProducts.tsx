@@ -145,7 +145,7 @@ export function FeaturedProducts() {
                         <div className="promo-product-card__content">
                           <p className="promo-product-card__tag">Maquinaria destacada</p>
                           <h3>{product.name}</h3>
-                          <p className="promo-product-card__price">{formatPrice(product)}</p>
+                          <p className="promo-product-card__price home-product-price">{formatPrice(product)}</p>
                           {product.slug ? (
                             <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
                               Ver detalle
@@ -184,7 +184,7 @@ export function FeaturedProducts() {
                 <div className="spare-offer-card__content">
                   <span>Oferta destacada</span>
                   <h3>{product.name}</h3>
-                  <p>{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
+                  <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                   {product.slug ? (
                     <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>
                       Ver detalle

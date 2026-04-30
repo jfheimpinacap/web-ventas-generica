@@ -780,8 +780,14 @@ a {
 
 .promo-product-card__price {
   margin: 0;
+}
+
+.home-product-price {
+  margin: 0;
   font-weight: 800;
   color: #ea580c;
+  font-size: clamp(1rem, 1.2vw, 1.2rem);
+  line-height: 1.2;
 }
 
 .carousel-control {
@@ -870,6 +876,22 @@ a {
   margin: 0;
   color: #4b5563;
   font-size: 0.9rem;
+}
+
+.spare-offer-card__content h3,
+.repair-service-card h3,
+.promo-product-card__content h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.repair-service-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .repair-services__grid {
@@ -2571,7 +2593,11 @@ a {
   }
 
   .product-card__price {
-    font-size: 0.9rem !important;
+    font-size: 1rem !important;
+  }
+
+  .home-product-price {
+    font-size: 1rem;
   }
 
   .product-card__actions {
@@ -2579,6 +2605,26 @@ a {
   }
 
   .product-card__actions .btn {
+    font-size: 0.8rem;
+    padding: 0.42rem 0.5rem;
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 700px) {
+  .machinery-carousel__slide {
+    grid-template-columns: 1fr;
+  }
+
+  .spare-offer-card__content,
+  .repair-service-card div,
+  .promo-product-card__content {
+    gap: 0.24rem;
+  }
+
+  .spare-offer-card__content .btn,
+  .repair-service-card div .btn,
+  .promo-product-card__content .btn {
     font-size: 0.8rem;
     padding: 0.42rem 0.5rem;
     min-height: 34px;
