@@ -19,14 +19,14 @@ except ImportError:
 
 
 
-def _split_env_list(var_name: str, default: str = '') -> list[str]:
-    raw = os.getenv(var_name, default)
-    return [item.strip() for item in raw.split(',') if item.strip()]
+def env_list(name: str, default: str = "") -> list[str]:
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 SECRET_KEY = os.getenv('SECRET_KEY', os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-me'))
 DEBUG = os.getenv('DEBUG', os.getenv('DJANGO_DEBUG', 'true')).lower() == 'true'
-ALLOWED_HOSTS = _split_env_list('ALLOWED_HOSTS', os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost'))
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost'))
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -106,11 +106,14 @@ if HAS_WHITENOISE:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = _split_env_list(
+CORS_ALLOWED_ORIGINS = env_list(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:5174,http://127.0.0.1:5174',
 )
-CSRF_TRUSTED_ORIGINS = _split_env_list('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    'http://localhost:5174,http://127.0.0.1:5174',
+)
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
