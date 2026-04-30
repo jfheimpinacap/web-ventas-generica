@@ -29,7 +29,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}
         </p>
         <p className="product-card__description">{product.short_description || 'Sin descripción breve.'}</p>
-        <p className="product-card__price">{formatPrice(product)}</p>
+        <p className="product-card__price home-product-price">{formatPrice(product)}</p>
       </div>
       <div className="product-card__actions">
         <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
