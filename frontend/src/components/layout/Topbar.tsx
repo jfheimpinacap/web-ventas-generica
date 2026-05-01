@@ -96,6 +96,7 @@ export function Topbar() {
             WhatsApp
           </span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
+          <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>
 
         {hasSession ? (
