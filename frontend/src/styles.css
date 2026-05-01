@@ -183,6 +183,14 @@ a {
   white-space: nowrap;
 }
 
+.topbar__phone-compact {
+  display: none;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .topbar__top-link {
   display: inline-flex;
   align-items: center;
@@ -2971,16 +2979,26 @@ a {
 
 /* Responsive fixes public storefront */
 .topbar__row {
-  grid-template-columns: auto auto minmax(360px, 1fr) auto auto auto;
+  grid-template-columns: auto auto minmax(420px, 1fr) auto auto auto;
 }
 
 .topbar__categories-btn {
   justify-self: start;
-  width: auto;
+  width: fit-content;
+  min-width: max-content;
 }
 
 .topbar__search {
   min-width: 0;
+}
+
+.topbar__top-link--quote {
+  justify-self: end;
+}
+
+.topbar__whatsapp-contact {
+  justify-self: end;
+  padding-inline: 0.6rem 0.7rem;
 }
 
 .topbar__seller-link {
@@ -2989,7 +3007,7 @@ a {
 
 @media (max-width: 960px) {
   :root {
-    --topbar-height: 122px;
+    --topbar-height: 128px;
   }
 
   .app-shell__body {
@@ -2997,16 +3015,12 @@ a {
   }
 
   .topbar__row {
-    grid-template-columns: auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
       'brand quote whatsapp'
       'categories search search';
     align-items: center;
-    gap: 0.4rem;
-  }
-
-  .topbar__top-line {
-    display: contents;
+    gap: 0.34rem;
   }
 
   .topbar__brand {
@@ -3014,43 +3028,59 @@ a {
     margin-left: 0;
   }
 
+  .topbar__brand small {
+    display: none;
+  }
+
   .topbar__top-link--quote {
     grid-area: quote;
-    min-height: 38px;
-    padding: 0.35rem 0.6rem;
+    justify-self: end;
+    min-height: 40px;
+    padding: 0.4rem 0.65rem;
     display: inline-flex;
   }
 
   .topbar__whatsapp-contact {
     grid-area: whatsapp;
     justify-self: end;
-    min-height: 38px;
-    min-width: 38px;
+    min-height: 42px;
     justify-content: center;
-    padding: 0.35rem 0.55rem;
+    padding: 0.44rem 0.72rem;
+    gap: 0.33rem;
+    background: #16a34a;
+    border-color: #22c55e;
+  }
+
+  .topbar__whatsapp-icon {
+    color: #ffffff;
   }
 
   .topbar__categories-btn {
     grid-area: categories;
-    min-height: 38px;
-    padding: 0.35rem 0.6rem;
+    min-height: 40px;
+    padding: 0.38rem 0.62rem;
   }
 
   .topbar__search {
     grid-area: search;
-    gap: 0.4rem;
+    gap: 0.28rem;
+    width: 100%;
   }
 
   .topbar__search input,
-  .topbar__search button {
-    min-height: 38px;
+  .topbar__search button,
+  .topbar__categories-btn {
+    min-height: 40px;
   }
 
-  .topbar__whatsapp-mobile-only {
+  .topbar__search input {
+    flex: 1 1 auto;
+  }
+
+  .topbar__whatsapp-mobile-only,
+  .topbar__phone-compact {
     display: inline;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #f3f4f6;
+    font-size: 0.78rem;
   }
 
   .topbar__phone {
