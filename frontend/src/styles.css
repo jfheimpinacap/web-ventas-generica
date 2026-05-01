@@ -171,6 +171,10 @@ a {
   font-weight: 800;
 }
 
+.topbar__whatsapp-mobile-only {
+  display: none;
+}
+
 .topbar__phone {
   font-weight: 600;
   color: #f3f4f6;
@@ -204,6 +208,7 @@ a {
   border-color: #9a3412;
   color: #ffedd5;
   font-weight: 700;
+  display: none;
 }
 
 .topbar__user-link {
@@ -2906,7 +2911,7 @@ a {
 }
 
 .topbar__row {
-  grid-template-columns: auto auto minmax(260px, 1fr) auto auto auto;
+  grid-template-columns: auto auto minmax(260px, 1fr) auto auto;
 }
 
 .topbar__categories-btn {
@@ -2946,24 +2951,50 @@ a {
 
   .topbar__brand {
     grid-area: brand;
+    margin-left: 0;
   }
 
   .topbar__top-link--quote {
     grid-area: quote;
+    min-height: 38px;
+    padding: 0.35rem 0.6rem;
+    display: inline-flex;
   }
 
   .topbar__whatsapp-contact {
     grid-area: whatsapp;
     justify-self: end;
+    min-height: 38px;
+    min-width: 38px;
+    justify-content: center;
+    padding: 0.35rem 0.55rem;
   }
 
   .topbar__categories-btn {
     grid-area: categories;
+    min-height: 38px;
+    padding: 0.35rem 0.6rem;
   }
 
   .topbar__search {
     grid-area: search;
     gap: 0.4rem;
+  }
+
+  .topbar__search input,
+  .topbar__search button {
+    min-height: 38px;
+  }
+
+  .topbar__whatsapp-mobile-only {
+    display: inline;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #f3f4f6;
+  }
+
+  .topbar__phone {
+    display: none;
   }
 
   .topbar__seller-link {
@@ -3025,6 +3056,41 @@ a {
   .machinery-carousel__slide {
     min-width: 100%;
     flex: 0 0 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .topbar__row {
+    gap: 0.35rem;
+  }
+
+  .topbar__brand strong {
+    font-size: 0.92rem;
+    line-height: 1.15;
+  }
+
+  .topbar__brand small {
+    display: block;
+    font-size: 0.66rem;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .topbar__top-link--quote {
+    font-size: 0.82rem;
+  }
+
+  .topbar__whatsapp-mobile-only {
+    display: none;
+  }
+
+  .topbar__whatsapp-contact {
+    width: 38px;
+    padding: 0;
   }
 }
 
