@@ -92,9 +92,6 @@ export function Topbar() {
           <span className="topbar__whatsapp-icon" aria-hidden="true">
             ✆
           </span>
-          <span className="topbar__whatsapp-mobile-only" aria-hidden="true">
-            WhatsApp
-          </span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>
