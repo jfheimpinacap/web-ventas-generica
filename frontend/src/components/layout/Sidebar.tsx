@@ -53,22 +53,30 @@ export function Sidebar() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const clearFilters = () => {
+    const next = new URLSearchParams(searchParams)
+    ;['category', 'brand', 'product_type', 'condition', 'stock_status'].forEach((key) => next.delete(key))
+    setSearchParams(next)
+  }
+
   return (
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
-      <button
-        className="sidebar__mobile-toggle"
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-expanded={isOpen}
-        aria-controls="sidebar-panel"
-      >
-        {isOpen ? 'Cerrar categorías' : 'Filtro'}
+      <button className="sidebar__mobile-toggle" type="button" onClick={() => setIsOpen(true)} aria-expanded={isOpen} aria-controls="sidebar-panel">
+        Filtro
       </button>
 
+      {isOpen ? <button className="sidebar__mobile-backdrop" type="button" aria-label="Cerrar panel de filtros" onClick={() => setIsOpen(false)} /> : null}
+
       <div className="sidebar__panel" id="sidebar-panel">
+        <div className="sidebar__panel-header">
+          <h3>Filtros y categorías</h3>
+          <button type="button" className="sidebar__panel-close" onClick={() => setIsOpen(false)} aria-label="Cerrar panel de filtros">
+            ✕
+          </button>
+        </div>
+
         {isCatalogPage ? (
           <div className="sidebar-filters">
-            <h3>Filtros</h3>
             <select value={searchParams.get('category') ?? ''} onChange={(event) => updateFilter('category', event.target.value)}>
               <option value="">Categoría / subcategoría</option>
               {categories.map((category) => (
@@ -113,6 +121,10 @@ export function Sidebar() {
                 </option>
               ))}
             </select>
+
+            <button type="button" className="btn btn--ghost sidebar-filters__clear" onClick={clearFilters}>
+              Limpiar filtros
+            </button>
           </div>
         ) : null}
 

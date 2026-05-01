@@ -2899,3 +2899,142 @@ a {
     background: #e2e8f0;
   }
 }
+
+/* Responsive fixes public storefront */
+.topbar__top-line {
+  display: contents;
+}
+
+.topbar__row {
+  grid-template-columns: auto auto minmax(260px, 1fr) auto auto auto;
+}
+
+.topbar__categories-btn {
+  justify-self: start;
+  width: auto;
+}
+
+.topbar__search {
+  min-width: 0;
+}
+
+.topbar__seller-link {
+  justify-self: end;
+}
+
+@media (max-width: 960px) {
+  :root {
+    --topbar-height: 122px;
+  }
+
+  .app-shell__body {
+    padding-top: calc(var(--topbar-height) + 1rem);
+  }
+
+  .topbar__row {
+    grid-template-columns: auto auto auto;
+    grid-template-areas:
+      'brand quote whatsapp'
+      'categories search search';
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .topbar__top-line {
+    display: contents;
+  }
+
+  .topbar__brand {
+    grid-area: brand;
+  }
+
+  .topbar__top-link--quote {
+    grid-area: quote;
+  }
+
+  .topbar__whatsapp-contact {
+    grid-area: whatsapp;
+    justify-self: end;
+  }
+
+  .topbar__categories-btn {
+    grid-area: categories;
+  }
+
+  .topbar__search {
+    grid-area: search;
+    gap: 0.4rem;
+  }
+
+  .topbar__seller-link {
+    display: none;
+  }
+
+  .sidebar__mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1010;
+  }
+
+  .sidebar__panel {
+    position: fixed;
+    top: calc(var(--topbar-height) + 0.45rem);
+    left: 0.45rem;
+    right: 0.45rem;
+    display: none;
+    max-height: calc(100vh - var(--topbar-height) - 0.9rem);
+    z-index: 1011;
+  }
+
+  .sidebar--open .sidebar__panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar__panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar__panel-header h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .sidebar__panel-close {
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #f8fafc;
+    width: 32px;
+    height: 32px;
+  }
+
+  .sidebar-filters__clear {
+    margin-top: 0.35rem;
+    width: 100%;
+  }
+
+  .machinery-carousel__track {
+    display: flex;
+  }
+
+  .machinery-carousel__slide {
+    min-width: 100%;
+    flex: 0 0 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  :root {
+    --topbar-height: 128px;
+  }
+
+  .topbar__brand small,
+  .topbar__phone {
+    display: none;
+  }
+}
