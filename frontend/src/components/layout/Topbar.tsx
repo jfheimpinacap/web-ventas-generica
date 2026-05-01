@@ -49,7 +49,7 @@ export function Topbar() {
             </span>
             <div>
               <strong>Altura Comercial</strong>
-              <small>Equipos y repuestos industriales</small>
+              <small>Maquinaria, repuestos y servicios</small>
             </div>
           </Link>
 
@@ -66,6 +66,9 @@ export function Topbar() {
           >
             <span className="topbar__whatsapp-icon" aria-hidden="true">
               ✆
+            </span>
+            <span className="topbar__whatsapp-mobile-only" aria-hidden="true">
+              WhatsApp
             </span>
             <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           </a>
