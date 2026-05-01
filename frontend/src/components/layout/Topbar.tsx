@@ -42,8 +42,7 @@ export function Topbar() {
   return (
     <header className="topbar" aria-label="Barra principal">
       <div className="topbar__row">
-        <div className="topbar__top-line">
-          <Link className="topbar__brand" to="/" aria-label="Ir al inicio">
+        <Link className="topbar__brand" to="/" aria-label="Ir al inicio">
             <span className="topbar__logo" aria-hidden="true">
               ▲
             </span>
@@ -53,26 +52,6 @@ export function Topbar() {
             </div>
           </Link>
 
-          <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
-            Cotizar
-          </Link>
-
-          <a
-            className="topbar__whatsapp-contact"
-            href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Abrir WhatsApp con asesor comercial"
-          >
-            <span className="topbar__whatsapp-icon" aria-hidden="true">
-              ✆
-            </span>
-            <span className="topbar__whatsapp-mobile-only" aria-hidden="true">
-              WhatsApp
-            </span>
-            <span className="topbar__phone">{WHATSAPP_PHONE}</span>
-          </a>
-        </div>
 
         <button
           className="topbar__categories-btn"
@@ -98,6 +77,26 @@ export function Topbar() {
             🔍
           </button>
         </form>
+
+        <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
+          Cotizar
+        </Link>
+
+        <a
+          className="topbar__whatsapp-contact"
+          href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Abrir WhatsApp con asesor comercial"
+        >
+          <span className="topbar__whatsapp-icon" aria-hidden="true">
+            ✆
+          </span>
+          <span className="topbar__whatsapp-mobile-only" aria-hidden="true">
+            WhatsApp
+          </span>
+          <span className="topbar__phone">{WHATSAPP_PHONE}</span>
+        </a>
 
         {hasSession ? (
           <Link className="topbar__panel-link topbar__seller-link" to="/admin">

@@ -41,7 +41,7 @@ a {
   margin: 0 auto;
   max-width: 1450px;
   display: grid;
-  grid-template-columns: auto auto minmax(240px, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(360px, 1fr) auto auto auto;
   min-height: calc(var(--topbar-height) - 8px);
   align-items: center;
   gap: 1rem;
@@ -79,13 +79,13 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 36px;
+  min-height: 38px;
   border-radius: 10px;
   border: 1px solid #4b5563;
   background: rgba(255, 255, 255, 0.05);
   color: #e5e7eb;
   font-weight: 600;
-  padding: 0.35rem 0.65rem;
+  padding: 0.42rem 0.72rem;
 }
 
 .topbar__search {
@@ -158,6 +158,7 @@ a {
 
 .topbar__whatsapp-contact {
   display: inline-flex;
+  justify-self: start;
   align-items: center;
   gap: 0.35rem;
   padding: 0.45rem 0.65rem;
@@ -186,7 +187,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 38px;
   padding: 0.42rem 0.68rem;
   border-radius: 10px;
   border: 1px solid #374151;
@@ -208,7 +209,7 @@ a {
   border-color: #9a3412;
   color: #ffedd5;
   font-weight: 700;
-  display: none;
+  display: inline-flex;
 }
 
 .topbar__user-link {
@@ -2969,12 +2970,8 @@ a {
 }
 
 /* Responsive fixes public storefront */
-.topbar__top-line {
-  display: contents;
-}
-
 .topbar__row {
-  grid-template-columns: auto auto minmax(260px, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(360px, 1fr) auto auto auto;
 }
 
 .topbar__categories-btn {
