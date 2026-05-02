@@ -92,12 +92,12 @@ export function FeaturedProducts() {
     [machineryConfigured, sourceProducts],
   )
   const sparePartProducts = useMemo(
-    () => (sparePartsConfigured.length > 0 ? sparePartsConfigured.slice(0, 6) : pickProducts(sourceProducts, 'spare_part', 6, 'Repuesto en oferta')),
+    () => (sparePartsConfigured.length > 0 ? sparePartsConfigured.slice(0, 4) : pickProducts(sourceProducts, 'spare_part', 4, 'Repuesto en oferta')),
     [sparePartsConfigured, sourceProducts],
   )
 
   const serviceProducts = useMemo(
-    () => (servicesConfigured.length > 0 ? servicesConfigured : pickProducts(sourceProducts, 'service', 4, 'Servicio de reparación')),
+    () => (servicesConfigured.length > 0 ? servicesConfigured.slice(0, 4) : pickProducts(sourceProducts, 'service', 4, 'Servicio de reparación')),
     [servicesConfigured, sourceProducts],
   )
 
@@ -192,7 +192,7 @@ export function FeaturedProducts() {
           {sparePartProducts.map((product, index) => {
             const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
             return (
-              <article key={product.id} className={`spare-offer-card ${index === 0 || index === 5 ? 'spare-offer-card--large' : ''}`}>
+              <article key={product.id} className={`spare-offer-card ${index === 0 ? 'spare-offer-card--large' : ''}`}>
                 <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
                 <div className="spare-offer-card__content">
                   <span>Oferta destacada</span>
@@ -207,6 +207,11 @@ export function FeaturedProducts() {
               </article>
             )
           })}
+        </div>
+        <div className="home-section__more">
+          <Link className="btn btn--outline" to="/catalogo?product_type=spare_part">
+            Ver más
+          </Link>
         </div>
       </section>
 
@@ -235,6 +240,11 @@ export function FeaturedProducts() {
               </article>
             )
           })}
+        </div>
+        <div className="home-section__more">
+          <Link className="btn btn--outline" to="/catalogo?product_type=service">
+            Ver más
+          </Link>
         </div>
       </section>
     </div>
