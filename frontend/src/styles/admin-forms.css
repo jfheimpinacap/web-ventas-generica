@@ -367,3 +367,34 @@
   width: 18px;
   background: #ffffff;
 }
+
+@media (max-width: 768px) {
+  .admin-product-form,
+  .admin-inline-form,
+  .admin-media-item,
+  .admin-image-mini-item {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-media-item img {
+    height: 180px;
+  }
+
+  .admin-product-form__actions {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .admin-product-form__actions button,
+  .admin-inline-form button {
+    width: 100%;
+  }
+
+  .admin-product-preview-card {
+    max-width: 100%;
+  }
+
+  .admin-promotion-editor__preview {
+    padding: 0.65rem;
+  }
+}
