@@ -102,7 +102,9 @@
 
 
 .quote-form input,
-.quote-form textarea {
+.quote-form textarea,
+.quote-form select,
+.admin-inline-form textarea {
   border: 1px solid #d1d5db;
   border-radius: 10px;
   padding: 0.6rem;
@@ -241,14 +243,6 @@
 }
 
 
-
-.quote-form select,
-.admin-inline-form textarea {
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  padding: 0.6rem;
-  font: inherit;
-}
 
 
 

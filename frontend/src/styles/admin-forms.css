@@ -94,6 +94,14 @@
   gap: 0.55rem;
 }
 
+.admin-card,
+.admin-block,
+.admin-media-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
 
 
 .admin-media-list {
@@ -104,8 +112,6 @@
 
 
 .admin-media-item {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
   padding: 0.75rem;
   display: grid;
   grid-template-columns: 220px 1fr;
