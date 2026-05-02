@@ -1,1 +1,243 @@
-/* Sección extraída para futura organización incremental sin cambios visuales */
+.promo-product-card {
+  background: #ffffff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+
+
+.promo-product-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+
+
+.promo-product-card__content {
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+
+
+.promo-product-card__tag {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #c2410c;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+
+
+.promo-product-card__content h3 {
+  margin: 0;
+  font-size: 0.96rem;
+  min-height: 2.6em;
+}
+
+
+
+.promo-product-card__price {
+  margin: 0;
+}
+
+
+
+.spare-offer-card__content h3,
+.repair-service-card h3,
+.promo-product-card__content h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+
+.product-card {
+  background: #ffffff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+
+
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+
+
+.product-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+
+
+.product-card__content {
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+
+
+.product-card__content h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+  min-height: 2.7em;
+}
+
+
+
+.product-card__content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+
+
+.product-card__meta {
+  line-height: 1.35;
+}
+
+
+
+.product-card__description {
+  line-height: 1.45;
+  color: #4b5563;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 3.9em;
+}
+
+
+
+.product-card__price {
+  color: #ea580c !important;
+  font-size: 1rem !important;
+  font-weight: 800;
+  margin-top: auto !important;
+  padding-top: 0.35rem;
+}
+
+
+
+.product-card__actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 0.9rem 0.9rem;
+}
+
+
+
+.product-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+
+
+.badge--condition {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+
+
+.badge--stock {
+  background: #dcfce7;
+  color: #166534;
+}
+
+
+
+.badge--ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+
+
+.badge--muted {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+
+
+  .product-card img {
+    height: 124px;
+  }
+
+
+
+  .product-card__content {
+    padding: 0.65rem;
+    gap: 0.24rem;
+  }
+
+
+
+  .product-card__content h3 {
+    font-size: 0.88rem;
+    min-height: 2.3em;
+  }
+
+
+
+  .product-card__content p,
+  .product-card__meta {
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
+
+
+  .product-card__description {
+    -webkit-line-clamp: 2;
+    min-height: 2.6em;
+  }
+
+
+
+  .product-card__price {
+    font-size: 1rem !important;
+  }
+
+
+
+  .product-card__actions {
+    padding: 0 0.65rem 0.65rem;
+  }
+
+
+
+  .spare-offer-card__content,
+  .repair-service-card div,
+  .promo-product-card__content {
+    gap: 0.24rem;
+  }
