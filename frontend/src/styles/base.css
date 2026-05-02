@@ -8,6 +8,13 @@ body {
   margin: 0;
   min-height: 100vh;
   background: #f3f4f6;
+  overflow-x: hidden;
+}
+
+html,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 
@@ -34,6 +41,7 @@ a {
   width: min(100%, 1500px);
   max-width: 1500px;
   margin: 0 auto;
+  max-width: 100%;
 }
 
 
@@ -162,3 +170,15 @@ a {
   .app-shell__body {
     padding-top: calc(var(--topbar-height) + 1rem);
   }
+
+@media (max-width: 900px) {
+  .app-shell__body {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    padding: calc(var(--topbar-height) + 0.75rem) 0.75rem 0.75rem;
+  }
+
+  .simple-page {
+    padding: 1rem;
+  }
+}
