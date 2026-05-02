@@ -181,6 +181,12 @@ export function FeaturedProducts() {
             ›
           </button>
         </div>
+
+        <div className="home-section__more">
+          <Link className="btn btn--outline" to="/catalogo?product_type=machinery">
+            Ver más
+          </Link>
+        </div>
       </section>
 
       <section className="spare-offers">

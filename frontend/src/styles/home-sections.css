@@ -541,7 +541,7 @@
 
 @media (max-width: 768px) {
   .machinery-carousel {
-    padding: 0 1.6rem;
+    padding: 0 1.5rem;
   }
 
   .machinery-carousel__viewport {
@@ -552,7 +552,28 @@
 
   .machinery-carousel__slide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
     scroll-snap-align: start;
+  }
+
+  .featured-products .promo-product-card img {
+    height: 165px;
+  }
+
+  .featured-products .promo-product-card__content {
+    padding: 0.95rem;
+  }
+
+  .featured-products .promo-product-card__content h3 {
+    font-size: 1.02rem;
+  }
+
+  .featured-products .promo-product-card__tag {
+    font-size: 0.78rem;
+  }
+
+  .featured-products .home-product-price {
+    font-size: 1.08rem;
   }
 
   .carousel-control {
