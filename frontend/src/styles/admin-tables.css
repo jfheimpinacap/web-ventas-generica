@@ -1,1 +1,82 @@
-/* Sección extraída para futura organización incremental sin cambios visuales */
+.admin-table-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.38rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+
+
+.admin-table th {
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+
+
+.table-action {
+  color: #ea580c;
+  font-weight: 600;
+}
+
+
+
+.quote-status {
+  color: #0f172a;
+}
+
+
+
+.quote-status--new {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+
+
+.quote-status--contacted {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+
+
+.quote-status--quoted {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+
+
+.quote-status--closed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+
+
+.quote-status--discarded {
+  background: #fee2e2;
+  color: #b91c1c;
+}
