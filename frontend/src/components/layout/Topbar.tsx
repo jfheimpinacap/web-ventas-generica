@@ -89,7 +89,7 @@ export function Topbar() {
           rel="noreferrer"
           aria-label="Abrir WhatsApp con asesor comercial"
         >
-          <span className="topbar__whatsapp-icon" aria-hidden="true">💬</span>
+          <span className="topbar__whatsapp-icon" aria-hidden="true">📞</span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>

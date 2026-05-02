@@ -561,3 +561,17 @@
     font-size: 1.15rem;
   }
 }
+
+
+.home-section__more {
+  margin-top: 0.9rem;
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .spare-offers__grid,
+  .repair-services__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
