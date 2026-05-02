@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
@@ -61,6 +61,9 @@ export function CatalogPage() {
   )
 
   const { products, loading, error } = useCatalogProducts(query)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 560px)').matches)
+  const headingRef = useRef<HTMLDivElement | null>(null)
 
   const updateFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -69,6 +72,23 @@ export function CatalogPage() {
     setSearchParams(next)
   }
 
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 560px)')
+
+    const updateIsMobile = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches)
+    }
+
+    setIsMobile(mediaQuery.matches)
+    mediaQuery.addEventListener('change', updateIsMobile)
+
+    return () => mediaQuery.removeEventListener('change', updateIsMobile)
+  }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [query.search, query.category, query.brand, query.product_type, query.condition, query.stock_status, query.ordering])
   const selectedCategory = useMemo(() => {
     const categoryId = Number(query.category)
     if (!categoryId) return null
@@ -162,6 +182,18 @@ export function CatalogPage() {
     return [...productsWithPrice, ...productsWithoutPrice]
   }, [products, query.ordering])
 
+
+
+  const itemsPerPage = isMobile ? 10 : displayedProducts.length
+  const totalPages = isMobile ? Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage)) : 1
+  const paginatedProducts = isMobile
+    ? displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : displayedProducts
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page)
+    headingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   return (
     <Layout>
       <section className="simple-page catalog-page">
@@ -174,7 +206,7 @@ export function CatalogPage() {
           ))}
         </nav>
 
-        <div className="section-heading catalog-page__heading">
+        <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{pageTitle}</h1>
         </div>
 
@@ -197,10 +229,29 @@ export function CatalogPage() {
 
         {!loading && !error && displayedProducts.length > 0 ? (
           <div className="featured-products__grid">
-            {displayedProducts.map((product) => (
+            {paginatedProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
+        ) : null}
+
+        {!loading && !error && isMobile && totalPages > 1 ? (
+          <nav className="catalog-pagination" aria-label="Paginación de catálogo">
+            {Array.from({ length: totalPages }, (_, index) => {
+              const page = index + 1
+              return (
+                <button
+                  key={page}
+                  type="button"
+                  className={`catalog-pagination__button${page === currentPage ? ' is-active' : ''}`}
+                  onClick={() => goToPage(page)}
+                  aria-current={page === currentPage ? 'page' : undefined}
+                >
+                  {page}
+                </button>
+              )
+            })}
+          </nav>
         ) : null}
       </section>
     </Layout>

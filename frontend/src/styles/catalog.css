@@ -393,7 +393,8 @@
 
 @media (max-width: 560px) {
   .catalog-page .featured-products__grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
   }
 }
 
@@ -623,3 +624,27 @@
   .sidebar__panel-header h3 {
     font-size: 0.95rem;
   }
+
+
+.catalog-pagination {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.catalog-pagination__button {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #1f2937;
+  font-weight: 700;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+}
+
+.catalog-pagination__button.is-active {
+  background: #fdba74;
+  border-color: #fb923c;
+}
