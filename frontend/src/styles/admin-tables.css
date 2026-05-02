@@ -2,7 +2,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   border: 1px solid #e2e8f0;
   width: 100%;
 }

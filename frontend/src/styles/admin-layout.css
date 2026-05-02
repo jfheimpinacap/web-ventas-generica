@@ -60,7 +60,7 @@
 .admin-edit-layout--single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
 
 .admin-promotion-editor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 1rem; align-items: stretch; }
-.admin-promotion-editor__preview { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem; display: grid; gap: 0.75rem; align-content: start; }
+.admin-promotion-editor__preview { background: #ffffff; border: 1px solid #e2e8f0; border-radius: var(--radius-card); padding: 0.8rem; display: grid; gap: 0.75rem; align-content: start; }
 
 @media (max-width: 992px) {
   .admin-main { margin-left: 0; }

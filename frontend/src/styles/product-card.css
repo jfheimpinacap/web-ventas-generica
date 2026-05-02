@@ -1,7 +1,7 @@
 .product-card,
 .promo-product-card {
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
   display: flex;
@@ -66,7 +66,7 @@
 
 .product-card {
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
   display: flex;
