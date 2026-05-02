@@ -4,4 +4,7 @@
   background: linear-gradient(180deg, #f3f4f6 0%, #eef2f7 100%);
   line-height: 1.4;
   --topbar-height: 82px;
+  --radius-block: 0;
+  --radius-card: 0;
+  --radius-button: 10px;
 }

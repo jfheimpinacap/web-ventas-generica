@@ -14,7 +14,7 @@
 
 .btn {
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-button);
   padding: 0.56rem 0.92rem;
   cursor: pointer;
   font-weight: 700;
@@ -65,7 +65,7 @@
 
 .search-box button {
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-button);
   padding: 0.5rem 0.8rem;
   min-height: 38px;
   background: #111827;

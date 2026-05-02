@@ -14,7 +14,7 @@
   width: 100%;
   margin-bottom: 0.75rem;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: var(--radius-block);
   padding: 0.6rem;
   background: #ffffff;
   font-weight: 600;
@@ -28,7 +28,7 @@
   flex-direction: column;
   gap: 0.7rem;
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: var(--radius-block);
   padding: 0.8rem;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   width: 100%;
@@ -54,7 +54,7 @@
   margin: 0;
   padding: 0.55rem;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--radius-block);
   background: #f8fafc;
   width: 100%;
   max-width: 100%;
@@ -89,7 +89,7 @@
 
 .sidebar-filters-mobile__item {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--radius-block);
   overflow: hidden;
   background: #ffffff;
 }
@@ -164,7 +164,7 @@
   margin: 0 auto;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: var(--radius-block);
   padding: 0.9rem;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
