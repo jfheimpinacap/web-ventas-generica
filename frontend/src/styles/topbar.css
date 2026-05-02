@@ -841,3 +841,45 @@
   .topbar__phone {
     display: none;
   }
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0.4rem 0.55rem;
+  }
+
+  .topbar__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'brand quote whatsapp'
+      'search search categories';
+    column-gap: 0.4rem;
+    row-gap: 0.35rem;
+  }
+
+  .topbar__brand { grid-area: brand; margin-left: 0; }
+  .topbar__brand small { display: none; }
+  .topbar__top-link--quote { grid-area: quote; min-height: 40px; background: #ea580c; color: #fff; border-color: #c2410c; }
+
+  .topbar__whatsapp-contact { grid-area: whatsapp; min-height: 40px; min-width: 40px; padding: 0; justify-content: center; }
+  .topbar__whatsapp-icon { font-size: 1.2rem; line-height: 1; }
+  .topbar__phone,
+  .topbar__phone-compact { display: none; }
+
+  .topbar__search { grid-area: search; gap: 0; min-height: 40px; }
+  .topbar__search input { flex: 1; min-height: 40px; border-radius: 10px 0 0 10px; }
+  .topbar__search button { min-height: 40px; border-radius: 0 10px 10px 0; border-left: 0; }
+
+  .topbar__categories-btn {
+    grid-area: categories;
+    min-height: 40px;
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 10px;
+  }
+
+  .topbar__categories-label,
+  .topbar__seller-link { display: none; }
+
+  .topbar__categories-icon { font-size: 1.15rem; line-height: 1; }
+}

@@ -61,8 +61,8 @@ export function Topbar() {
           onClick={() => setIsCategoriesOpen((prev) => !prev)}
           aria-controls="categories-mega-menu"
         >
-          <span aria-hidden="true">☰</span>
-          <span>Categorías</span>
+          <span className="topbar__categories-icon" aria-hidden="true">☰</span>
+          <span className="topbar__categories-label">Categorías</span>
         </button>
 
         <form className="topbar__search" role="search" onSubmit={handleSearch}>
@@ -89,9 +89,7 @@ export function Topbar() {
           rel="noreferrer"
           aria-label="Abrir WhatsApp con asesor comercial"
         >
-          <span className="topbar__whatsapp-icon" aria-hidden="true">
-            ✆
-          </span>
+          <span className="topbar__whatsapp-icon" aria-hidden="true">💬</span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>

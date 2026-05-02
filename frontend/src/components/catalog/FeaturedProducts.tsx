@@ -9,7 +9,9 @@ import type { HomeSectionItem, ProductListItem, ProductType } from '../../types/
 import { formatPrice } from '../../utils/formatters'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
-const CAROUSEL_GROUP_SIZE = 4
+const DESKTOP_CAROUSEL_GROUP_SIZE = 4
+const MOBILE_CAROUSEL_GROUP_SIZE = 2
+const MOBILE_BREAKPOINT = 768
 
 function buildFallbackProducts(type: ProductType, count: number, titleBase: string): ProductListItem[] {
   return Array.from({ length: count }, (_, index) => {
@@ -55,6 +57,7 @@ export function FeaturedProducts() {
   const [homeItems, setHomeItems] = useState<HomeSectionItem[]>([])
   const [homeConfigError, setHomeConfigError] = useState(false)
   const [carouselIndex, setCarouselIndex] = useState(0)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT)
 
   useEffect(() => {
     const run = async () => {
@@ -69,6 +72,16 @@ export function FeaturedProducts() {
   }, [])
 
   const sourceProducts = !loading && !error && products.length > 0 ? products : mockProducts
+
+  const carouselGroupSize = isMobile ? MOBILE_CAROUSEL_GROUP_SIZE : DESKTOP_CAROUSEL_GROUP_SIZE
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
+
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
 
   const machineryConfigured = useMemo(() => fromSection(homeItems, 'machinery_promotions'), [homeItems])
   const sparePartsConfigured = useMemo(() => fromSection(homeItems, 'spare_parts_offers'), [homeItems])
@@ -89,10 +102,10 @@ export function FeaturedProducts() {
   )
 
   const machineryGroups = useMemo(() => {
-    return Array.from({ length: Math.ceil(machineryProducts.length / CAROUSEL_GROUP_SIZE) }, (_, index) =>
-      machineryProducts.slice(index * CAROUSEL_GROUP_SIZE, index * CAROUSEL_GROUP_SIZE + CAROUSEL_GROUP_SIZE),
+    return Array.from({ length: Math.ceil(machineryProducts.length / carouselGroupSize) }, (_, index) =>
+      machineryProducts.slice(index * carouselGroupSize, index * carouselGroupSize + carouselGroupSize),
     )
-  }, [machineryProducts])
+  }, [carouselGroupSize, machineryProducts])
 
   useEffect(() => {
     setCarouselIndex((current) => Math.min(current, Math.max(0, machineryGroups.length - 1)))
