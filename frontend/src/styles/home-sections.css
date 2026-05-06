@@ -596,3 +596,30 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+@media (min-width: 1024px) {
+  .spare-offers__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .spare-offer-card--large {
+    grid-column: span 2;
+  }
+
+  .repair-services__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+  .spare-offers__grid,
+  .repair-services__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .spare-offer-card--large {
+    grid-column: span 1;
+  }
+}
