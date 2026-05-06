@@ -49,6 +49,8 @@
 
 .promo-product-card__price {
   margin: 0;
+  font-size: clamp(1.25rem, 1.6vw, 1.65rem);
+  line-height: 1.12;
 }
 
 
@@ -138,10 +140,10 @@
 
 
 .product-card__price {
-  /* TODO: revisar retiro de !important cuando se estabilice el orden de imports modulares */
   color: #ea580c !important;
-  font-size: 1rem !important;
-  font-weight: 800;
+  font-size: clamp(1.28rem, 1.55vw, 1.7rem) !important;
+  font-weight: 900;
+  line-height: 1.12;
   margin-top: auto !important;
   padding-top: 0.35rem;
 }
@@ -151,7 +153,12 @@
 .promo-product-card__price,
 .product-card__price {
   color: #ea580c;
-  font-weight: 800;
+  font-weight: 900;
+}
+
+.price--public {
+  font-size: clamp(1.28rem, 1.55vw, 1.7rem);
+  line-height: 1.12;
 }
 
 
@@ -199,56 +206,43 @@
 }
 
 
-
+@media (max-width: 640px) {
   .product-card img {
     height: 124px;
   }
-
-
 
   .product-card__content {
     padding: 0.65rem;
     gap: 0.24rem;
   }
 
-
-
   .product-card__content h3 {
     font-size: 0.88rem;
     min-height: 2.3em;
   }
 
-
-
-  .product-card__content p,
+  .product-card__content p:not(.product-card__price),
   .product-card__meta {
     font-size: 0.78rem;
     line-height: 1.3;
   }
-
-
 
   .product-card__description {
     -webkit-line-clamp: 2;
     min-height: 2.6em;
   }
 
-
-
   .product-card__price {
-    font-size: 1rem !important;
+    font-size: clamp(1.12rem, 5vw, 1.35rem) !important;
   }
-
-
 
   .product-card__actions {
     padding: 0 0.65rem 0.65rem;
   }
-
-
 
   .spare-offer-card__content,
   .repair-service-card div,
   .promo-product-card__content {
     gap: 0.24rem;
   }
+}

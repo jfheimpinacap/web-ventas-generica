@@ -160,8 +160,8 @@
   margin: 0;
   font-weight: 900;
   color: #ea580c;
-  font-size: clamp(1.08rem, 1.45vw, 1.35rem);
-  line-height: 1.2;
+  font-size: clamp(1.3rem, 1.8vw, 1.85rem);
+  line-height: 1.12;
 }
 
 
@@ -202,6 +202,10 @@
   border-radius: var(--radius-block);
   padding: 1.2rem;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.repair-services {
+  border-radius: 0;
 }
 
 
@@ -291,7 +295,7 @@
 
 .repair-service-card {
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border-radius: 0;
   background: #f8fafc;
   overflow: hidden;
   display: flex;
@@ -324,13 +328,9 @@
   color: #111827;
 }
 
-
-
 .section-heading p {
   color: #4b5563;
 }
-
-
 
 .featured-products__grid {
   display: grid;
@@ -338,34 +338,38 @@
   gap: 0.75rem;
 }
 
-
-
+@media (max-width: 900px) {
   .quote-cta {
     flex-direction: column;
     align-items: flex-start;
   }
 
-
-
+  .machinery-carousel__slide,
   .spare-offers__grid,
   .repair-services__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
 
+@media (max-width: 640px) {
+  .machinery-carousel {
+    padding: 0 1.7rem;
+  }
 
-
+  .machinery-carousel__slide,
   .spare-offers__grid,
   .repair-services__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-
-
   .spare-offer-card--large {
     grid-column: span 1;
   }
 
-
+  .home-product-price {
+    font-size: clamp(1.12rem, 5vw, 1.42rem);
+  }
+}
 
 .product-detail {
   display: grid;
