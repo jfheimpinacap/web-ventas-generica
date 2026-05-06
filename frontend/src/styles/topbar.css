@@ -5,86 +5,96 @@
   min-height: var(--topbar-height);
   background: #111827;
   color: #ffffff;
-  padding: 0.55rem 0.65rem;
+  padding: 0.55rem 0.75rem;
   z-index: 1000;
   border-bottom: 1px solid #1f2937;
 }
 
-
-
 .topbar__row {
-  margin: 0 auto;
+  width: 100%;
   max-width: 1450px;
-  display: grid;
-  grid-template-columns: auto auto minmax(360px, 1fr) auto auto auto;
   min-height: calc(var(--topbar-height) - 8px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, max-content) max-content minmax(280px, 1fr) max-content max-content max-content;
   align-items: center;
-  gap: 1rem;
+  column-gap: clamp(0.55rem, 1.2vw, 1rem);
 }
 
-
-
 .topbar__brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
-  margin-left: 0.5rem;
+  color: #ffffff;
 }
 
-
-
-.topbar__logo {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #f59e0b;
-  color: #111827;
-  font-weight: 700;
+.topbar__brand > div {
+  min-width: 0;
 }
 
-
+.topbar__brand strong,
+.topbar__brand small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .topbar__brand small {
   display: block;
   color: #d1d5db;
 }
 
-
-
-.topbar__menu-toggle {
-  display: none;
+.topbar__logo {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 8px;
+  background: #f59e0b;
+  color: #111827;
+  font-weight: 700;
 }
 
-
+.topbar__menu-toggle,
+.topbar__whatsapp-mobile-only {
+  display: none;
+}
 
 .topbar__categories-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  width: max-content;
+  min-width: max-content;
   min-height: 38px;
+  padding: 0.42rem 0.72rem;
   border-radius: 10px;
   border: 1px solid #4b5563;
   background: rgba(255, 255, 255, 0.05);
   color: #e5e7eb;
   font-weight: 600;
-  padding: 0.42rem 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
 }
-
-
 
 .topbar__search {
   display: flex;
   width: 100%;
+  min-width: 0;
   gap: 0.45rem;
 }
 
-
+.topbar__search input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 .topbar__search button {
   min-height: 38px;
+  flex: 0 0 auto;
   border-radius: 10px;
   border: 1px solid #4b5563;
   background: #1f2937;
@@ -92,16 +102,12 @@
   padding: 0.4rem 0.6rem;
 }
 
-
-
 .topbar__nav {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 0.5rem;
 }
-
-
 
 .topbar__nav a {
   color: #e5e7eb;
@@ -111,8 +117,6 @@
   font-weight: 600;
 }
 
-
-
 .topbar__actions {
   display: flex;
   align-items: center;
@@ -120,8 +124,6 @@
   justify-content: flex-end;
   min-width: 0;
 }
-
-
 
 .topbar__actions-main {
   display: inline-flex;
@@ -131,60 +133,11 @@
   flex-wrap: wrap;
 }
 
-
-
 .topbar__seller-access {
   display: inline-flex;
   align-items: center;
   margin-left: 0.8rem;
 }
-
-
-
-.topbar__whatsapp-contact {
-  display: inline-flex;
-  justify-self: start;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid rgba(74, 222, 128, 0.45);
-  background: rgba(37, 211, 102, 0.1);
-}
-
-
-
-.topbar__whatsapp-icon {
-  color: #22c55e;
-  font-weight: 800;
-}
-
-
-
-.topbar__whatsapp-mobile-only {
-  display: none;
-}
-
-
-
-.topbar__phone {
-  font-weight: 600;
-  color: #f3f4f6;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-
-
-.topbar__phone-compact {
-  display: none;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-
 
 .topbar__top-link {
   display: inline-flex;
@@ -198,10 +151,9 @@
   color: #e5e7eb;
   font-weight: 600;
   line-height: 1.1;
+  white-space: nowrap;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
-
-
 
 .topbar__top-link:hover,
 .topbar__top-link.active {
@@ -210,16 +162,57 @@
   color: #ffffff;
 }
 
-
-
 .topbar__top-link--quote {
   border-color: #9a3412;
   color: #ffedd5;
   font-weight: 700;
-  display: inline-flex;
 }
 
+.topbar__whatsapp-contact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 38px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #22c55e;
+  background: #16a34a;
+  color: #ffffff;
+  white-space: nowrap;
+}
 
+.topbar__whatsapp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.topbar__whatsapp-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.topbar__phone {
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.topbar__phone-compact {
+  display: none;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
 
 .topbar__user-link {
   width: 36px;
@@ -234,8 +227,6 @@
   font-size: 1.05rem;
 }
 
-
-
 .topbar__panel-link {
   color: #e5e7eb;
   font-weight: 600;
@@ -243,162 +234,8 @@
   border-radius: 999px;
   padding: 0.45rem 0.72rem;
   line-height: 1.1;
+  white-space: nowrap;
 }
-
-
-
-  .topbar {
-    padding: 0.4rem 0.5rem;
-  }
-
-
-
-  .topbar__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: calc(var(--topbar-height) - 10px);
-    gap: 0.45rem;
-    align-items: center;
-  }
-
-
-
-  .topbar__brand {
-    margin-left: 0;
-    gap: 0.5rem;
-  }
-
-
-
-  .topbar__logo {
-    width: 30px;
-    height: 30px;
-    border-radius: 7px;
-    font-size: 0.92rem;
-  }
-
-
-
-  .topbar__brand strong {
-    font-size: 0.92rem;
-    line-height: 1.15;
-  }
-
-
-
-  .topbar__brand small {
-    font-size: 0.65rem;
-    line-height: 1.1;
-  }
-
-
-
-  .topbar__categories-btn {
-    min-height: 34px;
-    border-radius: 9px;
-    padding: 0.28rem 0.52rem;
-    font-size: 0.84rem;
-    white-space: nowrap;
-  }
-
-
-
-  .topbar__actions {
-    display: grid;
-    grid-column: 1 / -1;
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: center;
-    gap: 0.35rem;
-    order: 3;
-  }
-
-
-
-  .topbar__actions-main {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.35rem;
-    min-width: 0;
-    justify-content: space-between;
-  }
-
-
-
-  .topbar__top-link {
-    min-height: 30px;
-    padding: 0.3rem 0.52rem;
-    font-size: 0.78rem;
-    border-radius: 9px;
-  }
-
-
-
-  .topbar__whatsapp-contact {
-    padding: 0.3rem 0.52rem;
-    border-radius: 10px;
-    gap: 0.28rem;
-  }
-
-
-
-  .topbar__phone {
-    font-size: 0.72rem;
-  }
-
-
-
-  .topbar__user-link {
-    width: 30px;
-    height: 30px;
-    font-size: 0.95rem;
-  }
-
-
-
-  .topbar__panel-link {
-    padding: 0.3rem 0.58rem;
-    font-size: 0.76rem;
-  }
-
-
-
-  .topbar__whatsapp-contact {
-    justify-self: end;
-  }
-
-
-
-  .topbar__seller-link {
-    margin-left: auto;
-    flex: 0 0 auto;
-  }
-
-
-
-  .topbar__categories-btn {
-    grid-column: 1 / 2;
-    justify-self: start;
-    align-self: stretch;
-    order: 4;
-  }
-
-
-
-  .topbar__search {
-    grid-column: 2 / 3;
-    gap: 0.35rem;
-    order: 5;
-    width: 100%;
-  }
-
-
-
-  .topbar {
-    padding: 0.35rem 0.5rem;
-  }
-
-
 
 .categories-modal {
   position: fixed;
@@ -410,8 +247,6 @@
   align-items: flex-start;
   padding: calc(var(--topbar-height) + 0.85rem) 1rem 1rem;
 }
-
-
 
 .categories-modal__panel {
   width: fit-content;
@@ -425,8 +260,6 @@
   overflow: hidden;
   position: relative;
 }
-
-
 
 .categories-modal__close {
   position: absolute;
@@ -443,8 +276,6 @@
   z-index: 2;
 }
 
-
-
 .categories-modal__content {
   display: grid;
   grid-template-columns: clamp(210px, 24vw, 260px) minmax(340px, 1fr);
@@ -452,16 +283,12 @@
   min-height: 0;
 }
 
-
-
 .categories-modal__roots {
   border-right: 1px solid #e5e7eb;
   padding: 0.65rem;
   background: #f8fafc;
   overflow-y: auto;
 }
-
-
 
 .categories-modal__root-link {
   display: flex;
@@ -474,22 +301,16 @@
   font-weight: 600;
 }
 
-
-
 .categories-modal__root-link:hover,
 .categories-modal__root-link:focus-visible,
 .categories-modal__root-link--active {
   background: #e2e8f0;
 }
 
-
-
 .categories-modal__subs {
   padding: 0.65rem 1rem 1rem;
   overflow-y: auto;
 }
-
-
 
 .categories-modal__sub-grid {
   display: grid;
@@ -497,8 +318,6 @@
   gap: 0.45rem 0.85rem;
   align-content: start;
 }
-
-
 
 .categories-modal__sub-grid ul {
   margin: 0;
@@ -508,8 +327,6 @@
   gap: 0.2rem;
 }
 
-
-
 .categories-modal__sub-grid a {
   display: block;
   padding: 0.36rem 0.3rem;
@@ -517,27 +334,151 @@
   color: #1f2937;
 }
 
-
-
 .categories-modal__sub-grid a:hover,
 .categories-modal__sub-grid a:focus-visible {
   background: #f1f5f9;
 }
-
-
 
 .categories-modal__empty {
   color: #64748b;
   margin: 0.3rem 0;
 }
 
-
-
 .categories-modal__mobile-accordion {
   display: none;
 }
 
+@media (max-width: 1120px) and (min-width: 769px) {
+  .topbar__row {
+    grid-template-columns: minmax(180px, max-content) max-content minmax(220px, 1fr) max-content max-content max-content;
+    column-gap: 0.55rem;
+  }
 
+  .topbar__brand {
+    gap: 0.5rem;
+  }
+
+  .topbar__brand small {
+    display: none;
+  }
+
+  .topbar__categories-btn,
+  .topbar__top-link,
+  .topbar__whatsapp-contact,
+  .topbar__panel-link {
+    font-size: 0.9rem;
+  }
+
+  .topbar__whatsapp-contact {
+    padding-inline: 0.58rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0.4rem 0.55rem;
+  }
+
+  .topbar__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'brand quote whatsapp'
+      'search search categories';
+    min-height: calc(var(--topbar-height) - 10px);
+    align-items: center;
+    column-gap: 0.4rem;
+    row-gap: 0.35rem;
+  }
+
+  .topbar__brand {
+    grid-area: brand;
+    margin-left: 0;
+    gap: 0.5rem;
+  }
+
+  .topbar__logo {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 7px;
+    font-size: 0.92rem;
+  }
+
+  .topbar__brand strong {
+    font-size: 0.92rem;
+    line-height: 1.15;
+  }
+
+  .topbar__brand small {
+    display: none;
+  }
+
+  .topbar__top-link--quote {
+    grid-area: quote;
+    min-height: 40px;
+    padding: 0.38rem 0.68rem;
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #c2410c;
+    font-size: 0.8rem;
+  }
+
+  .topbar__whatsapp-contact {
+    grid-area: whatsapp;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 10px;
+  }
+
+  .topbar__whatsapp-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .topbar__phone,
+  .topbar__phone-compact {
+    display: none;
+  }
+
+  .topbar__search {
+    grid-area: search;
+    gap: 0;
+    min-height: 40px;
+  }
+
+  .topbar__search input {
+    flex: 1;
+    min-height: 40px;
+    border-radius: 10px 0 0 10px;
+  }
+
+  .topbar__search button {
+    min-height: 40px;
+    border-radius: 0 10px 10px 0;
+    border-left: 0;
+  }
+
+  .topbar__categories-btn {
+    grid-area: categories;
+    min-height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 10px;
+  }
+
+  .topbar__categories-label,
+  .topbar__seller-link {
+    display: none;
+  }
+
+  .topbar__categories-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+  }
 
   .categories-modal__panel {
     width: 100%;
@@ -546,13 +487,9 @@
     max-height: calc(100vh - var(--topbar-height) - 0.85rem);
   }
 
-
-
   .categories-modal__content {
     display: none;
   }
-
-
 
   .categories-modal__mobile-accordion {
     display: grid;
@@ -562,8 +499,6 @@
     gap: 0.4rem;
   }
 
-
-
   .categories-modal__close {
     top: 0.7rem;
     right: 0.7rem;
@@ -572,16 +507,12 @@
     z-index: 5;
   }
 
-
-
   .categories-modal__mobile-item {
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     background: #f8fafc;
     overflow: hidden;
   }
-
-
 
   .categories-modal__mobile-header {
     display: grid;
@@ -590,15 +521,11 @@
     min-height: 46px;
   }
 
-
-
   .categories-modal__mobile-link {
     padding: 0.7rem 0.8rem;
     font-weight: 700;
     color: #0f172a;
   }
-
-
 
   .categories-modal__mobile-toggle {
     width: 44px;
@@ -609,8 +536,6 @@
     color: #334155;
     font-size: 1rem;
   }
-
-
 
   .categories-modal__mobile-subs {
     list-style: none;
@@ -625,16 +550,12 @@
     transition: max-height 280ms ease, opacity 220ms ease, transform 220ms ease, padding 220ms ease;
   }
 
-
-
   .categories-modal__mobile-subs.is-expanded {
     max-height: 340px;
     opacity: 1;
     transform: translateY(0);
     padding: 0 0.45rem 0.55rem;
   }
-
-
 
   .categories-modal__mobile-subs a {
     display: block;
@@ -643,243 +564,8 @@
     color: #1f2937;
   }
 
-
-
   .categories-modal__mobile-subs a:hover,
   .categories-modal__mobile-subs a:focus-visible {
     background: #e2e8f0;
   }
-
-
-
-/* Responsive fixes public storefront */
-.topbar__row {
-  grid-template-columns: auto auto minmax(420px, 1fr) auto auto auto;
-}
-
-
-
-.topbar__categories-btn {
-  justify-self: start;
-  width: fit-content;
-  min-width: max-content;
-}
-
-
-
-.topbar__search {
-  min-width: 0;
-}
-
-
-
-.topbar__top-link--quote {
-  justify-self: end;
-}
-
-
-
-.topbar__whatsapp-contact {
-  justify-self: end;
-  padding-inline: 0.6rem 0.7rem;
-}
-
-
-
-.topbar__seller-link {
-  justify-self: end;
-}
-
-
-
-  .topbar__row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'brand quote whatsapp'
-      'categories search search';
-    align-items: center;
-    column-gap: 0.4rem;
-    row-gap: 0.3rem;
-  }
-
-
-
-  .topbar__brand {
-    grid-area: brand;
-    margin-left: 0;
-  }
-
-
-
-  .topbar__brand small {
-    display: none;
-  }
-
-
-
-  .topbar__top-link--quote {
-    grid-area: quote;
-    justify-self: end;
-    min-height: 38px;
-    padding: 0.38rem 0.68rem;
-    display: inline-flex;
-    background: #ea580c;
-    border-color: #c2410c;
-    color: #ffffff;
-  }
-
-
-
-  .topbar__whatsapp-contact {
-    grid-area: whatsapp;
-    justify-self: end;
-    min-height: 38px;
-    justify-content: center;
-    padding: 0.38rem 0.58rem;
-    gap: 0.32rem;
-    background: #16a34a;
-    border-color: #22c55e;
-    border-radius: 10px;
-    white-space: nowrap;
-  }
-
-
-
-  .topbar__whatsapp-icon {
-    color: #ffffff;
-    font-size: 1.05rem;
-    line-height: 1;
-  }
-
-
-
-  .topbar__categories-btn {
-    grid-area: categories;
-    min-height: 38px;
-    height: 38px;
-    padding: 0 0.58rem;
-    font-size: 0.87rem;
-    line-height: 1;
-    align-items: center;
-    border-radius: 10px;
-  }
-
-
-
-  .topbar__search {
-    grid-area: search;
-    gap: 0.14rem;
-    width: 100%;
-  }
-
-
-
-  .topbar__phone-compact {
-    display: inline;
-    font-size: 0.84rem;
-    font-weight: 700;
-  }
-
-
-
-  .topbar__phone {
-    display: none;
-  }
-
-
-
-  .topbar__seller-link {
-    display: none;
-  }
-
-
-
-  .topbar__row {
-    gap: 0.35rem;
-  }
-
-
-
-  .topbar__brand strong {
-    font-size: 0.92rem;
-    line-height: 1.15;
-  }
-
-
-
-  .topbar__brand small {
-    display: block;
-    font-size: 0.66rem;
-    line-height: 1.1;
-    white-space: nowrap;
-  }
-
-
-
-  .topbar__top-link--quote {
-    font-size: 0.8rem;
-    min-width: 74px;
-  }
-
-
-
-  .topbar__whatsapp-contact {
-    width: auto;
-    min-width: 128px;
-    padding: 0.35rem 0.56rem;
-  }
-
-
-
-  .topbar__phone-compact {
-    font-size: 0.76rem;
-  }
-
-
-
-  .topbar__brand small,
-  .topbar__phone {
-    display: none;
-  }
-
-@media (max-width: 768px) {
-  .topbar {
-    padding: 0.4rem 0.55rem;
-  }
-
-  .topbar__row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'brand quote whatsapp'
-      'search search categories';
-    column-gap: 0.4rem;
-    row-gap: 0.35rem;
-  }
-
-  .topbar__brand { grid-area: brand; margin-left: 0; }
-  .topbar__brand small { display: none; }
-  .topbar__top-link--quote { grid-area: quote; min-height: 40px; background: #ea580c; color: #fff; border-color: #c2410c; }
-
-  .topbar__whatsapp-contact { grid-area: whatsapp; min-height: 40px; min-width: 40px; padding: 0; justify-content: center; }
-  .topbar__whatsapp-icon { font-size: 1.2rem; line-height: 1; }
-  .topbar__phone,
-  .topbar__phone-compact { display: none; }
-
-  .topbar__search { grid-area: search; gap: 0; min-height: 40px; }
-  .topbar__search input { flex: 1; min-height: 40px; border-radius: 10px 0 0 10px; }
-  .topbar__search button { min-height: 40px; border-radius: 0 10px 10px 0; border-left: 0; }
-
-  .topbar__categories-btn {
-    grid-area: categories;
-    min-height: 40px;
-    width: 40px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 10px;
-  }
-
-  .topbar__categories-label,
-  .topbar__seller-link { display: none; }
-
-  .topbar__categories-icon { font-size: 1.15rem; line-height: 1; }
 }
