@@ -154,6 +154,23 @@
   background: #f59e0b;
 }
 
+
+@media (min-width: 901px) {
+  .hero-section {
+    width: 100vw;
+    max-width: none;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+
+  .hero-section__actions .btn {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: max-content;
+    padding-inline: 0.95rem;
+  }
+}
+
 @media (max-width: 900px) {
   .hero-section {
     grid-template-columns: 1fr;

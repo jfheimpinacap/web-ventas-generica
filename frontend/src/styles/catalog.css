@@ -648,3 +648,53 @@
   background: #fdba74;
   border-color: #fb923c;
 }
+
+@media (min-width: 901px) {
+  .sidebar {
+    order: initial;
+    position: sticky;
+    top: calc(var(--topbar-height) + 1rem);
+    width: clamp(260px, 20vw, 300px);
+    min-width: 260px;
+    max-width: 300px;
+    max-height: calc(100vh - var(--topbar-height) - 1.5rem);
+    overflow: hidden;
+  }
+
+  .sidebar__mobile-toggle,
+  .sidebar__mobile-backdrop,
+  .sidebar__panel-close {
+    display: none;
+  }
+
+  .sidebar__panel {
+    position: static;
+    display: flex !important;
+    flex-direction: column;
+    max-height: calc(100vh - var(--topbar-height) - 1.5rem);
+    z-index: auto;
+  }
+
+  .sidebar__panel-header {
+    display: none;
+  }
+
+  .sidebar-filters--desktop,
+  .sidebar-categories-desktop {
+    display: block;
+  }
+
+  .sidebar-filters-mobile {
+    display: none;
+  }
+
+  .catalog-page {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem 0;
+  }
+
+  .catalog-page .featured-products__grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
