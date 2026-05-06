@@ -280,10 +280,10 @@ export async function deletePromotion(id: number) {
 
 
 export async function getProductsForHomeSection(section: HomeSection) {
-  const sectionParams: Record<HomeSection, Record<string, string>> = {
-    machinery_promotions: { product_type: 'machinery' },
-    spare_parts_offers: { product_type: 'spare_part' },
-    repair_services: { product_type: 'service' },
+  const sectionParams: Record<HomeSection, Record<string, string | boolean>> = {
+    machinery_promotions: { product_type: 'machinery', is_published: true },
+    spare_parts_offers: { product_type: 'spare_part', is_published: true },
+    repair_services: { product_type: 'service', is_published: true },
   }
 
   return getAdminProducts(sectionParams[section])

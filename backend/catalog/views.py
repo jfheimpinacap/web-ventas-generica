@@ -342,16 +342,13 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
             else:
                 serializer.save(position=target_position)
 
-            self._reindex_section(section)
             return
 
         serializer.save()
 
     @transaction.atomic
     def perform_destroy(self, instance):
-        section = instance.section
         instance.delete()
-        self._reindex_section(section)
 
     def get_queryset(self):
         queryset = HomeSectionItem.objects.select_related('product__category', 'product__brand', 'product__supplier', 'product')

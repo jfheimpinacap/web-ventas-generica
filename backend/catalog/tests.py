@@ -609,6 +609,89 @@ class HomeSectionItemApiTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['position'], 2)
 
+    def test_patch_moves_item_to_empty_slot_without_compacting(self):
+        self.authenticate()
+        item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=1,
+            product=self.spare_part,
+            is_active=True,
+        )
+
+        response = self.client.patch(
+            reverse('home-section-item-detail', kwargs={'pk': item.pk}),
+            {'position': 4},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.position, 4)
+
+    def test_patch_swaps_occupied_slots(self):
+        self.authenticate()
+        second_spare = Product.objects.create(
+            name='Filtro hidráulico',
+            category=self.category,
+            product_type=Product.ProductType.SPARE_PART,
+            condition=Product.ProductCondition.NEW,
+            sku='REP-2',
+            is_published=True,
+        )
+        first_item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=1,
+            product=self.spare_part,
+            is_active=True,
+        )
+        second_item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=2,
+            product=second_spare,
+            is_active=True,
+        )
+
+        response = self.client.patch(
+            reverse('home-section-item-detail', kwargs={'pk': first_item.pk}),
+            {'position': 2},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        first_item.refresh_from_db()
+        second_item.refresh_from_db()
+        self.assertEqual(first_item.position, 2)
+        self.assertEqual(second_item.position, 1)
+
+    def test_delete_leaves_slot_available(self):
+        self.authenticate()
+        second_spare = Product.objects.create(
+            name='Filtro hidráulico',
+            category=self.category,
+            product_type=Product.ProductType.SPARE_PART,
+            condition=Product.ProductCondition.NEW,
+            sku='REP-2',
+            is_published=True,
+        )
+        removed_item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=1,
+            product=self.spare_part,
+            is_active=True,
+        )
+        remaining_item = HomeSectionItem.objects.create(
+            section=HomeSectionItem.Section.SPARE_PARTS_OFFERS,
+            position=2,
+            product=second_spare,
+            is_active=True,
+        )
+
+        response = self.client.delete(reverse('home-section-item-detail', kwargs={'pk': removed_item.pk}))
+
+        self.assertEqual(response.status_code, 204)
+        remaining_item.refresh_from_db()
+        self.assertEqual(remaining_item.position, 2)
+
     def test_section_compatibility_validation(self):
         self.authenticate()
         response = self.client.post(
