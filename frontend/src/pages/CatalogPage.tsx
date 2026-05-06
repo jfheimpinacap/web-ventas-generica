@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
+import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { Layout } from '../components/layout/Layout'
 import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
@@ -96,14 +97,14 @@ export function CatalogPage() {
   }, [categories, query.category])
 
   const categoryPath = useMemo(() => {
-    if (!selectedCategory) return [] as string[]
+    if (!selectedCategory) return [] as Category[]
 
     const categoryById = new Map(categories.map((category) => [category.id, category]))
-    const path: string[] = []
+    const path: Category[] = []
     let current: Category | null = selectedCategory
 
     while (current) {
-      path.unshift(current.name)
+      path.unshift(current)
       current = current.parent ? categoryById.get(current.parent) ?? null : null
     }
 
@@ -132,14 +133,33 @@ export function CatalogPage() {
     return trail
   }, [query])
 
-  const breadcrumbItems = useMemo(() => {
-    const trail = ['Inicio', ...categoryPath]
-    if (selectedBrand?.name) trail.push(selectedBrand.name)
-    return [...trail, ...extraFilterTrail]
-  }, [categoryPath, selectedBrand, extraFilterTrail])
+  const buildCatalogHref = (categoryId?: number) => {
+    const next = new URLSearchParams(searchParams)
+    if (categoryId) next.set('category', String(categoryId))
+    else next.delete('category')
+
+    const queryString = next.toString()
+    return queryString ? `/catalogo?${queryString}` : '/catalogo'
+  }
+
+  const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
+    const trail: BreadcrumbItem[] = [
+      { label: 'Inicio', to: '/' },
+      { label: 'Catálogo', to: '/catalogo' },
+      ...categoryPath.map((category) => ({
+        label: category.name,
+        to: buildCatalogHref(category.id),
+      })),
+    ]
+
+    if (selectedBrand?.name) trail.push({ label: selectedBrand.name })
+    extraFilterTrail.forEach((item) => trail.push({ label: item }))
+
+    return trail
+  }, [categoryPath, selectedBrand, extraFilterTrail, searchParams])
 
   const pageTitle = useMemo(() => {
-    const categoryName = categoryPath[categoryPath.length - 1]
+    const categoryName = categoryPath[categoryPath.length - 1]?.name
     const brandName = selectedBrand?.name
 
     if (categoryName && brandName) return `${brandName} en ${categoryName}`
@@ -197,14 +217,7 @@ export function CatalogPage() {
   return (
     <Layout>
       <section className="simple-page catalog-page">
-        <nav className="catalog-breadcrumb" aria-label="Ruta del catálogo">
-          {breadcrumbItems.map((item, index) => (
-            <span key={`${item}-${index}`}>
-              {item}
-              {index < breadcrumbItems.length - 1 ? ' > ' : ''}
-            </span>
-          ))}
-        </nav>
+        <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta del catálogo" />
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{pageTitle}</h1>

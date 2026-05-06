@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
+import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { Layout } from '../components/layout/Layout'
 import { getProductBySlug, getProducts } from '../services/catalogApi'
+import { useCategories } from '../hooks/useCategories'
 import { resolveMediaUrl } from '../services/api'
-import type { ProductDetail, ProductListItem } from '../types/catalog'
+import type { Category, ProductDetail, ProductListItem } from '../types/catalog'
 import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
 
@@ -17,6 +19,7 @@ export function ProductDetailPage() {
   const [relatedProducts, setRelatedProducts] = useState<ProductListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { categories } = useCategories()
 
   useEffect(() => {
     if (!slug) {
@@ -47,6 +50,36 @@ export function ProductDetailPage() {
     void run()
   }, [slug])
 
+
+  const categoryPath = useMemo(() => {
+    if (!product?.category) return [] as Category[]
+
+    const categoryById = new Map(categories.map((category) => [category.id, category]))
+    const path: Category[] = []
+    let current: Category | null = categoryById.get(product.category.id) ?? product.category
+
+    while (current) {
+      path.unshift(current)
+      current = current.parent ? categoryById.get(current.parent) ?? null : null
+    }
+
+    return path
+  }, [categories, product])
+
+  const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
+    if (!product) return []
+
+    return [
+      { label: 'Inicio', to: '/' },
+      { label: 'Catálogo', to: '/catalogo' },
+      ...categoryPath.map((category) => ({
+        label: category.name,
+        to: `/catalogo?category=${category.id}`,
+      })),
+      { label: product.name },
+    ]
+  }, [categoryPath, product])
+
   const imageUrls = useMemo(() => {
     if (!product) return []
     return [...product.images]
@@ -63,6 +96,8 @@ export function ProductDetailPage() {
 
         {!loading && !error && product ? (
           <div className="product-detail">
+            <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta del producto" />
+
             <div className="product-detail__top-actions">
               <Link className="btn btn--ghost" to="/catalogo">
                 ← Volver al catálogo
