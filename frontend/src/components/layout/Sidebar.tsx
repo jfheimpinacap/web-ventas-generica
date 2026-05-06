@@ -172,7 +172,7 @@ export function Sidebar() {
               </button>
             </div>
 
-            <div className="sidebar-filters-mobile" role="list" aria-label="Filtros móviles del catálogo">
+            <div className="sidebar-filters-mobile" role="list" aria-label="Filtros móviles de productos">
               {mobileFilterSections.map((section) => {
                 const isExpanded = openMobileFilterKey === section.key
                 return (

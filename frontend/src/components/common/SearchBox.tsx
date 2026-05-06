@@ -28,14 +28,14 @@ export function SearchBox({
       <input
         type="search"
         placeholder={placeholder}
-        aria-label="Buscar en el catálogo"
+        aria-label="Buscar productos"
         value={value}
         onChange={(event) => setValue(event.target.value)}
       />
       <button type="submit">Buscar</button>
       {showCatalogButton ? (
         <Link className="btn btn--ghost search-box__catalog" to="/catalogo">
-          Catálogo
+          Ver productos
         </Link>
       ) : null}
     </form>

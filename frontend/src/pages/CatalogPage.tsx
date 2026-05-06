@@ -145,7 +145,6 @@ export function CatalogPage() {
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     const trail: BreadcrumbItem[] = [
       { label: 'Inicio', to: '/' },
-      { label: 'Catálogo', to: '/catalogo' },
       ...categoryPath.map((category) => ({
         label: category.name,
         to: buildCatalogHref(category.id),
@@ -166,9 +165,9 @@ export function CatalogPage() {
     if (categoryName) return categoryName
     if (brandName) return brandName
 
-    if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Catálogo'
+    if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
     if (query.search) return `Resultados para "${query.search}"`
-    return 'Catálogo'
+    return 'Productos'
   }, [categoryPath, selectedBrand, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
@@ -217,7 +216,7 @@ export function CatalogPage() {
   return (
     <Layout>
       <section className="simple-page catalog-page">
-        <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta del catálogo" />
+        <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{pageTitle}</h1>
@@ -236,7 +235,7 @@ export function CatalogPage() {
           </label>
         </div>
 
-        {loading ? <p className="ui-note">Cargando catálogo...</p> : null}
+        {loading ? <p className="ui-note">Cargando productos...</p> : null}
         {!loading && error ? <p className="ui-note ui-note--error">{error} Usa el menú lateral o vuelve más tarde.</p> : null}
         {!loading && !error && displayedProducts.length === 0 ? <p className="ui-note">No hay productos con estos filtros.</p> : null}
 
@@ -249,7 +248,7 @@ export function CatalogPage() {
         ) : null}
 
         {!loading && !error && isMobile && totalPages > 1 ? (
-          <nav className="catalog-pagination" aria-label="Paginación de catálogo">
+          <nav className="catalog-pagination" aria-label="Paginación de productos">
             {Array.from({ length: totalPages }, (_, index) => {
               const page = index + 1
               return (
