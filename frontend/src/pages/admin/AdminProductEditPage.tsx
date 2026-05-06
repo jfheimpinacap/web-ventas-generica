@@ -23,6 +23,7 @@ import type {
   Category,
   ProductFormValues,
   ProductImage,
+  ProductImageWritePayload,
   ProductSpec,
   ProductSpecWritePayload,
   SupplierSummary,
@@ -89,6 +90,7 @@ export function AdminProductEditPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageAltText, setImageAltText] = useState('')
   const [imageSaving, setImageSaving] = useState(false)
   const [imageStatus, setImageStatus] = useState<string | null>(null)
   const [imageError, setImageError] = useState<string | null>(null)
@@ -174,10 +176,13 @@ export function AdminProductEditPage() {
       await createProductImage({
         product: productId,
         image: imageFile,
+        alt_text: imageAltText.trim(),
+        order: sortedImages.length,
         is_main: sortedImages.length === 0,
       })
       await refreshMediaData(productId)
       setImageFile(null)
+      setImageAltText('')
       setImageStatus('Imagen agregada correctamente.')
     } catch {
       setImageError('No se pudo guardar la imagen.')
@@ -197,6 +202,24 @@ export function AdminProductEditPage() {
       setImageStatus('Imagen principal actualizada.')
     } catch {
       setImageError('No se pudo actualizar la imagen principal.')
+    } finally {
+      setImageSaving(false)
+    }
+  }
+
+
+  const handleUpdateImage = async (imageId: number, payload: Partial<ProductImageWritePayload>) => {
+    if (!productId) return
+
+    try {
+      setImageSaving(true)
+      setImageError(null)
+      setImageStatus(null)
+      await updateProductImage(imageId, payload)
+      await refreshMediaData(productId)
+      setImageStatus('Imagen actualizada.')
+    } catch {
+      setImageError('No se pudo actualizar la imagen.')
     } finally {
       setImageSaving(false)
     }
@@ -317,6 +340,10 @@ export function AdminProductEditPage() {
                     Archivo
                     <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} required />
                   </label>
+                  <label className="admin-image-upload-field">
+                    Texto alternativo
+                    <input value={imageAltText} onChange={(e) => setImageAltText(e.target.value)} placeholder={previewValues?.name || 'Imagen de producto'} />
+                  </label>
                   <button type="submit" className="btn btn--accent" disabled={imageSaving}>
                     {imageSaving ? 'Guardando...' : 'Subir imagen'}
                   </button>
@@ -371,8 +398,29 @@ export function AdminProductEditPage() {
               {sortedImages.map((image) => (
                 <article key={image.id} className="admin-image-mini-item">
                   <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
-                  <div>
-                    <p>{image.alt_text || 'Sin texto alternativo'}</p>
+                  <div className="admin-image-mini-item__content">
+                    <label>
+                      Texto alternativo
+                      <input
+                        value={image.alt_text}
+                        onChange={(e) =>
+                          setImages((prev) => prev.map((item) => (item.id === image.id ? { ...item, alt_text: e.target.value } : item)))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Orden
+                      <input
+                        type="number"
+                        min={0}
+                        value={image.order}
+                        onChange={(e) =>
+                          setImages((prev) =>
+                            prev.map((item) => (item.id === image.id ? { ...item, order: Number(e.target.value) || 0 } : item)),
+                          )
+                        }
+                      />
+                    </label>
                     <div className="admin-media-item__actions">
                       <button
                         type="button"
@@ -381,6 +429,14 @@ export function AdminProductEditPage() {
                         disabled={imageSaving || image.is_main}
                       >
                         {image.is_main ? 'Principal' : 'Marcar principal'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => handleUpdateImage(image.id, { alt_text: image.alt_text, order: image.order })}
+                        disabled={imageSaving}
+                      >
+                        Guardar
                       </button>
                       <button type="button" className="btn btn--ghost" onClick={() => handleDeleteImage(image.id)} disabled={imageSaving}>
                         Eliminar
