@@ -68,7 +68,7 @@ export function AdminPromotionFormPage() {
       setError(null)
       if (id) await updatePromotion(Number(id), values)
       else await createPromotion(values)
-      navigate('/admin/promociones')
+      navigate('/admin/ofertas-hero')
     } catch {
       setError('No se pudo guardar la oferta.')
     } finally {

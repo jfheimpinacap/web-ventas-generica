@@ -46,10 +46,11 @@ export function AppRouter() {
         <Route path="/admin/proveedores/:id/editar" element={<AdminSupplierFormPage />} />
         <Route path="/admin/cotizaciones" element={<AdminQuotesPage />} />
         <Route path="/admin/cotizaciones/:id" element={<AdminQuoteDetailPage />} />
-        <Route path="/admin/promociones" element={<AdminPromotionsPage />} />
-        <Route path="/admin/promociones/nueva" element={<AdminPromotionFormPage />} />
-        <Route path="/admin/promociones/:id/editar" element={<AdminPromotionFormPage />} />
-        <Route path="/admin/home-secciones" element={<AdminHomeSectionsPage />} />
+        <Route path="/admin/promociones" element={<AdminHomeSectionsPage />} />
+        <Route path="/admin/home-secciones" element={<Navigate to="/admin/promociones" replace />} />
+        <Route path="/admin/ofertas-hero" element={<AdminPromotionsPage />} />
+        <Route path="/admin/ofertas-hero/nueva" element={<AdminPromotionFormPage />} />
+        <Route path="/admin/ofertas-hero/:id/editar" element={<AdminPromotionFormPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -42,7 +42,7 @@ export function AdminPromotionsPage() {
         <h1>Ofertas en Hero section</h1>
         <div className="admin-list-toolbar">
           <input className="admin-search" placeholder="Buscar oferta" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Link className="btn btn--accent" to="/admin/promociones/nueva">
+          <Link className="btn btn--accent" to="/admin/ofertas-hero/nueva">
             Nueva oferta
           </Link>
         </div>
@@ -76,7 +76,7 @@ export function AdminPromotionsPage() {
                   <td>{item.starts_at ? new Date(item.starts_at).toLocaleDateString() : '-'}</td>
                   <td>{item.ends_at ? new Date(item.ends_at).toLocaleDateString() : '-'}</td>
                   <td>
-                    <Link className="table-action" to={`/admin/promociones/${item.id}/editar`}>
+                    <Link className="table-action" to={`/admin/ofertas-hero/${item.id}/editar`}>
                       Editar
                     </Link>{' '}
                     <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>

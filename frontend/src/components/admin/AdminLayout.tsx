@@ -9,8 +9,8 @@ const adminMenu = [
   { to: '/admin/marcas', label: 'Marcas' },
   { to: '/admin/proveedores', label: 'Proveedores' },
   { to: '/admin/cotizaciones', label: 'Cotizaciones' },
-  { to: '/admin/promociones', label: 'Ofertas en Hero section' },
-  { to: '/admin/home-secciones', label: 'Promociones' },
+  { to: '/admin/promociones', label: 'Promociones' },
+  { to: '/admin/ofertas-hero', label: 'Ofertas en Hero section' },
 ]
 
 export function AdminLayout({ children }: PropsWithChildren) {
