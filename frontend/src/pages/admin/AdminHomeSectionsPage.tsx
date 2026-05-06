@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getProductsForHomeSection, updateHomeSectionItem } from '../../services/adminApi'
@@ -116,10 +117,12 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function ProductThumb({ item }: { item: HomeSectionItem }) {
-  const imageUrl = resolveMediaUrl(item.product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE
+function getProductImageUrl(product: ProductListItem) {
+  return resolveMediaUrl(product.main_image?.image) || PREVIEW_PLACEHOLDER_IMAGE
+}
 
-  return <img src={imageUrl} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+function ProductThumb({ item }: { item: HomeSectionItem }) {
+  return <img src={getProductImageUrl(item.product)} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
 }
 
 function PreviewCard({ item, tag }: { item: HomeSectionItem; tag: string }) {
@@ -139,6 +142,24 @@ function PreviewCard({ item, tag }: { item: HomeSectionItem; tag: string }) {
 function SectionPreview({ section, items }: { section: SectionConfig; items: HomeSectionItem[] }) {
   const sortedItems = sortByPosition(items)
   const slots = buildSlots(sortedItems, section.limit)
+  const [machineryPreviewIndex, setMachineryPreviewIndex] = useState(0)
+  const machineryGroups = useMemo(() => {
+    return Array.from({ length: Math.ceil(sortedItems.length / 4) }, (_, index) => sortedItems.slice(index * 4, index * 4 + 4))
+  }, [sortedItems])
+
+  useEffect(() => {
+    setMachineryPreviewIndex((current) => Math.min(current, Math.max(0, machineryGroups.length - 1)))
+  }, [machineryGroups.length])
+
+  const goPreviewPrev = () => {
+    if (machineryGroups.length === 0) return
+    setMachineryPreviewIndex((prev) => (prev - 1 + machineryGroups.length) % machineryGroups.length)
+  }
+
+  const goPreviewNext = () => {
+    if (machineryGroups.length === 0) return
+    setMachineryPreviewIndex((prev) => (prev + 1) % machineryGroups.length)
+  }
 
   return (
     <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
@@ -149,13 +170,50 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
 
       <div className={`home-preview home-preview--${section.key}`}>
         {section.key === 'machinery_promotions' ? (
-          <div className="home-preview-machinery">
-            <div className="home-preview-machinery__topbar">
+          <div className="featured-products home-preview-machinery">
+            <div className="section-heading">
               <h3>Promociones en maquinarias</h3>
-              <div aria-hidden="true"><span>‹</span><span>›</span></div>
             </div>
-            <div className="home-preview-machinery__grid">
-              {sortedItems.slice(0, 4).map((item) => <PreviewCard item={item} tag="Maquinaria destacada" key={item.id} />)}
+
+            <div className="machinery-carousel" aria-label="Carrusel manual de maquinarias en promoción">
+              <button className="carousel-control carousel-control--prev" type="button" onClick={goPreviewPrev} aria-label="Ver maquinarias anteriores">
+                ‹
+              </button>
+
+              <div className="machinery-carousel__viewport">
+                <div className="machinery-carousel__track" style={{ transform: `translateX(-${machineryPreviewIndex * 100}%)` }}>
+                  {machineryGroups.map((group, groupIndex) => (
+                    <div className="machinery-carousel__slide" key={`admin-machinery-group-${groupIndex}`}>
+                      {group.map((item) => {
+                        const imageUrl = getProductImageUrl(item.product)
+                        return (
+                          <article className="promo-product-card" key={item.id}>
+                            <img src={imageUrl} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+                            <div className="promo-product-card__content">
+                              <p className="promo-product-card__tag">Maquinaria destacada</p>
+                              <h3>{item.product.name}</h3>
+                              <p className="promo-product-card__price home-product-price">{formatPrice(item.product)}</p>
+                              {item.product.slug ? (
+                                <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                                  Ver detalle
+                                </Link>
+                              ) : (
+                                <span className="btn btn--accent btn--disabled" aria-disabled="true">
+                                  Ver detalle
+                                </span>
+                              )}
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button className="carousel-control carousel-control--next" type="button" onClick={goPreviewNext} aria-label="Ver más maquinarias">
+                ›
+              </button>
             </div>
           </div>
         ) : null}
@@ -185,18 +243,24 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
         ) : null}
 
         {section.key === 'repair_services' ? (
-          <div className="home-preview-services">
-            <h3>Servicios de reparación</h3>
-            <div className="home-preview-services__grid">
-              {sortedItems.slice(0, 4).map((item) => (
-                <article className="home-preview-services__card" key={item.id}>
-                  <ProductThumb item={item} />
-                  <div>
-                    <strong>{item.product.name}</strong>
-                    <span>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</span>
-                  </div>
-                </article>
-              ))}
+          <div className="repair-services home-preview-services">
+            <div className="section-heading">
+              <h3>Servicios de reparación</h3>
+            </div>
+            <div className="repair-services__grid">
+              {sortedItems.slice(0, 4).map((item) => {
+                const imageUrl = getProductImageUrl(item.product)
+                return (
+                  <article className="repair-service-card" key={item.id}>
+                    <img src={imageUrl} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+                    <div>
+                      <h3>{item.product.name}</h3>
+                      <p>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
+                      <p className="home-product-price">{formatPrice(item.product) || 'Consulta precio y disponibilidad'}</p>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           </div>
         ) : null}

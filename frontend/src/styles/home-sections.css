@@ -158,10 +158,6 @@
 
 .home-product-price {
   margin: 0;
-  font-weight: 900;
-  color: #ea580c;
-  font-size: clamp(1.3rem, 1.8vw, 1.85rem);
-  line-height: 1.12;
 }
 
 
@@ -364,10 +360,6 @@
 
   .spare-offer-card--large {
     grid-column: span 1;
-  }
-
-  .home-product-price {
-    font-size: clamp(1.12rem, 5vw, 1.42rem);
   }
 }
 
@@ -678,58 +670,6 @@
   gap: 0.5rem;
 }
 
-
-
-  .product-detail__contact {
-    min-height: auto;
-  }
-
-
-
-  .product-detail__contact-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-
-
-  .repair-services__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-
-
-  .spare-offers__grid,
-  .repair-services__grid {
-    grid-template-columns: 1fr;
-  }
-
-
-
-.home-sections-rows {
-  display: grid;
-  gap: 0.9rem;
-}
-
-
-
-  .home-product-price {
-    font-size: 1rem;
-  }
-
-
-
-  .machinery-carousel__track {
-    display: flex;
-  }
-
-
-
-  .machinery-carousel__slide {
-    min-width: 100%;
-    flex: 0 0 100%;
-  }
-
 @media (max-width: 768px) {
   .machinery-carousel {
     padding: 0 1.5rem;
@@ -762,11 +702,6 @@
   .featured-products .promo-product-card__tag {
     font-size: 0.78rem;
   }
-
-  .featured-products .home-product-price {
-    font-size: 1.08rem;
-  }
-
   .carousel-control {
     width: 30px;
     height: 30px;
@@ -1017,6 +952,31 @@
   padding: 0.7rem;
 }
 
+.home-preview--machinery_promotions,
+.home-preview--repair_services {
+  max-height: none;
+  overflow: visible;
+}
+
+.home-preview--machinery_promotions .featured-products,
+.home-preview--repair_services .repair-services {
+  padding: 1rem;
+}
+
+.home-preview--machinery_promotions .machinery-carousel__slide,
+.home-preview--repair_services .repair-services__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-preview--machinery_promotions .promo-product-card img,
+.home-preview--repair_services .repair-service-card img {
+  height: 130px;
+}
+
+.home-preview--machinery_promotions .carousel-control {
+  top: 55%;
+}
+
 .home-preview h3 {
   margin: 0;
   color: #111827;
@@ -1167,6 +1127,25 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.home-preview--machinery_promotions .promo-product-card,
+.home-preview--repair_services .repair-service-card {
+  min-height: 100%;
+}
+
+@media (max-width: 900px) {
+  .home-preview--machinery_promotions .machinery-carousel__slide,
+  .home-preview--repair_services .repair-services__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .home-preview--machinery_promotions .machinery-carousel__slide,
+  .home-preview--repair_services .repair-services__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .ui-note--success {
