@@ -177,56 +177,58 @@ export function AdminProductsPage() {
       <div className="admin-products-header">
         <h1>Productos</h1>
         <div className="admin-list-toolbar">
-          <input
-            className="admin-search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por nombre, marca, categoría o SKU"
-          />
           <Link className="btn btn--accent" to="/admin/productos/nuevo">
             Nuevo producto
           </Link>
         </div>
       </div>
-      <div className="admin-filter-strip">
-        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-          <option value="">Tipo</option>
-          <option value="machinery">Maquinaria</option>
-          <option value="spare_part">Repuesto</option>
-          <option value="service">Servicio</option>
-          <option value="other">Otro</option>
-        </select>
-        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-          <option value="">Categoría</option>
-          {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
-          <option value="">Marca</option>
-          {brandOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}>
-          <option value="">Condición</option>
-          <option value="new">Nuevo</option>
-          <option value="used">Usado</option>
-          <option value="refurbished">Reacondicionado</option>
-          <option value="not_applicable">No aplica</option>
-        </select>
-        <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
-          <option value="">Stock</option>
-          <option value="available">Disponible</option>
-          <option value="on_request">A pedido</option>
-          <option value="reserved">Reservado</option>
-          <option value="sold">Vendido</option>
-        </select>
-        <select value={publishedFilter} onChange={(event) => setPublishedFilter(event.target.value)}>
-          <option value="">Publicación</option>
-          <option value="published">Publicado</option>
-          <option value="unpublished">No publicado</option>
-        </select>
-        <button type="button" className="btn btn--ghost" onClick={clearFilters}>
-          Limpiar filtros
-        </button>
-      </div>
+      <section className="admin-products-filter-panel" aria-label="Filtros de productos">
+        <input
+          className="admin-search admin-products-filter-panel__search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar por nombre, marca, categoría o SKU"
+        />
+        <div className="admin-filter-strip admin-filter-strip--products">
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option value="">Tipo</option>
+            <option value="machinery">Maquinaria</option>
+            <option value="spare_part">Repuesto</option>
+            <option value="service">Servicio</option>
+            <option value="other">Otro</option>
+          </select>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+            <option value="">Categoría</option>
+            {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
+            <option value="">Marca</option>
+            {brandOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}>
+            <option value="">Condición</option>
+            <option value="new">Nuevo</option>
+            <option value="used">Usado</option>
+            <option value="refurbished">Reacondicionado</option>
+            <option value="not_applicable">No aplica</option>
+          </select>
+          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
+            <option value="">Stock</option>
+            <option value="available">Disponible</option>
+            <option value="on_request">A pedido</option>
+            <option value="reserved">Reservado</option>
+            <option value="sold">Vendido</option>
+          </select>
+          <select value={publishedFilter} onChange={(event) => setPublishedFilter(event.target.value)}>
+            <option value="">Publicación</option>
+            <option value="published">Publicado</option>
+            <option value="unpublished">No publicado</option>
+          </select>
+          <button type="button" className="btn btn--ghost" onClick={clearFilters}>
+            Limpiar filtros
+          </button>
+        </div>
+      </section>
 
       {loading ? <p className="ui-note">Cargando productos...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
