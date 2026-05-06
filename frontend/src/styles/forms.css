@@ -152,7 +152,7 @@
 .admin-product-form {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 0.75rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -292,7 +292,7 @@
 .admin-form-panel {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 0.75rem;
   display: grid;
   gap: 0.55rem;

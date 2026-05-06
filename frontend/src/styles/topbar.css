@@ -252,7 +252,7 @@
   width: fit-content;
   min-width: min(620px, 100%);
   max-width: min(980px, 100%);
-  border-radius: 16px;
+  border-radius: var(--radius-block);
   border: 1px solid #d1d5db;
   background: #ffffff;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
@@ -483,7 +483,7 @@
   .categories-modal__panel {
     width: 100%;
     min-width: 0;
-    border-radius: 14px;
+    border-radius: var(--radius-block);
     max-height: calc(100vh - var(--topbar-height) - 0.85rem);
   }
 
@@ -509,7 +509,7 @@
 
   .categories-modal__mobile-item {
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     background: #f8fafc;
     overflow: hidden;
   }

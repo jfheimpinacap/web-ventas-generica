@@ -36,7 +36,7 @@ export function Topbar() {
   const handleSearch = (event: FormEvent) => {
     event.preventDefault()
     const term = searchValue.trim()
-    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
+    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')
   }
 
   return (
@@ -70,7 +70,7 @@ export function Topbar() {
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
             placeholder="Busca maquinaria, repuestos y servicios"
-            aria-label="Buscar en el catálogo"
+            aria-label="Buscar productos"
           />
           <button type="submit" aria-label="Buscar">
             🔍

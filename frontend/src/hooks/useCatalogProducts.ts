@@ -16,7 +16,7 @@ export function useCatalogProducts(params: ProductQueryParams) {
       try {
         setProducts(await getProducts(params))
       } catch {
-        setError('No fue posible cargar el catálogo desde la API.')
+        setError('No fue posible cargar productos desde la API.')
       } finally {
         setLoading(false)
       }

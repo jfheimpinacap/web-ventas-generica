@@ -15,7 +15,7 @@ export function PublicSearchStrip({ onSearch }: PublicSearchStripProps) {
       return
     }
 
-    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')
+    navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')
   }
 
   return (

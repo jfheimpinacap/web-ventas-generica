@@ -16,7 +16,7 @@ const fallbackSlides: Promotion[] = [
       'Conecta con un vendedor especializado para cotizar equipos, repuestos y soluciones en altura de forma rápida.',
     product: null,
     image: null,
-    button_text: 'Ver catálogo',
+    button_text: 'Ver productos',
     button_url: '/catalogo',
     is_active: true,
     order: 0,
@@ -91,7 +91,7 @@ export function HeroSection() {
 
         <div className="hero-section__actions">
           <Link to="/catalogo" className="btn btn--accent">
-            Ver catálogo
+            Ver productos
           </Link>
           <Link to="/cotizar" className="btn btn--ghost">
             Cotizar ahora

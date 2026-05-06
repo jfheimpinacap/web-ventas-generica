@@ -7,7 +7,7 @@ import { Layout } from '../components/layout/Layout'
 export function HomePage() {
   const navigate = useNavigate()
   return (
-    <Layout onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/catalogo')}>
+    <Layout onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')}>
       <HeroSection />
 
       <section className="quote-cta">
@@ -20,7 +20,7 @@ export function HomePage() {
             Cotizar ahora
           </Link>
           <Link to="/catalogo" className="btn btn--ghost">
-            Ver catálogo
+            Ver productos
           </Link>
         </div>
       </section>

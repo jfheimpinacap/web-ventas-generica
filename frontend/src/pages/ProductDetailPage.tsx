@@ -71,12 +71,14 @@ export function ProductDetailPage() {
     return path
   }, [categories, product])
 
+  const rootCategory = categoryPath[0]?.parent === null ? categoryPath[0] : null
+  const backHref = rootCategory ? `/catalogo?category=${rootCategory.id}` : '/'
+
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     if (!product) return []
 
     return [
       { label: 'Inicio', to: '/' },
-      { label: 'Catálogo', to: '/catalogo' },
       ...categoryPath.map((category) => ({
         label: category.name,
         to: `/catalogo?category=${category.id}`,
@@ -119,8 +121,8 @@ export function ProductDetailPage() {
             <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta del producto" />
 
             <div className="product-detail__top-actions">
-              <Link className="btn btn--ghost" to="/catalogo">
-                ← Volver al catálogo
+              <Link className="btn btn--ghost" to={backHref}>
+                ← Volver
               </Link>
             </div>
 
