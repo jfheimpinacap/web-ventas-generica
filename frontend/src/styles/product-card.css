@@ -49,8 +49,6 @@
 
 .promo-product-card__price {
   margin: 0;
-  font-size: clamp(1.25rem, 1.6vw, 1.65rem);
-  line-height: 1.12;
 }
 
 
@@ -140,10 +138,6 @@
 
 
 .product-card__price {
-  color: #ea580c !important;
-  font-size: clamp(1.28rem, 1.55vw, 1.7rem) !important;
-  font-weight: 900;
-  line-height: 1.12;
   margin-top: auto !important;
   padding-top: 0.35rem;
 }
@@ -152,13 +146,10 @@
 .home-product-price,
 .promo-product-card__price,
 .product-card__price {
-  color: #ea580c;
-  font-weight: 900;
-}
-
-.price--public {
-  font-size: clamp(1.28rem, 1.55vw, 1.7rem);
-  line-height: 1.12;
+  color: #ea580c !important;
+  font-size: clamp(1.35rem, 1.9vw, 1.95rem) !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
 }
 
 
@@ -232,8 +223,11 @@
     min-height: 2.6em;
   }
 
+  .price--public,
+  .home-product-price,
+  .promo-product-card__price,
   .product-card__price {
-    font-size: clamp(1.12rem, 5vw, 1.35rem) !important;
+    font-size: clamp(1.2rem, 5.4vw, 1.5rem) !important;
   }
 
   .product-card__actions {
