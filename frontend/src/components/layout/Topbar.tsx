@@ -43,15 +43,14 @@ export function Topbar() {
     <header className="topbar" aria-label="Barra principal">
       <div className="topbar__row">
         <Link className="topbar__brand" to="/" aria-label="Ir al inicio">
-            <span className="topbar__logo" aria-hidden="true">
-              ▲
-            </span>
-            <div>
-              <strong>Altura Comercial</strong>
-              <small>Maquinaria, repuestos y servicios</small>
-            </div>
-          </Link>
-
+          <span className="topbar__logo" aria-hidden="true">
+            ▲
+          </span>
+          <div>
+            <strong>Altura Comercial</strong>
+            <small>Maquinaria, repuestos y servicios</small>
+          </div>
+        </Link>
 
         <button
           className="topbar__categories-btn"
@@ -89,7 +88,11 @@ export function Topbar() {
           rel="noreferrer"
           aria-label="Abrir WhatsApp con asesor comercial"
         >
-          <span className="topbar__whatsapp-icon" aria-hidden="true">📞</span>
+          <span className="topbar__whatsapp-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.24 1.02l-2.21 2.2Z" />
+            </svg>
+          </span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
           <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>
