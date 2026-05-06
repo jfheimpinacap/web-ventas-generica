@@ -1147,6 +1147,192 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* Proportional admin Home previews */
+.admin-home-preview {
+  background: #f8fafc;
+  padding: 0.5rem;
+}
+
+.admin-home-preview .featured-products,
+.admin-home-preview .spare-offers,
+.admin-home-preview .repair-services {
+  border-radius: 12px;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.05);
+  padding: 0.65rem;
+}
+
+.admin-home-preview .section-heading {
+  margin-bottom: 0;
+}
+
+.admin-home-preview .section-heading h3,
+.admin-home-preview .section-heading h2,
+.admin-home-preview h3 {
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.admin-home-preview .btn {
+  min-height: 0;
+  padding: 0.34rem 0.48rem;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  line-height: 1.05;
+}
+
+.admin-home-preview .home-product-price,
+.admin-home-preview .price--public,
+.admin-home-preview .promo-product-card__price,
+.admin-home-preview .product-card__price {
+  color: #ea580c !important;
+  font-size: clamp(0.72rem, 1.45vw, 0.96rem) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
+}
+
+.admin-home-preview--machinery .featured-products,
+.admin-home-preview--machinery .home-preview-machinery,
+.admin-home-preview--services .repair-services,
+.admin-home-preview--services .home-preview-services,
+.admin-home-preview--spares .spare-offers,
+.admin-home-preview--spares .home-preview-spares {
+  gap: 0.45rem;
+}
+
+.admin-home-preview--machinery .machinery-carousel {
+  padding: 0 1.15rem;
+}
+
+.admin-home-preview--machinery .machinery-carousel__slide {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.admin-home-preview--machinery .promo-product-card {
+  border-radius: 10px;
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.06);
+}
+
+.admin-home-preview--machinery .promo-product-card img {
+  height: 74px;
+}
+
+.admin-home-preview--machinery .promo-product-card__content {
+  padding: 0.46rem;
+  gap: 0.22rem;
+}
+
+.admin-home-preview--machinery .promo-product-card__tag {
+  font-size: 0.55rem;
+  letter-spacing: 0.015em;
+}
+
+.admin-home-preview--machinery .promo-product-card__content h3 {
+  min-height: 2.45em;
+  font-size: 0.68rem;
+  line-height: 1.22;
+}
+
+.admin-home-preview--machinery .carousel-control {
+  top: 52%;
+  width: 22px;
+  height: 22px;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+.admin-home-preview--spares .home-preview-spares__grid,
+.admin-home-preview--spares .spare-offers__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.admin-home-preview--spares .home-preview-spares__slot,
+.admin-home-preview--spares .spare-offer-card {
+  min-height: 108px;
+  border-radius: 10px;
+  gap: 0.26rem;
+  padding: 0.36rem;
+}
+
+.admin-home-preview--spares .home-preview-spares__slot.is-large,
+.admin-home-preview--spares .spare-offer-card--large {
+  grid-column: span 2;
+}
+
+.admin-home-preview--spares .home-preview-spares__slot header {
+  font-size: 0.56rem;
+  line-height: 1;
+}
+
+.admin-home-preview--spares .home-preview-spares__compact-card,
+.admin-home-preview--spares .spare-offer-card__content {
+  padding: 0;
+  gap: 0.3rem;
+}
+
+.admin-home-preview--spares .home-preview-spares__compact-card img,
+.admin-home-preview--spares .spare-offer-card img {
+  height: 54px;
+  border-radius: 8px;
+}
+
+.admin-home-preview--spares .home-preview-spares__compact-card div {
+  gap: 0.12rem;
+}
+
+.admin-home-preview--spares .home-preview-spares__compact-card span:not(.home-product-price),
+.admin-home-preview--spares .spare-offer-card__content span:not(.home-product-price) {
+  color: #b45309;
+  font-size: 0.52rem;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.admin-home-preview--spares .home-preview-spares__compact-card strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.66rem;
+  line-height: 1.16;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.admin-home-preview--spares .home-preview-spares__slot p {
+  font-size: 0.66rem;
+}
+
+.admin-home-preview--services .repair-services__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.admin-home-preview--services .repair-service-card {
+  border-radius: 10px;
+}
+
+.admin-home-preview--services .repair-service-card img {
+  height: 72px;
+}
+
+.admin-home-preview--services .repair-service-card div {
+  padding: 0.46rem;
+  gap: 0.2rem;
+}
+
+.admin-home-preview--services .repair-service-card h3 {
+  font-size: 0.68rem;
+  line-height: 1.18;
+}
+
+.admin-home-preview--services .repair-service-card p:not(.home-product-price) {
+  font-size: 0.6rem;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+}
+
 
 .ui-note--success {
   color: #166534;

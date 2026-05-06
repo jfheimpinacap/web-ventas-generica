@@ -168,7 +168,7 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
         <strong>{section.previewLabel}</strong>
       </div>
 
-      <div className={`home-preview home-preview--${section.key}`}>
+      <div className={`home-preview home-preview--${section.key} admin-home-preview admin-home-preview--compact admin-home-preview--${section.key === 'machinery_promotions' ? 'machinery' : section.key === 'spare_parts_offers' ? 'spares' : 'services'}`}>
         {section.key === 'machinery_promotions' ? (
           <div className="featured-products home-preview-machinery">
             <div className="section-heading">
@@ -219,18 +219,26 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
         ) : null}
 
         {section.key === 'spare_parts_offers' ? (
-          <div className="home-preview-spares">
-            <h3>Oferta en repuestos</h3>
-            <div className="home-preview-spares__grid">
+          <div className="spare-offers home-preview-spares">
+            <div className="section-heading">
+              <h3>Oferta en repuestos</h3>
+            </div>
+            <div className="spare-offers__grid home-preview-spares__grid">
               {slots.map((item, index) => (
-                <article className={`home-preview-spares__slot ${index === 0 || index === 5 ? 'is-large' : ''}`} key={index + 1}>
+                <article className={`spare-offer-card home-preview-spares__slot ${index === 0 || index === 5 ? 'spare-offer-card--large is-large' : ''}`} key={index + 1}>
                   <header>Slot {index + 1}</header>
                   {item ? (
-                    <div className="home-preview-spares__compact-card">
+                    <div className="spare-offer-card__content home-preview-spares__compact-card">
                       <ProductThumb item={item} />
                       <div>
+                        <span>Oferta destacada</span>
                         <strong>{item.product.name}</strong>
-                        <span>{formatPrice(item.product) || 'Consultar'}</span>
+                        <span className="home-product-price">{formatPrice(item.product) || 'Consultar'}</span>
+                        {item.product.slug ? (
+                          <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                            Ver detalle
+                          </Link>
+                        ) : null}
                       </div>
                     </div>
                   ) : (
@@ -257,6 +265,11 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
                       <h3>{item.product.name}</h3>
                       <p>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
                       <p className="home-product-price">{formatPrice(item.product) || 'Consulta precio y disponibilidad'}</p>
+                      {item.product.slug ? (
+                        <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                          Ver detalle
+                        </Link>
+                      ) : null}
                     </div>
                   </article>
                 )
