@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useCategories } from '../../hooks/useCategories'
 import { usePromotions } from '../../hooks/usePromotions'
 import { resolveMediaUrl } from '../../services/api'
-import type { Promotion } from '../../types/catalog'
+import type { Category, Promotion } from '../../types/catalog'
 
 const AUTO_ADVANCE_MS = 6000
 const FALLBACK_IMAGE = 'https://placehold.co/1200x700/111827/F3F4F6?text=Promociones+Industriales'
@@ -16,8 +17,8 @@ const fallbackSlides: Promotion[] = [
       'Conecta con un vendedor especializado para cotizar equipos, repuestos y soluciones en altura de forma rápida.',
     product: null,
     image: null,
-    button_text: 'Ver productos',
-    button_url: '/catalogo',
+    button_text: '',
+    button_url: '',
     is_active: true,
     order: 0,
     starts_at: null,
@@ -27,18 +28,43 @@ const fallbackSlides: Promotion[] = [
   },
 ]
 
-function resolvePromotionUrl(promotion: Promotion) {
-  if (promotion.button_url?.trim()) return promotion.button_url.trim()
-  if (promotion.product) return `/producto/${promotion.product.slug}`
-  return '/catalogo'
+function getRootCategory(category: Category | null | undefined, categories: Category[]) {
+  if (!category) return null
+
+  const byId = new Map(categories.map((item) => [item.id, item]))
+  const visited = new Set<number>()
+
+  let current: Category | null = category
+  while (current?.parent != null) {
+    if (visited.has(current.id)) break
+    visited.add(current.id)
+    const next = byId.get(current.parent)
+    if (!next) break
+    current = next
+  }
+
+  return current
 }
 
-function isExternalUrl(url: string) {
-  return /^https?:\/\//i.test(url)
+function resolveCatalogCategoryLink(promotion: Promotion, categories: Category[]) {
+  if (!promotion.product?.category) {
+    return { to: '/catalogo', label: 'Ver catálogo' }
+  }
+
+  const rootCategory = getRootCategory(promotion.product.category, categories)
+  if (!rootCategory) {
+    return { to: '/catalogo', label: 'Ver catálogo' }
+  }
+
+  return {
+    to: `/catalogo?category=${rootCategory.id}`,
+    label: `Ver categoría ${rootCategory.name}`,
+  }
 }
 
 export function HeroSection() {
   const { promotions, error } = usePromotions()
+  const { categories } = useCategories()
   const slides = promotions.length > 0 ? promotions : fallbackSlides
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -58,8 +84,8 @@ export function HeroSection() {
 
   const currentSlide = slides[currentIndex]
   const imageUrl = resolveMediaUrl(currentSlide.image) || FALLBACK_IMAGE
-  const ctaUrl = resolvePromotionUrl(currentSlide)
-  const externalCta = isExternalUrl(ctaUrl)
+  const categoryLink = useMemo(() => resolveCatalogCategoryLink(currentSlide, categories), [currentSlide, categories])
+  const isClickable = Boolean(currentSlide.product)
 
   return (
     <section className="hero-section" aria-label="Promociones destacadas">
@@ -72,28 +98,16 @@ export function HeroSection() {
           <p className="hero-section__product">Producto asociado: {currentSlide.product.name}</p>
         ) : null}
         {error ? <p className="ui-note">No se pudo cargar la API de promociones. Mostrando contenido base.</p> : null}
-
-        <div className="hero-section__actions">
-          <Link to="/catalogo" className="btn btn--accent">
-            Ver productos
-          </Link>
-          <Link to="/cotizar" className="btn btn--ghost">
-            Cotizar ahora
-          </Link>
-          {externalCta ? (
-            <a className="btn btn--ghost" href={ctaUrl} target="_blank" rel="noreferrer">
-              {currentSlide.button_text || 'Ver promoción'}
-            </a>
-          ) : (
-            <Link className="btn btn--ghost" to={ctaUrl}>
-              {currentSlide.button_text || 'Ver promoción'}
-            </Link>
-          )}
-        </div>
       </div>
 
       <div className="hero-section__media">
-        <img src={imageUrl} alt={currentSlide.title} />
+        {isClickable ? (
+          <Link to={categoryLink.to} aria-label={categoryLink.label} className="hero-section__media-link">
+            <img src={imageUrl} alt={currentSlide.title || 'Imagen de promoción'} />
+          </Link>
+        ) : (
+          <img src={imageUrl} alt={currentSlide.title || 'Imagen de promoción'} />
+        )}
       </div>
 
       {slides.length > 1 ? (
