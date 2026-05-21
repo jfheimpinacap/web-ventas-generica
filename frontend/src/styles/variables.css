@@ -6,9 +6,10 @@
   --topbar-height: 82px;
   --radius-block: 0;
   --radius-card: 0;
-  --radius-button: 10px;
+  --radius-button: 8px;
   --color-primary-dark: #03045e;
-  --color-topbar-bg: #020546;
+  --color-topbar-bg: #0b2545;
+  --color-footer-bg: #0b2545;
   --color-primary: #0077b6;
   --color-accent: #00b4d8;
   --color-accent-soft: #90e0ef;

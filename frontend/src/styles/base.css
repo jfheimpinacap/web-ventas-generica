@@ -48,7 +48,7 @@ a {
 
 .footer {
   margin-top: 1.2rem;
-  background: #020546;
+  background: var(--color-footer-bg);
   color: #f3f4f6;
   padding: 1.5rem 1rem;
   display: grid;
