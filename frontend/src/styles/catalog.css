@@ -211,7 +211,9 @@
 
 .sidebar-menu__group-label {
   min-width: 0;
-  padding-left: 0.35rem;
+  padding-left: 0.7rem;
+  color: #000000;
+  font-family: "Ubuntu", system-ui, sans-serif;
 }
 
 
