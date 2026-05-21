@@ -15,7 +15,9 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <article className="product-card">
-      <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+      <Link className="product-card__image-link" to={`/producto/${product.slug}`} aria-label={`Ver detalle de ${product.name}`}>
+        <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+      </Link>
       <div className="product-card__content">
         <div className="product-card__badges">
           <span className="badge badge--condition">{formatCondition(product.condition)}</span>

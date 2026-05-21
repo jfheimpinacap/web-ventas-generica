@@ -18,6 +18,13 @@
   object-fit: cover;
 }
 
+.product-card__image-link,
+.promo-product-card__image-link,
+.spare-offer-card__image-link,
+.repair-service-card__image-link {
+  display: block;
+}
+
 
 
 .promo-product-card__content {

@@ -164,7 +164,13 @@ export function FeaturedProducts() {
                     const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
                     return (
                       <article className="promo-product-card" key={product.id}>
-                        <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+                        <Link
+                          className="promo-product-card__image-link"
+                          to={`/producto/${product.slug}`}
+                          aria-label={`Ver detalle de ${product.name}`}
+                        >
+                          <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+                        </Link>
                         <div className="promo-product-card__content">
                           <p className="promo-product-card__tag">Maquinaria destacada</p>
                           <h3>{product.name}</h3>
@@ -209,7 +215,9 @@ export function FeaturedProducts() {
             const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
             return (
               <article key={product.id} className={`spare-offer-card ${index === 0 || index === 5 ? 'spare-offer-card--large' : ''}`}>
-                <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
+                <Link className="spare-offer-card__image-link" to={`/producto/${product.slug}`} aria-label={`Ver detalle de ${product.name}`}>
+                  <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
+                </Link>
                 <div className="spare-offer-card__content">
                   <span>Oferta destacada</span>
                   <h3>{product.name}</h3>
@@ -242,7 +250,9 @@ export function FeaturedProducts() {
 
             return (
               <article className="repair-service-card" key={`${product.slug}-${index}`}>
-                <img src={imageUrl} alt={product.name} loading="lazy" />
+                <Link className="repair-service-card__image-link" to={`/producto/${product.slug}`} aria-label={`Ver detalle de ${product.name}`}>
+                  <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
+                </Link>
                 <div>
                   <h3>{product.name}</h3>
                   <p>{product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>

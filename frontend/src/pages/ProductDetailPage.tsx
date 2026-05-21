@@ -219,7 +219,7 @@ export function ProductDetailPage() {
                     Cotizar
                   </Link>
                   <a
-                    className="btn btn--ghost"
+                    className="btn btn--whatsapp"
                     href={buildWhatsAppUrl(buildProductWhatsAppMessage(product.name))}
                     target="_blank"
                     rel="noreferrer"
