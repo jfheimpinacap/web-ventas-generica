@@ -48,7 +48,7 @@ a {
 
 .footer {
   margin-top: 1.2rem;
-  background: var(--color-primary);
+  background: #020546;
   color: #f3f4f6;
   padding: 1.5rem 1rem;
   display: grid;
@@ -78,6 +78,16 @@ a {
 
 .footer li {
   margin-bottom: 0.3rem;
+}
+
+.footer a {
+  color: #e5edff;
+}
+
+.footer a:hover,
+.footer a:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 
