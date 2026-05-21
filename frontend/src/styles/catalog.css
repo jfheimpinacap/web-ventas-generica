@@ -404,6 +404,7 @@
 
 
 .catalog-breadcrumb {
+  padding-left: 0.85rem;
   font-size: 0.82rem;
   color: #64748b;
   margin: 0;
@@ -487,6 +488,7 @@
 
 .catalog-page__heading {
   margin: 0;
+  padding-left: 0.85rem;
 }
 
 
@@ -495,16 +497,17 @@
   margin: 0;
   font-size: clamp(1.3rem, 2.2vw, 1.7rem);
   line-height: 1.2;
+  color: #111827;
 }
 
 
 
 .catalog-toolbar {
-  display: inline-flex;
-  width: fit-content;
+  display: flex;
+  width: 100%;
   max-width: 100%;
-  justify-content: flex-start;
-  gap: 0.55rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   align-items: center;
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-block);
@@ -519,6 +522,11 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.88rem;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.catalog-toolbar__sort span {
   white-space: nowrap;
 }
 
@@ -706,16 +714,15 @@
 
 .catalog-pagination {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin-top: 0.75rem;
 }
 
 .catalog-pagination__button {
   border: 1px solid #d1d5db;
   background: #ffffff;
-  color: var(--color-primary);
+  color: #0f172a;
   font-weight: 700;
   min-width: 2rem;
   height: 2rem;
@@ -723,8 +730,51 @@
 }
 
 .catalog-pagination__button.is-active {
-  background: #fdba74;
-  border-color: #fb923c;
+  background: #90e0ef;
+  border-color: #00b4d8;
+}
+
+.catalog-pagination--inline {
+  margin-top: 0;
+}
+
+.catalog-pagination__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.catalog-pagination__button--next {
+  font-size: 1rem;
+}
+
+.catalog-pagination__ellipsis {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  color: #475569;
+}
+
+@media (max-width: 560px) {
+  .catalog-breadcrumb,
+  .catalog-page__heading {
+    padding-left: 0.3rem;
+  }
+
+  .catalog-toolbar {
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
+
+  .catalog-toolbar__sort {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .catalog-pagination--inline {
+    width: 100%;
+    order: 2;
+  }
 }
 
 @media (min-width: 901px) {
