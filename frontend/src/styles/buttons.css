@@ -49,8 +49,12 @@
 
 
 .btn--accent {
-  background: var(--color-accent);
+  background: var(--color-primary);
   color: #ffffff;
+}
+
+.btn--accent:hover {
+  background: var(--color-accent);
 }
 
 

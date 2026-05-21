@@ -3,7 +3,7 @@
   top: 0;
   width: 100%;
   min-height: var(--topbar-height);
-  background: var(--color-primary-dark);
+  background: var(--color-topbar-bg);
   color: #ffffff;
   padding: 0.55rem 0.75rem;
   z-index: 1000;
@@ -48,8 +48,9 @@
 .topbar__logo {
   display: block;
   place-items: center;
-  width: clamp(120px, 14vw, 172px);
-  height: 42px;
+  width: auto;
+  height: clamp(52px, calc(var(--topbar-height) - 18px), 68px);
+  max-height: 100%;
   flex: 0 0 auto;
   object-fit: contain;
 }
@@ -160,8 +161,9 @@
 }
 
 .topbar__top-link--quote {
-  border-color: var(--color-accent);
-  color: var(--color-text-on-dark);
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -394,11 +396,10 @@
   }
 
   .topbar__logo {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
-    border-radius: 7px;
-    font-size: 0.92rem;
+    width: auto;
+    height: clamp(36px, calc(var(--topbar-height) - 32px), 44px);
+    max-width: min(52vw, 170px);
+    flex-basis: auto;
   }
 
   .topbar__brand strong {
@@ -414,7 +415,7 @@
     grid-area: quote;
     min-height: 40px;
     padding: 0.38rem 0.68rem;
-    background: var(--color-accent);
+    background: var(--color-primary);
     color: #ffffff;
     border-color: var(--color-primary);
     font-size: 0.8rem;
