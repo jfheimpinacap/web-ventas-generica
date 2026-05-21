@@ -49,7 +49,7 @@
   display: block;
   place-items: center;
   width: auto;
-  height: clamp(52px, calc(var(--topbar-height) - 18px), 68px);
+  height: clamp(58px, calc(var(--topbar-height) - 10px), 76px);
   max-height: 100%;
   flex: 0 0 auto;
   object-fit: contain;
@@ -397,7 +397,7 @@
 
   .topbar__logo {
     width: auto;
-    height: clamp(36px, calc(var(--topbar-height) - 32px), 44px);
+    height: clamp(42px, calc(var(--topbar-height) - 24px), 52px);
     max-width: min(52vw, 170px);
     flex-basis: auto;
   }

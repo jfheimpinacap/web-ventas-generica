@@ -43,7 +43,8 @@
 
 .btn--ghost {
   background: #ffffff;
-  color: var(--color-primary-dark);
+  color: #111827;
+  font-family: "Ubuntu", system-ui, sans-serif;
 }
 
 
