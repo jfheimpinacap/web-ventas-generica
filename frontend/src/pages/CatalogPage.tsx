@@ -43,6 +43,7 @@ function getNumericPrice(product: ProductListItem) {
 }
 
 export function CatalogPage() {
+  const PRODUCTS_PER_PAGE = 12
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const { categories } = useCategories()
@@ -63,7 +64,6 @@ export function CatalogPage() {
 
   const { products, loading, error } = useCatalogProducts(query)
   const [currentPage, setCurrentPage] = useState(1)
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 560px)').matches)
   const headingRef = useRef<HTMLDivElement | null>(null)
 
   const updateFilter = (key: string, value: string) => {
@@ -72,20 +72,6 @@ export function CatalogPage() {
     else next.set(key, value)
     setSearchParams(next)
   }
-
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 560px)')
-
-    const updateIsMobile = (event: MediaQueryListEvent) => {
-      setIsMobile(event.matches)
-    }
-
-    setIsMobile(mediaQuery.matches)
-    mediaQuery.addEventListener('change', updateIsMobile)
-
-    return () => mediaQuery.removeEventListener('change', updateIsMobile)
-  }, [])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -203,11 +189,23 @@ export function CatalogPage() {
 
 
 
-  const itemsPerPage = isMobile ? 10 : displayedProducts.length
-  const totalPages = isMobile ? Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage)) : 1
-  const paginatedProducts = isMobile
-    ? displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-    : displayedProducts
+  const itemsPerPage = PRODUCTS_PER_PAGE
+  const totalPages = Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage))
+  const paginatedProducts = displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 1) return [1]
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
+
+    const pages = [1]
+    if (currentPage > 3) pages.push(-1)
+    for (let page = Math.max(2, currentPage - 1); page <= Math.min(totalPages - 1, currentPage + 1); page += 1) {
+      pages.push(page)
+    }
+    if (currentPage < totalPages - 2) pages.push(-2)
+    pages.push(totalPages)
+    return pages
+  }, [currentPage, totalPages])
 
   const goToPage = (page: number) => {
     setCurrentPage(page)
@@ -223,6 +221,39 @@ export function CatalogPage() {
         </div>
 
         <div className="catalog-toolbar">
+          {totalPages > 1 ? (
+            <nav className="catalog-pagination catalog-pagination--inline" aria-label="Paginación de productos">
+              {paginationItems.map((item, index) => {
+                if (item < 0) {
+                  return (
+                    <span key={`ellipsis-${index}`} className="catalog-pagination__ellipsis" aria-hidden="true">
+                      ...
+                    </span>
+                  )
+                }
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`catalog-pagination__button${item === currentPage ? ' is-active' : ''}`}
+                    onClick={() => goToPage(item)}
+                    aria-current={item === currentPage ? 'page' : undefined}
+                  >
+                    {item}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                className="catalog-pagination__button catalog-pagination__button--next"
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                aria-label="Siguiente página"
+              >
+                &gt;
+              </button>
+            </nav>
+          ) : null}
           <label className="catalog-toolbar__sort">
             <span>Ordenar por</span>
             <select value={sortValue} onChange={(event) => updateFilter('ordering', event.target.value)}>
@@ -245,25 +276,6 @@ export function CatalogPage() {
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
-        ) : null}
-
-        {!loading && !error && isMobile && totalPages > 1 ? (
-          <nav className="catalog-pagination" aria-label="Paginación de productos">
-            {Array.from({ length: totalPages }, (_, index) => {
-              const page = index + 1
-              return (
-                <button
-                  key={page}
-                  type="button"
-                  className={`catalog-pagination__button${page === currentPage ? ' is-active' : ''}`}
-                  onClick={() => goToPage(page)}
-                  aria-current={page === currentPage ? 'page' : undefined}
-                >
-                  {page}
-                </button>
-              )
-            })}
-          </nav>
         ) : null}
       </section>
     </Layout>
