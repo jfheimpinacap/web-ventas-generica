@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { FeaturedProducts } from '../components/catalog/FeaturedProducts'
 import { HeroSection } from '../components/catalog/HeroSection'
@@ -9,21 +9,6 @@ export function HomePage() {
   return (
     <Layout onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')}>
       <HeroSection />
-
-      <section className="quote-cta">
-        <div>
-          <h2>¿Necesitas precio y disponibilidad hoy?</h2>
-          <p>Envíanos los detalles y un vendedor te responde para cerrar tu cotización.</p>
-        </div>
-        <div className="quote-cta__actions">
-          <Link to="/cotizar" className="btn btn--accent">
-            Cotizar ahora
-          </Link>
-          <Link to="/catalogo" className="btn btn--ghost">
-            Ver productos
-          </Link>
-        </div>
-      </section>
 
       <FeaturedProducts />
     </Layout>
