@@ -32,7 +32,7 @@
   margin: 0;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #c2410c;
+  color: var(--color-primary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -146,7 +146,7 @@
 .home-product-price,
 .promo-product-card__price,
 .product-card__price {
-  color: #ea580c !important;
+  color: var(--color-accent) !important;
   font-size: clamp(1.35rem, 1.9vw, 1.95rem) !important;
   font-weight: 900 !important;
   line-height: 1.1 !important;
@@ -171,8 +171,8 @@
 
 
 .badge--condition {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-surface-soft);
+  color: var(--color-primary-dark);
 }
 
 

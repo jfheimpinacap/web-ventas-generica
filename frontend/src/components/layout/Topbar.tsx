@@ -43,13 +43,7 @@ export function Topbar() {
     <header className="topbar" aria-label="Barra principal">
       <div className="topbar__row">
         <Link className="topbar__brand" to="/" aria-label="Ir al inicio">
-          <span className="topbar__logo" aria-hidden="true">
-            ▲
-          </span>
-          <div>
-            <strong>Altura Comercial</strong>
-            <small>Maquinaria, repuestos y servicios</small>
-          </div>
+          <img className="topbar__logo" src="/logos/jem-nexus.png" alt="JEM Nexus" loading="eager" decoding="async" />
         </Link>
 
         <button

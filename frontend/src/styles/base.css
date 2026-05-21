@@ -48,7 +48,7 @@ a {
 
 .footer {
   margin-top: 1.2rem;
-  background: #1f2937;
+  background: var(--color-primary);
   color: #f3f4f6;
   padding: 1.5rem 1rem;
   display: grid;
@@ -120,7 +120,7 @@ a {
 .login-card__eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #ea580c;
+  color: var(--color-accent);
   font-weight: 700;
   font-size: 0.75rem;
 }

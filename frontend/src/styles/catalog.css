@@ -530,7 +530,7 @@
 
 .sidebar-menu__link {
   display: inline-block;
-  color: #1f2937;
+  color: var(--color-primary);
   text-decoration: underline;
   text-decoration-color: transparent;
   text-underline-offset: 2px;
@@ -541,14 +541,14 @@
 
 .sidebar-menu__link:hover,
 .sidebar-menu__link:focus-visible {
-  color: #111827;
+  color: var(--color-primary-dark);
   text-decoration-color: currentColor;
 }
 
 
 
 .sidebar-menu__label {
-  color: #1f2937;
+  color: var(--color-primary);
 }
 
 
@@ -711,7 +711,7 @@
 .catalog-pagination__button {
   border: 1px solid #d1d5db;
   background: #ffffff;
-  color: #1f2937;
+  color: var(--color-primary);
   font-weight: 700;
   min-width: 2rem;
   height: 2rem;

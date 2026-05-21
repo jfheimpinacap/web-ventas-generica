@@ -35,21 +35,21 @@
 
 .category-card h3 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-dark);
   font-size: 0.98rem;
 }
 
 
 
 .category-card span {
-  color: #c2410c;
+  color: var(--color-primary);
   font-weight: 700;
 }
 
 
 
 .category-card:hover {
-  border-color: #f59e0b;
+  border-color: var(--color-accent);
   transform: translateY(-2px);
 }
 
@@ -78,7 +78,7 @@
 
 .quote-cta {
   border-radius: var(--radius-block);
-  background: linear-gradient(120deg, #111827, #1f2937);
+  background: linear-gradient(120deg, var(--color-primary-dark), var(--color-primary));
   color: #fff;
   padding: 1.4rem;
   display: flex;
@@ -171,7 +171,7 @@
   border-radius: 999px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
-  color: #111827;
+  color: var(--color-primary-dark);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
@@ -321,7 +321,7 @@
 
 .section-heading h2 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-dark);
 }
 
 .section-heading p {
@@ -428,7 +428,7 @@
 .product-detail__thumb--active,
 .product-detail__thumb:hover,
 .product-detail__thumb:focus-visible {
-  border-color: #f97316;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
   outline: none;
 }
@@ -464,7 +464,7 @@
 
 .product-detail__eyebrow {
   margin: 0;
-  color: #f97316;
+  color: var(--color-accent);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -489,9 +489,9 @@
 }
 
 .product-detail__price-box {
-  border: 1px solid #fed7aa;
+  border: 1px solid var(--color-accent-soft);
   border-radius: var(--radius-card);
-  background: #fff7ed;
+  background: var(--color-surface-soft);
   padding: 0.95rem 1rem;
   display: grid;
   gap: 0.2rem;
@@ -499,7 +499,7 @@
 
 .product-detail__price-box span,
 .product-detail__price-box small {
-  color: #9a3412;
+  color: var(--color-primary-dark);
 }
 
 .product-detail__price-box span {
@@ -510,7 +510,7 @@
 }
 
 .product-detail__price-box strong {
-  color: #111827;
+  color: var(--color-primary-dark);
   font-size: clamp(1.8rem, 4vw, 2.55rem);
   line-height: 1;
 }
@@ -540,7 +540,7 @@
 }
 
 .product-detail__facts dd {
-  color: #111827;
+  color: var(--color-primary-dark);
   font-weight: 700;
   margin: 0;
   overflow-wrap: anywhere;
@@ -587,7 +587,7 @@
 .product-detail__description-card h2,
 .product-detail__spec-section h2 {
   margin: 0 0 0.75rem;
-  color: #111827;
+  color: var(--color-primary-dark);
 }
 
 .product-detail__description-card p,
@@ -626,7 +626,7 @@
 }
 
 .product-detail__spec-row dd {
-  color: #111827;
+  color: var(--color-primary-dark);
   font-weight: 700;
   margin: 0;
   overflow-wrap: anywhere;
@@ -663,8 +663,8 @@
 .quote-product-banner {
   margin: 0.8rem 0 1rem;
   padding: 0.8rem;
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
+  border: 1px solid var(--color-accent-soft);
+  background: var(--color-surface-soft);
   border-radius: var(--radius-block);
   display: grid;
   gap: 0.5rem;
@@ -808,8 +808,8 @@
   margin: 0;
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--color-surface-soft);
+  color: var(--color-primary-dark);
   font-weight: 800;
   font-size: 0.82rem;
 }
@@ -869,7 +869,7 @@
 .home-preview-card strong,
 .home-preview-spares__compact-card strong,
 .home-preview-services__card strong {
-  color: #111827;
+  color: var(--color-primary-dark);
   overflow-wrap: anywhere;
 }
 
@@ -979,7 +979,7 @@
 
 .home-preview h3 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-dark);
   font-size: 0.95rem;
 }
 
@@ -1020,7 +1020,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #ffffff;
-  color: #111827;
+  color: var(--color-primary-dark);
   font-size: 1.1rem;
 }
 
@@ -1058,7 +1058,7 @@
 
 .home-preview-card p {
   margin: 0;
-  color: #c2410c;
+  color: var(--color-primary);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -1067,7 +1067,7 @@
 
 .home-preview-card span,
 .home-preview-spares__compact-card span {
-  color: #ea580c;
+  color: var(--color-accent);
   font-weight: 900;
   font-size: 0.9rem;
 }
@@ -1184,7 +1184,7 @@
 .admin-home-preview .price--public,
 .admin-home-preview .promo-product-card__price,
 .admin-home-preview .product-card__price {
-  color: #ea580c !important;
+  color: var(--color-accent) !important;
   font-size: clamp(0.72rem, 1.45vw, 0.96rem) !important;
   font-weight: 900 !important;
   line-height: 1.08 !important;
