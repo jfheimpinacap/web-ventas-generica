@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
-import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload } from '../types/catalog'
+import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
 
 interface QuoteFormState {
@@ -14,6 +14,21 @@ interface QuoteFormState {
   city: string
   preferred_contact_method: PreferredContactMethod | ''
   message: string
+}
+
+
+const CONDITION_LABELS: Record<ProductCondition, string> = {
+  new: 'Nuevo',
+  used: 'Usado',
+  refurbished: 'Reacondicionado',
+  not_applicable: 'No aplica',
+}
+
+const STOCK_LABELS: Record<StockStatus, string> = {
+  available: 'Disponible',
+  on_request: 'Bajo consulta',
+  sold: 'Vendido',
+  reserved: 'Reservado',
 }
 
 const initialForm: QuoteFormState = {
@@ -40,6 +55,10 @@ export function QuotePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [productFromQuery])
 
   useEffect(() => {
     if (!productFromQuery) {
@@ -102,25 +121,49 @@ export function QuotePage() {
 
   return (
     <Layout>
-      <section className="simple-page">
-        <h1>Cotizar</h1>
-        <p>Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>
+      <section className="simple-page quote-page">
+        <h1 className="quote-page__title">Cotizar</h1>
+        <p className="quote-page__subtitle">Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>
 
-        {productFromQuery ? (
-          <div className="quote-product-banner">
-            <p>
-              <strong>Producto seleccionado:</strong>{' '}
-              {selectedProduct ? `${selectedProduct.name} · ${formatPrice(selectedProduct)}` : `#${productFromQuery}`}
-            </p>
+        <div className="quote-layout">
+          <aside className="quote-preview" aria-label="Resumen del producto a cotizar">
+            <h2>Producto a cotizar</h2>
             {selectedProduct ? (
-              <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
-                Ver detalle del producto
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
+              <>
+                <div className="quote-preview__image-wrap">
+                  {selectedProduct.main_image?.image ? (
+                    <img
+                      className="quote-preview__image"
+                      src={selectedProduct.main_image.image}
+                      alt={selectedProduct.main_image.alt_text || selectedProduct.name}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="quote-preview__placeholder">Sin imagen disponible</div>
+                  )}
+                </div>
+                <div className="quote-preview__meta">
+                  <h3>{selectedProduct.name}</h3>
+                  <p><strong>Marca:</strong> {selectedProduct.brand?.name ?? 'Sin marca'}</p>
+                  <p><strong>Categoría:</strong> {selectedProduct.category?.name ?? 'Sin categoría'}</p>
+                  <p><strong>Condición:</strong> {CONDITION_LABELS[selectedProduct.condition]}</p>
+                  <p><strong>Disponibilidad:</strong> {STOCK_LABELS[selectedProduct.stock_status]}</p>
+                  <p><strong>Modelo / SKU:</strong> Consultar</p>
+                  <p><strong>Precio:</strong> {selectedProduct.price_visible ? formatPrice(selectedProduct) : 'Consultar'}</p>
+                  <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
+                    Ver detalle
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="quote-preview__empty">
+                <p><strong>No hay producto seleccionado.</strong></p>
+                <p>Puedes enviar una solicitud general de cotización.</p>
+              </div>
+            )}
+          </aside>
 
-        <form className="quote-form" onSubmit={onSubmit}>
+          <form className="quote-form" onSubmit={onSubmit}>
           <label>
             Nombre
             <input
@@ -181,10 +224,11 @@ export function QuotePage() {
           {error ? <p className="ui-note ui-note--error">{error}</p> : null}
           {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
-          <button className="btn btn--accent" type="submit" disabled={loading}>
-            {loading ? 'Enviando...' : 'Enviar cotización'}
-          </button>
-        </form>
+            <button className="btn btn--accent" type="submit" disabled={loading}>
+              {loading ? 'Enviando...' : 'Enviar cotización'}
+            </button>
+          </form>
+        </div>
       </section>
     </Layout>
   )

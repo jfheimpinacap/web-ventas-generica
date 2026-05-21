@@ -428,3 +428,117 @@
     flex: 1 1 auto;
     padding-inline: 0.72rem;
   }
+
+.quote-page {
+  font-family: "Ubuntu", system-ui, sans-serif;
+}
+
+.quote-page__title {
+  color: #000;
+  margin: 0;
+}
+
+.quote-page__subtitle {
+  margin: 0.35rem 0 1rem;
+  color: #374151;
+}
+
+.quote-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.quote-preview,
+.quote-form {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.quote-preview h2 {
+  margin: 0 0 0.75rem;
+  color: #000;
+}
+
+.quote-preview__image-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.quote-preview__image,
+.quote-preview__placeholder {
+  width: 100%;
+  min-height: 220px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.quote-preview__image {
+  object-fit: cover;
+  display: block;
+}
+
+.quote-preview__placeholder {
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.quote-preview__meta h3 {
+  margin: 0 0 0.6rem;
+  color: #000;
+}
+
+.quote-preview__meta p,
+.quote-preview__empty p {
+  margin: 0 0 0.45rem;
+  color: #111827;
+}
+
+.quote-form {
+  max-width: none;
+}
+
+.quote-form label {
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+.quote-form input,
+.quote-form textarea,
+.quote-form select {
+  width: 100%;
+}
+
+.quote-form .btn--accent {
+  background: #0077b6;
+}
+
+@media (min-width: 960px) {
+  .quote-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+    align-items: start;
+  }
+
+  .quote-form {
+    order: 1;
+  }
+
+  .quote-preview {
+    order: 2;
+    position: sticky;
+    top: calc(var(--topbar-height) + 1rem);
+  }
+}
+
+@media (max-width: 959px) {
+  .quote-preview {
+    order: 1;
+  }
+
+  .quote-form {
+    order: 2;
+  }
+}
