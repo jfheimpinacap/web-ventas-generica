@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { usePromotions } from '../../hooks/usePromotions'
@@ -61,25 +61,9 @@ export function HeroSection() {
   const ctaUrl = resolvePromotionUrl(currentSlide)
   const externalCta = isExternalUrl(ctaUrl)
 
-  const badges = useMemo(() => {
-    const tags = ['Oferta vigente', 'Cotización rápida']
-    if (currentSlide.product) {
-      tags.unshift('Producto destacado')
-    }
-    return tags
-  }, [currentSlide.product])
-
   return (
     <section className="hero-section" aria-label="Promociones destacadas">
       <div className="hero-section__content">
-        <div className="hero-section__badges" aria-label="Etiquetas de promoción">
-          {badges.map((badge) => (
-            <span key={badge} className="hero-badge">
-              {badge}
-            </span>
-          ))}
-        </div>
-        <p className="hero-section__tag">Promociones comerciales</p>
         <h1>{currentSlide.title}</h1>
         <p className="hero-section__subtitle">
           {currentSlide.subtitle || 'Consulta disponibilidad y tiempos de entrega con nuestro equipo comercial.'}
