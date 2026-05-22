@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 
 from dotenv import load_dotenv
 
@@ -10,6 +11,7 @@ except ImportError:  # pragma: no cover - dependency is required in Render
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
+TESTING = 'test' in sys.argv
 
 try:
     import whitenoise  # noqa: F401
@@ -125,6 +127,19 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'core.throttles.AuthenticatedUserThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '600/hour',
+        'authenticated_user': '1000/hour',
+        'login': '5/minute',
+        'quote_requests_create': '20/hour',
+        'public_catalog_read': '600/hour',
+        'admin_api': '1000/hour',
+    },
 }
 
 MEDIA_URL = '/media/'

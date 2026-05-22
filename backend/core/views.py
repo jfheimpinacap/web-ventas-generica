@@ -2,6 +2,9 @@ from django.contrib.auth import get_user_model
 from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from .throttles import LoginRateThrottle
 
 
 class HealthView(APIView):
@@ -23,3 +26,7 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         return Response(CurrentUserSerializer(request.user).data)
+
+
+class LoginTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [LoginRateThrottle]

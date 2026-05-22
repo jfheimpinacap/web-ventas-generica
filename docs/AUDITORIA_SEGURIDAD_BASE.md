@@ -220,3 +220,65 @@ No implementado en esta fase (solo propuesta).
 ## Conclusión ejecutiva
 
 Estado actual: base razonable de permisos y JWT funcional, con riesgos principales en endurecimiento de configuración productiva, ausencia de throttling explícito y controles de upload/validación avanzada por reforzar.
+
+## Implementación Seguridad Fase 1
+
+### Qué se implementó
+- Se activó throttling base en DRF con tasas centralizadas en `REST_FRAMEWORK.DEFAULT_THROTTLE_RATES`.
+- Se agregaron clases de throttle específicas para login, creación pública de cotizaciones, lecturas públicas de catálogo y tráfico autenticado/admin.
+- Se incorporó validación estricta de query params en productos y cotizaciones admin (search, ordering, filtros por id/choices/boolean).
+- Se reforzó validación de largo de `message` en cotizaciones públicas.
+- Se agregaron tests de seguridad para throttling y validación de filtros/ordering/search.
+
+### Endpoints protegidos
+- `POST /api/auth/login/` con throttle específico de login.
+- `POST /api/quote-requests/` con throttle específico de creación pública.
+- Lecturas públicas de catálogo en:
+  - `/api/products/`
+  - `/api/categories/`
+  - `/api/brands/`
+  - `/api/suppliers/`
+  - `/api/promotions/`
+  - `/api/home-section-items/`
+- Endpoints autenticados/admin bajo scope de throttle amplio para usuarios autenticados.
+
+### Límites aplicados
+- `login`: `5/minute`
+- `quote_requests_create`: `20/hour`
+- `public_catalog_read`: `600/hour`
+- `authenticated_user`: `1000/hour`
+- `admin_api`: `1000/hour`
+- `anon` global: `600/hour`
+
+### Validaciones agregadas
+- `products`:
+  - `search` con `strip` y máximo 120 caracteres.
+  - `ordering` con whitelist (`name`, `price`, `created_at`, `updated_at`, `is_featured` y sus descendentes con `-`).
+  - `category` y `brand` deben ser numéricos.
+  - `product_type`, `condition`, `stock_status` validados contra choices.
+  - `include_unpublished` e `is_featured` validados como booleanos permitidos.
+- `quote-requests` admin:
+  - `search` con máximo 120 caracteres.
+  - `ordering` inválido retorna `400`.
+- `quote-requests` público:
+  - `message` máximo 2000 caracteres (con trim).
+
+### Tests agregados
+- Login throttling (bloqueo con 429 al superar límite configurado para test).
+- Quote request throttling (bloqueo con 429 al superar límite configurado para test).
+- Products:
+  - ordering inválido -> 400.
+  - category inválida -> 400.
+  - product_type inválido -> 400.
+  - search demasiado largo -> 400.
+- Quote requests:
+  - POST válido sigue funcionando.
+  - mensaje demasiado largo falla con 400.
+  - ordering admin inválido -> 400.
+- Cobertura existente mantiene protección de `include_unpublished` sin autenticación.
+
+### Pendientes para Fase 2
+- Hardening de settings de producción (`DEBUG`, `SECRET_KEY`, flags `SECURE_*`, HSTS).
+- Revisión de CORS/CSRF por dominio final de despliegue.
+- Estrategia de tokens (rotación/blacklist y evaluación de almacenamiento más seguro).
+- Validación robusta de uploads (MIME/extensión/tamaño) y tests negativos.
