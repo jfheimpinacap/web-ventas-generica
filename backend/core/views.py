@@ -58,6 +58,21 @@ class SitemapXmlView(APIView):
                 'changefreq': 'daily',
                 'priority': '0.8',
             },
+            {
+                'loc': _build_absolute_url('/contacto'),
+                'changefreq': 'monthly',
+                'priority': '0.6',
+            },
+            {
+                'loc': _build_absolute_url('/sobre-nosotros'),
+                'changefreq': 'monthly',
+                'priority': '0.6',
+            },
+            {
+                'loc': _build_absolute_url('/preguntas-frecuentes'),
+                'changefreq': 'monthly',
+                'priority': '0.5',
+            },
         ]
 
         published_products = Product.objects.filter(is_published=True).only('slug', 'updated_at').order_by('slug')

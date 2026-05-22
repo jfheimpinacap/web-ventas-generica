@@ -192,3 +192,11 @@ a {
     padding: 1rem;
   }
 }
+
+
+.trust-page { display: grid; gap: 1rem; }
+.trust-page h1, .trust-page h2 { color: #0f172a; }
+.trust-page__grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 0.8rem; }
+.trust-page__card, .trust-page__faq-item { border: 1px solid #e5e7eb; border-radius: var(--radius-button); padding: 0.9rem; background: #fff; }
+.trust-page__actions { display:flex; gap:0.65rem; flex-wrap:wrap; }
+.trust-page__faq-list { display:grid; gap:0.75rem; }

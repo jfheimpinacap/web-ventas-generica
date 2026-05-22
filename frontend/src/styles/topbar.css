@@ -541,3 +541,6 @@
     background: #e2e8f0;
   }
 }
+
+.topbar__top-link--contact { background: rgba(255,255,255,0.08); }
+@media (max-width: 900px) { .topbar__top-link--contact { display: none; } }

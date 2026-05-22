@@ -43,7 +43,13 @@ export function Footer() {
             <Link to="/cotizar">Cotizar</Link>
           </li>
           <li>
-            <a href="#">Contacto</a>
+            <Link to="/contacto">Contacto</Link>
+          </li>
+          <li>
+            <Link to="/sobre-nosotros">Sobre nosotros</Link>
+          </li>
+          <li>
+            <Link to="/preguntas-frecuentes">Preguntas frecuentes</Link>
           </li>
           <li>
             <Link to="/login">Login vendedor</Link>
