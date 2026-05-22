@@ -3,13 +3,14 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
+import { JsonLd } from '../components/common/JsonLd'
 import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
-import { buildPublicUrl } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPublicUrl } from '../utils/seo'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -207,6 +208,16 @@ export function CatalogPage() {
   const totalPages = Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage))
   const paginatedProducts = displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
+  const shouldRenderItemList = !hasSearch
+  const visiblePublishedProducts = useMemo(
+    () => paginatedProducts.filter((product) => product.is_published !== false),
+    [paginatedProducts],
+  )
+
+  const breadcrumbJsonLd = useMemo(() => buildBreadcrumbJsonLd(breadcrumbItems), [breadcrumbItems])
+  const itemListJsonLd = useMemo(() => buildItemListJsonLd(visiblePublishedProducts), [visiblePublishedProducts])
+
+
   const paginationItems = useMemo(() => {
     if (totalPages <= 1) return [1]
     if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -235,6 +246,8 @@ export function CatalogPage() {
         ogUrl={canonicalUrl}
         robots={seoRobots}
       />
+      <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} />
+      {shouldRenderItemList && visiblePublishedProducts.length > 0 ? <JsonLd id="catalog-itemlist" data={itemListJsonLd} /> : null}
       <section className="simple-page catalog-page">
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 

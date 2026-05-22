@@ -306,3 +306,35 @@ Durante esta fase:
 - Incluir productos publicados (`/producto/:slug`) de forma automática.
 - Incluir categorías principales con URLs SEO limpias cuando existan rutas dedicadas (ej.: `/maquinaria`, `/repuestos`, `/servicios`).
 - Mantener sincronización automática entre dominio público y referencias en `robots.txt`/`sitemap.xml` en cambios de entorno.
+
+## Implementación Fase SEO 2B
+
+### JSON-LD implementados
+
+- `Organization` en Home (`/`), con nombre comercial, URL pública, logo y descripción comercial.
+- `WebSite` en Home (`/`), incluyendo `SearchAction` hacia `/catalogo?search={search_term_string}`.
+- `BreadcrumbList` en listado (`/catalogo`) y en detalle de producto (`/producto/:slug`), alineado con breadcrumb visual.
+- `Product` en detalle de producto (`/producto/:slug`) usando datos reales: nombre, descripción, imagen principal, marca/categoría, sku y `offers` con disponibilidad + precio condicional.
+- `ItemList` en catálogo (`/catalogo`) para los productos visibles en la página actual, excluyendo no publicados.
+
+### Rutas cubiertas
+
+- `/`
+- `/catalogo`
+- `/catalogo?category=:id`
+- `/producto/:slug`
+
+### Limitaciones actuales
+
+- `Organization.contactPoint.telephone` queda pendiente de número comercial confiable (no se publica valor inventado).
+- Servicios (`product_type=service`) continúan modelados como `Product` para mantener consistencia del catálogo actual.
+- `ItemList` se omite en resultados con `search` para reducir señales duplicadas en URLs de refinamiento.
+- `priceCurrency` se fija en `CLP` por convención comercial actual; si la operación cambia de moneda, debe parametrizarse.
+
+### Pendientes para SEO 2C / SEO 3
+
+- Evolucionar sitemap hacia versión dinámica con actualización por contenido publicado.
+- Definir canonicals limpias para categorías/subcategorías sin dependencia exclusiva de query params.
+- Incorporar contenido SEO escalable por categoría/servicio (bloques introductorios, FAQs y landings de intención).
+- Evaluar marcado `Service` específico si el modelo de datos separa servicios como entidad propia.
+- Añadir validación automatizada de datos estructurados en pipeline de calidad técnica.

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
+import { JsonLd } from '../components/common/JsonLd'
 import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { getProductBySlug, getProducts } from '../services/catalogApi'
@@ -11,7 +12,7 @@ import { resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
-import { buildPublicUrl } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/900x700/111827/F3F4F6?text=Producto'
 
@@ -122,6 +123,16 @@ export function ProductDetailPage() {
   const robots = product && product.is_published === false ? 'noindex,nofollow' : 'index,follow'
   const ogImage = selectedImage?.url
 
+  const breadcrumbJsonLd = useMemo(
+    () => (product ? buildBreadcrumbJsonLd(breadcrumbItems) : null),
+    [breadcrumbItems, product],
+  )
+  const productJsonLd = useMemo(
+    () => (product ? buildProductJsonLd(product, canonicalUrl) : null),
+    [canonicalUrl, product],
+  )
+
+
   return (
     <Layout>
       <Seo
@@ -135,6 +146,8 @@ export function ProductDetailPage() {
         twitterImage={ogImage}
         robots={robots}
       />
+      {breadcrumbJsonLd ? <JsonLd id="product-breadcrumb" data={breadcrumbJsonLd} /> : null}
+      {productJsonLd ? <JsonLd id="product-main" data={productJsonLd} /> : null}
       <section className="simple-page">
         {loading ? <p>Cargando detalle...</p> : null}
         {!loading && error ? <p className="ui-note ui-note--error">{error}</p> : null}
