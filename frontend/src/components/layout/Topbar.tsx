@@ -71,6 +71,10 @@ export function Topbar() {
           </button>
         </form>
 
+        <Link className="topbar__top-link topbar__top-link--contact" to="/contacto">
+          Contacto
+        </Link>
+
         <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
           Cotizar
         </Link>

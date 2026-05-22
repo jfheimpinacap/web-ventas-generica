@@ -361,3 +361,23 @@ Durante esta fase:
 - Diseñar bloques de contenido escalable para subcategorías estratégicas con intención transaccional.
 - Agregar módulos FAQ comerciales por línea de negocio (maquinaria, repuestos, servicios) según inventario real.
 - Evaluar landings SEO limpias por categoría (`/maquinaria`, `/repuestos`, `/servicios`) para mejorar arquitectura de indexación sin depender de query params.
+
+## Implementación Fase SEO 3B
+
+- Se crearon las páginas públicas `/contacto`, `/sobre-nosotros` y `/preguntas-frecuentes` con contenido comercial base orientado a confianza, claridad y conversión.
+- Se aplicó SEO on-page con `title`, `meta description`, canonical y `robots=index,follow` usando el componente `Seo` existente.
+- En `/preguntas-frecuentes` se implementó JSON-LD tipo `FAQPage` con las 6 preguntas y respuestas iniciales.
+- En `/contacto` se agregó JSON-LD simple tipo `ContactPage`.
+- Se actualizaron enlaces de navegación en footer (Contacto, Sobre nosotros, Preguntas frecuentes) y se añadió acceso a Contacto en topbar desktop sin saturar mobile.
+- Se actualizó el sitemap dinámico backend para incluir:
+  - `/contacto` (priority 0.6)
+  - `/sobre-nosotros` (priority 0.6)
+  - `/preguntas-frecuentes` (priority 0.5)
+- Se mantuvo la exclusión de rutas no públicas/operativas como `/login`, `/admin/*` y `/cotizar` en sitemap.
+
+### Pendientes SEO 3C
+
+- Extender contenido comercial SEO por categorías estratégicas con texto introductorio semántico (sin keyword stuffing).
+- Evaluar JSON-LD `Organization` reutilizable fuera de Home según estrategia global de entidad.
+- Definir y publicar datos de contacto comerciales finales (correo corporativo único, horarios y cobertura geográfica).
+- Diseñar cluster de contenidos de soporte (guías de compra, compatibilidad, mantenimiento) para captación long-tail.

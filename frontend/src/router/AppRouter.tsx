@@ -1,7 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '../components/admin/ProtectedRoute'
+import { AboutPage } from '../pages/AboutPage'
 import { CatalogPage } from '../pages/CatalogPage'
+import { ContactPage } from '../pages/ContactPage'
+import { FaqPage } from '../pages/FaqPage'
 import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProductDetailPage } from '../pages/ProductDetailPage'
@@ -29,6 +32,9 @@ export function AppRouter() {
       <Route path="/producto/:slug" element={<ProductDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/cotizar" element={<QuotePage />} />
+      <Route path="/contacto" element={<ContactPage />} />
+      <Route path="/sobre-nosotros" element={<AboutPage />} />
+      <Route path="/preguntas-frecuentes" element={<FaqPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/admin" element={<Navigate to="/admin/productos" replace />} />
