@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Seo } from '../components/common/Seo'
 import { JsonLd } from '../components/common/JsonLd'
 import { Layout } from '../components/layout/Layout'
+import { trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
 import { buildPublicUrl } from '../utils/seo'
 import { buildWhatsAppUrl } from '../utils/whatsapp'
 
@@ -41,7 +42,7 @@ export function ContactPage() {
           <article className="trust-page__card">
             <h2>WhatsApp</h2>
             <p>Atención comercial directa para resolver dudas y coordinar tu cotización.</p>
-            <a className="btn btn--whatsapp" href={buildWhatsAppUrl('Hola, quiero solicitar información comercial.')} target="_blank" rel="noreferrer">
+            <a className="btn btn--whatsapp" href={buildWhatsAppUrl('Hola, quiero solicitar información comercial.')} target="_blank" rel="noreferrer" onClick={() => trackWhatsAppClick({ location: 'contact' })}>
               Escribir por WhatsApp
             </a>
           </article>
@@ -49,7 +50,7 @@ export function ContactPage() {
           <article className="trust-page__card">
             <h2>Formulario de cotización</h2>
             <p>Completa la solicitud con tu requerimiento técnico para una respuesta personalizada.</p>
-            <Link className="btn btn--accent" to="/cotizar">
+            <Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'contact' })}>
               Cotizar ahora
             </Link>
           </article>

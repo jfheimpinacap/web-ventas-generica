@@ -5,6 +5,7 @@ import { useCategories } from '../../hooks/useCategories'
 import { usePromotions } from '../../hooks/usePromotions'
 import { resolveMediaUrl } from '../../services/api'
 import type { Category, Promotion } from '../../types/catalog'
+import { trackHeroOfferClick } from '../../utils/analytics'
 
 const AUTO_ADVANCE_MS = 6000
 const FALLBACK_IMAGE = 'https://placehold.co/1200x700/111827/F3F4F6?text=Promociones+Industriales'
@@ -102,7 +103,18 @@ export function HeroSection() {
 
       <div className="hero-section__media">
         {isClickable ? (
-          <Link to={categoryLink.to} aria-label={categoryLink.label} className="hero-section__media-link">
+          <Link
+            to={categoryLink.to}
+            aria-label={categoryLink.label}
+            className="hero-section__media-link"
+            onClick={() =>
+              trackHeroOfferClick({
+                promotion_id: currentSlide.id,
+                product_id: currentSlide.product?.id,
+                category_name: currentSlide.product?.category?.name,
+              })
+            }
+          >
             <img src={imageUrl} alt={currentSlide.title || 'Imagen de promoción'} />
           </Link>
         ) : (

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { resolveMediaUrl } from '../../services/api'
 import type { ProductListItem } from '../../types/catalog'
+import { trackProductDetailClick } from '../../utils/analytics'
 import { formatCondition, formatPrice, formatStockStatus } from '../../utils/formatters'
 
 interface ProductCardProps {
@@ -15,7 +16,12 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <article className="product-card">
-      <Link className="product-card__image-link" to={`/producto/${product.slug}`} aria-label={`Ver detalle de ${product.name}`}>
+      <Link
+        className="product-card__image-link"
+        to={`/producto/${product.slug}`}
+        aria-label={`Ver detalle de ${product.name}`}
+        onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'catalog' })}
+      >
         <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
       </Link>
       <div className="product-card__content">
@@ -34,7 +40,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="product-card__price home-product-price">{formatPrice(product)}</p>
       </div>
       <div className="product-card__actions">
-        <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+        <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'catalog' })}>
           Ver detalle
         </Link>
       </div>

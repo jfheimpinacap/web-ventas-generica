@@ -6,6 +6,7 @@ import { Seo } from '../components/common/Seo'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
 import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
+import { trackQuoteSubmit } from '../utils/analytics'
 import { buildPublicUrl } from '../utils/seo'
 
 interface QuoteFormState {
@@ -112,6 +113,11 @@ export function QuotePage() {
     try {
       setLoading(true)
       await createQuoteRequest(payload)
+      trackQuoteSubmit({
+        product_id: selectedProduct?.id,
+        product_name: selectedProduct?.name,
+        preferred_contact_method: form.preferred_contact_method || undefined,
+      })
       setSuccess('¡Solicitud enviada! Un vendedor te contactará pronto para continuar con tu cotización.')
       setForm(initialForm)
     } catch {

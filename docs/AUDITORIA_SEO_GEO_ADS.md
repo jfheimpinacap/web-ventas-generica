@@ -381,3 +381,48 @@ Durante esta fase:
 - Evaluar JSON-LD `Organization` reutilizable fuera de Home según estrategia global de entidad.
 - Definir y publicar datos de contacto comerciales finales (correo corporativo único, horarios y cobertura geográfica).
 - Diseñar cluster de contenidos de soporte (guías de compra, compatibilidad, mantenimiento) para captación long-tail.
+
+## Implementación Fase SEO 4A
+
+### Variable de entorno GTM
+
+- Se agregó soporte frontend para `VITE_GTM_ID`.
+- Si `VITE_GTM_ID` existe, se inicializa `window.dataLayer` y se inyecta el script de GTM de forma asíncrona.
+- Si `VITE_GTM_ID` no existe, no se carga GTM y el sitio mantiene funcionamiento normal.
+
+### Eventos implementados (dataLayer)
+
+- `quote_submit`
+- `whatsapp_click`
+- `quote_click`
+- `product_view`
+- `product_detail_click`
+- `category_view`
+- `hero_offer_click`
+
+### Datos enviados
+
+Solo se envían identificadores comerciales no sensibles, por ejemplo:
+- `product_id`, `product_name`
+- `category_id`, `category_name`
+- `brand`, `price` (cuando aplica)
+- `location`
+- `preferred_contact_method`
+- `source` (para `quote_submit` con valor `quote_form`)
+
+### Datos no enviados
+
+No se envían datos personales ni sensibles:
+- email
+- teléfono
+- nombre completo
+- mensaje libre del usuario
+- RUT/u otros identificadores personales
+- credenciales, tokens o datos internos de administración
+
+### Pendientes para GA4 / Google Ads
+
+- Crear contenedor GTM por ambiente (staging/producción) y mapear eventos a tags GA4.
+- Definir conversiones de negocio en GA4 (`quote_submit` principal y microconversiones).
+- Conectar GA4 con Google Ads e importar conversiones cuando se active pauta.
+- Validar nomenclatura final de parámetros y convenciones UTM/campañas.

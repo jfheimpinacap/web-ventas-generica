@@ -7,6 +7,7 @@ import { getHomeSectionItems } from '../../services/catalogApi'
 import { resolveMediaUrl } from '../../services/api'
 import type { HomeSectionItem, ProductListItem, ProductType } from '../../types/catalog'
 import { formatPrice } from '../../utils/formatters'
+import { trackProductDetailClick } from '../../utils/analytics'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
 const DESKTOP_CAROUSEL_GROUP_SIZE = 4
@@ -167,6 +168,7 @@ export function FeaturedProducts() {
                         <Link
                           className="promo-product-card__image-link"
                           to={`/producto/${product.slug}`}
+                          onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'machinery_promotions' })}
                           aria-label={`Ver detalle de ${product.name}`}
                         >
                           <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
@@ -176,7 +178,7 @@ export function FeaturedProducts() {
                           <h3>{product.name}</h3>
                           <p className="promo-product-card__price home-product-price">{formatPrice(product)}</p>
                           {product.slug ? (
-                            <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+                            <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'machinery_promotions' })}>
                               Ver detalle
                             </Link>
                           ) : (
@@ -223,7 +225,7 @@ export function FeaturedProducts() {
                   <h3>{product.name}</h3>
                   <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                   {product.slug ? (
-                    <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+                    <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'spare_offers' })}>
                       Ver detalle
                     </Link>
                   ) : null}
@@ -258,7 +260,7 @@ export function FeaturedProducts() {
                   <p>{product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
                   <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
                   {product.slug ? (
-                    <Link className="btn btn--accent" to={`/producto/${product.slug}`}>
+                    <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'repair_services' })}>
                       Ver detalle
                     </Link>
                   ) : null}

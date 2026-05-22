@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { useCategories } from '../../hooks/useCategories'
 import { isAuthenticated } from '../../services/authApi'
+import { trackQuoteClick, trackWhatsAppClick } from '../../utils/analytics'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 import { CategoriesMegaMenu } from './CategoriesMegaMenu'
 
@@ -75,7 +76,7 @@ export function Topbar() {
           Contacto
         </Link>
 
-        <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar">
+        <Link className="topbar__top-link topbar__top-link--quote" to="/cotizar" onClick={() => trackQuoteClick({ location: 'topbar' })}>
           Cotizar
         </Link>
 
@@ -85,6 +86,7 @@ export function Topbar() {
           target="_blank"
           rel="noreferrer"
           aria-label="Abrir WhatsApp con asesor comercial"
+          onClick={() => trackWhatsAppClick({ location: 'topbar' })}
         >
           <span className="topbar__whatsapp-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false">
