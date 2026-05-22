@@ -1037,3 +1037,92 @@ class GenerateDemoProductsCommandTests(TestCase):
         output = out.getvalue()
         self.assertIn('Generación demo completada.', output)
         self.assertIn('- total: 9', output)
+
+
+class CommercialPermissionsPhase4ATests(APITestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name='Cat A')
+        self.product = Product.objects.create(
+            name='Visible',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            short_description='ok',
+            sku='SKU-PERM-1',
+            is_published=True,
+        )
+        self.hidden_product = Product.objects.create(
+            name='Hidden',
+            category=self.category,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            short_description='hidden',
+            sku='SKU-PERM-2',
+            is_published=False,
+        )
+        User = get_user_model()
+        self.normal_user = User.objects.create_user(username='normal_user', password='normal123', is_staff=False)
+        self.seller_user = User.objects.create_user(username='seller_user', password='seller123', is_staff=True)
+
+    def _auth(self, username, password):
+        response = self.client.post(reverse('token-obtain-pair'), {'username': username, 'password': password}, format='json')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+
+    def _product_payload(self):
+        return {
+            'name': 'Creado',
+            'category': self.category.id,
+            'product_type': Product.ProductType.MACHINERY,
+            'condition': Product.ProductCondition.NEW,
+            'short_description': 'creado',
+            'sku': 'SKU-PERM-NEW',
+            'stock_status': Product.StockStatus.AVAILABLE,
+        }
+
+    def test_anonymous_can_get_products_cannot_post_product_can_post_quote_cannot_list_quotes(self):
+        self.assertEqual(self.client.get(reverse('product-list')).status_code, 200)
+        self.assertEqual(self.client.post(reverse('product-list'), self._product_payload(), format='json').status_code, 401)
+        quote_payload = {
+            'customer_name': 'Anon',
+            'customer_email': 'anon@example.com',
+            'customer_phone': '+123456789',
+            'message': 'Hola',
+            'product': self.product.id,
+        }
+        self.assertEqual(self.client.post(reverse('quote-request-list'), quote_payload, format='json').status_code, 201)
+        self.assertEqual(self.client.get(reverse('quote-request-list')).status_code, 401)
+
+    def test_authenticated_non_staff_cannot_write_product_or_list_quotes(self):
+        self._auth('normal_user', 'normal123')
+        self.assertEqual(self.client.post(reverse('product-list'), self._product_payload(), format='json').status_code, 403)
+        self.assertEqual(self.client.patch(reverse('product-detail', kwargs={'slug': self.product.slug}), {'name': 'x'}, format='json').status_code, 403)
+        self.assertEqual(self.client.delete(reverse('product-detail', kwargs={'slug': self.product.slug})).status_code, 403)
+        self.assertEqual(self.client.get(reverse('quote-request-list')).status_code, 403)
+
+    def test_staff_seller_can_manage_products_quotes_images_specs(self):
+        self._auth('seller_user', 'seller123')
+        created = self.client.post(reverse('product-list'), self._product_payload(), format='json')
+        self.assertEqual(created.status_code, 201)
+        slug = created.data['slug']
+        self.assertEqual(self.client.patch(reverse('product-detail', kwargs={'slug': slug}), {'name': 'Editado'}, format='json').status_code, 200)
+        self.assertEqual(self.client.get(reverse('quote-request-list')).status_code, 200)
+
+        img_payload = {
+            'product': self.product.id,
+            'image': SimpleUploadedFile('ok.jpg', b'\xff\xd8\xff\xd9', content_type='image/jpeg'),
+            'alt_text': 'main',
+        }
+        self.assertIn(self.client.post(reverse('product-image-list'), img_payload, format='multipart').status_code, {201, 400})
+        spec_payload = {'product': self.product.id, 'name': 'Potencia', 'value': '10hp', 'order': 1}
+        self.assertEqual(self.client.post(reverse('product-spec-list'), spec_payload, format='json').status_code, 201)
+        self.assertEqual(self.client.delete(reverse('product-detail', kwargs={'slug': slug})).status_code, 204)
+
+    def test_include_unpublished_only_for_seller_staff(self):
+        self._auth('normal_user', 'normal123')
+        response = self.client.get(reverse('product-list'), {'include_unpublished': 'true'})
+        self.assertEqual(len(response.data), 1)
+
+        self.client.credentials()
+        self._auth('seller_user', 'seller123')
+        response = self.client.get(reverse('product-list'), {'include_unpublished': 'true'})
+        self.assertGreaterEqual(len(response.data), 2)

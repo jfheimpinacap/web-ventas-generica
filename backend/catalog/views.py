@@ -1,10 +1,11 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework import filters, mixins, permissions, viewsets
+from rest_framework import filters, mixins, viewsets
 from rest_framework.exceptions import ValidationError
 
 from .models import Brand, Category, HomeSectionItem, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
+from .permissions import IsPublicReadSellerWrite, IsQuoteCreatePublicSellerManage, is_seller_or_admin_user
 from .services import send_quote_request_notifications
 from .serializers import (
     BrandSerializer,
@@ -34,7 +35,7 @@ MAX_SEARCH_LENGTH = 120
 
 def _include_inactive_for_authenticated(request):
     include_inactive = request.query_params.get('include_inactive') in {'1', 'true', 'True'}
-    return request.user.is_authenticated and include_inactive
+    return is_seller_or_admin_user(request.user) and include_inactive
 
 
 def _get_category_descendant_ids(category_id: int):
@@ -52,7 +53,7 @@ def _get_category_descendant_ids(category_id: int):
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
@@ -68,7 +69,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class BrandViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
@@ -84,7 +85,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
@@ -102,7 +103,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
     queryset = Product.objects.select_related('category', 'brand', 'supplier').prefetch_related('images', 'specs')
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'model', 'sku', 'short_description']
     ordering = ['-updated_at']
@@ -122,7 +123,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         self._validate_query_params(params)
 
         include_unpublished = params.get('include_unpublished') in {'1', 'true', 'True'}
-        can_see_unpublished = self.request.user.is_authenticated and (
+        can_see_unpublished = is_seller_or_admin_user(self.request.user) and (
             include_unpublished or self.action in {'retrieve', 'update', 'partial_update', 'destroy'}
         )
         if not can_see_unpublished:
@@ -191,7 +192,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.select_related('product').order_by('order', 'id')
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -218,7 +219,7 @@ class ProductImageViewSet(viewsets.ModelViewSet):
 
 class ProductSpecViewSet(viewsets.ModelViewSet):
     queryset = ProductSpec.objects.select_related('product').order_by('order', 'id')
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -234,7 +235,7 @@ class ProductSpecViewSet(viewsets.ModelViewSet):
 
 
 class PromotionViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
@@ -258,6 +259,7 @@ class QuoteRequestViewSet(
     viewsets.GenericViewSet,
 ):
     queryset = QuoteRequest.objects.select_related('product')
+    permission_classes = [IsQuoteCreatePublicSellerManage]
     throttle_scope = 'admin_api'
 
     def get_serializer_class(self):
@@ -265,10 +267,6 @@ class QuoteRequestViewSet(
             return QuoteRequestPublicSerializer
         return QuoteRequestAdminSerializer
 
-    def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
 
     def get_throttles(self):
         if self.action == 'create':
@@ -338,7 +336,7 @@ class QuoteRequestViewSet(
 
 
 class HomeSectionItemViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsPublicReadSellerWrite]
     throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):

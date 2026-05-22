@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 
 
@@ -24,6 +25,9 @@ class Command(BaseCommand):
                     changed = True
             if changed:
                 user.save(update_fields=list(defaults.keys()))
+
+        seller_group, _ = Group.objects.get_or_create(name='vendedor')
+        user.groups.add(seller_group)
 
         user.set_password('vendedor123')
         user.save(update_fields=['password'])
