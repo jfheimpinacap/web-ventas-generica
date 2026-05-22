@@ -273,3 +273,36 @@ Durante esta fase:
 - Estrategia de canonical/indexación más granular para más combinaciones de filtros del catálogo.
 - Validación en Google Search Console y pruebas de rich results.
 
+
+
+## Implementación Fase SEO 2A
+
+### Sitemap creado
+
+- Se creó `frontend/public/sitemap.xml` como sitemap inicial estático para descubrimiento básico en buscadores.
+- URL pública resultante (Vite public root): `https://web-ventas-ps62.onrender.com/sitemap.xml`.
+
+### Rutas incluidas
+
+- `https://web-ventas-ps62.onrender.com/`
+- `https://web-ventas-ps62.onrender.com/catalogo`
+
+### Rutas excluidas (decisión actual)
+
+- `/cotizar`: excluida por estrategia actual de `noindex` al ser página principalmente transaccional de formulario.
+- `/login` y `/admin`: excluidas por ser rutas privadas/no públicas para SEO.
+- URLs con filtros o búsqueda (`/catalogo?search=...`, combinaciones de query params): excluidas para evitar duplicación y canibalización.
+- Productos (`/producto/:slug`): excluidos en esta fase por no existir aún generación dinámica/automatizada del sitemap.
+
+### Limitaciones
+
+- Este sitemap es **inicial y estático**.
+- No incorpora inventario dinámico (productos publicados) ni cambios automáticos de catálogo.
+- No incluye categorías por query param (`/catalogo?category=<id>`) porque no son rutas limpias estables y los IDs pueden variar.
+
+### Pendientes para Fase SEO 2B
+
+- Generar sitemap dinámico desde backend o script de build-time.
+- Incluir productos publicados (`/producto/:slug`) de forma automática.
+- Incluir categorías principales con URLs SEO limpias cuando existan rutas dedicadas (ej.: `/maquinaria`, `/repuestos`, `/servicios`).
+- Mantener sincronización automática entre dominio público y referencias en `robots.txt`/`sitemap.xml` en cambios de entorno.

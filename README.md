@@ -386,3 +386,10 @@ El frontend ya consume la API desde `VITE_API_BASE_URL` (con fallback local para
 ### Nota SEO técnica
 
 - `frontend/public/robots.txt` usa temporalmente el dominio Render actual en la línea `Sitemap`. Si cambia el dominio productivo, actualizar ese valor manualmente.
+
+
+## SEO técnico público (estado actual)
+
+- Sitemap público disponible en `/sitemap.xml` (producción actual: `https://web-ventas-ps62.onrender.com/sitemap.xml`).
+- Robots público disponible en `/robots.txt` (producción actual: `https://web-ventas-ps62.onrender.com/robots.txt`).
+- Si cambia el dominio de Render, actualizar las URLs absolutas referenciadas en `frontend/public/robots.txt` y `frontend/public/sitemap.xml`.
