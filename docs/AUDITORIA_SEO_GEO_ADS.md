@@ -348,3 +348,16 @@ Durante esta fase:
 - Dominio público definido desde backend con `PUBLIC_SITE_URL`; fallback local `http://localhost:5174`. Se normaliza para evitar slash final duplicado.
 - Limitaciones actuales: categorías en URL con query param (`/catalogo?category=<id>`), transición pendiente a URLs limpias (`/maquinaria`, `/repuestos`, `/servicios`, `/categoria/<slug>`).
 - Pendientes SEO 3: crear contenido escalable por categoría/servicio, FAQs comerciales, y páginas Sobre nosotros + Contacto para reforzar relevancia y cobertura semántica.
+
+## Implementación Fase SEO 3A
+
+- Categorías cubiertas: **Maquinaria**, **Repuestos** y **Servicios** en la vista pública de `/catalogo` cuando el usuario navega por categoría principal o por `product_type` equivalente.
+- Textos agregados: se incorporó un bloque SEO/comercial breve debajo del encabezado principal de catálogo para cada categoría prioritaria, con tono sobrio y enfoque de cotización.
+- Metadata mejorada: la `meta description` dinámica de catálogo ahora usa descripciones específicas por categoría principal (Maquinaria, Repuestos, Servicios) en vez de una variante genérica.
+- Ajuste de búsqueda: cuando existe búsqueda sin categoría principal seleccionada se prioriza encabezado compacto de “Resultados de búsqueda”, evitando bloques de contenido SEO largo fuera de contexto.
+
+### Pendientes para SEO 3B
+
+- Diseñar bloques de contenido escalable para subcategorías estratégicas con intención transaccional.
+- Agregar módulos FAQ comerciales por línea de negocio (maquinaria, repuestos, servicios) según inventario real.
+- Evaluar landings SEO limpias por categoría (`/maquinaria`, `/repuestos`, `/servicios`) para mejorar arquitectura de indexación sin depender de query params.
