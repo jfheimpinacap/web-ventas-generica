@@ -4,4 +4,4 @@ Allow: /
 Disallow: /login
 Disallow: /admin
 
-Sitemap: https://web-ventas-ps62.onrender.com/sitemap.xml
+Sitemap: https://web-ventas-backend.onrender.com/sitemap.xml

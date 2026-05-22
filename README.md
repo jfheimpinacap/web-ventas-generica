@@ -64,6 +64,7 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
    - `DEFAULT_FROM_EMAIL`
    - `QUOTE_NOTIFICATION_EMAIL`
    - `EMAIL_BACKEND` (por defecto consola en desarrollo)
+  - `PUBLIC_SITE_URL` (dominio público frontend para sitemap dinámico, ejemplo: `https://web-ventas-ps62.onrender.com`)
 
 
 
@@ -82,6 +83,7 @@ Configurar estas variables en Render para endurecimiento de seguridad:
 - `QUOTE_NOTIFICATION_EMAIL`
 - `DEFAULT_FROM_EMAIL`
 - `EMAIL_BACKEND`
+- `PUBLIC_SITE_URL` (URL pública del frontend, usada por `GET /sitemap.xml`)
 
 Notas:
 - Mantener `CORS_ALLOW_ALL_ORIGINS=false` (solo emergencia local).

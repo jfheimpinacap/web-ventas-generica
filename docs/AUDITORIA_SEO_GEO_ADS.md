@@ -338,3 +338,13 @@ Durante esta fase:
 - Incorporar contenido SEO escalable por categoría/servicio (bloques introductorios, FAQs y landings de intención).
 - Evaluar marcado `Service` específico si el modelo de datos separa servicios como entidad propia.
 - Añadir validación automatizada de datos estructurados en pipeline de calidad técnica.
+
+
+## Implementación Fase SEO 2C
+
+- Sitemap dinámico implementado en backend mediante endpoint público `GET /sitemap.xml` con `content_type=application/xml`.
+- Rutas incluidas: Home (`/`), catálogo (`/catalogo`), productos publicados (`/producto/<slug>` con `is_published=True`) y categorías activas (`/catalogo?category=<id>`).
+- Rutas excluidas: `/login`, `/admin`, `/cotizar` (si se mantiene noindex), búsquedas y filtros combinados, productos no publicados y categorías inactivas.
+- Dominio público definido desde backend con `PUBLIC_SITE_URL`; fallback local `http://localhost:5174`. Se normaliza para evitar slash final duplicado.
+- Limitaciones actuales: categorías en URL con query param (`/catalogo?category=<id>`), transición pendiente a URLs limpias (`/maquinaria`, `/repuestos`, `/servicios`, `/categoria/<slug>`).
+- Pendientes SEO 3: crear contenido escalable por categoría/servicio, FAQs comerciales, y páginas Sobre nosotros + Contacto para reforzar relevancia y cobertura semántica.
