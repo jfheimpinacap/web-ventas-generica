@@ -374,3 +374,9 @@ Variable de entorno del frontend:
 - `VITE_WHATSAPP_NUMBER=<tu_numero>`
 
 El frontend ya consume la API desde `VITE_API_BASE_URL` (con fallback local para desarrollo).
+
+
+## Uploads de imágenes
+- Formatos permitidos: `.jpg`, `.jpeg`, `.png`, `.webp`.
+- MIME permitidos: `image/jpeg`, `image/png`, `image/webp`.
+- Tamaño máximo configurable en backend con `MAX_UPLOAD_IMAGE_SIZE_MB` (default: 5 MB).
