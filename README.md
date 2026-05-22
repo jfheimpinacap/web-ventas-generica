@@ -65,6 +65,28 @@ Base reutilizable para una web comercial tipo catálogo (maquinaria, elevadores 
    - `QUOTE_NOTIFICATION_EMAIL`
    - `EMAIL_BACKEND` (por defecto consola en desarrollo)
 
+
+
+### Backend (Render producción)
+
+Configurar estas variables en Render para endurecimiento de seguridad:
+
+- `SECRET_KEY`
+- `DEBUG=false`
+- `DATABASE_URL`
+- `ALLOWED_HOSTS`
+- `CORS_ALLOWED_ORIGINS`
+- `CSRF_TRUSTED_ORIGINS`
+- `SECURE_SSL_REDIRECT`
+- `SECURE_HSTS_SECONDS`
+- `QUOTE_NOTIFICATION_EMAIL`
+- `DEFAULT_FROM_EMAIL`
+- `EMAIL_BACKEND`
+
+Notas:
+- Mantener `CORS_ALLOW_ALL_ORIGINS=false` (solo emergencia local).
+- En Render, `SECURE_PROXY_SSL_HEADER` se configura en settings para respetar `X-Forwarded-Proto` y evitar loops HTTPS.
+
 ### Frontend
 
 1. Copia archivo de ejemplo:

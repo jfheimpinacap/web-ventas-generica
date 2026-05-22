@@ -1,3 +1,6 @@
+import importlib
+import os
+
 from django.contrib.auth import get_user_model
 from copy import deepcopy
 from django.conf import settings
@@ -77,3 +80,26 @@ class AuthEndpointsTests(APITestCase):
         self.assertTrue(throttle.allow_request(request1, None))
         self.assertTrue(throttle.allow_request(request2, None))
         self.assertFalse(throttle.allow_request(request3, None))
+
+
+class SettingsSecurityTests(TestCase):
+    def test_env_list_parses_comma_separated_values(self):
+        settings_module = importlib.import_module('config.settings')
+        with override_settings():
+            self.assertEqual(
+                settings_module.env_list('UNSET_LIST_TEST', 'a, b, ,c'),
+                ['a', 'b', 'c'],
+            )
+
+    def test_debug_false_without_secret_key_raises(self):
+        original_env = os.environ.copy()
+        try:
+            os.environ['DEBUG'] = 'false'
+            os.environ.pop('SECRET_KEY', None)
+            os.environ.pop('DJANGO_SECRET_KEY', None)
+            with self.assertRaises(RuntimeError):
+                importlib.reload(importlib.import_module('config.settings'))
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
+            importlib.reload(importlib.import_module('config.settings'))
