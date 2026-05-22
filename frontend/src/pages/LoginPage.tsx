@@ -2,7 +2,9 @@ import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '../services/api'
+import { Seo } from '../components/common/Seo'
 import { getMe, login } from '../services/authApi'
+import { buildPublicUrl } from '../utils/seo'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -33,6 +35,14 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
+      <Seo
+        title="Acceso vendedor | JEM Nexus"
+        description="Acceso al panel interno de gestión comercial y soporte."
+        canonical={buildPublicUrl('/login')}
+        ogType="website"
+        ogUrl={buildPublicUrl('/login')}
+        robots="noindex,nofollow"
+      />
       <section className="login-card">
         <p className="login-card__eyebrow">Acceso vendedor</p>
         <h1>Panel privado</h1>

@@ -3,11 +3,13 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
+import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
+import { buildPublicUrl } from '../utils/seo'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -119,6 +121,18 @@ export function CatalogPage() {
     return trail
   }, [query])
 
+
+  const hasSearch = Boolean((query.search ?? '').trim())
+  const seoTitle = selectedCategory ? `${selectedCategory.name} | JEM Nexus` : 'Productos industriales | JEM Nexus'
+  const seoDescription = selectedCategory
+    ? `Ver productos disponibles en ${selectedCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
+    : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
+  const canonicalPath = selectedCategory
+    ? `/catalogo?category=${selectedCategory.id}`
+    : '/catalogo'
+  const seoRobots = hasSearch ? 'noindex,follow' : 'index,follow'
+  const canonicalUrl = buildPublicUrl(canonicalPath)
+
   const buildCatalogHref = (categoryId?: number) => {
     const next = new URLSearchParams(searchParams)
     if (categoryId) next.set('category', String(categoryId))
@@ -213,6 +227,14 @@ export function CatalogPage() {
   }
   return (
     <Layout>
+      <Seo
+        title={seoTitle}
+        description={seoDescription}
+        canonical={canonicalUrl}
+        ogType="website"
+        ogUrl={canonicalUrl}
+        robots={seoRobots}
+      />
       <section className="simple-page catalog-page">
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
