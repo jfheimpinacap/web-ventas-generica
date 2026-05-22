@@ -180,6 +180,37 @@ class ProductWritePermissionsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(len(response.data), 1)
 
+    def test_created_by_updated_by_are_set_on_create_and_update(self):
+        self.authenticate()
+        create_response = self.client.post(reverse('product-list'), self._product_payload(), format='json')
+        self.assertEqual(create_response.status_code, 201)
+        product = Product.objects.get(name='Producto nuevo')
+        self.assertEqual(product.created_by_id, self.user.id)
+        self.assertEqual(product.updated_by_id, self.user.id)
+
+        other = get_user_model().objects.create_user(username='other_seller', password='seller123', is_staff=True)
+        self.client.force_authenticate(user=other)
+        update_response = self.client.patch(
+            reverse('product-detail', kwargs={'slug': product.slug}),
+            {'short_description': 'Actualizado'},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(product.created_by_id, self.user.id)
+        self.assertEqual(product.updated_by_id, other.id)
+
+    def test_cannot_set_audit_fields_manually_from_payload(self):
+        self.authenticate()
+        payload = self._product_payload()
+        payload['created_by'] = 9999
+        payload['updated_by'] = 9999
+        response = self.client.post(reverse('product-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        product = Product.objects.get(name='Producto nuevo')
+        self.assertEqual(product.created_by_id, self.user.id)
+        self.assertEqual(product.updated_by_id, self.user.id)
+
 
 class ProductMediaAndSpecsApiTests(APITestCase):
     def setUp(self):
@@ -360,6 +391,8 @@ class QuoteRequestApiTests(APITestCase):
             is_published=True,
         )
         User = get_user_model()
+        self.seller = User.objects.create_user(username='quote_seller', password='seller123', is_staff=True)
+        User = get_user_model()
         self.user = User.objects.create_user(username='seller_quotes', password='seller123', is_staff=True)
 
     def authenticate(self):
@@ -538,6 +571,32 @@ class QuoteRequestApiTests(APITestCase):
         self.authenticate()
         response = self.client.get(reverse('quote-request-list'), {'ordering': 'drop_table'})
         self.assertEqual(response.status_code, 400)
+
+    def test_public_quote_request_keeps_created_by_null(self):
+        payload = {
+            'product': self.product.id,
+            'customer_name': 'Visitante',
+            'customer_phone': '+56 9 1234 5678',
+            'message': 'Solicitud pública',
+            'created_by': 9999,
+        }
+        response = self.client.post(reverse('quote-request-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        quote = QuoteRequest.objects.get(pk=response.data['id'])
+        self.assertIsNone(quote.created_by_id)
+        self.assertIsNone(quote.updated_by_id)
+
+    def test_seller_update_sets_quote_updated_by(self):
+        quote = QuoteRequest.objects.create(product=self.product, customer_name='Cliente', customer_phone='1', message='x')
+        self.client.force_authenticate(user=self.seller)
+        response = self.client.patch(
+            reverse('quote-request-detail', kwargs={'pk': quote.pk}),
+            {'status': QuoteRequest.QuoteStatus.CONTACTED},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        quote.refresh_from_db()
+        self.assertEqual(quote.updated_by_id, self.seller.id)
 
 
 class HomeSectionItemApiTests(APITestCase):
