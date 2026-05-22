@@ -240,3 +240,36 @@ Durante esta fase:
 2. Definir taxonomía indexable de categorías/subcategorías (canónicas).
 3. Incorporar structured data de alto impacto comercial.
 4. Preparar instrumentación analítica antes de activar inversión Ads.
+
+## Implementación Fase SEO 1
+
+### Qué se implementó
+
+- Componente reutilizable `Seo` en frontend para gestionar `title`, `description`, `canonical`, `robots`, Open Graph y Twitter Card en runtime.
+- Metadatos SEO aplicados en rutas públicas clave (`/`, `/catalogo`, `/producto/:slug`, `/cotizar`, `/login`).
+- Política `noindex` aplicada para login y rutas admin vía `ProtectedRoute`.
+- Soporte de `VITE_PUBLIC_SITE_URL` con fallback a `window.location.origin` para construir canonical y `og:url`.
+- `robots.txt` agregado en frontend con `Disallow` para `/login` y `/admin`.
+- `frontend/index.html` actualizado con title/description base como fallback estático.
+
+### Rutas cubiertas
+
+- `/` (index,follow)
+- `/catalogo` (index,follow; `noindex,follow` cuando hay `search`)
+- `/catalogo?category=:id` (title/description/canonical por categoría)
+- `/producto/:slug` (index,follow por defecto; `noindex,nofollow` si `is_published=false`)
+- `/cotizar` (`noindex,follow`)
+- `/login` (`noindex,nofollow`)
+- `/admin/*` (`noindex,nofollow` desde capa protegida frontend)
+
+### Variables nuevas
+
+- `VITE_PUBLIC_SITE_URL` en frontend (`.env.example`) para URL pública base de canonical/OG.
+
+### Pendientes para Fase SEO 2
+
+- `sitemap.xml` dinámico o automatizado por entorno.
+- JSON-LD inicial (`Organization`, `WebSite`, `BreadcrumbList`, `Product`).
+- Estrategia de canonical/indexación más granular para más combinaciones de filtros del catálogo.
+- Validación en Google Search Console y pruebas de rich results.
+

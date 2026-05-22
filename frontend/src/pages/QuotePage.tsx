@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
+import { Seo } from '../components/common/Seo'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
 import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
+import { buildPublicUrl } from '../utils/seo'
 
 interface QuoteFormState {
   customer_name: string
@@ -121,6 +123,14 @@ export function QuotePage() {
 
   return (
     <Layout>
+      <Seo
+        title="Solicitar cotización | JEM Nexus"
+        description="Solicita una cotización de maquinaria, repuestos o servicios industriales. Un vendedor revisará tu solicitud y responderá con disponibilidad y precio."
+        canonical={buildPublicUrl('/cotizar')}
+        ogType="website"
+        ogUrl={buildPublicUrl('/cotizar')}
+        robots="noindex,follow"
+      />
       <section className="simple-page quote-page">
         <h1 className="quote-page__title">Cotizar</h1>
         <p className="quote-page__subtitle">Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>

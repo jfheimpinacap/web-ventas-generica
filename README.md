@@ -94,6 +94,7 @@ Notas:
 2. Variable disponible:
    - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8001/api`)
   - `VITE_WHATSAPP_NUMBER` (ejemplo: `56912345678`)
+  - `VITE_PUBLIC_SITE_URL` (ejemplo local: `http://localhost:5174`, producción: `https://web-ventas-ps62.onrender.com`)
 
 ## Comandos rápidos con `start.py`
 
@@ -380,3 +381,8 @@ El frontend ya consume la API desde `VITE_API_BASE_URL` (con fallback local para
 - Formatos permitidos: `.jpg`, `.jpeg`, `.png`, `.webp`.
 - MIME permitidos: `image/jpeg`, `image/png`, `image/webp`.
 - Tamaño máximo configurable en backend con `MAX_UPLOAD_IMAGE_SIZE_MB` (default: 5 MB).
+
+
+### Nota SEO técnica
+
+- `frontend/public/robots.txt` usa temporalmente el dominio Render actual en la línea `Sitemap`. Si cambia el dominio productivo, actualizar ese valor manualmente.

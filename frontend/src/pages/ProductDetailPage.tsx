@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
+import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
@@ -10,6 +11,7 @@ import { resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
+import { buildPublicUrl } from '../utils/seo'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/900x700/111827/F3F4F6?text=Producto'
 
@@ -110,8 +112,29 @@ export function ProductDetailPage() {
     return galleryImages.find((image) => image.id === selectedImageId) ?? galleryImages[0]
   }, [galleryImages, selectedImageId])
 
+  const seoTitle = product ? `${product.name} | JEM Nexus` : 'Producto | JEM Nexus'
+  const seoDescription = product
+    ? product.brand?.name
+      ? `Cotiza ${product.name} de marca ${product.brand.name} para operaciones industriales. Revisa precio, disponibilidad y especificaciones técnicas.`
+      : `Cotiza ${product.name} para operaciones industriales. Revisa precio, disponibilidad y especificaciones técnicas.`
+    : 'Cotiza maquinaria, repuestos y servicios industriales.'
+  const canonicalUrl = buildPublicUrl(`/producto/${slug}`)
+  const robots = product && product.is_published === false ? 'noindex,nofollow' : 'index,follow'
+  const ogImage = selectedImage?.url
+
   return (
     <Layout>
+      <Seo
+        title={seoTitle}
+        description={seoDescription}
+        canonical={canonicalUrl}
+        ogType="product"
+        ogUrl={canonicalUrl}
+        ogImage={ogImage}
+        twitterCard={ogImage ? 'summary_large_image' : 'summary'}
+        twitterImage={ogImage}
+        robots={robots}
+      />
       <section className="simple-page">
         {loading ? <p>Cargando detalle...</p> : null}
         {!loading && error ? <p className="ui-note ui-note--error">{error}</p> : null}
