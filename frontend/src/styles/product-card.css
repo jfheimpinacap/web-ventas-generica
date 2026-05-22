@@ -48,7 +48,7 @@
 
 .promo-product-card__content h3 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-text);
   font-size: 0.96rem;
   min-height: 2.6em;
 }
@@ -112,7 +112,7 @@
 
 .product-card__content h3 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-text);
   font-size: 1rem;
   font-family: "Ubuntu", system-ui, sans-serif;
   line-height: 1.35;
@@ -124,7 +124,7 @@
 .product-card__content p {
   margin: 0;
   font-size: 0.9rem;
-  color: #1f2937;
+  color: var(--color-secondary-text);
 }
 
 
@@ -137,7 +137,7 @@
 
 .product-card__description {
   line-height: 1.45;
-  color: #4b5563;
+  color: var(--color-secondary-text);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -156,7 +156,7 @@
 .home-product-price,
 .promo-product-card__price,
 .product-card__price {
-  color: #111827 !important;
+  color: var(--color-public-price) !important;
   font-size: clamp(1.35rem, 1.9vw, 1.95rem) !important;
   font-weight: 700 !important;
   font-family: "Ubuntu", system-ui, sans-serif;

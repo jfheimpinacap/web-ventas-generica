@@ -146,7 +146,7 @@
 .spare-offer-card__content h3,
 .repair-service-card h3 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 
@@ -154,7 +154,7 @@
 .spare-offer-card__content p:not(.home-product-price),
 .repair-service-card p:not(.home-product-price) {
   margin: 0;
-  color: #4b5563;
+  color: var(--color-secondary-text);
   font-size: 0.9rem;
 }
 
@@ -224,11 +224,11 @@
 
 .section-heading h2 {
   margin: 0;
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 .section-heading p {
-  color: #4b5563;
+  color: var(--color-secondary-text);
 }
 
 
@@ -415,7 +415,7 @@
 
 .product-detail__price-box span,
 .product-detail__price-box small {
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 .product-detail__price-box span {
@@ -426,7 +426,7 @@
 }
 
 .product-detail__price-box strong {
-  color: #111827;
+  color: var(--color-primary-text);
   font-size: clamp(1.8rem, 4vw, 2.55rem);
   line-height: 1;
 }
@@ -456,7 +456,7 @@
 }
 
 .product-detail__facts dd {
-  color: #111827;
+  color: var(--color-primary-text);
   font-weight: 700;
   margin: 0;
   overflow-wrap: anywhere;
@@ -470,7 +470,7 @@
 .product-detail__payment-box h2 {
   font-size: 1rem;
   margin: 0 0 0.45rem;
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 .product-detail__payment-box ul {
@@ -482,7 +482,7 @@
 }
 
 .product-detail__supplier {
-  color: #111827;
+  color: var(--color-primary-text);
   margin: 0;
 }
 
@@ -504,7 +504,7 @@
 .product-detail__description-card h2,
 .product-detail__spec-section h2 {
   margin: 0 0 0.75rem;
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 .product-detail__description-card p,
@@ -538,7 +538,7 @@
 }
 
 .product-detail__spec-row dt {
-  color: #111827;
+  color: var(--color-primary-text);
   font-weight: 800;
 }
 
@@ -550,7 +550,7 @@
 }
 
 .product-detail > section > h2 {
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 @media (max-width: 900px) {
@@ -638,7 +638,7 @@
 }
 
 .home-section__more .btn {
-  color: #111827;
+  color: var(--color-primary-text);
 }
 
 @media (max-width: 768px) {
