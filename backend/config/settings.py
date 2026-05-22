@@ -193,3 +193,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
 QUOTE_NOTIFICATION_EMAIL = os.getenv('QUOTE_NOTIFICATION_EMAIL', 'vendedor@example.com')
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+
+MAX_UPLOAD_IMAGE_SIZE_MB = env_int('MAX_UPLOAD_IMAGE_SIZE_MB', 5)
+MAX_UPLOAD_IMAGE_SIZE_BYTES = MAX_UPLOAD_IMAGE_SIZE_MB * 1024 * 1024

@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from .validators import validate_image_upload
+
 from .models import (
     Brand,
     Category,
@@ -71,6 +73,11 @@ class BrandWriteSerializer(serializers.ModelSerializer):
             'is_active': {'required': False},
         }
 
+    def validate_logo(self, value):
+        if value in (None, ''):
+            return value
+        return validate_image_upload(value)
+
 
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -120,6 +127,11 @@ class ProductImageWriteSerializer(serializers.ModelSerializer):
             'is_main': {'required': False},
             'order': {'required': False},
         }
+
+    def validate_image(self, value):
+        if value in (None, ''):
+            return value
+        return validate_image_upload(value)
 
 
 class ProductSpecSerializer(serializers.ModelSerializer):
@@ -291,6 +303,11 @@ class PromotionWriteSerializer(serializers.ModelSerializer):
             'starts_at': {'required': False, 'allow_null': True},
             'ends_at': {'required': False, 'allow_null': True},
         }
+
+    def validate_image(self, value):
+        if value in (None, ''):
+            return value
+        return validate_image_upload(value)
 
 
 class HomeSectionItemSerializer(serializers.ModelSerializer):

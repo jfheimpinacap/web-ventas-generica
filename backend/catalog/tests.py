@@ -204,8 +204,18 @@ class ProductMediaAndSpecsApiTests(APITestCase):
         token = token_response.data['access']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
 
-    def _sample_image(self, name='test.gif'):
-        return SimpleUploadedFile(name, b'GIF87a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;', content_type='image/gif')
+    def _sample_image(self, name='test.jpg', content_type='image/jpeg'):
+        jpeg_bytes = (
+            b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00'
+            b'\xff\xdb\x00C\x00' + b'\x08' * 64 +
+            b'\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01'
+            b'\xff\xc4\x00\x14\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+            b'\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xd2\xcf \xff\xd9'
+        )
+        return SimpleUploadedFile(name, jpeg_bytes, content_type=content_type)
+
+    def _fake_image_file(self, name='fake.jpg', content_type='image/jpeg'):
+        return SimpleUploadedFile(name, b'not-an-image', content_type=content_type)
 
     def test_create_product_image_authenticated(self):
         self.authenticate()
@@ -232,6 +242,47 @@ class ProductMediaAndSpecsApiTests(APITestCase):
         }
         response = self.client.post(reverse('product-image-list'), payload, format='multipart')
         self.assertEqual(response.status_code, 401)
+
+
+    def test_create_product_image_rejects_invalid_extension(self):
+        self.authenticate()
+        payload = {'product': self.product.id, 'image': self._sample_image(name='test.bmp', content_type='image/jpeg')}
+        response = self.client.post(reverse('product-image-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('image', response.data)
+
+    def test_create_product_image_rejects_invalid_content_type(self):
+        self.authenticate()
+        payload = {'product': self.product.id, 'image': self._sample_image(name='test.jpg', content_type='text/plain')}
+        response = self.client.post(reverse('product-image-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('image', response.data)
+
+    def test_create_product_image_rejects_fake_renamed_file(self):
+        self.authenticate()
+        payload = {'product': self.product.id, 'image': self._fake_image_file(name='fake.jpg', content_type='image/jpeg')}
+        response = self.client.post(reverse('product-image-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('image', response.data)
+
+    @override_settings(MAX_UPLOAD_IMAGE_SIZE_MB=1, MAX_UPLOAD_IMAGE_SIZE_BYTES=1024 * 1024)
+    def test_create_product_image_rejects_oversized_file(self):
+        self.authenticate()
+        oversized = SimpleUploadedFile('big.jpg', b'a' * (1024 * 1024 + 1), content_type='image/jpeg')
+        payload = {'product': self.product.id, 'image': oversized}
+        response = self.client.post(reverse('product-image-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('image', response.data)
+
+    def test_create_product_image_valid_png_and_webp(self):
+        self.authenticate()
+        png = SimpleUploadedFile('ok.png', bytes.fromhex('89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C49444154789C636060600000000400010BE7029D0000000049454E44AE426082'), content_type='image/png')
+        webp = SimpleUploadedFile('ok.webp', bytes.fromhex('52494646240000005745425056503820180000003001009D012A0100010002003425A400037000FEFBFD5000'), content_type='image/webp')
+
+        for img in (png, webp):
+            payload = {'product': self.product.id, 'image': img}
+            response = self.client.post(reverse('product-image-list'), payload, format='multipart')
+            self.assertEqual(response.status_code, 201)
 
     def test_setting_new_main_image_unsets_old_one(self):
         self.authenticate()
@@ -841,6 +892,25 @@ class CatalogEntitiesAdminApiTests(APITestCase):
     def test_create_category_without_token_fails(self):
         response = self.client.post(reverse('category-list'), {'name': 'Sin token'}, format='json')
         self.assertEqual(response.status_code, 401)
+
+    def test_create_brand_with_invalid_logo_fails(self):
+        self.authenticate()
+        payload = {'name': 'Marca con logo inválido', 'logo': SimpleUploadedFile('logo.txt', b'nope', content_type='text/plain')}
+        response = self.client.post(reverse('brand-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('logo', response.data)
+
+    def test_create_promotion_with_invalid_image_fails(self):
+        self.authenticate()
+        payload = {
+            'title': 'Promo inválida',
+            'product': self.product.id,
+            'image': SimpleUploadedFile('promo.exe', b'bad', content_type='application/octet-stream'),
+            'is_active': True,
+        }
+        response = self.client.post(reverse('promotion-list'), payload, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('image', response.data)
 
     def test_create_brand_authenticated(self):
         self.authenticate()

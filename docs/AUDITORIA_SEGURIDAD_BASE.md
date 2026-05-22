@@ -320,3 +320,14 @@ Se definió configuración explícita en settings:
 - Validaciones robustas de uploads (MIME real, extensión permitida, tamaño máximo).
 - Mayor cobertura de tests de seguridad (casos negativos de archivos y estrés de payloads).
 - Evaluación de estrategia de tokens más resistente a XSS (sin cambios en esta fase).
+
+
+## Implementación Seguridad Fase 3
+
+- **Validaciones agregadas**: tamaño máximo por archivo, extensión permitida, `content_type` permitido y verificación de firma binaria real para JPEG/PNG/WEBP con reinicio de cursor para no romper el guardado.
+- **Modelos/serializers protegidos**: `BrandWriteSerializer.logo`, `ProductImageWriteSerializer.image`, `PromotionWriteSerializer.image`.
+- **Tamaño máximo permitido**: `MAX_UPLOAD_IMAGE_SIZE_MB` (por defecto `5 MB`), centralizado en settings y expuesto en `.env.example`.
+- **Extensiones permitidas**: `.jpg`, `.jpeg`, `.png`, `.webp`.
+- **MIME/content-type permitido**: `image/jpeg`, `image/png`, `image/webp`.
+- **Tests agregados**: casos positivos y negativos para ProductImage (auth/no auth, extensión inválida, MIME inválido, archivo falso, exceso de tamaño) y validación inválida para Brand/Promotion.
+- **Pendientes para Fase 4**: matriz de autorización por rol para escrituras de media, auditoría de ownership por vendedor, logging/alertas de intentos fallidos y cuotas por usuario para uploads.
