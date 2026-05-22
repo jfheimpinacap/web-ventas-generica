@@ -165,3 +165,32 @@ Esta tarea documenta formalmente la auditoría previa y **no elimina CSS**, **no
 - No se tocaron estilos de precios públicos.
 - No se alteró responsive complejo fuera de la remoción puntual de un bloque ya eliminado (`quote-cta`).
 - No se tocaron componentes React, backend, auth, endpoints, cotizaciones ni deploy/Render.
+
+
+## Limpieza Fase 2
+
+**Fecha:** 2026-05-22  
+**Objetivo:** consolidar estilos de precios públicos, botones y variables visuales sin rediseño ni cambios de layout.
+
+### Reglas consolidadas
+- Se consolidó el color de precios públicos usando `--color-public-price` y se mantuvo la base de pricing en `frontend/src/styles/product-card.css` para `.price--public`, `.home-product-price`, `.promo-product-card__price` y `.product-card__price` con `!important` en color/tamaño/peso/line-height.
+- Se reutilizó la jerarquía textual con variables (`--color-primary-text`, `--color-secondary-text`) en cards y secciones home para evitar redefinir hex equivalentes.
+- Se consolidó estilo visual de botones WhatsApp en variables (`--color-whatsapp`, `--color-whatsapp-hover`).
+- Se normalizó la variante `.btn--secondary` para que reutilice la misma base visual de `.btn--ghost` sin alterar apariencia.
+
+### Duplicados eliminados / reducidos
+- Se reemplazaron valores hex repetidos en reglas de títulos/textos y botones por variables en `variables.css`.
+- Se evitó replicar color de precio público en secciones individuales, manteniendo la fuente de verdad en `product-card.css`.
+
+### Variables nuevas o reutilizadas
+- Nuevas: `--color-primary-text`, `--color-secondary-text`, `--color-whatsapp`, `--color-whatsapp-hover`, `--color-public-price`.
+- Reutilizadas: `--color-primary`, `--color-accent`, `--radius-button`, `--radius-block`, `--radius-card`.
+
+### Reglas `!important` revisadas
+- **Conservadas** en precios públicos de `product-card.css` (color/tamaño/peso/line-height y ajuste mobile de tamaño) para no arriesgar regresiones de especificidad en catálogo/home/preview admin.
+- **Eliminadas:** ninguna en esta fase, por criterio de seguridad visual.
+
+### Alcance y exclusiones confirmadas
+- No se tocaron media queries complejas ni layout mobile de topbar/catálogo.
+- No se tocaron previews admin estructuralmente, slots de promociones, drawers ni panel vendedor.
+- No se modificó backend, auth, endpoints, deploy Render ni lógica funcional React.

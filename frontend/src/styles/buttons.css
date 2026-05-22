@@ -1,10 +1,10 @@
 .btn--whatsapp {
-  background: #25d366;
+  background: var(--color-whatsapp);
   color: #ffffff;
 }
 
 .btn--whatsapp:hover {
-  background: #1ebe5d;
+  background: var(--color-whatsapp-hover);
   color: #ffffff;
 }
 
@@ -39,9 +39,10 @@
 
 
 
-.btn--ghost {
+.btn--ghost,
+.btn--secondary {
   background: #ffffff;
-  color: #111827;
+  color: var(--color-primary-text);
   font-family: "Ubuntu", system-ui, sans-serif;
 }
 

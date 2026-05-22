@@ -14,5 +14,10 @@
   --color-accent: #00b4d8;
   --color-accent-soft: #90e0ef;
   --color-surface-soft: #caf0f8;
+  --color-primary-text: #111827;
+  --color-secondary-text: #4b5563;
+  --color-whatsapp: #25d366;
+  --color-whatsapp-hover: #1ebe5d;
+  --color-public-price: #111827;
   --color-text-on-dark: #f8fbff;
 }
