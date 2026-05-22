@@ -194,3 +194,28 @@ Esta tarea documenta formalmente la auditoría previa y **no elimina CSS**, **no
 - No se tocaron media queries complejas ni layout mobile de topbar/catálogo.
 - No se tocaron previews admin estructuralmente, slots de promociones, drawers ni panel vendedor.
 - No se modificó backend, auth, endpoints, deploy Render ni lógica funcional React.
+
+## Limpieza Fase 3
+
+**Fecha:** 2026-05-22  
+**Objetivo:** consolidar media queries repetidas/conflictivas de forma segura en frontend público, sin rediseño.
+
+### Media queries revisadas
+- `home-sections.css`: `max-width: 640px`, `max-width: 768px`, `max-width: 900px`.
+- `catalog.css`: `max-width: 560px` (equivalente de tramo mobile dentro del archivo; se mantuvo el resto de breakpoints propios del componente).
+- `topbar.css`: `max-width: 768px` y `max-width: 1120px` (sin consolidación por no detectar duplicados seguros en esos bloques).
+
+### Reglas consolidadas
+- En `home-sections.css` se unificaron los dos bloques separados de `@media (max-width: 640px)` en un solo bloque para evitar fragmentación del tramo móvil.
+- En `home-sections.css` se unificaron los dos bloques separados de `@media (max-width: 768px)` en un único bloque manteniendo el mismo contenido y orden lógico del componente.
+- En `catalog.css` se consolidaron en un solo bloque `@media (max-width: 560px)` reglas que estaban distribuidas en tres bloques distintos (grid mobile, breadcrumb mobile y toolbar/paginación mobile), sin alterar valores.
+
+### Reglas conservadas por riesgo
+- Se conservaron sin cambios los bloques de `max-width: 900px` en `home-sections.css` por su interacción progresiva con `768px` y `640px`.
+- Se conservaron sin cambios las media queries de `topbar.css` (`1120px` intermedio y `768px` móvil) por sensibilidad del layout fijo de navegación.
+- No se movieron reglas de responsive de estos componentes a `responsive.css`; cada bloque se mantiene en su archivo dueño.
+
+### Confirmación de no rediseño
+- No se cambiaron colores, tamaños tipográficos, espaciados intencionales ni estructura visual.
+- La intervención se limitó a agrupar bloques repetidos y mantener el mismo comportamiento responsive.
+- No se tocó backend, deploy/Render, ni lógica funcional.
