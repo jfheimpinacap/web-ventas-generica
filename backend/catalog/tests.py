@@ -1,12 +1,17 @@
 from io import StringIO
+from copy import deepcopy
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.conf import settings
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
+from rest_framework.test import APIRequestFactory
+from core.throttles import QuoteRequestCreateThrottle
 
 from catalog.models import Brand, Category, HomeSectionItem, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 
@@ -69,6 +74,26 @@ class ProductApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
         self.assertSetEqual({product['name'] for product in response.data}, {'Producto publicado', 'Elevador de prueba'})
+
+    def test_products_reject_invalid_ordering(self):
+        response = self.client.get(reverse('product-list'), {'ordering': 'drop_table'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ordering', response.data)
+
+    def test_products_reject_invalid_category_filter(self):
+        response = self.client.get(reverse('product-list'), {'category': 'abc'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('category', response.data)
+
+    def test_products_reject_invalid_product_type_filter(self):
+        response = self.client.get(reverse('product-list'), {'product_type': 'invalid'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('product_type', response.data)
+
+    def test_products_reject_overlong_search(self):
+        response = self.client.get(reverse('product-list'), {'search': 'x' * 121})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('search', response.data)
 
 
 class ProductWritePermissionsTests(APITestCase):
@@ -416,6 +441,52 @@ class QuoteRequestApiTests(APITestCase):
         self.assertEqual(len(response_name.data), 1)
         self.assertEqual(len(response_email.data), 1)
         self.assertEqual(len(response_phone.data), 1)
+
+    @override_settings(
+        TESTING=False,
+        REST_FRAMEWORK=(lambda rf: {**rf, 'DEFAULT_THROTTLE_RATES': {**rf['DEFAULT_THROTTLE_RATES'], 'quote_requests_create': '2/minute'}})(deepcopy(settings.REST_FRAMEWORK)),
+    )
+    def test_quote_request_throttling(self):
+        factory = APIRequestFactory()
+        throttle = QuoteRequestCreateThrottle()
+        throttle.rate = '2/min'
+        throttle.num_requests, throttle.duration = throttle.parse_rate(throttle.rate)
+        request1 = factory.post(reverse('quote-request-list'), {}, format='json')
+        request2 = factory.post(reverse('quote-request-list'), {}, format='json')
+        request3 = factory.post(reverse('quote-request-list'), {}, format='json')
+        for request in (request1, request2, request3):
+            request.META['REMOTE_ADDR'] = '2.2.2.2'
+            request.user = AnonymousUser()
+        self.assertTrue(throttle.allow_request(request1, None))
+        self.assertTrue(throttle.allow_request(request2, None))
+        self.assertFalse(throttle.allow_request(request3, None))
+
+    def test_quote_request_post_valid_payload_still_works(self):
+        payload = {
+            'product': self.product.id,
+            'customer_name': 'Cliente Válido',
+            'customer_phone': '+56 9 3333 4444',
+            'customer_email': 'valido@example.com',
+            'message': 'Consulta válida',
+        }
+        response = self.client.post(reverse('quote-request-list'), payload, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_quote_request_post_too_long_message_fails(self):
+        payload = {
+            'product': self.product.id,
+            'customer_name': 'Cliente',
+            'customer_phone': '+56 9 3333 4444',
+            'message': 'x' * 6001,
+        }
+        response = self.client.post(reverse('quote-request-list'), payload, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_quote_request_admin_rejects_invalid_ordering(self):
+        QuoteRequest.objects.create(product=self.product, customer_name='A', customer_phone='1', message='x')
+        self.authenticate()
+        response = self.client.get(reverse('quote-request-list'), {'ordering': 'drop_table'})
+        self.assertEqual(response.status_code, 400)
 
 
 class HomeSectionItemApiTests(APITestCase):

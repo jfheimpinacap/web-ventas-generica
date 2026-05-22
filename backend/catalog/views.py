@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, mixins, permissions, viewsets
+from rest_framework.exceptions import ValidationError
 
 from .models import Brand, Category, HomeSectionItem, Product, ProductImage, ProductSpec, Promotion, QuoteRequest, Supplier
 from .services import send_quote_request_notifications
@@ -26,6 +27,9 @@ from .serializers import (
     SupplierSerializer,
     SupplierWriteSerializer,
 )
+from core.throttles import PublicCatalogReadThrottle, QuoteRequestCreateThrottle
+
+MAX_SEARCH_LENGTH = 120
 
 
 def _include_inactive_for_authenticated(request):
@@ -49,6 +53,7 @@ def _get_category_descendant_ids(category_id: int):
 
 class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -64,6 +69,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class BrandViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -79,6 +85,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 
 class SupplierViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -100,6 +107,8 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'model', 'sku', 'short_description']
     ordering_fields = ['name', 'created_at', 'updated_at', 'price']
     ordering = ['-updated_at']
+    ordering_fields = ['name', 'price', 'created_at', 'updated_at', 'is_featured']
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -111,6 +120,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         params = self.request.query_params
+        self._validate_query_params(params)
 
         include_unpublished = params.get('include_unpublished') in {'1', 'true', 'True'}
         can_see_unpublished = self.request.user.is_authenticated and (
@@ -148,6 +158,36 @@ class ProductViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(**{bool_param: False})
 
         return queryset
+
+    def _validate_query_params(self, params):
+        search = params.get('search')
+        if search is not None:
+            normalized_search = search.strip()
+            if len(normalized_search) > MAX_SEARCH_LENGTH:
+                raise ValidationError({'search': f'El parámetro search no puede superar {MAX_SEARCH_LENGTH} caracteres.'})
+        category_value = params.get('category')
+        if category_value and not category_value.isdigit():
+            raise ValidationError({'category': 'El parámetro category debe ser un ID numérico.'})
+        brand_value = params.get('brand')
+        if brand_value and not brand_value.isdigit():
+            raise ValidationError({'brand': 'El parámetro brand debe ser un ID numérico.'})
+        enum_values = {
+            'product_type': {choice[0] for choice in Product.ProductType.choices},
+            'condition': {choice[0] for choice in Product.ProductCondition.choices},
+            'stock_status': {choice[0] for choice in Product.StockStatus.choices},
+        }
+        for key, allowed in enum_values.items():
+            value = params.get(key)
+            if value and value not in allowed:
+                raise ValidationError({key: f'Valor inválido para {key}.'})
+        bool_fields = ['include_unpublished', 'is_featured']
+        for key in bool_fields:
+            value = params.get(key)
+            if value and value not in {'1', '0', 'true', 'false', 'True', 'False'}:
+                raise ValidationError({key: f'Valor inválido para {key}.'})
+        ordering = params.get('ordering')
+        if ordering and ordering not in {field for item in self.ordering_fields for field in (item, f'-{item}')}:
+            raise ValidationError({'ordering': 'Campo de ordering inválido.'})
 
 
 class ProductImageViewSet(viewsets.ModelViewSet):
@@ -196,6 +236,7 @@ class ProductSpecViewSet(viewsets.ModelViewSet):
 
 class PromotionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:
@@ -218,6 +259,7 @@ class QuoteRequestViewSet(
     viewsets.GenericViewSet,
 ):
     queryset = QuoteRequest.objects.select_related('product')
+    throttle_scope = 'admin_api'
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -228,6 +270,11 @@ class QuoteRequestViewSet(
         if self.action == 'create':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+
+    def get_throttles(self):
+        if self.action == 'create':
+            return [QuoteRequestCreateThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         queryset = self.queryset
@@ -244,6 +291,8 @@ class QuoteRequestViewSet(
             queryset = queryset.filter(product_id=product_value)
 
         search = params.get('search', '').strip()
+        if len(search) > MAX_SEARCH_LENGTH:
+            raise ValidationError({'search': f'El parámetro search no puede superar {MAX_SEARCH_LENGTH} caracteres.'})
         if search:
             queryset = queryset.filter(
                 Q(customer_name__icontains=search)
@@ -255,6 +304,8 @@ class QuoteRequestViewSet(
 
         ordering = params.get('ordering', '-created_at')
         allowed_ordering = {'created_at', '-created_at', 'updated_at', '-updated_at', 'status', '-status'}
+        if ordering not in allowed_ordering:
+            raise ValidationError({'ordering': 'Campo de ordering inválido para cotizaciones.'})
         if ordering in allowed_ordering:
             queryset = queryset.order_by(ordering)
 
@@ -289,6 +340,7 @@ class QuoteRequestViewSet(
 
 class HomeSectionItemViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogReadThrottle]
 
     def get_serializer_class(self):
         if self.action in {'create', 'update', 'partial_update'}:

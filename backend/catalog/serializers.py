@@ -361,6 +361,12 @@ class HomeSectionItemWriteSerializer(serializers.ModelSerializer):
 
 
 class QuoteRequestPublicSerializer(serializers.ModelSerializer):
+    def validate_message(self, value):
+        normalized_value = (value or '').strip()
+        if len(normalized_value) > 2000:
+            raise serializers.ValidationError('El mensaje no puede superar 2000 caracteres.')
+        return normalized_value
+
     class Meta:
         model = QuoteRequest
         fields = [

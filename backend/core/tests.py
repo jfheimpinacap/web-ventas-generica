@@ -1,7 +1,12 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from copy import deepcopy
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
+from rest_framework.test import APIRequestFactory
+from core.throttles import LoginRateThrottle
 
 
 class HealthEndpointTests(TestCase):
@@ -50,3 +55,25 @@ class AuthEndpointsTests(APITestCase):
     def test_auth_me_without_token_returns_401(self):
         response = self.client.get(reverse('auth-me'))
         self.assertEqual(response.status_code, 401)
+
+    @override_settings(
+        TESTING=False,
+        REST_FRAMEWORK=(lambda rf: {**rf, 'DEFAULT_THROTTLE_RATES': {**rf['DEFAULT_THROTTLE_RATES'], 'login': '2/minute'}})(deepcopy(settings.REST_FRAMEWORK)),
+    )
+    def test_login_throttling(self):
+        factory = APIRequestFactory()
+        throttle = LoginRateThrottle()
+        throttle.rate = '2/min'
+        throttle.num_requests, throttle.duration = throttle.parse_rate(throttle.rate)
+        request1 = factory.post(reverse('token-obtain-pair'), {'username': 'u', 'password': 'x'}, format='json')
+        request2 = factory.post(reverse('token-obtain-pair'), {'username': 'u', 'password': 'x'}, format='json')
+        request3 = factory.post(reverse('token-obtain-pair'), {'username': 'u', 'password': 'x'}, format='json')
+        request1.META['REMOTE_ADDR'] = '1.1.1.1'
+        request2.META['REMOTE_ADDR'] = '1.1.1.1'
+        request3.META['REMOTE_ADDR'] = '1.1.1.1'
+        request1.user = AnonymousUser()
+        request2.user = AnonymousUser()
+        request3.user = AnonymousUser()
+        self.assertTrue(throttle.allow_request(request1, None))
+        self.assertTrue(throttle.allow_request(request2, None))
+        self.assertFalse(throttle.allow_request(request3, None))
