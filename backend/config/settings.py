@@ -196,3 +196,5 @@ EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.Em
 
 MAX_UPLOAD_IMAGE_SIZE_MB = env_int('MAX_UPLOAD_IMAGE_SIZE_MB', 5)
 MAX_UPLOAD_IMAGE_SIZE_BYTES = MAX_UPLOAD_IMAGE_SIZE_MB * 1024 * 1024
+
+PUBLIC_SITE_URL = (os.getenv('PUBLIC_SITE_URL') or 'http://localhost:5174').rstrip('/')

@@ -103,3 +103,41 @@ class SettingsSecurityTests(TestCase):
             os.environ.clear()
             os.environ.update(original_env)
             importlib.reload(importlib.import_module('config.settings'))
+
+
+class SitemapXmlViewTests(TestCase):
+    @override_settings(PUBLIC_SITE_URL='https://frontend.example.com/')
+    def test_sitemap_xml_contains_public_routes_only(self):
+        from catalog.models import Category, Product
+
+        category_active = Category.objects.create(name='Categoria activa', is_active=True)
+        Category.objects.create(name='Categoria inactiva', is_active=False)
+
+        Product.objects.create(
+            name='Publicado',
+            category=category_active,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            is_published=True,
+        )
+        Product.objects.create(
+            name='No publicado',
+            category=category_active,
+            product_type=Product.ProductType.MACHINERY,
+            condition=Product.ProductCondition.NEW,
+            is_published=False,
+        )
+
+        response = self.client.get('/sitemap.xml')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/xml')
+
+        content = response.content.decode()
+        self.assertIn('<loc>https://frontend.example.com/</loc>', content)
+        self.assertIn('<loc>https://frontend.example.com/catalogo</loc>', content)
+        self.assertIn('https://frontend.example.com/producto/publicado', content)
+        self.assertNotIn('https://frontend.example.com/producto/no-publicado', content)
+        self.assertIn(f'https://frontend.example.com/catalogo?category={category_active.id}', content)
+        self.assertNotIn('/login', content)
+        self.assertNotIn('/admin', content)
+
