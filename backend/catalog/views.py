@@ -105,7 +105,6 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'model', 'sku', 'short_description']
-    ordering_fields = ['name', 'created_at', 'updated_at', 'price']
     ordering = ['-updated_at']
     ordering_fields = ['name', 'price', 'created_at', 'updated_at', 'is_featured']
     throttle_classes = [PublicCatalogReadThrottle]
