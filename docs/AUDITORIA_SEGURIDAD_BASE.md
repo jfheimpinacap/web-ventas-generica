@@ -282,3 +282,41 @@ Estado actual: base razonable de permisos y JWT funcional, con riesgos principal
 - Revisión de CORS/CSRF por dominio final de despliegue.
 - Estrategia de tokens (rotación/blacklist y evaluación de almacenamiento más seguro).
 - Validación robusta de uploads (MIME/extensión/tamaño) y tests negativos.
+
+## Implementación Seguridad Fase 2
+
+### Settings endurecidos
+- `DEBUG` ahora se toma de entorno (`DEBUG`/`DJANGO_DEBUG`) y por defecto es `True` solo para desarrollo local.
+- `SECRET_KEY` se toma de entorno (`SECRET_KEY`/`DJANGO_SECRET_KEY`).
+- Si `DEBUG=False` y no existe `SECRET_KEY`, la app falla al iniciar con error claro (`RuntimeError`).
+- Se agregaron helpers `env_bool`, `env_int` y se mantuvo `env_list` para parseo seguro de variables.
+
+### Variables nuevas/actualizadas
+- Variables recomendadas de producción: `SECRET_KEY`, `DEBUG`, `DATABASE_URL`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS`, `QUOTE_NOTIFICATION_EMAIL`, `DEFAULT_FROM_EMAIL`, `EMAIL_BACKEND`.
+- `CORS_ALLOW_ALL_ORIGINS` queda soportada como variable opcional de emergencia local, con default `False`.
+
+### Headers de seguridad configurados (producción)
+Condicionados a `DEBUG=False`:
+- `SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https")`
+- `SECURE_SSL_REDIRECT=True` (overridable por env)
+- `SESSION_COOKIE_SECURE=True`
+- `CSRF_COOKIE_SECURE=True`
+- `SECURE_HSTS_SECONDS=31536000` (overridable)
+- `SECURE_HSTS_INCLUDE_SUBDOMAINS=True`
+- `SECURE_HSTS_PRELOAD=True`
+- `SECURE_CONTENT_TYPE_NOSNIFF=True`
+- `X_FRAME_OPTIONS='DENY'`
+- `SECURE_REFERRER_POLICY='strict-origin-when-cross-origin'`
+
+### SIMPLE_JWT explícito
+Se definió configuración explícita en settings:
+- `ACCESS_TOKEN_LIFETIME=30 minutos`
+- `REFRESH_TOKEN_LIFETIME=7 días`
+- `ROTATE_REFRESH_TOKENS=False`
+- `BLACKLIST_AFTER_ROTATION=False` (sin blacklist app en esta fase)
+- `AUTH_HEADER_TYPES=("Bearer",)`
+
+### Pendientes para Fase 3
+- Validaciones robustas de uploads (MIME real, extensión permitida, tamaño máximo).
+- Mayor cobertura de tests de seguridad (casos negativos de archivos y estrés de payloads).
+- Evaluación de estrategia de tokens más resistente a XSS (sin cambios en esta fase).
