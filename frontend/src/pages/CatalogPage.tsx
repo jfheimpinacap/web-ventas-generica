@@ -39,6 +39,39 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
   },
 }
 
+
+const MAIN_CATEGORY_SEO_CONTENT: Record<'maquinaria' | 'repuestos' | 'servicios', { title: string; description: string; metaDescription: string }> = {
+  maquinaria: {
+    title: 'Maquinaria',
+    description:
+      'Encuentra maquinaria para trabajos en altura y operación industrial, incluyendo elevadores tipo tijera, brazos articulados y equipos seleccionados para cotización comercial. Revisa disponibilidad, características y solicita precio con atención personalizada.',
+    metaDescription:
+      'Cotiza maquinaria para trabajos en altura, elevadores tipo tijera y brazos articulados con atención comercial personalizada.',
+  },
+  repuestos: {
+    title: 'Repuestos',
+    description:
+      'Cotiza repuestos industriales para equipos de elevación y maquinaria, como baterías, ruedas, controles, cargadores y componentes críticos. Te ayudamos a identificar disponibilidad y alternativas compatibles.',
+    metaDescription:
+      'Cotiza repuestos industriales para maquinaria de elevación: baterías, ruedas, controles, cargadores y componentes críticos.',
+  },
+  servicios: {
+    title: 'Servicios',
+    description:
+      'Solicita servicios de reparación y mantención para componentes industriales, motores eléctricos, bombas y equipos asociados. Revisa opciones disponibles y envía una solicitud de cotización.',
+    metaDescription:
+      'Solicita servicios de reparación y mantención industrial para motores eléctricos, bombas y equipos asociados.',
+  },
+}
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 function getNumericPrice(product: ProductListItem) {
   if (!product.price_visible || !product.price) return null
   const parsedPrice = Number(product.price)
@@ -123,11 +156,30 @@ export function CatalogPage() {
   }, [query])
 
 
+  const mainCategorySeo = useMemo(() => {
+    const rootCategory = categoryPath[0]
+    const normalizedRoot = rootCategory ? normalizeLabel(rootCategory.name) : ''
+
+    if (normalizedRoot === 'maquinaria') return MAIN_CATEGORY_SEO_CONTENT.maquinaria
+    if (normalizedRoot === 'repuestos') return MAIN_CATEGORY_SEO_CONTENT.repuestos
+    if (normalizedRoot === 'servicios') return MAIN_CATEGORY_SEO_CONTENT.servicios
+
+    if (query.product_type === 'machinery') return MAIN_CATEGORY_SEO_CONTENT.maquinaria
+    if (query.product_type === 'spare_part') return MAIN_CATEGORY_SEO_CONTENT.repuestos
+    if (query.product_type === 'service') return MAIN_CATEGORY_SEO_CONTENT.servicios
+
+    return null
+  }, [categoryPath, query.product_type])
+
   const hasSearch = Boolean((query.search ?? '').trim())
+  const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
+  const searchOnlyView = hasSearch && !query.category && !query.product_type && !hasSpecificFilters
   const seoTitle = selectedCategory ? `${selectedCategory.name} | JEM Nexus` : 'Productos industriales | JEM Nexus'
-  const seoDescription = selectedCategory
-    ? `Ver productos disponibles en ${selectedCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
-    : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
+  const seoDescription = mainCategorySeo
+    ? mainCategorySeo.metaDescription
+    : selectedCategory
+      ? `Ver productos disponibles en ${selectedCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
+      : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
   const canonicalPath = selectedCategory
     ? `/catalogo?category=${selectedCategory.id}`
     : '/catalogo'
@@ -252,7 +304,12 @@ export function CatalogPage() {
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
-          <h1>{pageTitle}</h1>
+          <h1>{searchOnlyView ? 'Resultados de búsqueda' : pageTitle}</h1>
+          {mainCategorySeo ? (
+            <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${mainCategorySeo.title}`}>
+              <p>{mainCategorySeo.description}</p>
+            </div>
+          ) : null}
         </div>
 
         <div className="catalog-toolbar">
