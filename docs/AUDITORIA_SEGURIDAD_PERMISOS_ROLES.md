@@ -203,3 +203,43 @@ Base de rutas observada:
 - ownership por vendedor para aislamiento multi-vendedor.
 - administración de usuarios/grupos/permisos desde panel.
 - auditoría de cambios y trazabilidad operativa.
+
+## Implementación Seguridad Fase 4B
+
+### Modelos con trazabilidad agregada
+Se agregaron campos `created_by` y `updated_by` (ForeignKey a `AUTH_USER_MODEL`, con `null=True`, `blank=True`, `on_delete=SET_NULL`) en:
+- `Category`
+- `Brand`
+- `Supplier`
+- `Product`
+- `ProductImage`
+- `ProductSpec`
+- `Promotion`
+- `HomeSectionItem`
+- `QuoteRequest`
+
+### Cómo se setean `created_by`/`updated_by`
+- En `create` de los ViewSets comerciales se asigna automáticamente:
+  - `created_by = request.user`
+  - `updated_by = request.user`
+  - Solo cuando `request.user.is_authenticated`.
+- En `update/partial_update` se asigna automáticamente:
+  - `updated_by = request.user`
+  - Solo cuando `request.user.is_authenticated`.
+- Implementado mediante `perform_create` y `perform_update`.
+- No se permite escritura manual efectiva de estos campos desde payload de API (los serializers de escritura no incluyen esos campos).
+
+### Comportamiento especial en cotizaciones públicas
+- `QuoteRequest` creado por visitante anónimo mantiene `created_by = null` y `updated_by = null`.
+- Cuando un vendedor/admin gestiona una cotización, `updated_by` se actualiza con ese usuario autenticado.
+
+### Limitaciones actuales
+- Aún no hay ownership estricto por vendedor (no se bloquea edición cruzada por creador).
+- Aún no se filtra visibilidad por vendedor.
+- Aún no hay historial detallado de cambios por campo.
+
+### Pendientes Fase 4C/4D
+- Ownership multi-vendedor en modelos comerciales.
+- Asignación comercial de cotizaciones (`assigned_to`).
+- Historial de cambios/auditoría detallada.
+- Administración de usuarios, roles y permisos desde panel.

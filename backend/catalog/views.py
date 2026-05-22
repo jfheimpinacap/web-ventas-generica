@@ -33,6 +33,18 @@ from core.throttles import PublicCatalogReadThrottle, QuoteRequestCreateThrottle
 MAX_SEARCH_LENGTH = 120
 
 
+def _audit_kwargs_for_create(request):
+    if request.user.is_authenticated:
+        return {'created_by': request.user, 'updated_by': request.user}
+    return {}
+
+
+def _audit_kwargs_for_update(request):
+    if request.user.is_authenticated:
+        return {'updated_by': request.user}
+    return {}
+
+
 def _include_inactive_for_authenticated(request):
     include_inactive = request.query_params.get('include_inactive') in {'1', 'true', 'True'}
     return is_seller_or_admin_user(request.user) and include_inactive
@@ -67,6 +79,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
             return queryset
         return queryset.filter(is_active=True)
 
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
+
 
 class BrandViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPublicReadSellerWrite]
@@ -83,6 +101,12 @@ class BrandViewSet(viewsets.ModelViewSet):
             return queryset
         return queryset.filter(is_active=True)
 
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
+
 
 class SupplierViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPublicReadSellerWrite]
@@ -98,6 +122,12 @@ class SupplierViewSet(viewsets.ModelViewSet):
         if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
+
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -189,6 +219,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         if ordering and ordering not in {field for item in self.ordering_fields for field in (item, f'-{item}')}:
             raise ValidationError({'ordering': 'Campo de ordering inválido.'})
 
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
+
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.select_related('product').order_by('order', 'id')
@@ -207,12 +243,12 @@ class ProductImageViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        image = serializer.save()
+        image = serializer.save(**_audit_kwargs_for_create(self.request))
         if image.is_main:
             ProductImage.objects.filter(product=image.product, is_main=True).exclude(pk=image.pk).update(is_main=False)
 
     def perform_update(self, serializer):
-        image = serializer.save()
+        image = serializer.save(**_audit_kwargs_for_update(self.request))
         if image.is_main:
             ProductImage.objects.filter(product=image.product, is_main=True).exclude(pk=image.pk).update(is_main=False)
 
@@ -233,6 +269,12 @@ class ProductSpecViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(product_id=product_id)
         return queryset
 
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
+
 
 class PromotionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPublicReadSellerWrite]
@@ -248,6 +290,12 @@ class PromotionViewSet(viewsets.ModelViewSet):
         if _include_inactive_for_authenticated(self.request):
             return queryset
         return queryset.filter(is_active=True)
+
+    def perform_create(self, serializer):
+        serializer.save(**_audit_kwargs_for_create(self.request))
+
+    def perform_update(self, serializer):
+        serializer.save(**_audit_kwargs_for_update(self.request))
 
 
 class QuoteRequestViewSet(
@@ -309,12 +357,12 @@ class QuoteRequestViewSet(
         return queryset
 
     def perform_create(self, serializer):
-        quote_request = serializer.save()
+        quote_request = serializer.save(**_audit_kwargs_for_create(self.request))
         send_quote_request_notifications(quote_request)
 
     def perform_update(self, serializer):
         previous_status = serializer.instance.status
-        quote_request = serializer.save()
+        quote_request = serializer.save(**_audit_kwargs_for_update(self.request))
         next_status = quote_request.status
 
         if previous_status == next_status:
@@ -361,7 +409,7 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         section = serializer.validated_data['section']
-        serializer.save(position=self._next_position(section), is_active=True)
+        serializer.save(position=self._next_position(section), is_active=True, **_audit_kwargs_for_create(self.request))
 
     @transaction.atomic
     def perform_update(self, serializer):
@@ -373,7 +421,7 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
         target_position = serializer.validated_data.get('position', instance.position)
 
         if section != original_section:
-            serializer.save(position=self._next_position(section))
+            serializer.save(position=self._next_position(section), **_audit_kwargs_for_update(self.request))
             self._reindex_section(original_section)
             self._reindex_section(section)
             return
@@ -387,13 +435,13 @@ class HomeSectionItemViewSet(viewsets.ModelViewSet):
             if occupied_item:
                 HomeSectionItem.objects.filter(pk=instance.pk).update(position=0)
                 HomeSectionItem.objects.filter(pk=occupied_item.pk).update(position=original_position)
-                serializer.save(position=target_position)
+                serializer.save(position=target_position, **_audit_kwargs_for_update(self.request))
             else:
-                serializer.save(position=target_position)
+                serializer.save(position=target_position, **_audit_kwargs_for_update(self.request))
 
             return
 
-        serializer.save()
+        serializer.save(**_audit_kwargs_for_update(self.request))
 
     @transaction.atomic
     def perform_destroy(self, instance):

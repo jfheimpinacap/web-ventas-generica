@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
@@ -37,6 +38,8 @@ class Category(TimestampedModel):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_categories_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_categories_updated')
 
     class Meta:
         ordering = ['order', 'name']
@@ -57,6 +60,8 @@ class Brand(TimestampedModel):
     logo = models.FileField(upload_to='brands/logos/', blank=True, null=True)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_brands_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_brands_updated')
 
     class Meta:
         ordering = ['name']
@@ -77,6 +82,8 @@ class Supplier(TimestampedModel):
     email = models.EmailField(blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_suppliers_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_suppliers_updated')
 
     class Meta:
         ordering = ['name']
@@ -122,6 +129,8 @@ class Product(TimestampedModel):
     stock_status = models.CharField(max_length=20, choices=StockStatus.choices, default=StockStatus.ON_REQUEST)
     is_featured = models.BooleanField(default=False)
     is_published = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_products_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_products_updated')
 
     class Meta:
         ordering = ['-updated_at']
@@ -146,6 +155,9 @@ class ProductImage(models.Model):
     is_main = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_product_images_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_product_images_updated')
 
     class Meta:
         ordering = ['order', 'id']
@@ -160,6 +172,8 @@ class ProductSpec(models.Model):
     value = models.CharField(max_length=220)
     unit = models.CharField(max_length=40, blank=True)
     order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_product_specs_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_product_specs_updated')
 
     class Meta:
         ordering = ['order', 'id']
@@ -179,6 +193,8 @@ class Promotion(TimestampedModel):
     order = models.PositiveIntegerField(default=0)
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_promotions_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_promotions_updated')
 
     class Meta:
         ordering = ['order', '-created_at']
@@ -203,6 +219,8 @@ class HomeSectionItem(TimestampedModel):
     position = models.PositiveIntegerField(default=1)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='home_section_items')
     is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_home_section_items_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_home_section_items_updated')
 
     class Meta:
         ordering = ['section', 'position', 'id']
@@ -256,6 +274,8 @@ class QuoteRequest(TimestampedModel):
     contacted_at = models.DateTimeField(null=True, blank=True)
     quoted_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_quote_requests_created')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='catalog_quote_requests_updated')
 
     class Meta:
         ordering = ['-created_at']

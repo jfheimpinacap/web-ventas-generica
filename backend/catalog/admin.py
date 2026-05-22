@@ -9,6 +9,7 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('name', 'slug', 'description')
     list_filter = ('is_active', 'parent')
     ordering = ('order', 'name')
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(Brand)
@@ -17,6 +18,7 @@ class BrandAdmin(admin.ModelAdmin):
     search_fields = ('name', 'slug', 'description')
     list_filter = ('is_active',)
     ordering = ('name',)
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(Supplier)
@@ -25,6 +27,7 @@ class SupplierAdmin(admin.ModelAdmin):
     search_fields = ('name', 'contact_name', 'phone', 'email')
     list_filter = ('is_active',)
     ordering = ('name',)
+    readonly_fields = ('created_by', 'updated_by')
 
 
 class ProductImageInline(admin.TabularInline):
@@ -54,6 +57,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('category', 'brand', 'product_type', 'condition', 'stock_status', 'is_featured', 'is_published')
     ordering = ('-updated_at',)
     inlines = [ProductImageInline, ProductSpecInline]
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(ProductImage)
@@ -62,6 +66,7 @@ class ProductImageAdmin(admin.ModelAdmin):
     search_fields = ('product__name', 'alt_text')
     list_filter = ('is_main',)
     ordering = ('product', 'order')
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(ProductSpec)
@@ -70,6 +75,7 @@ class ProductSpecAdmin(admin.ModelAdmin):
     search_fields = ('product__name', 'name', 'value', 'unit')
     list_filter = ('name',)
     ordering = ('product', 'order')
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(Promotion)
@@ -78,6 +84,7 @@ class PromotionAdmin(admin.ModelAdmin):
     search_fields = ('title', 'subtitle', 'button_text', 'button_url')
     list_filter = ('is_active',)
     ordering = ('order', '-updated_at')
+    readonly_fields = ('created_by', 'updated_by')
 
 
 @admin.register(QuoteRequest)
@@ -86,3 +93,4 @@ class QuoteRequestAdmin(admin.ModelAdmin):
     search_fields = ('customer_name', 'customer_phone', 'customer_email', 'message')
     list_filter = ('status', 'created_at')
     ordering = ('-created_at',)
+    readonly_fields = ('created_by', 'updated_by')
