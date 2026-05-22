@@ -174,3 +174,32 @@ Base de rutas observada:
 - ✅ No se modificaron permisos funcionales ni lógica de backend/frontend.
 - ✅ No se cambiaron modelos, migraciones, deploy ni seeds.
 
+
+## Implementación Seguridad Fase 4A
+
+### Permisos creados
+- `IsSellerOrAdmin`: habilita escritura para usuarios autenticados que sean `is_staff`, `is_superuser` o pertenezcan a grupos `vendedor` / `admin_comercial`.
+- `IsPublicReadSellerWrite`: permite lectura pública (`SAFE_METHODS`) y restringe escrituras a vendedor/admin.
+- `IsQuoteCreatePublicSellerManage`: permite `POST` público para cotización y restringe gestión (`list/retrieve/update/destroy`) a vendedor/admin.
+
+### Endpoints ajustados
+- Aplicado `IsPublicReadSellerWrite` en: `categories`, `brands`, `suppliers`, `products`, `product-images`, `product-specs`, `promotions`, `home-section-items`.
+- Aplicado `IsQuoteCreatePublicSellerManage` en `quote-requests`.
+- Ajuste de visibilidad `include_inactive` / `include_unpublished`: ahora requiere rol vendedor/admin (ya no cualquier autenticado).
+
+### Alcance
+- Se endurece autorización de escritura comercial sin introducir ownership por objeto.
+- Se mantiene lectura pública de catálogo publicado/activo.
+- Se mantiene `POST` público de cotizaciones.
+
+### Pruebas agregadas
+- Cobertura para anónimo: lectura de productos públicos, bloqueo de escritura comercial, `POST` cotización permitido y bloqueo de listado de cotizaciones.
+- Cobertura para autenticado no staff/no vendedor: bloqueo de `POST/PATCH/DELETE` en productos y bloqueo de listado de cotizaciones.
+- Cobertura para vendedor/staff: permiso de `POST/PATCH/DELETE` en productos, listado de cotizaciones y creación de imagen/spec.
+- Cobertura de `include_unpublished`: visible solo para vendedor/staff.
+
+### Pendientes Fase 4B
+- `created_by` / `updated_by` en entidades críticas.
+- ownership por vendedor para aislamiento multi-vendedor.
+- administración de usuarios/grupos/permisos desde panel.
+- auditoría de cambios y trazabilidad operativa.
