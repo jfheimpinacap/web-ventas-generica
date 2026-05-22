@@ -97,6 +97,7 @@ Notas:
    - `VITE_API_BASE_URL` (ejemplo: `http://127.0.0.1:8001/api`)
   - `VITE_WHATSAPP_NUMBER` (ejemplo: `56912345678`)
   - `VITE_PUBLIC_SITE_URL` (ejemplo local: `http://localhost:5174`, producción: `https://web-ventas-ps62.onrender.com`)
+  - `VITE_GTM_ID` (opcional, ejemplo: `GTM-XXXXXXX`; si no se define, no se carga Google Tag Manager)
 
 ## Comandos rápidos con `start.py`
 

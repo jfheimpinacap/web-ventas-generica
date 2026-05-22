@@ -11,6 +11,7 @@ import { useCategories } from '../hooks/useCategories'
 import { resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
+import { trackProductView, trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
 
@@ -76,6 +77,17 @@ export function ProductDetailPage() {
 
   const rootCategory = categoryPath[0]?.parent === null ? categoryPath[0] : null
   const backHref = rootCategory ? `/catalogo?category=${rootCategory.id}` : '/'
+
+  useEffect(() => {
+    if (!product) return
+    trackProductView({
+      product_id: product.id,
+      product_name: product.name,
+      category: product.category?.name,
+      brand: product.brand?.name,
+      price: product.price_visible ? product.price : undefined,
+    })
+  }, [product])
 
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     if (!product) return []
@@ -251,7 +263,11 @@ export function ProductDetailPage() {
                 ) : null}
 
                 <div className="product-detail__contact-actions">
-                  <Link className="btn btn--accent" to={`/cotizar?product=${product.id}`}>
+                  <Link
+                    className="btn btn--accent"
+                    to={`/cotizar?product=${product.id}`}
+                    onClick={() => trackQuoteClick({ location: 'product_detail', product_id: product.id, product_name: product.name })}
+                  >
                     Cotizar
                   </Link>
                   <a
@@ -259,6 +275,7 @@ export function ProductDetailPage() {
                     href={buildWhatsAppUrl(buildProductWhatsAppMessage(product.name))}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => trackWhatsAppClick({ location: 'product_detail', product_id: product.id, product_name: product.name })}
                   >
                     WhatsApp
                   </a>

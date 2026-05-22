@@ -10,6 +10,7 @@ import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
+import { trackCategoryView } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPublicUrl } from '../utils/seo'
 
 const ORDER_OPTIONS = [
@@ -224,6 +225,14 @@ export function CatalogPage() {
   }, [categoryPath, selectedBrand, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
+
+  useEffect(() => {
+    const root = categoryPath[0]
+    if (!root || root.parent !== null) return
+    const normalized = normalizeLabel(root.name)
+    if (!['maquinaria', 'repuestos', 'servicios'].includes(normalized)) return
+    trackCategoryView({ category_id: root.id, category_name: root.name })
+  }, [categoryPath])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
