@@ -132,3 +132,36 @@ Primero validar cobertura real de clases en componentes, estados condicionales y
 
 ### Nota de alcance
 Esta tarea documenta formalmente la auditoría previa y **no elimina CSS**, **no modifica diseño funcional**, **no toca backend**, **no toca deploy** y **no altera datos**.
+
+## Limpieza Fase 1
+
+**Fecha:** 2026-05-22  
+**Referencia:** limpieza conservadora inicial (bloques públicos removidos visualmente).
+
+### Clases eliminadas (confirmadas sin uso en TSX/TS/JSX/JS)
+- `home-block`
+- `home-block--light`
+- `category-grid`
+- `category-card` (incluye `h3`, `span`, `:hover`)
+- `benefits-grid` (incluye `li`)
+- `quote-cta` (incluye ajuste responsive en `@media (max-width: 900px)`)
+- `quote-cta__actions`
+- `hero-section__badges`
+- `hero-section__tag`
+- `topbar__nav` (incluye `topbar__nav a` y estado activo en `buttons.css`)
+- `topbar__seller-access`
+- `topbar__whatsapp-mobile-only`
+- `sidebar__meta`
+- `hero-section__actions` (selector auxiliar en `buttons.css`)
+
+### Clases revisadas pero conservadas
+- `hero-badge`: se conserva por uso en preview admin (`.admin-promo-preview__badges .hero-badge`) y por posible reutilización de badges en contenido promocional.
+
+### Motivo de conservación / pendientes
+- Se evitó eliminar clases con posible impacto en preview admin o en rutas no incluidas en la Fase 1 cuando no eran parte de bloques públicos removidos.
+
+### Confirmación de alcance seguro
+- No se modificaron reglas con `!important`.
+- No se tocaron estilos de precios públicos.
+- No se alteró responsive complejo fuera de la remoción puntual de un bloque ya eliminado (`quote-cta`).
+- No se tocaron componentes React, backend, auth, endpoints, cotizaciones ni deploy/Render.

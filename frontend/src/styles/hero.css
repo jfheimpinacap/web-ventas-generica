@@ -34,12 +34,6 @@
   min-width: 0;
 }
 
-.hero-section__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
 .hero-badge {
   background: rgba(0, 119, 182, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -47,14 +41,6 @@
   padding: 0.2rem 0.6rem;
   font-size: 0.72rem;
   font-weight: 700;
-}
-
-.hero-section__tag {
-  color: var(--color-accent-soft);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.76rem;
 }
 
 .hero-section h1 {

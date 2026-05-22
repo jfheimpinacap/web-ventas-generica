@@ -55,11 +55,6 @@
   object-fit: contain;
 }
 
-.topbar__menu-toggle,
-.topbar__whatsapp-mobile-only {
-  display: none;
-}
-
 .topbar__categories-btn {
   display: inline-flex;
   align-items: center;
@@ -100,21 +95,6 @@
   padding: 0.4rem 0.6rem;
 }
 
-.topbar__nav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.topbar__nav a {
-  color: var(--color-text-on-dark);
-  padding: 0.5rem 0.72rem;
-  line-height: 1.1;
-  border-radius: 8px;
-  font-weight: 600;
-}
-
 .topbar__actions {
   display: flex;
   align-items: center;
@@ -129,12 +109,6 @@
   gap: 0.6rem;
   min-width: 0;
   flex-wrap: wrap;
-}
-
-.topbar__seller-access {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.8rem;
 }
 
 .topbar__top-link {
