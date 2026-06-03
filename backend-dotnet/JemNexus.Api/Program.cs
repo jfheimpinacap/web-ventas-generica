@@ -1,8 +1,17 @@
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
+using JemNexus.Api.Contracts.Auth;
 using JemNexus.Api.Data;
+using JemNexus.Api.Models;
 using JemNexus.Api.Options;
+using JemNexus.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 const string CorsPolicyName = "JemNexusFrontend";
 const string AppName = "JEM Nexus API";
@@ -12,6 +21,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
+builder.Services.Configure<SeedUserOptions>(builder.Configuration.GetSection(SeedUserOptions.SectionName));
+builder.Services.Configure<JwtOptions>(options =>
+{
+    builder.Configuration.GetSection(JwtOptions.SectionName).Bind(options);
+    options.Secret = FirstNonEmpty(builder.Configuration["JWT_SECRET"], options.Secret);
+    options.Issuer = FirstNonEmpty(builder.Configuration["JWT_ISSUER"], options.Issuer);
+    options.Audience = FirstNonEmpty(builder.Configuration["JWT_AUDIENCE"], options.Audience);
+
+    if (builder.Environment.IsEnvironment("Test") && string.IsNullOrWhiteSpace(options.Secret))
+    {
+        options.Secret = "test-only-jwt-secret-not-for-production-32chars";
+    }
+});
 
 builder.Services.Configure<JsonOptions>(options =>
 {
@@ -27,8 +49,57 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower;
 });
 
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+jwtOptions.Secret = FirstNonEmpty(builder.Configuration["JWT_SECRET"], jwtOptions.Secret);
+if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(jwtOptions.Secret))
+{
+    throw new InvalidOperationException("Jwt:Secret or JWT_SECRET must be configured in Production.");
+}
+
+var signingSecret = string.IsNullOrWhiteSpace(jwtOptions.Secret)
+    ? "development-placeholder-jwt-secret-configure-env-before-auth-use"
+    : jwtOptions.Secret;
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Test");
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
+            NameClaimType = ClaimTypes.Name,
+            RoleClaimType = ClaimTypes.Role
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireActiveUser", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim("is_staff")
+            .RequireAssertion(context => context.User.HasClaim("is_staff", "true") || context.User.HasClaim("is_superuser", "true")));
+
+    options.AddPolicy("RequireSellerOrSupportAdmin", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireRole(AppRoles.Seller, AppRoles.SupportAdmin));
+
+    options.AddPolicy("RequireSupportAdmin", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireRole(AppRoles.SupportAdmin));
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var defaultConnection = string.IsNullOrWhiteSpace(configuredConnection)
@@ -64,6 +135,8 @@ if (!app.Environment.IsEnvironment("Test"))
 }
 
 app.UseCors(CorsPolicyName);
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.Use(async (context, next) =>
 {
@@ -98,7 +171,98 @@ app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(envir
     .WithName("ApiHealth")
     .WithOpenApi();
 
+MapAuthEndpoints(app);
+
 app.Run();
+
+static void MapAuthEndpoints(WebApplication app)
+{
+    app.MapPost("/api/auth/login/", LoginAsync).AllowAnonymous().WithName("AuthLoginSlash").WithOpenApi();
+    app.MapPost("/api/auth/login", LoginAsync).AllowAnonymous().WithName("AuthLogin").WithOpenApi();
+    app.MapPost("/api/auth/refresh/", RefreshAsync).AllowAnonymous().WithName("AuthRefreshSlash").WithOpenApi();
+    app.MapPost("/api/auth/refresh", RefreshAsync).AllowAnonymous().WithName("AuthRefresh").WithOpenApi();
+    app.MapGet("/api/auth/me/", MeAsync).RequireAuthorization().WithName("AuthMeSlash").WithOpenApi();
+    app.MapGet("/api/auth/me", MeAsync).RequireAuthorization().WithName("AuthMe").WithOpenApi();
+}
+
+static async Task<IResult> LoginAsync(
+    LoginRequest request,
+    JemNexusDbContext dbContext,
+    IPasswordHasherService passwordHasher,
+    IJwtTokenService jwtTokenService,
+    Microsoft.Extensions.Options.IOptions<JwtOptions> jwtOptions,
+    CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.Unauthorized();
+    }
+
+    var usernameOrEmail = request.Username.Trim();
+    var user = await dbContext.AppUsers
+        .FirstOrDefaultAsync(candidate => candidate.Username == usernameOrEmail || candidate.Email == usernameOrEmail, cancellationToken);
+
+    if (user is null || !user.IsActive || !passwordHasher.VerifyPassword(user, request.Password))
+    {
+        return Results.Unauthorized();
+    }
+
+    var tokenPair = jwtTokenService.GenerateTokenPair(user);
+    var refreshToken = new AppRefreshToken
+    {
+        UserId = user.Id,
+        TokenHash = jwtTokenService.HashRefreshToken(tokenPair.Refresh),
+        ExpiresAt = DateTimeOffset.UtcNow.AddDays(jwtOptions.Value.RefreshTokenDays)
+    };
+
+    user.LastLoginAt = DateTimeOffset.UtcNow;
+    dbContext.AppRefreshTokens.Add(refreshToken);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new LoginResponse(tokenPair.Access, tokenPair.Refresh, AuthUserResponse.FromUser(user)));
+}
+
+static async Task<IResult> RefreshAsync(
+    RefreshRequest request,
+    JemNexusDbContext dbContext,
+    IJwtTokenService jwtTokenService,
+    CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(request.Refresh))
+    {
+        return Results.Unauthorized();
+    }
+
+    var tokenHash = jwtTokenService.HashRefreshToken(request.Refresh);
+    var refreshToken = await dbContext.AppRefreshTokens
+        .Include(token => token.User)
+        .FirstOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
+
+    if (refreshToken is null || refreshToken.RevokedAt is not null || refreshToken.ExpiresAt <= DateTimeOffset.UtcNow || !refreshToken.User.IsActive)
+    {
+        return Results.Unauthorized();
+    }
+
+    var access = jwtTokenService.GenerateAccessToken(refreshToken.User);
+    return Results.Ok(new RefreshResponse(access));
+}
+
+static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext dbContext, CancellationToken cancellationToken)
+{
+    var userIdValue = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
+    if (!int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await dbContext.AppUsers.FindAsync([userId], cancellationToken);
+    if (user is null || !user.IsActive)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(AuthUserResponse.FromUser(user));
+}
 
 static string[] GetAllowedOrigins(IConfiguration configuration)
 {
@@ -111,6 +275,11 @@ static string[] GetAllowedOrigins(IConfiguration configuration)
         .Where(origin => !string.IsNullOrWhiteSpace(origin))
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
+}
+
+static string FirstNonEmpty(params string?[] values)
+{
+    return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
 }
 
 public partial class Program;

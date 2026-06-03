@@ -11,7 +11,9 @@ public sealed class HomeSectionItem
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public int? CreatedById { get; set; }
+    public AppUser? CreatedBy { get; set; }
     public int? UpdatedById { get; set; }
+    public AppUser? UpdatedBy { get; set; }
 }
 
 public static class HomeSections

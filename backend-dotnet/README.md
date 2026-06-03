@@ -146,3 +146,110 @@ En desarrollo local, `RootPath` debe apuntar a una carpeta configurable. En Ples
 `CreatedById` y `UpdatedById` se mantienen por ahora como campos base sin FK real hasta definir autenticación JWT y usuarios en Backend .NET 3. La decisión pendiente es usar una tabla propia liviana o ASP.NET Core Identity.
 
 > Advertencia: no ejecutar `dotnet ef database update` contra Plesk/SQL Server productivo sin revisar connection string, confirmar backup de SQL Server y uploads, validar ventana de mantenimiento y confirmar explícitamente la migración a aplicar.
+
+## Backend .NET 3: autenticación JWT y usuarios base
+
+Esta fase agrega una base de autenticación ASP.NET Core compatible con el contrato actual del frontend/Django, sin modificar frontend, Django, Render ni Plesk.
+
+### Modelo auth
+
+Se usa un `AppUser` propio y liviano, no ASP.NET Core Identity completo. Identity se usa únicamente para `PasswordHasher<AppUser>`.
+
+Roles definidos:
+
+- `seller`
+- `support_admin`
+
+No hay multiempresa ni ownership multi-vendedor en esta fase.
+
+### Endpoints
+
+Endpoints implementados con y sin slash final:
+
+- `POST /api/auth/login/`
+- `POST /api/auth/refresh/`
+- `GET /api/auth/me/`
+
+Respuesta de login esperada:
+
+```json
+{
+  "access": "...",
+  "refresh": "...",
+  "user": {
+    "id": 1,
+    "username": "demo",
+    "email": null,
+    "role": "seller",
+    "is_staff": true,
+    "is_superuser": false
+  }
+}
+```
+
+### Variables JWT
+
+No guardar secretos reales en `appsettings*.json`. Configurar por variables de entorno o secretos locales:
+
+```text
+Jwt__Issuer=JEM Nexus API
+Jwt__Audience=JEM Nexus Frontend
+Jwt__Secret=<configurar-fuera-del-repo>
+Jwt__AccessTokenMinutes=60
+Jwt__RefreshTokenDays=7
+```
+
+También se soportan aliases de entorno simples:
+
+```text
+JWT_SECRET=<configurar-fuera-del-repo>
+JWT_ISSUER=JEM Nexus API
+JWT_AUDIENCE=JEM Nexus Frontend
+```
+
+En Production, `Jwt__Secret` o `JWT_SECRET` es obligatorio. El valor en `appsettings.json` queda vacío intencionalmente.
+
+### Variables SeedUsers
+
+El seed de usuarios no crea usuarios si no hay contraseñas configuradas. Configurar solo en entorno local/seguro:
+
+```text
+SeedUsers__SellerUsername=demo
+SeedUsers__SellerPassword=<password-local-no-real>
+SeedUsers__SellerEmail=
+SeedUsers__SellerFullName=Vendedor Demo
+SeedUsers__SupportUsername=support
+SeedUsers__SupportPassword=<password-local-no-real>
+SeedUsers__SupportEmail=
+SeedUsers__SupportFullName=Administrador Soporte
+```
+
+No subir contraseñas reales al repositorio.
+
+### Refresh tokens
+
+Los refresh tokens se persisten en `AppRefreshTokens` como hash SHA-256 (`TokenHash`), nunca en texto plano, con expiración y campo opcional `RevokedAt` preparado para revocación futura.
+
+### Auditoría
+
+`CreatedById` y `UpdatedById` de entidades comerciales se relacionan opcionalmente con `AppUsers` mediante FKs nullable y `DeleteBehavior.NoAction`. Las requests públicas pueden dejar auditoría de usuario en `null`.
+
+### Migración requerida
+
+Cuando el SDK .NET 8 y `dotnet-ef` estén disponibles, generar la migración y el script revisable:
+
+```bash
+dotnet ef migrations add AddAuthUsersAndAuditRelations \
+  --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --output-dir Data/Migrations
+```
+
+```bash
+dotnet ef migrations script \
+  --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
+```
+
+No ejecutar `dotnet ef database update` contra SQL Server real/Plesk en esta fase. Revisar primero el script, confirmar backup y ventana de mantenimiento.
