@@ -1,10 +1,13 @@
 using JemNexus.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace JemNexus.Api.Data;
 
 public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> options) : DbContext(options)
 {
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
+    public DbSet<AppRefreshToken> AppRefreshTokens => Set<AppRefreshToken>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -31,7 +34,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     {
         var utcNow = DateTimeOffset.UtcNow;
 
-        foreach (var entry in ChangeTracker.Entries().Where(entry => IsCommercialAuditedEntity(entry.Entity)))
+        foreach (var entry in ChangeTracker.Entries().Where(entry => IsTimestampAuditedEntity(entry.Entity)))
         {
             if (entry.State == EntityState.Added)
             {
@@ -51,9 +54,11 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         }
     }
 
-    private static bool IsCommercialAuditedEntity(object entity)
+    private static bool IsTimestampAuditedEntity(object entity)
     {
-        return entity is Category
+        return entity is AppUser
+            or AppRefreshToken
+            or Category
             or Brand
             or Supplier
             or Product
@@ -68,6 +73,8 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     {
         base.OnModelCreating(modelBuilder);
 
+        ConfigureAppUser(modelBuilder);
+        ConfigureAppRefreshToken(modelBuilder);
         ConfigureCategory(modelBuilder);
         ConfigureBrand(modelBuilder);
         ConfigureSupplier(modelBuilder);
@@ -77,6 +84,61 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         ConfigurePromotion(modelBuilder);
         ConfigureHomeSectionItem(modelBuilder);
         ConfigureQuoteRequest(modelBuilder);
+    }
+
+
+    private static void ConfigureAppUser(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AppUser>(entity =>
+        {
+            entity.ToTable("AppUsers");
+            entity.HasKey(user => user.Id);
+            entity.Property(user => user.Username).HasMaxLength(150).IsRequired();
+            entity.Property(user => user.Email).HasMaxLength(254);
+            entity.Property(user => user.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(user => user.Role).HasMaxLength(40).IsRequired();
+            entity.Property(user => user.FullName).HasMaxLength(180);
+            entity.Property(user => user.IsActive).HasDefaultValue(true);
+            entity.Property(user => user.IsStaff).HasDefaultValue(false);
+            entity.Property(user => user.IsSuperuser).HasDefaultValue(false);
+            entity.Property(user => user.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(user => user.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.HasIndex(user => user.Username).IsUnique();
+            entity.HasIndex(user => user.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
+            entity.HasIndex(user => user.Role);
+            entity.HasIndex(user => user.IsActive);
+        });
+    }
+
+    private static void ConfigureAppRefreshToken(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AppRefreshToken>(entity =>
+        {
+            entity.ToTable("AppRefreshTokens");
+            entity.HasKey(token => token.Id);
+            entity.Property(token => token.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(token => token.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(token => token.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.HasIndex(token => token.TokenHash).IsUnique();
+            entity.HasIndex(token => new { token.UserId, token.ExpiresAt });
+            entity.HasOne(token => token.User)
+                .WithMany(user => user.RefreshTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigureAuditUsers<TEntity>(EntityTypeBuilder<TEntity> entity)
+        where TEntity : class
+    {
+        entity.HasOne(typeof(AppUser), "CreatedBy")
+            .WithMany()
+            .HasForeignKey("CreatedById")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(typeof(AppUser), "UpdatedBy")
+            .WithMany()
+            .HasForeignKey("UpdatedById")
+            .OnDelete(DeleteBehavior.NoAction);
     }
 
     private static void ConfigureCategory(ModelBuilder modelBuilder)
@@ -92,6 +154,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(category => category.Order).HasDefaultValue(0);
             entity.Property(category => category.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(category => category.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(category => category.Slug).IsUnique();
             entity.HasIndex(category => category.IsActive);
             entity.HasIndex(category => category.Order);
@@ -115,6 +178,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(brand => brand.IsActive).HasDefaultValue(true);
             entity.Property(brand => brand.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(brand => brand.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(brand => brand.Slug).IsUnique();
             entity.HasIndex(brand => brand.IsActive);
             entity.HasIndex(brand => brand.Name);
@@ -135,6 +199,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(supplier => supplier.IsActive).HasDefaultValue(true);
             entity.Property(supplier => supplier.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(supplier => supplier.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(supplier => supplier.IsActive);
             entity.HasIndex(supplier => supplier.Name);
         });
@@ -161,6 +226,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.IsPublished).HasDefaultValue(true);
             entity.Property(product => product.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(product => product.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(product => product.Slug).IsUnique();
             entity.HasIndex(product => product.Sku);
             entity.HasIndex(product => product.ProductType);
@@ -195,6 +261,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(image => image.Order).HasDefaultValue(0);
             entity.Property(image => image.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(image => image.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(image => image.IsMain);
             entity.HasIndex(image => new { image.ProductId, image.Order, image.Id });
             entity.HasOne(image => image.Product)
@@ -216,6 +283,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(spec => spec.Order).HasDefaultValue(0);
             entity.Property(spec => spec.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(spec => spec.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(spec => new { spec.ProductId, spec.Order, spec.Id });
             entity.HasOne(spec => spec.Product)
                 .WithMany(product => product.Specs)
@@ -239,6 +307,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(promotion => promotion.Order).HasDefaultValue(0);
             entity.Property(promotion => promotion.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(promotion => promotion.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(promotion => promotion.IsActive);
             entity.HasIndex(promotion => promotion.Order);
             entity.HasIndex(promotion => promotion.StartsAt);
@@ -261,6 +330,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(item => item.IsActive).HasDefaultValue(true);
             entity.Property(item => item.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(item => item.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(item => item.IsActive);
             entity.HasIndex(item => new { item.Section, item.Position }).IsUnique();
             entity.HasIndex(item => new { item.Section, item.ProductId }).IsUnique();
@@ -289,6 +359,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(quote => quote.SellerResponse).HasDefaultValue(string.Empty);
             entity.Property(quote => quote.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(quote => quote.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
             entity.HasIndex(quote => quote.Status);
             entity.HasIndex(quote => quote.CreatedAt);
             entity.HasOne(quote => quote.Product)

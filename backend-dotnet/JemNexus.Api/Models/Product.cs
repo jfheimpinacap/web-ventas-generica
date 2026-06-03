@@ -27,7 +27,9 @@ public sealed class Product
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public int? CreatedById { get; set; }
+    public AppUser? CreatedBy { get; set; }
     public int? UpdatedById { get; set; }
+    public AppUser? UpdatedBy { get; set; }
     public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
     public ICollection<ProductSpec> Specs { get; set; } = new List<ProductSpec>();
     public ICollection<Promotion> Promotions { get; set; } = new List<Promotion>();

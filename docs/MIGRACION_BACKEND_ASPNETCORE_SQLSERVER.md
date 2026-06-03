@@ -966,3 +966,103 @@ Backend .NET 2C cerró o dejó preparadas las observaciones principales de Backe
 2. Confirmar si se desean `CHECK CONSTRAINT` SQL para choices/enums o si basta validación de aplicación como en Django.
 3. Definir carpeta física de uploads en Plesk/IIS, permisos NTFS del app pool y política de backup de archivos.
 4. Revisar connection string productiva, backup y ventana de aplicación antes de cualquier `dotnet ef database update`.
+
+## Backend .NET 3 - Auth JWT y usuarios base
+
+### Alcance y decisión técnica
+
+Backend .NET 3 agrega una base de autenticación JWT para ASP.NET Core sin reemplazar todavía Django ni aplicar cambios en Plesk/SQL Server productivo. Se mantiene la decisión de usar un `AppUser` propio y liviano, en vez de ASP.NET Core Identity completo, porque el uso inicial considera un vendedor y un administrador de soporte, sin multiempresa ni ownership multi-vendedor estricto.
+
+### Modelo de usuario y roles
+
+Se agrega `AppUser` con campos básicos de autenticación y administración: `Username`, `Email`, `PasswordHash`, `Role`, `FullName`, `IsActive`, `IsStaff`, `IsSuperuser`, `LastLoginAt`, `CreatedAt` y `UpdatedAt`.
+
+Roles mínimos definidos:
+
+- `seller`: vendedor operativo para catálogo/cotizaciones en fases futuras.
+- `support_admin`: soporte/administración del usuario vendedor.
+
+No se agrega rol multiempresa, ownership multi-vendedor ni CRUD comercial en esta fase.
+
+### Password hashing
+
+Se implementa `PasswordHasherService` usando `PasswordHasher<AppUser>` de Microsoft.AspNetCore.Identity únicamente como hasher. No se habilita Identity completo, no se guardan contraseñas en texto plano y no se usan hashes inseguros como MD5/SHA1.
+
+### JWT y refresh token
+
+La configuración JWT queda bajo:
+
+```json
+"Jwt": {
+  "Issuer": "JEM Nexus API",
+  "Audience": "JEM Nexus Frontend",
+  "Secret": "",
+  "AccessTokenMinutes": 60,
+  "RefreshTokenDays": 7
+}
+```
+
+El secreto debe configurarse fuera del repositorio mediante `Jwt__Secret` o `JWT_SECRET`. En Production la API exige secreto configurado. Los tokens de acceso incluyen claims mínimos: id de usuario, username, email si existe, role, `is_staff` e `is_superuser`.
+
+Se eligió refresh token persistido con `AppRefreshToken` para mantener compatibilidad futura con un contrato similar a Django SimpleJWT y permitir revocación/expiración. La entidad guarda solo `TokenHash`, nunca el refresh token plano, junto con `UserId`, `ExpiresAt`, `RevokedAt`, `CreatedAt` y `UpdatedAt`.
+
+### Endpoints auth compatibles
+
+Se agregan endpoints con y sin slash final para compatibilidad:
+
+- `POST /api/auth/login/` y `POST /api/auth/login`.
+- `POST /api/auth/refresh/` y `POST /api/auth/refresh`.
+- `GET /api/auth/me/` y `GET /api/auth/me`.
+
+`login` acepta username o email y responde `access`, `refresh` y `user`. `refresh` recibe `refresh` y responde un nuevo `access`. `me` requiere Bearer token y devuelve el usuario autenticado activo.
+
+### Seed de usuarios
+
+Se agrega `SeedData` para preparar usuarios demo/desarrollo si se configuran contraseñas por configuración segura o variables de entorno. Los usuarios sugeridos son:
+
+- vendedor: username `demo`, password vacío por defecto.
+- soporte: username `support`, password vacío por defecto.
+
+Si las contraseñas faltan, el seed no crea usuarios. En Production tampoco crea usuarios sin contraseña configurada. No se guardan contraseñas reales en el repositorio.
+
+### Políticas de autorización
+
+Quedan registradas políticas base para fases futuras:
+
+- `RequireActiveUser`.
+- `RequireSellerOrSupportAdmin`.
+- `RequireSupportAdmin`.
+
+No se aplican todavía a endpoints CRUD comerciales porque dichos endpoints no existen en ASP.NET Core en esta fase. Health sigue público.
+
+### Auditoría CreatedBy/UpdatedBy
+
+Las entidades comerciales con `CreatedById` y `UpdatedById` ahora tienen navegación opcional hacia `AppUser` y relación EF Core opcional con `DeleteBehavior.NoAction`, evitando cascadas peligrosas. Aplica a `Category`, `Brand`, `Supplier`, `Product`, `ProductImage`, `ProductSpec`, `Promotion`, `HomeSectionItem` y `QuoteRequest`.
+
+Las solicitudes públicas futuras, por ejemplo `QuoteRequest`, pueden seguir con `CreatedById = null`.
+
+### Migración y SQL
+
+Este cambio requiere una migración de schema para crear `AppUsers`, `AppRefreshTokens`, índices únicos y FKs opcionales de auditoría hacia `AppUsers`.
+
+Migración prevista:
+
+```bash
+dotnet ef migrations add AddAuthUsersAndAuditRelations \
+  --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --output-dir Data/Migrations
+```
+
+Script revisable previsto:
+
+```bash
+dotnet ef migrations script \
+  --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
+```
+
+En el entorno Codex de esta implementación `dotnet` no estaba disponible, por lo que no se inventó ni editó manualmente la migración o el script SQL. Deben generarse y validarse localmente con SDK .NET 8/dotnet-ef antes de aplicar cualquier cambio real.
+
+> No ejecutar `dotnet ef database update` contra `jemnexusb_prod` sin revisión del script, backup y ventana de mantenimiento confirmada.

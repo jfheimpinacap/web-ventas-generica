@@ -360,3 +360,11 @@ El schema es consistente con los modelos comerciales actuales y compatible con S
 - Validar unicidad de `ProductImage.IsMain` por producto y reglas de home sections en la capa de aplicación.
 - Validar uploads por extensión, content-type, firma binaria y tamaño máximo antes de guardar archivos.
 - Aplicar throttling/autorización en endpoints de cotización y panel vendedor cuando se implemente JWT.
+
+## Nota de cierre Backend .NET 3 - auditoría y usuarios
+
+La observación pendiente sobre auditoría/usuarios del schema inicial pasa a implementación en Backend .NET 3 mediante un `AppUser` liviano, roles base `seller` y `support_admin`, JWT y refresh tokens persistidos en `AppRefreshTokens`.
+
+Las columnas comerciales `CreatedById` y `UpdatedById` se mantienen nullable y se configuran como FKs opcionales hacia `AppUsers` con `DeleteBehavior.NoAction` para evitar cascadas peligrosas. Esto aplica a `Category`, `Brand`, `Supplier`, `Product`, `ProductImage`, `ProductSpec`, `Promotion`, `HomeSectionItem` y `QuoteRequest`.
+
+Este cierre requiere una migración correctiva posterior llamada `AddAuthUsersAndAuditRelations` y un script SQL revisable antes de tocar SQL Server real/Plesk. En el entorno Codex no se generó migración ni script porque `dotnet` no estaba disponible; no se debe aplicar nada en `jemnexusb_prod` hasta generar y revisar esos artefactos localmente.
