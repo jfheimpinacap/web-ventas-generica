@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
+using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Xunit;
 
 namespace JemNexus.Api.Tests;
@@ -53,7 +53,7 @@ public sealed class SeedDataTests
         services.AddDbContext<JemNexusDbContext>(options => options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IPasswordHasherService, PasswordHasherService>();
-        services.AddSingleton(Options.Create(new SeedUserOptions
+        services.AddSingleton(OptionsFactory.Create(new SeedUserOptions
         {
             SellerUsername = "demo",
             SellerPassword = "seller-password",
