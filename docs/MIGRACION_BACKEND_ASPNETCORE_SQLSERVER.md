@@ -692,6 +692,107 @@ Frontend/API consumers revisados solo para confirmar contrato actual:
 
 Registrar aquí el resultado observado al ejecutar los comandos requeridos:
 
+- `dotnet build backend-dotnet/JemNexus.sln`: no ejecutable en este contenedor porque el SDK `dotnet` no está instalado (`dotnet: command not found`). Se intentó instalar .NET 8 con `apt-get` y `dotnet-install.sh`, pero la red/proxy del entorno devolvió HTTP 403.
+- `dotnet test backend-dotnet/JemNexus.sln`: no ejecutable en este contenedor porque el SDK `dotnet` no está instalado (`dotnet: command not found`).
+- `dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net8.0 -o backend-dotnet/publish-test`: no ejecutable en este contenedor porque el SDK `dotnet` no está instalado (`dotnet: command not found`).
 - `python backend/manage.py check`: OK, sin issues.
 - `python backend/manage.py test core catalog -v 2`: OK, 80 tests ejecutados. Warnings observados: directorio `backend/staticfiles/` inexistente y llave HMAC dev menor a 32 bytes en entorno de test.
 - `cd frontend && npm run build`: OK. Warning de npm: `Unknown env config "http-proxy"`.
+
+## Implementación Backend .NET 1
+
+Se agregó la base del backend ASP.NET Core Web API en .NET 8 dentro de `backend-dotnet/`, sin eliminar ni reemplazar el backend Django existente y sin modificar contratos funcionales del frontend.
+
+### Estructura creada
+
+```text
+backend-dotnet/
+  JemNexus.sln
+  README.md
+  JemNexus.Api/
+    JemNexus.Api.csproj
+    Program.cs
+    appsettings.json
+    appsettings.Development.json
+  JemNexus.Api.Tests/
+    JemNexus.Api.Tests.csproj
+    HealthEndpointTests.cs
+```
+
+### Endpoints mínimos
+
+La API base expone endpoints de salud simples:
+
+- `GET /`
+- `GET /health`
+- `GET /api/health`
+- `GET /api/health/`
+
+Todos responden JSON sin datos sensibles:
+
+```json
+{
+  "status": "ok",
+  "app": "JEM Nexus API",
+  "environment": "Development",
+  "timestamp": "2026-06-03T00:00:00Z"
+}
+```
+
+### Configuración base
+
+Se agregaron `appsettings.json` y `appsettings.Development.json`, más lectura estándar de variables de entorno de ASP.NET Core. En esta fase no se conecta SQL Server y los valores sensibles quedan vacíos o documentados para configuración externa.
+
+Variables sugeridas para Plesk/IIS y futuras fases:
+
+- `ASPNETCORE_ENVIRONMENT`
+- `PUBLIC_SITE_URL`
+- `FRONTEND_ORIGINS`
+- `JWT_SECRET`
+- `ConnectionStrings__DefaultConnection`
+
+### CORS preparado
+
+La política CORS inicial permite los orígenes esperados del frontend final y local:
+
+- `https://jem-nexus.cl`
+- `https://www.jem-nexus.cl`
+- `http://localhost:5174`
+- `http://127.0.0.1:5174`
+
+Además, `FRONTEND_ORIGINS` permite agregar orígenes por variable de entorno, separados por coma o punto y coma.
+
+### Compatibilidad JSON
+
+La API queda configurada con `JsonNamingPolicy.SnakeCaseLower` para respuestas JSON futuras. Esto prepara compatibilidad con el backend Django/DRF actual, que expone campos en `snake_case`. Los DTOs y contratos reales todavía no se migran en esta fase.
+
+### Swagger/OpenAPI
+
+Swagger/OpenAPI se habilita solo cuando el ambiente es `Development` o `QA`. No queda expuesto obligatoriamente en `Production`.
+
+### Publish para IIS/Plesk
+
+El comando previsto para validar publicación manual es:
+
+```bash
+dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net8.0 -o backend-dotnet/publish-test
+```
+
+La salida esperada para Plesk/IIS debe incluir `JemNexus.Api.dll`, `JemNexus.Api.exe`, `web.config` y `appsettings.json`. El contenido publicado debe subirse manualmente al sitio `https://api.jem-nexus.cl`, configurando variables de entorno en Plesk/IIS. Codex no sube artefactos a Plesk.
+
+### Tests agregados
+
+Se agregó un proyecto xUnit `JemNexus.Api.Tests` con pruebas mínimas para validar que:
+
+- `GET /health` retorna HTTP 200.
+- `GET /api/health` retorna HTTP 200.
+- La respuesta contiene `status = ok`.
+- La respuesta contiene `app = JEM Nexus API`.
+
+### Pendientes Backend .NET 2
+
+- Crear entidades EF Core equivalentes a los modelos Django.
+- Crear `DbContext` y configuraciones de relaciones/índices.
+- Agregar provider SQL Server y migraciones iniciales.
+- Generar scripts SQL revisables antes de aplicar en Plesk.
+- Mantener sin cambios el frontend hasta que los contratos estén replicados.
