@@ -45,6 +45,10 @@ public sealed class SeedDataTests
         Assert.True(support.IsActive);
         Assert.Equal(AppRoles.Seller, seller.Role);
         Assert.Equal(AppRoles.SupportAdmin, support.Role);
+        Assert.True(seller.IsStaff);
+        Assert.True(support.IsStaff);
+        Assert.False(seller.IsSuperuser);
+        Assert.False(support.IsSuperuser);
     }
 
     private static ServiceProvider CreateServices()
@@ -56,9 +60,9 @@ public sealed class SeedDataTests
         services.AddSingleton(OptionsFactory.Create(new SeedUserOptions
         {
             SellerUsername = "demo",
-            SellerPassword = "seller-password",
+            SellerPassword = "test-only-seller-password-not-real-32chars",
             SupportUsername = "support",
-            SupportPassword = "support-password"
+            SupportPassword = "test-only-support-password-not-real-32chars"
         }));
         return services.BuildServiceProvider();
     }
