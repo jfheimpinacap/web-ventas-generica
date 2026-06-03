@@ -2,7 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
-using Microsoft.Extensions.Options;
+using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Xunit;
 
 namespace JemNexus.Api.Tests;
@@ -35,7 +35,7 @@ public sealed class JwtTokenServiceTests
 
     private static JwtTokenService CreateService()
     {
-        return new JwtTokenService(Options.Create(new JwtOptions
+        return new JwtTokenService(OptionsFactory.Create(new JwtOptions
         {
             Issuer = "JEM Nexus API",
             Audience = "JEM Nexus Frontend",
