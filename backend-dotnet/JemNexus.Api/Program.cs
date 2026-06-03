@@ -45,8 +45,22 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QA"))
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsEnvironment("Test"))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors(CorsPolicyName);
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals("/api/health/", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = "/api/health";
+    }
+
+    await next();
+});
 
 IResult HealthResponse(IHostEnvironment environment)
 {
@@ -69,10 +83,6 @@ app.MapGet("/health", (IHostEnvironment environment) => HealthResponse(environme
 
 app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(environment))
     .WithName("ApiHealth")
-    .WithOpenApi();
-
-app.MapGet("/api/health/", (IHostEnvironment environment) => HealthResponse(environment))
-    .WithName("ApiHealthTrailingSlash")
     .WithOpenApi();
 
 app.Run();

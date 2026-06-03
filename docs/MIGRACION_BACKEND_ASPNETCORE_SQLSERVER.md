@@ -728,7 +728,7 @@ La API base expone endpoints de salud simples:
 - `GET /api/health`
 - `GET /api/health/`
 
-Todos responden JSON sin datos sensibles:
+La compatibilidad con `GET /api/health/` se conserva mediante normalización interna hacia `GET /api/health`, evitando mapear dos endpoints que ASP.NET Core pueda considerar ambiguos. Todos responden JSON sin datos sensibles:
 
 ```json
 {
