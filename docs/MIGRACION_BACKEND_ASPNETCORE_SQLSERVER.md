@@ -919,3 +919,33 @@ python backend/manage.py check
 python backend/manage.py test core catalog -v 2
 cd frontend && npm run build
 ```
+
+## Revisión Backend .NET 2B - Schema SQL inicial
+
+Fecha: 2026-06-03.
+
+Se realizó una revisión técnica documental del schema EF Core/SQL Server inicial antes de aplicar migraciones en SQL Server/Plesk. La revisión no ejecutó `dotnet ef database update`, no conectó a `jemnexusb_prod`, no tocó la base real, no regeneró migraciones, no modificó frontend y no eliminó Django.
+
+Archivos revisados principales:
+
+- `backend-dotnet/JemNexus.Api/Data/Migrations/20260603182917_InitialCommercialSchema.cs`
+- `backend-dotnet/JemNexus.Api/Data/Migrations/20260603182917_InitialCommercialSchema.Designer.cs`
+- `backend-dotnet/JemNexus.Api/Data/Migrations/JemNexusDbContextModelSnapshot.cs`
+- `backend-dotnet/sql/InitialCommercialSchema.sql`
+- `backend-dotnet/JemNexus.Api/Data/JemNexusDbContext.cs`
+- `backend-dotnet/JemNexus.Api/Models/*.cs`
+- `backend/catalog/models.py`
+- `backend/core/views.py`
+- contratos frontend de catálogo como referencia futura.
+
+Documento creado: `docs/REVISION_SCHEMA_ASPNETCORE_SQLSERVER.md`.
+
+Conclusión: **APTO CON OBSERVACIONES**. El schema reproduce adecuadamente el dominio comercial actual y no presenta bloqueos críticos para SQL Server 2022 en una base nueva, pero antes de aplicarlo en Plesk deben cerrarse observaciones sobre generación de slugs, actualización automática de `UpdatedAt`, validaciones equivalentes a Django, auditoría/usuarios y almacenamiento de imágenes en IIS/Plesk.
+
+Próximos pasos sugeridos:
+
+1. Revisar y aprobar las observaciones del documento de revisión.
+2. Implementar o planificar generación de slugs y actualización automática de `UpdatedAt` en la API .NET.
+3. Definir estrategia de usuarios/roles/auditoría y uploads en Windows/IIS/Plesk.
+4. Probar el script primero en una base temporal SQL Server 2022.
+5. Ejecutar `database update` solo cuando el checklist previo esté completo.
