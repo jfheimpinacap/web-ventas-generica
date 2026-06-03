@@ -4,10 +4,10 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
-using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -22,13 +22,12 @@ public sealed class AuthEndpointTests
     public async Task LoginWithValidCredentialsReturnsAccessRefreshAndUser(string loginPath)
     {
         await using var factory = CreateFactory();
-        await SeedUserAsync(factory, "demo", "correct-password");
+        await SeedTestUsersAsync(factory);
         var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
-        var payload = await response.Content.ReadFromJsonAsync<LoginPayload>();
+        var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
+        var payload = await ReadSuccessfulJsonAsync<LoginPayload>(response);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(payload);
         Assert.False(string.IsNullOrWhiteSpace(payload.Access));
         Assert.False(string.IsNullOrWhiteSpace(payload.Refresh));
@@ -43,7 +42,7 @@ public sealed class AuthEndpointTests
     public async Task LoginWithInvalidCredentialsReturnsUnauthorized(string loginPath)
     {
         await using var factory = CreateFactory();
-        await SeedUserAsync(factory, "demo", "correct-password");
+        await SeedTestUsersAsync(factory);
         var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "wrong-password" });
@@ -70,17 +69,15 @@ public sealed class AuthEndpointTests
     public async Task MeWithBearerTokenReturnsCurrentUser(string loginPath, string mePath)
     {
         await using var factory = CreateFactory();
-        await SeedUserAsync(factory, "demo", "correct-password");
+        await SeedTestUsersAsync(factory);
         var client = factory.CreateClient();
-        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
-        var login = await loginResponse.Content.ReadFromJsonAsync<LoginPayload>();
-        Assert.NotNull(login);
+        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
+        var login = await ReadSuccessfulJsonAsync<LoginPayload>(loginResponse);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
         var response = await client.GetAsync(mePath);
-        var user = await response.Content.ReadFromJsonAsync<UserPayload>();
+        var user = await ReadSuccessfulJsonAsync<UserPayload>(response);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(user);
         Assert.Equal("demo", user.Username);
         Assert.Equal(AppRoles.Seller, user.Role);
@@ -92,16 +89,14 @@ public sealed class AuthEndpointTests
     public async Task RefreshWithPersistedRefreshTokenReturnsNewAccessToken(string loginPath, string refreshPath)
     {
         await using var factory = CreateFactory();
-        await SeedUserAsync(factory, "demo", "correct-password");
+        await SeedTestUsersAsync(factory);
         var client = factory.CreateClient();
-        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
-        var login = await loginResponse.Content.ReadFromJsonAsync<LoginPayload>();
-        Assert.NotNull(login);
+        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
+        var login = await ReadSuccessfulJsonAsync<LoginPayload>(loginResponse);
 
         var response = await client.PostAsJsonAsync(refreshPath, new { refresh = login.Refresh });
-        var payload = await response.Content.ReadFromJsonAsync<RefreshPayload>();
+        var payload = await ReadSuccessfulJsonAsync<RefreshPayload>(response);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(payload);
         Assert.False(string.IsNullOrWhiteSpace(payload.Access));
     }
@@ -112,7 +107,10 @@ public sealed class AuthEndpointTests
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Test");
-                builder.UseSetting("Jwt:Secret", "endpoint-test-jwt-secret-not-for-production-32chars");
+                builder.ConfigureAppConfiguration((_, configurationBuilder) =>
+                {
+                    configurationBuilder.AddInMemoryCollection(TestConfiguration);
+                });
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
@@ -122,23 +120,35 @@ public sealed class AuthEndpointTests
             });
     }
 
-    private static async Task SeedUserAsync(WebApplicationFactory<Program> factory, string username, string password)
+    private const string TestPassword = "DummyPassword123!";
+
+    private static readonly IReadOnlyDictionary<string, string?> TestConfiguration = new Dictionary<string, string?>
+    {
+        ["Jwt:Secret"] = "endpoint-test-jwt-secret-not-for-production-32chars",
+        ["SeedUsers:SellerUsername"] = "demo",
+        ["SeedUsers:SellerPassword"] = TestPassword,
+        ["SeedUsers:SellerEmail"] = "demo@example.test",
+        ["SeedUsers:SupportUsername"] = "support",
+        ["SeedUsers:SupportPassword"] = TestPassword,
+        ["SeedUsers:SupportEmail"] = "support@example.test"
+    };
+
+    private static async Task SeedTestUsersAsync(WebApplicationFactory<Program> factory)
     {
         using var scope = factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
-        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-        var user = new AppUser
-        {
-            Username = username,
-            Email = $"{username}@example.test",
-            Role = AppRoles.Seller,
-            IsActive = true,
-            IsStaff = true,
-            IsSuperuser = false
-        };
-        user.PasswordHash = passwordHasher.HashPassword(user, password);
-        dbContext.AppUsers.Add(user);
-        await dbContext.SaveChangesAsync();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        await SeedData.SeedUsersAsync(factory.Services, environment);
+    }
+
+    private static async Task<T> ReadSuccessfulJsonAsync<T>(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"Status: {response.StatusCode}, Body: {body}");
+
+        var payload = await response.Content.ReadFromJsonAsync<T>();
+        Assert.True(payload is not null, $"Expected JSON response body for {typeof(T).Name}. Status: {response.StatusCode}, Body: {body}");
+
+        return payload!;
     }
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
