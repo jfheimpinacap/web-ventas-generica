@@ -1,5 +1,6 @@
 using System.Text.Json;
 using JemNexus.Api.Data;
+using JemNexus.Api.Options;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,8 @@ const string AppName = "JEM Nexus API";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddEnvironmentVariables();
+
+builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
 
 builder.Services.Configure<JsonOptions>(options =>
 {

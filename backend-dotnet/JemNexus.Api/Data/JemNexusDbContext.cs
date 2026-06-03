@@ -15,6 +15,55 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<HomeSectionItem> HomeSectionItems => Set<HomeSectionItem>();
     public DbSet<QuoteRequest> QuoteRequests => Set<QuoteRequest>();
 
+    public override int SaveChanges()
+    {
+        ApplyAuditTimestamps();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyAuditTimestamps();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplyAuditTimestamps()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries().Where(entry => IsCommercialAuditedEntity(entry.Entity)))
+        {
+            if (entry.State == EntityState.Added)
+            {
+                var createdAtProperty = entry.Property("CreatedAt");
+                if (createdAtProperty.CurrentValue is DateTimeOffset createdAt && createdAt == default)
+                {
+                    createdAtProperty.CurrentValue = utcNow;
+                }
+
+                entry.Property("UpdatedAt").CurrentValue = utcNow;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Property("CreatedAt").IsModified = false;
+                entry.Property("UpdatedAt").CurrentValue = utcNow;
+            }
+        }
+    }
+
+    private static bool IsCommercialAuditedEntity(object entity)
+    {
+        return entity is Category
+            or Brand
+            or Supplier
+            or Product
+            or ProductImage
+            or ProductSpec
+            or Promotion
+            or HomeSectionItem
+            or QuoteRequest;
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
