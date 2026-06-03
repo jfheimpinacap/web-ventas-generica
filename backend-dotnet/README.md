@@ -2,7 +2,7 @@
 
 Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (.NET 8), preparado para Windows Server + IIS + Plesk.
 
-> Esta fase no conecta SQL Server, no migra modelos, no agrega autenticación y no reemplaza el backend Django existente.
+> Esta fase prepara el modelo comercial EF Core para SQL Server, pero no conecta la base real de Plesk, no agrega autenticación y no reemplaza el backend Django existente.
 
 ## Estructura
 
@@ -10,6 +10,8 @@ Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (
 backend-dotnet/
   JemNexus.sln
   JemNexus.Api/
+    Data/
+    Models/
   JemNexus.Api.Tests/
 ```
 
@@ -17,6 +19,8 @@ backend-dotnet/
 
 ```bash
 dotnet restore backend-dotnet/JemNexus.sln
+dotnet build backend-dotnet/JemNexus.sln
+dotnet test backend-dotnet/JemNexus.sln
 dotnet run --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
 ```
 
@@ -29,11 +33,30 @@ Endpoints mínimos:
 
 Todos responden JSON con `status`, `app`, `environment` y `timestamp`.
 
-## Tests
+## Tests y validación
 
 ```bash
+dotnet restore backend-dotnet/JemNexus.sln
 dotnet build backend-dotnet/JemNexus.sln
 dotnet test backend-dotnet/JemNexus.sln
+```
+
+Los tests incluyen endpoints mínimos de health y validaciones de metadata del modelo comercial EF Core.
+
+## Entity Framework Core
+
+El DbContext `JemNexusDbContext` queda registrado para SQL Server y toma la cadena desde `ConnectionStrings:DefaultConnection`, que en IIS/Plesk debe configurarse como variable de entorno:
+
+```text
+ConnectionStrings__DefaultConnection
+```
+
+No guardar credenciales reales en `appsettings*.json`.
+
+Comando local para crear la migración inicial cuando el SDK .NET 8 y `dotnet-ef` estén disponibles:
+
+```bash
+dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
 ```
 
 ## Publicación para IIS/Plesk

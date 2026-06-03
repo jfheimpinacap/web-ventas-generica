@@ -796,3 +796,126 @@ Se agregó un proyecto xUnit `JemNexus.Api.Tests` con pruebas mínimas para vali
 - Agregar provider SQL Server y migraciones iniciales.
 - Generar scripts SQL revisables antes de aplicar en Plesk.
 - Mantener sin cambios el frontend hasta que los contratos estén replicados.
+
+## Implementación Backend .NET 2
+
+Fase implementada para preparar la base lógica comercial de ASP.NET Core + SQL Server con Entity Framework Core, sin conectar todavía con la base real de Plesk y sin reemplazar Django.
+
+### Paquetes EF Core agregados
+
+En `backend-dotnet/JemNexus.Api/JemNexus.Api.csproj` se agregaron paquetes estables compatibles con .NET 8:
+
+- `Microsoft.EntityFrameworkCore`.
+- `Microsoft.EntityFrameworkCore.SqlServer`.
+- `Microsoft.EntityFrameworkCore.Design` con `PrivateAssets=all`.
+- `Microsoft.EntityFrameworkCore.Tools` con `PrivateAssets=all`.
+
+No se agregaron versiones preview.
+
+### Entidades creadas
+
+Se creó el namespace `JemNexus.Api.Models` con las entidades comerciales equivalentes a los modelos actuales de Django/DRF:
+
+- `Category`: nombre, slug, jerarquía padre/hijo, descripción, activo, orden y auditoría básica.
+- `Brand`: nombre, slug, logo, descripción, activo y auditoría básica.
+- `Supplier`: nombre, datos de contacto, notas, activo y auditoría básica.
+- `Product`: categoría, marca, proveedor, tipo, condición, descripciones, modelo, SKU, año, horómetro, precio, visibilidad de precio, estado de stock, destacado, publicado y auditoría básica.
+- `ProductImage`: producto, ruta/archivo de imagen, texto alternativo, marca de imagen principal, orden y auditoría básica.
+- `ProductSpec`: producto, clave, valor, unidad, orden y auditoría básica.
+- `Promotion`: título, subtítulo, producto opcional, imagen, botón, activo, orden, fechas de vigencia y auditoría básica.
+- `HomeSectionItem`: sección, posición, producto, activo y auditoría básica.
+- `QuoteRequest`: producto opcional, datos del cliente, método de contacto preferido, mensaje, estado, notas/respuesta interna, fechas de gestión y auditoría básica.
+
+Los nombres C# quedaron en `PascalCase`; la configuración JSON existente conserva la política `SnakeCaseLower` para preparar compatibilidad futura con los contratos DRF.
+
+### Relaciones configuradas
+
+`JemNexusDbContext` configura las relaciones principales:
+
+- `Category` self-reference opcional (`ParentId`) con hijos (`Children`) y borrado `SetNull`.
+- `Product` → `Category` requerido con borrado restringido, equivalente al `PROTECT` de Django.
+- `Product` → `Brand` opcional con borrado `SetNull`.
+- `Product` → `Supplier` opcional con borrado `SetNull`.
+- `ProductImage` → `Product` requerido con borrado en cascada.
+- `ProductSpec` → `Product` requerido con borrado en cascada.
+- `Promotion` → `Product` opcional con borrado `SetNull`.
+- `HomeSectionItem` → `Product` requerido con borrado en cascada.
+- `QuoteRequest` → `Product` opcional con borrado `SetNull`.
+
+### Índices configurados
+
+Se configuraron índices para preparar consultas públicas y de panel vendedor:
+
+- Slug único en `Category`, `Brand` y `Product`.
+- Índice normal en `Product.Sku`, ya que el modelo Django actual permite SKU vacío y no lo define como único.
+- Índices de filtro/consulta en `IsActive`, `IsPublished`, `ProductType`, `Condition`, `StockStatus` e `IsFeatured`.
+- Índices de orden para categorías, imágenes, specs, promociones y secciones home.
+- Índices únicos equivalentes a `unique_together` en `HomeSectionItem`: `(Section, Position)` y `(Section, ProductId)`.
+- Índices de gestión en `QuoteRequest.Status` y `QuoteRequest.CreatedAt`.
+
+### DbContext y connection string
+
+Se creó `backend-dotnet/JemNexus.Api/Data/JemNexusDbContext.cs` con `DbSet` para todas las entidades comerciales.
+
+`Program.cs` registra el DbContext con SQL Server usando `ConnectionStrings:DefaultConnection`, configurable en despliegue por la variable de entorno:
+
+```text
+ConnectionStrings__DefaultConnection
+```
+
+`appsettings.json` mantiene `ConnectionStrings:DefaultConnection` vacío para evitar credenciales reales en git. Si no existe valor local, `Program.cs` usa un placeholder seguro de LocalDB solo para permitir arranque/desarrollo sin apuntar a Plesk.
+
+### Estado de migraciones
+
+La solución queda preparada para migraciones EF Core. En esta fase se debe intentar crear la migración inicial con:
+
+```bash
+dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
+```
+
+Si `dotnet` o `dotnet-ef` no están instalados en el entorno de ejecución, la migración queda pendiente para un entorno local Windows/.NET 8. No se debe crear ni aplicar migración contra la base real `jemnexusb_prod` hasta una fase posterior con cadena segura configurada fuera de git.
+
+### Comandos locales para validar
+
+```bash
+dotnet restore backend-dotnet/JemNexus.sln
+dotnet build backend-dotnet/JemNexus.sln
+dotnet test backend-dotnet/JemNexus.sln
+dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
+python backend/manage.py check
+python backend/manage.py test core catalog -v 2
+cd frontend && npm run build
+```
+
+### Pendientes Backend .NET 3
+
+- Generar y revisar la migración `InitialCommercialSchema` en un entorno con SDK .NET 8 y herramienta `dotnet-ef` disponibles.
+- Definir DTOs y contratos públicos compatibles con los serializers actuales de DRF.
+- Implementar endpoints CRUD/lectura del catálogo sin modificar aún el frontend.
+- Diseñar autenticación/autorización equivalente a vendedor/admin soporte.
+- Implementar validaciones de negocio que hoy viven en serializers/modelos Django.
+- Preparar estrategia de carga de media/archivos para IIS/Plesk.
+- Planificar migración de datos desde Django/PostgreSQL o SQLite hacia SQL Server sin pérdida de información.
+
+### Validación ejecutada en Codex para Backend .NET 2
+
+En el entorno Codex de esta implementación, `dotnet` no está instalado. Por lo tanto, estos comandos quedaron pendientes para validación local Windows/.NET 8 y no se inventaron resultados:
+
+```bash
+dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
+# Error real: /bin/bash: line 1: dotnet: command not found
+
+dotnet build backend-dotnet/JemNexus.sln
+# Error real: /bin/bash: line 1: dotnet: command not found
+
+dotnet test backend-dotnet/JemNexus.sln
+# Error real: /bin/bash: line 1: dotnet: command not found
+```
+
+Validaciones existentes ejecutadas correctamente en Codex:
+
+```bash
+python backend/manage.py check
+python backend/manage.py test core catalog -v 2
+cd frontend && npm run build
+```
