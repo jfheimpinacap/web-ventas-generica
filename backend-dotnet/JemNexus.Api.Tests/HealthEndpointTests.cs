@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -11,12 +12,15 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
 
     public HealthEndpointTests(WebApplicationFactory<Program> factory)
     {
-        _client = factory.CreateClient();
+        _client = factory
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Test"))
+            .CreateClient();
     }
 
     [Theory]
     [InlineData("/health")]
     [InlineData("/api/health")]
+    [InlineData("/api/health/")]
     public async Task HealthEndpointsReturnOk(string path)
     {
         var response = await _client.GetAsync(path);
@@ -27,6 +31,7 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
     [Theory]
     [InlineData("/health")]
     [InlineData("/api/health")]
+    [InlineData("/api/health/")]
     public async Task HealthEndpointsReturnExpectedPayload(string path)
     {
         var payload = await _client.GetFromJsonAsync<HealthResponse>(path);
