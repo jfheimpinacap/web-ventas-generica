@@ -1,5 +1,7 @@
 using System.Text.Json;
+using JemNexus.Api.Data;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.EntityFrameworkCore;
 
 const string CorsPolicyName = "JemNexusFrontend";
 const string AppName = "JEM Nexus API";
@@ -24,6 +26,14 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+var defaultConnection = string.IsNullOrWhiteSpace(configuredConnection)
+    ? "Server=(localdb)\\mssqllocaldb;Database=JemNexus_Local;Trusted_Connection=True;TrustServerCertificate=True"
+    : configuredConnection;
+
+builder.Services.AddDbContext<JemNexusDbContext>(options =>
+    options.UseSqlServer(defaultConnection));
 
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
 
