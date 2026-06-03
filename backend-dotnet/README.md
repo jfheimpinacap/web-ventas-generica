@@ -108,3 +108,41 @@ Swagger se registra solo cuando `ASPNETCORE_ENVIRONMENT` es `Development` o `QA`
 ## Compatibilidad JSON
 
 La serialización JSON queda configurada con `JsonNamingPolicy.SnakeCaseLower`. Esta decisión prepara respuestas futuras compatibles con los contratos actuales de Django/DRF, que usan nombres de campos en `snake_case`. Los DTOs reales se migrarán en fases posteriores.
+
+## Observaciones pre-aplicación Backend .NET 2C
+
+### Slugs
+
+`JemNexus.Api/Utils/SlugHelper.cs` centraliza la generación/normalización de slugs: minúsculas, remoción de tildes, separadores con guiones, eliminación de caracteres no seguros, compactación de guiones y manejo seguro de `null`/vacío.
+
+La unicidad final de slugs debe resolverse al crear endpoints de escritura, consultando la base de datos y aplicando una política de sufijos si el índice único detecta colisión.
+
+### Timestamps automáticos
+
+`JemNexusDbContext` actualiza timestamps comerciales en `SaveChanges` y `SaveChangesAsync`:
+
+- En entidades nuevas, asigna `CreatedAt` cuando viene en default y siempre asigna `UpdatedAt`.
+- En entidades modificadas, actualiza `UpdatedAt` y conserva `CreatedAt`.
+
+Esto prepara el equivalente a `auto_now`/`auto_now_add` sin agregar triggers ni cambiar el schema inicial.
+
+### Uploads
+
+La sección `Uploads` de `appsettings*.json` prepara la configuración de imágenes para fases futuras:
+
+```json
+"Uploads": {
+  "RootPath": "",
+  "PublicBasePath": "/media",
+  "AllowedExtensions": [".jpg", ".jpeg", ".png", ".webp"],
+  "MaxFileSizeMb": 5
+}
+```
+
+En desarrollo local, `RootPath` debe apuntar a una carpeta configurable. En Plesk/IIS, debe apuntar a una carpeta del hosting/subdominio o carpeta asignada con permisos de escritura controlados para el identity del app pool. La base de datos debe guardar rutas relativas, no rutas absolutas. Los endpoints futuros deben validar extensión, content-type, firma binaria y tamaño antes de escribir archivos y nunca exponer archivos fuera de la carpeta pública.
+
+### Auditoría y actualización de base real
+
+`CreatedById` y `UpdatedById` se mantienen por ahora como campos base sin FK real hasta definir autenticación JWT y usuarios en Backend .NET 3. La decisión pendiente es usar una tabla propia liviana o ASP.NET Core Identity.
+
+> Advertencia: no ejecutar `dotnet ef database update` contra Plesk/SQL Server productivo sin revisar connection string, confirmar backup de SQL Server y uploads, validar ventana de mantenimiento y confirmar explícitamente la migración a aplicar.

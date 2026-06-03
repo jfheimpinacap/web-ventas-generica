@@ -949,3 +949,20 @@ Próximos pasos sugeridos:
 3. Definir estrategia de usuarios/roles/auditoría y uploads en Windows/IIS/Plesk.
 4. Probar el script primero en una base temporal SQL Server 2022.
 5. Ejecutar `database update` solo cuando el checklist previo esté completo.
+
+## Backend .NET 2C - Cierre de observaciones pre-aplicación
+
+Backend .NET 2C cerró o dejó preparadas las observaciones principales de Backend .NET 2B sin aplicar cambios destructivos, sin modificar la migración inicial, sin ejecutar `dotnet ef database update` y sin conectar a `jemnexusb_prod`.
+
+- **Slugs:** se agregó `SlugHelper` para normalizar texto a slugs seguros. La unicidad final se mantiene protegida por índices únicos del schema, pero la generación de sufijos ante colisiones queda para los endpoints de escritura de la fase CRUD.
+- **`UpdatedAt`:** `JemNexusDbContext` actualiza timestamps automáticamente en `SaveChanges` y `SaveChangesAsync` para las entidades comerciales principales. No requiere cambio de schema.
+- **Validaciones:** se agregó `CommercialValidation` con constantes permitidas para `ProductType`, `Condition`, `StockStatus`, `QuoteRequest.Status` y `PreferredContactMethod`, además de reglas iniciales para productos, cotizaciones, imágenes y specs. Las validaciones de DTO/controller quedan para fases API.
+- **Uploads IIS/Plesk:** se agregó configuración `Uploads` y `UploadOptions`. La estrategia es guardar rutas relativas en DB, mantener carpeta configurable, usar permisos NTFS controlados, no exponer carpetas fuera del path público y validar extensión, content-type, firma binaria y tamaño en endpoints futuros.
+- **Auditoría/usuarios:** `CreatedById` y `UpdatedById` siguen como campos base sin FK real. En Backend .NET 3 se debe definir JWT y decidir tabla propia liviana vs ASP.NET Core Identity. Dado que el sistema tendrá 1 vendedor y 1 administrador soporte, no se recomienda sobrediseñar multiempresa ni ownership multi-vendedor.
+
+### Pendiente antes de aplicar en Plesk
+
+1. Confirmar si se aceptan `CreatedById`/`UpdatedById` sin FK para la primera aplicación o si se hará una migración correctiva de usuarios/auth antes de crear la base definitiva.
+2. Confirmar si se desean `CHECK CONSTRAINT` SQL para choices/enums o si basta validación de aplicación como en Django.
+3. Definir carpeta física de uploads en Plesk/IIS, permisos NTFS del app pool y política de backup de archivos.
+4. Revisar connection string productiva, backup y ventana de aplicación antes de cualquier `dotnet ef database update`.
