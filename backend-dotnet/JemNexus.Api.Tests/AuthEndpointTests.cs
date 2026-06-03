@@ -16,14 +16,16 @@ namespace JemNexus.Api.Tests;
 
 public sealed class AuthEndpointTests
 {
-    [Fact]
-    public async Task LoginWithValidCredentialsReturnsAccessRefreshAndUser()
+    [Theory]
+    [InlineData("/api/auth/login")]
+    [InlineData("/api/auth/login/")]
+    public async Task LoginWithValidCredentialsReturnsAccessRefreshAndUser(string loginPath)
     {
         await using var factory = CreateFactory();
         await SeedUserAsync(factory, "demo", "correct-password");
         var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/auth/login/", new { username = "demo", password = "correct-password" });
+        var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
         var payload = await response.Content.ReadFromJsonAsync<LoginPayload>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -35,41 +37,47 @@ public sealed class AuthEndpointTests
         Assert.True(payload.User.IsStaff);
     }
 
-    [Fact]
-    public async Task LoginWithInvalidCredentialsReturnsUnauthorized()
+    [Theory]
+    [InlineData("/api/auth/login")]
+    [InlineData("/api/auth/login/")]
+    public async Task LoginWithInvalidCredentialsReturnsUnauthorized(string loginPath)
     {
         await using var factory = CreateFactory();
         await SeedUserAsync(factory, "demo", "correct-password");
         var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/auth/login/", new { username = "demo", password = "wrong-password" });
+        var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "wrong-password" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task MeWithoutBearerTokenReturnsUnauthorized()
+    [Theory]
+    [InlineData("/api/auth/me")]
+    [InlineData("/api/auth/me/")]
+    public async Task MeWithoutBearerTokenReturnsUnauthorized(string mePath)
     {
         await using var factory = CreateFactory();
         var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/auth/me/");
+        var response = await client.GetAsync(mePath);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task MeWithBearerTokenReturnsCurrentUser()
+    [Theory]
+    [InlineData("/api/auth/login", "/api/auth/me")]
+    [InlineData("/api/auth/login/", "/api/auth/me/")]
+    public async Task MeWithBearerTokenReturnsCurrentUser(string loginPath, string mePath)
     {
         await using var factory = CreateFactory();
         await SeedUserAsync(factory, "demo", "correct-password");
         var client = factory.CreateClient();
-        var loginResponse = await client.PostAsJsonAsync("/api/auth/login/", new { username = "demo", password = "correct-password" });
+        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
         var login = await loginResponse.Content.ReadFromJsonAsync<LoginPayload>();
         Assert.NotNull(login);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
-        var response = await client.GetAsync("/api/auth/me/");
+        var response = await client.GetAsync(mePath);
         var user = await response.Content.ReadFromJsonAsync<UserPayload>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -78,17 +86,19 @@ public sealed class AuthEndpointTests
         Assert.Equal(AppRoles.Seller, user.Role);
     }
 
-    [Fact]
-    public async Task RefreshWithPersistedRefreshTokenReturnsNewAccessToken()
+    [Theory]
+    [InlineData("/api/auth/login", "/api/auth/refresh")]
+    [InlineData("/api/auth/login/", "/api/auth/refresh/")]
+    public async Task RefreshWithPersistedRefreshTokenReturnsNewAccessToken(string loginPath, string refreshPath)
     {
         await using var factory = CreateFactory();
         await SeedUserAsync(factory, "demo", "correct-password");
         var client = factory.CreateClient();
-        var loginResponse = await client.PostAsJsonAsync("/api/auth/login/", new { username = "demo", password = "correct-password" });
+        var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "correct-password" });
         var login = await loginResponse.Content.ReadFromJsonAsync<LoginPayload>();
         Assert.NotNull(login);
 
-        var response = await client.PostAsJsonAsync("/api/auth/refresh/", new { refresh = login.Refresh });
+        var response = await client.PostAsJsonAsync(refreshPath, new { refresh = login.Refresh });
         var payload = await response.Content.ReadFromJsonAsync<RefreshPayload>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

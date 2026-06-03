@@ -134,19 +134,11 @@ if (!app.Environment.IsEnvironment("Test"))
     app.UseHttpsRedirection();
 }
 
+app.Use(NormalizeKnownTrailingSlashPaths);
+app.UseRouting();
 app.UseCors(CorsPolicyName);
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.Equals("/api/health/", StringComparison.OrdinalIgnoreCase))
-    {
-        context.Request.Path = "/api/health";
-    }
-
-    await next();
-});
 
 IResult HealthResponse(IHostEnvironment environment)
 {
@@ -175,13 +167,25 @@ MapAuthEndpoints(app);
 
 app.Run();
 
+static Task NormalizeKnownTrailingSlashPaths(HttpContext context, Func<Task> next)
+{
+    var path = context.Request.Path;
+
+    if (path.Equals("/api/health/", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/auth/login/", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/auth/refresh/", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/auth/me/", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = path.Value!.TrimEnd('/');
+    }
+
+    return next();
+}
+
 static void MapAuthEndpoints(WebApplication app)
 {
-    app.MapPost("/api/auth/login/", LoginAsync).AllowAnonymous().WithName("AuthLoginSlash").WithOpenApi();
     app.MapPost("/api/auth/login", LoginAsync).AllowAnonymous().WithName("AuthLogin").WithOpenApi();
-    app.MapPost("/api/auth/refresh/", RefreshAsync).AllowAnonymous().WithName("AuthRefreshSlash").WithOpenApi();
     app.MapPost("/api/auth/refresh", RefreshAsync).AllowAnonymous().WithName("AuthRefresh").WithOpenApi();
-    app.MapGet("/api/auth/me/", MeAsync).RequireAuthorization().WithName("AuthMeSlash").WithOpenApi();
     app.MapGet("/api/auth/me", MeAsync).RequireAuthorization().WithName("AuthMe").WithOpenApi();
 }
 
