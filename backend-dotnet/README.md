@@ -2,7 +2,7 @@
 
 Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (.NET 8), preparado para Windows Server + IIS + Plesk.
 
-> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`, pero no aplica cambios en Plesk/SQL Server real ni reemplaza todavía el backend Django existente.
+> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`; el schema corregido quedó aplicado en Plesk/SQL Server, pero la API .NET todavía no está publicada ni reemplaza el backend Django existente.
 
 ## Estructura
 
@@ -71,6 +71,26 @@ Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs
 5. No guardar credenciales reales, cadenas de conexión completas ni secretos JWT en archivos versionados.
 
 `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es acumulado desde cero. Si la base ya tiene `InitialCommercialSchema`, se debe generar/revisar `backend-dotnet/sql/FromInitialCommercialSchemaToAddAuthUsersAndAuditRelations.sql` antes de aplicar cambios.
+
+## Estado Plesk SQL Server
+
+El schema ASP.NET Core / EF Core quedó aplicado correctamente en Plesk SQL Server sobre `jemnexusb_prod`. Las tablas fueron creadas bajo el esquema real `jmnexusb_api` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+
+No ejecutar nuevamente `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` sobre la misma base sin revisar antes `__EFMigrationsHistory` y la existencia real de tablas. El script es acumulado desde cero y puede fallar o duplicar objetos si se usa sobre una base ya aplicada.
+
+Antes de publicar la API en Plesk/IIS, configurar fuera del repositorio y sin secretos reales en git:
+
+- `ConnectionStrings__DefaultConnection`
+- `Jwt__Secret` o `JWT_SECRET`
+- `Jwt__Issuer`
+- `Jwt__Audience`
+- `SeedUsers__SellerUsername`
+- `SeedUsers__SellerPassword`
+- `SeedUsers__SupportUsername`
+- `SeedUsers__SupportPassword`
+- `FRONTEND_ORIGINS`
+
+No crear usuarios reales ni iniciar la API productiva hasta que estas variables estén configuradas y exista un plan de publicación/rollback controlado.
 
 ## Publicación para IIS/Plesk
 

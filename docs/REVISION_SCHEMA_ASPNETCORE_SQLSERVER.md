@@ -11,9 +11,9 @@ Base destino futura considerada: SQL Server 2022, Windows Server, IIS/Plesk, bas
 
 El schema inicial EF Core/SQL Server reproduce de forma amplia el dominio comercial actual de Django: categorías, marcas, proveedores, productos, imágenes, especificaciones, promociones, secciones de home y solicitudes de cotización. La migración genera claves primarias `IDENTITY`, relaciones equivalentes a las relaciones principales Django, índices para filtros públicos y administrativos, unicidad en slugs y unicidad de posiciones/items de home.
 
-La conclusión original de esta revisión fue: **APTO CON OBSERVACIONES**. Esa decisión queda reemplazada por el incidente documentado al final de este archivo: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
+La conclusión original de esta revisión fue: **APTO CON OBSERVACIONES**. Esa decisión fue reemplazada temporalmente por **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk** durante el incidente `Msg 1785`. Tras el hotfix de cascadas y la aplicación controlada posterior, el estado actual es: **APTO APLICADO EN PLESK tras hotfix de cascadas**.
 
-Se detectó posteriormente un bloqueo crítico para una base nueva/vacía en SQL Server 2022: la FK self-reference de `Categories.ParentId` con acción de borrado generó `Msg 1785` por ciclos o múltiples cascade paths. Sin embargo, antes de aplicar en Plesk conviene resolver o aceptar explícitamente algunas observaciones: no existen claves foráneas reales hacia usuarios/auditoría, `UpdatedAt` no se actualiza automáticamente por SQL Server, no hay `CHECK CONSTRAINT` para enums/choices, los slugs son obligatorios en .NET aunque en Django se autogeneran si vienen en blanco, no hay defaults SQL para `Product.PriceVisible`, `Product.IsFeatured` e `Product.IsPublished`, y varios `nvarchar(max)` podrían limitarse si se desea mayor control operativo.
+Se detectó posteriormente un bloqueo crítico para una base nueva/vacía en SQL Server 2022: la FK self-reference de `Categories.ParentId` con acción de borrado generó `Msg 1785` por ciclos o múltiples cascade paths. Ese bloqueo quedó corregido configurando `DeleteBehavior.NoAction` en relaciones comerciales/self-reference y regenerando el script acumulado. Sin embargo, antes de aplicar en Plesk conviene resolver o aceptar explícitamente algunas observaciones: no existen claves foráneas reales hacia usuarios/auditoría, `UpdatedAt` no se actualiza automáticamente por SQL Server, no hay `CHECK CONSTRAINT` para enums/choices, los slugs son obligatorios en .NET aunque en Django se autogeneran si vienen en blanco, no hay defaults SQL para `Product.PriceVisible`, `Product.IsFeatured` e `Product.IsPublished`, y varios `nvarchar(max)` podrían limitarse si se desea mayor control operativo.
 
 ## 2. Archivos revisados
 
@@ -389,8 +389,23 @@ Observación operacional importante: el script SQL revisado es acumulado desde u
 
 ## Reemplazo de decisión por incidente SQL Server Msg 1785
 
-La decisión anterior de la revisión inicial, **“APTO CON OBSERVACIONES”**, queda reemplazada por: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
+La decisión anterior de la revisión inicial, **“APTO CON OBSERVACIONES”**, quedó reemplazada durante el incidente por: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
 
 Motivo: SQL Server rechazó la FK `FK_Categories_Categories_ParentId` por riesgo de ciclos o múltiples cascade paths (`Msg 1785`) durante la aplicación real del script acumulado. Además, el intento dejó `jemnexusb_prod` en estado parcial con `__EFMigrationsHistory` y `Suppliers`, pero sin tablas principales como `Brands`, `Categories`, `Products`, `AppUsers` y `AppRefreshTokens`.
 
 La existencia de filas en `__EFMigrationsHistory` ya no prueba que el schema esté aplicado en este caso. Antes de una nueva aplicación se requiere limpiar la base parcial y usar el script hotfix con `DeleteBehavior.NoAction`/`ON DELETE NO ACTION` en las relaciones comerciales y en la self-reference de categorías.
+
+
+## Estado posterior al hotfix y aplicación controlada en Plesk
+
+Estado actual de la revisión: **APTO APLICADO EN PLESK tras hotfix de cascadas**.
+
+Trazabilidad del incidente:
+
+- SQL Server rechazó inicialmente `FK_Categories_Categories_ParentId` con `Msg 1785` por posible ciclo o múltiples rutas de cascada.
+- El intento fallido dejó objetos parciales e historial EF no confiable, por lo que fue necesario limpiar antes de reintentar.
+- La corrección técnica fue configurar `DeleteBehavior.NoAction` en relaciones comerciales y self-reference, de modo que el SQL resultante use `ON DELETE NO ACTION` donde corresponde.
+- Después de limpiar el intento fallido, `jemnexusb_prod` quedó con `0` tablas y se aplicó el script corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
+- El schema quedó aplicado bajo `jmnexusb_api` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+
+No se requiere una migración correctiva adicional en este punto por el incidente `Msg 1785`, porque la base quedó aplicada desde cero con el script corregido. Las futuras migraciones deberán partir del historial EF ya registrado y no deben reejecutar el acumulado sobre la misma base sin diagnóstico previo.

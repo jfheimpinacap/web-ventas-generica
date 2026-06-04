@@ -14,7 +14,7 @@ Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el e
 - Base de datos: `jemnexusb_prod`.
 - Usuario de base de datos: `jemnexusb_api`.
 - Host visible en Plesk: `.\MSSQLSERVER2022`.
-- La base fue creada previamente, pero desde este flujo todavía no se ha aplicado schema real.
+- La base fue creada previamente y el schema ASP.NET Core / EF Core quedó aplicado posteriormente en una aplicación controlada documentada en este mismo archivo.
 
 > No incluir contraseñas, cadenas de conexión completas, claves JWT ni credenciales reales en este documento ni en el repositorio.
 
@@ -278,9 +278,45 @@ Publicación local revisable para IIS/Plesk:
 dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net8.0 -o backend-dotnet/publish-test
 ```
 
+## Resultado de aplicación controlada del schema
+
+Hito documentado aproximadamente el 2026-06-04, después del hotfix de cascadas SQL Server (`DeleteBehavior.NoAction` en relaciones comerciales y self-reference).
+
+Resultado operativo informado para Plesk/SQL Server:
+
+- El intento fallido anterior fue limpiado antes de reintentar.
+- La base `jemnexusb_prod` quedó con `0` tablas antes de aplicar nuevamente el script.
+- Se aplicó el script acumulado corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
+- El schema quedó creado bajo el esquema real `jmnexusb_api`.
+- No se crearon usuarios reales en esta fase.
+- No se configuraron secretos reales ni variables productivas todavía.
+- No se publicó ni inició la API ASP.NET Core en Plesk todavía.
+
+Tablas creadas bajo el esquema `jmnexusb_api`:
+
+- `__EFMigrationsHistory`
+- `AppRefreshTokens`
+- `AppUsers`
+- `Brands`
+- `Categories`
+- `HomeSectionItems`
+- `ProductImages`
+- `Products`
+- `ProductSpecs`
+- `Promotions`
+- `QuoteRequests`
+- `Suppliers`
+
+Migraciones registradas en `__EFMigrationsHistory`:
+
+- `20260603182917_InitialCommercialSchema`
+- `20260604020543_AddAuthUsersAndAuditRelations`
+
+Estado actual: schema aplicado correctamente en SQL Server/Plesk; la publicación de la API .NET, la configuración de variables/secretos y la creación controlada de usuarios quedan para una fase posterior. No repetir el script sobre `jemnexusb_prod` sin revisar previamente `__EFMigrationsHistory` y la existencia real de tablas.
+
 ## Próximo paso recomendado
 
-Ejecutar solo las queries de diagnóstico en Plesk/SQL Server, registrar resultados exactos de tablas e `__EFMigrationsHistory`, y recién después elegir entre script acumulado, script diferencial o detención para revisión manual.
+Configurar variables/secretos fuera del repositorio y preparar una publicación controlada de la API ASP.NET Core en Plesk/IIS, con smoke tests y plan de rollback. No ejecutar nuevamente scripts SQL sobre `jemnexusb_prod` sin diagnóstico previo de tablas e `__EFMigrationsHistory`.
 
 ## Incidente de aplicación fallida por cascadas SQL Server
 
