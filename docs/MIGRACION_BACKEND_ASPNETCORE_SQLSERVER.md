@@ -1168,3 +1168,20 @@ Antes de aplicar schema real en `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCH
 A la fecha de este documento, desde este flujo todavía **no se ha aplicado schema real en Plesk/SQL Server**, no se ha conectado a `jemnexusb_prod` y no se ha ejecutado `dotnet ef database update` contra producción.
 
 Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; si la base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
+
+## Nota hotfix SQL Server cascades / Plesk
+
+El script acumulado original `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` no debe considerarse aplicado en Plesk: falló en SQL Server real por múltiples rutas/ciclos de cascada al crear `FK_Categories_Categories_ParentId` y dejó `jemnexusb_prod` parcialmente ensuciada con `__EFMigrationsHistory` y `Suppliers`.
+
+Este hotfix prepara `DeleteBehavior.NoAction` explícito para la self-reference de `Categories`, las relaciones comerciales principales hacia `Products`, las dependencias comerciales de `Products` y las FKs de auditoría hacia `AppUsers`. El objetivo es que SQL Server pueda crear el schema desde cero sin intentar cascadas múltiples o ciclos peligrosos.
+
+Antes de reintentar en Plesk se debe limpiar el intento fallido con el plan/script `backend-dotnet/sql/CleanupFailedPleskApply.sql`, verificar que la base vuelva a quedar sin tablas de usuario y aplicar solo el script acumulado corregido. No ejecutar `dotnet ef database update` contra producción y no confiar solo en `__EFMigrationsHistory` si hubo un error parcial.
+
+Si el entorno donde se prepara el hotfix no tiene .NET SDK/`dotnet-ef`, regenerar localmente el script acumulado corregido con este comando y revisar que las FKs comerciales queden como `ON DELETE NO ACTION`:
+
+```bash
+dotnet ef migrations script \
+  --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
+  -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
+```

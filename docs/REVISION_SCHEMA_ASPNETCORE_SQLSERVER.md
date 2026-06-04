@@ -11,9 +11,9 @@ Base destino futura considerada: SQL Server 2022, Windows Server, IIS/Plesk, bas
 
 El schema inicial EF Core/SQL Server reproduce de forma amplia el dominio comercial actual de Django: categorías, marcas, proveedores, productos, imágenes, especificaciones, promociones, secciones de home y solicitudes de cotización. La migración genera claves primarias `IDENTITY`, relaciones equivalentes a las relaciones principales Django, índices para filtros públicos y administrativos, unicidad en slugs y unicidad de posiciones/items de home.
 
-La conclusión de esta revisión es: **APTO CON OBSERVACIONES**.
+La conclusión original de esta revisión fue: **APTO CON OBSERVACIONES**. Esa decisión queda reemplazada por el incidente documentado al final de este archivo: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
 
-No se detectan bloqueos críticos para una base nueva/vacía en SQL Server 2022. Sin embargo, antes de aplicar en Plesk conviene resolver o aceptar explícitamente algunas observaciones: no existen claves foráneas reales hacia usuarios/auditoría, `UpdatedAt` no se actualiza automáticamente por SQL Server, no hay `CHECK CONSTRAINT` para enums/choices, los slugs son obligatorios en .NET aunque en Django se autogeneran si vienen en blanco, no hay defaults SQL para `Product.PriceVisible`, `Product.IsFeatured` e `Product.IsPublished`, y varios `nvarchar(max)` podrían limitarse si se desea mayor control operativo.
+Se detectó posteriormente un bloqueo crítico para una base nueva/vacía en SQL Server 2022: la FK self-reference de `Categories.ParentId` con acción de borrado generó `Msg 1785` por ciclos o múltiples cascade paths. Sin embargo, antes de aplicar en Plesk conviene resolver o aceptar explícitamente algunas observaciones: no existen claves foráneas reales hacia usuarios/auditoría, `UpdatedAt` no se actualiza automáticamente por SQL Server, no hay `CHECK CONSTRAINT` para enums/choices, los slugs son obligatorios en .NET aunque en Django se autogeneran si vienen en blanco, no hay defaults SQL para `Product.PriceVisible`, `Product.IsFeatured` e `Product.IsPublished`, y varios `nvarchar(max)` podrían limitarse si se desea mayor control operativo.
 
 ## 2. Archivos revisados
 
@@ -383,6 +383,14 @@ Impacto sobre el schema:
 
 Esta migración cierra la observación pendiente de auditoría/usuarios del schema inicial para el alcance actual: un `AppUser` liviano con roles `seller` y `support_admin`, JWT y refresh tokens persistidos. `QuoteRequests` conserva auditoría nullable, lo cual es compatible con solicitudes públicas anónimas.
 
-No se detectaron drops, renames, cambios de tipo ni alteraciones destructivas inesperadas sobre tablas comerciales existentes. No se requiere migración correctiva adicional obligatoria antes de Plesk por el diseño revisado. Se mantienen como decisiones futuras no bloqueantes los `CHECK CONSTRAINT` para roles/choices y una estrategia de limpieza de refresh tokens expirados/revocados.
+No se detectaron drops, renames, cambios de tipo ni alteraciones destructivas inesperadas sobre tablas comerciales existentes. Esta conclusión queda reemplazada por el incidente SQL Server Msg 1785 documentado abajo; sí se requiere hotfix de cascadas antes de reintentar en Plesk. Se mantienen como decisiones futuras no bloqueantes los `CHECK CONSTRAINT` para roles/choices y una estrategia de limpieza de refresh tokens expirados/revocados.
 
 Observación operacional importante: el script SQL revisado es acumulado desde una base vacía e incluye también `20260603182917_InitialCommercialSchema`. Si la base de destino ya tuviera aplicada la migración inicial, se debe generar y revisar un script diferencial desde `20260603182917_InitialCommercialSchema` hasta `20260604020543_AddAuthUsersAndAuditRelations`; no ejecutar el script acumulado a ciegas sobre objetos existentes.
+
+## Reemplazo de decisión por incidente SQL Server Msg 1785
+
+La decisión anterior de la revisión inicial, **“APTO CON OBSERVACIONES”**, queda reemplazada por: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
+
+Motivo: SQL Server rechazó la FK `FK_Categories_Categories_ParentId` por riesgo de ciclos o múltiples cascade paths (`Msg 1785`) durante la aplicación real del script acumulado. Además, el intento dejó `jemnexusb_prod` en estado parcial con `__EFMigrationsHistory` y `Suppliers`, pero sin tablas principales como `Brands`, `Categories`, `Products`, `AppUsers` y `AppRefreshTokens`.
+
+La existencia de filas en `__EFMigrationsHistory` ya no prueba que el schema esté aplicado en este caso. Antes de una nueva aplicación se requiere limpiar la base parcial y usar el script hotfix con `DeleteBehavior.NoAction`/`ON DELETE NO ACTION` en las relaciones comerciales y en la self-reference de categorías.
