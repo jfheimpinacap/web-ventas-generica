@@ -971,7 +971,7 @@ Backend .NET 2C cerró o dejó preparadas las observaciones principales de Backe
 
 ### Alcance y decisión técnica
 
-Backend .NET 3 agrega una base de autenticación JWT para ASP.NET Core sin reemplazar todavía Django ni aplicar cambios en Plesk/SQL Server productivo. Se mantiene la decisión de usar un `AppUser` propio y liviano, en vez de ASP.NET Core Identity completo, porque el uso inicial considera un vendedor y un administrador de soporte, sin multiempresa ni ownership multi-vendedor estricto.
+Backend .NET 3 agrega una base de autenticación JWT para ASP.NET Core sin reemplazar todavía Django. Posteriormente, el schema corregido de esta fase quedó aplicado correctamente en Plesk/SQL Server, pero la API .NET todavía no fue publicada. Se mantiene la decisión de usar un `AppUser` propio y liviano, en vez de ASP.NET Core Identity completo, porque el uso inicial considera un vendedor y un administrador de soporte, sin multiempresa ni ownership multi-vendedor estricto.
 
 ### Modelo de usuario y roles
 
@@ -1165,17 +1165,17 @@ No se detectan drops, renames, cambios de tipo ni alteraciones destructivas ines
 
 Antes de aplicar schema real en `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
 
-A la fecha de este documento, desde este flujo todavía **no se ha aplicado schema real en Plesk/SQL Server**, no se ha conectado a `jemnexusb_prod` y no se ha ejecutado `dotnet ef database update` contra producción.
+Estado actualizado Backend .NET 3: el schema ASP.NET Core / EF Core fue aplicado correctamente en Plesk SQL Server sobre la base `jemnexusb_prod`, bajo el esquema real `jmnexusb_api`, después de limpiar el intento fallido previo y reintentar con el script corregido. La API .NET todavía no fue publicada y Codex no ejecutó `dotnet ef database update` ni conectó a Plesk.
 
 Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; si la base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
 
 ## Nota hotfix SQL Server cascades / Plesk
 
-El script acumulado original `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` no debe considerarse aplicado en Plesk: falló en SQL Server real por múltiples rutas/ciclos de cascada al crear `FK_Categories_Categories_ParentId` y dejó `jemnexusb_prod` parcialmente ensuciada con `__EFMigrationsHistory` y `Suppliers`.
+El script acumulado original `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` falló en SQL Server real por múltiples rutas/ciclos de cascada al crear `FK_Categories_Categories_ParentId` y dejó `jemnexusb_prod` parcialmente ensuciada con `__EFMigrationsHistory` y `Suppliers`. Ese intento no debía considerarse una aplicación válida del schema.
 
-Este hotfix prepara `DeleteBehavior.NoAction` explícito para la self-reference de `Categories`, las relaciones comerciales principales hacia `Products`, las dependencias comerciales de `Products` y las FKs de auditoría hacia `AppUsers`. El objetivo es que SQL Server pueda crear el schema desde cero sin intentar cascadas múltiples o ciclos peligrosos.
+El hotfix agregó `DeleteBehavior.NoAction` explícito para la self-reference de `Categories`, las relaciones comerciales principales hacia `Products`, las dependencias comerciales de `Products` y las FKs de auditoría hacia `AppUsers`. El objetivo fue que SQL Server pudiera crear el schema desde cero sin intentar cascadas múltiples o ciclos peligrosos.
 
-Antes de reintentar en Plesk se debe limpiar el intento fallido con el plan/script `backend-dotnet/sql/CleanupFailedPleskApply.sql`, verificar que la base vuelva a quedar sin tablas de usuario y aplicar solo el script acumulado corregido. No ejecutar `dotnet ef database update` contra producción y no confiar solo en `__EFMigrationsHistory` si hubo un error parcial.
+El reintento posterior ya se hizo después de limpiar el intento fallido con el plan/script `backend-dotnet/sql/CleanupFailedPleskApply.sql`, verificar que la base volviera a quedar sin tablas de usuario y aplicar solo el script acumulado corregido. No ejecutar `dotnet ef database update` contra producción y no confiar solo en `__EFMigrationsHistory` si hubo un error parcial.
 
 Si el entorno donde se prepara el hotfix no tiene .NET SDK/`dotnet-ef`, regenerar localmente el script acumulado corregido con este comando y revisar que las FKs comerciales queden como `ON DELETE NO ACTION`:
 
@@ -1185,3 +1185,18 @@ dotnet ef migrations script \
   --startup-project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
   -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
 ```
+
+
+## Backend .NET 3 - Estado aplicado en Plesk SQL Server
+
+Estado documentado aproximadamente el 2026-06-04:
+
+- Base usada en Plesk/SQL Server: `jemnexusb_prod`.
+- Esquema real usado por los objetos creados: `jmnexusb_api`.
+- Estado: schema aplicado correctamente; API ASP.NET Core aún no publicada.
+- Migraciones registradas en `__EFMigrationsHistory`:
+  - `20260603182917_InitialCommercialSchema`
+  - `20260604020543_AddAuthUsersAndAuditRelations`
+- Próximo paso: configurar variables/secretos en Plesk/IIS fuera del repositorio y preparar la publicación controlada de la API .NET, sin crear usuarios reales ni guardar secretos en git.
+
+No se requiere aplicar una migración correctiva adicional en este punto solo por el incidente de cascadas, porque el reintento exitoso se hizo con el script corregido. Antes de cualquier nueva ejecución SQL se debe revisar el estado real de `__EFMigrationsHistory` y de las tablas existentes.
