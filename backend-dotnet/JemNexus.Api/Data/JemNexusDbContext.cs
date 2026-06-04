@@ -161,7 +161,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(category => category.Parent)
                 .WithMany(category => category.Children)
                 .HasForeignKey(category => category.ParentId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -237,15 +237,15 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(product => product.Category)
                 .WithMany(category => category.Products)
                 .HasForeignKey(product => product.CategoryId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(product => product.Brand)
                 .WithMany(brand => brand.Products)
                 .HasForeignKey(product => product.BrandId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(product => product.Supplier)
                 .WithMany(supplier => supplier.Products)
                 .HasForeignKey(product => product.SupplierId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -267,7 +267,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(image => image.Product)
                 .WithMany(product => product.Images)
                 .HasForeignKey(image => image.ProductId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -288,7 +288,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(spec => spec.Product)
                 .WithMany(product => product.Specs)
                 .HasForeignKey(spec => spec.ProductId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -315,7 +315,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(promotion => promotion.Product)
                 .WithMany(product => product.Promotions)
                 .HasForeignKey(promotion => promotion.ProductId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -337,7 +337,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(item => item.Product)
                 .WithMany(product => product.HomeSectionItems)
                 .HasForeignKey(item => item.ProductId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 
@@ -365,7 +365,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(quote => quote.Product)
                 .WithMany(product => product.QuoteRequests)
                 .HasForeignKey(quote => quote.ProductId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

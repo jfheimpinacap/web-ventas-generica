@@ -281,3 +281,33 @@ dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net
 ## Próximo paso recomendado
 
 Ejecutar solo las queries de diagnóstico en Plesk/SQL Server, registrar resultados exactos de tablas e `__EFMigrationsHistory`, y recién después elegir entre script acumulado, script diferencial o detención para revisión manual.
+
+## Incidente de aplicación fallida por cascadas SQL Server
+
+Durante el intento de aplicar en SQL Server real/Plesk el script acumulado `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`, la base `jemnexusb_prod` había sido diagnosticada como vacía: `TABLES: 0`, sin `__EFMigrationsHistory`, sin `AppUsers` y sin `AppRefreshTokens`.
+
+El intento falló al crear la FK self-reference de categorías con el error SQL Server:
+
+```text
+Msg 1785: Introducing FOREIGN KEY constraint 'FK_Categories_Categories_ParentId' on table 'Categories' may cause cycles or multiple cascade paths. Specify ON DELETE NO ACTION or ON UPDATE NO ACTION, or modify other FOREIGN KEY constraints.
+```
+
+Después del error, el script continuó parcialmente y dejó la base en estado inconsistente. El diagnóstico post-error informado para `jemnexusb_prod` fue:
+
+- Base actual: `jemnexusb_prod`.
+- Tablas existentes: `__EFMigrationsHistory`, `Suppliers`.
+- Tablas faltantes: `Brands`, `Categories`, `Products`, `AppUsers`, `AppRefreshTokens`.
+- `__EFMigrationsHistory` contiene `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+- `OBJECT_ID` de `Brands`, `Categories`, `Products`, `AppUsers` y `AppRefreshTokens` es `NULL`.
+
+Por este incidente, `__EFMigrationsHistory` **no es confiable** como única fuente de verdad: contiene migraciones registradas aunque los objetos principales no existen. No se debe considerar el schema aplicado en Plesk si el historial EF dice que sí pero las tablas reales faltan.
+
+Acciones obligatorias antes de reintentar:
+
+1. No reejecutar el script viejo que contiene cascadas problemáticas.
+2. Ejecutar diagnóstico de tablas e historial EF y guardar la salida.
+3. Limpiar la base parcialmente ensuciada antes de aplicar de nuevo, usando `backend-dotnet/sql/CleanupFailedPleskApply.sql` en modo diagnóstico primero.
+4. Confirmar que no existen tablas inesperadas; si existen, detenerse y hacer revisión manual.
+5. Aplicar únicamente el script acumulado corregido con `ON DELETE NO ACTION` en relaciones comerciales y self-reference de categorías.
+
+El hotfix ajusta el modelo EF Core, la migración inicial, el snapshot y el script acumulado para evitar cascadas comerciales peligrosas en SQL Server. La única cascada conservada es `AppRefreshTokens.UserId -> AppUsers.Id`, limitada a tokens de autenticación dependientes del usuario.

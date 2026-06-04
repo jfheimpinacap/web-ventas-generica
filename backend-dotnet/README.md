@@ -282,3 +282,14 @@ dotnet ef migrations script \
 > Advertencia: no ejecutar `dotnet ef database update` contra SQL Server real/Plesk y no aplicar SQL sin backup verificado, revisión del script, confirmación del estado de `__EFMigrationsHistory`, ventana de mantenimiento y aprobación explícita. Si la base ya tiene aplicada `InitialCommercialSchema`, generar/revisar un script diferencial en vez de ejecutar un script acumulado desde cero.
 
 Antes de producción configurar `Jwt__Secret`/`JWT_SECRET` fuera del repo y definir si `SeedUsers__SellerPassword` y `SeedUsers__SupportPassword` se usarán para crear usuarios iniciales por seed controlado o si se crearán por un procedimiento separado seguro. No subir contraseñas reales ni connection strings reales al repositorio.
+
+## Advertencia Plesk/SQL Server: errores parciales de aplicación SQL
+
+Si la aplicación manual de un script SQL falla en Plesk/SQL Server, detenerse antes de reintentar. Revisar siempre:
+
+- base actual (`DB_NAME()`),
+- tablas existentes,
+- contenido de `__EFMigrationsHistory`,
+- existencia real de tablas esperadas mediante `OBJECT_ID` o `INFORMATION_SCHEMA.TABLES`.
+
+No confiar solo en `__EFMigrationsHistory` si hubo un error parcial: un script acumulado puede haber insertado filas de historial aunque la creación del schema haya quedado incompleta. En ese caso, limpiar o restaurar la base antes de aplicar un script corregido; no reejecutar a ciegas el script anterior.

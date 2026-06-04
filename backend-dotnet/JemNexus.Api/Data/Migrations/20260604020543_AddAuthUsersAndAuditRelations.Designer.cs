@@ -922,7 +922,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Category", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
@@ -946,7 +946,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("HomeSectionItems")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
@@ -966,12 +966,12 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Brand", "Brand")
                         .WithMany("Products")
                         .HasForeignKey("BrandId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JemNexus.Api.Models.Category", "Category")
                         .WithMany("Products")
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "CreatedBy")
@@ -982,7 +982,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Supplier", "Supplier")
                         .WithMany("Products")
                         .HasForeignKey("SupplierId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
@@ -1010,7 +1010,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("Images")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
@@ -1035,7 +1035,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("Specs")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
@@ -1060,7 +1060,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("Promotions")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
@@ -1084,7 +1084,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("QuoteRequests")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
