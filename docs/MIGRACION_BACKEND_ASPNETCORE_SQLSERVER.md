@@ -1200,3 +1200,19 @@ Estado documentado aproximadamente el 2026-06-04:
 - Próximo paso: configurar variables/secretos en Plesk/IIS fuera del repositorio y preparar la publicación controlada de la API .NET, sin crear usuarios reales ni guardar secretos en git.
 
 No se requiere aplicar una migración correctiva adicional en este punto solo por el incidente de cascadas, porque el reintento exitoso se hizo con el script corregido. Antes de cualquier nueva ejecución SQL se debe revisar el estado real de `__EFMigrationsHistory` y de las tablas existentes.
+
+## Prompt 009 - Preparación de publicación controlada API .NET en Plesk
+
+Estado actualizado:
+
+- El schema ASP.NET Core / EF Core ya fue aplicado correctamente en Plesk SQL Server.
+- La base real documentada es `jemnexusb_prod`.
+- El esquema real de los objetos creados es `jmnexusb_api`.
+- `__EFMigrationsHistory` debe contener `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+- La publicación de la API .NET en `https://api.jem-nexus.cl` sigue pendiente.
+- El Prompt 009 prepara documentación, checklist, variables, comandos de publish, smoke tests, diagnóstico y rollback para una publicación controlada.
+- No se ha cambiado el frontend para consumir la API .NET todavía.
+- No ejecutar `dotnet ef database update`, SQL real ni scripts de migración durante la publicación controlada.
+- No guardar secretos reales ni crear usuarios reales desde SQL como parte de este paso.
+
+Usar `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md` antes de publicar. El paquete local puede generarse con `backend-dotnet/scripts/publish-plesk.ps1` o con `dotnet publish` manual, y la salida esperada queda en `backend-dotnet/publish/JemNexus.Api` para subida manual a Plesk.
