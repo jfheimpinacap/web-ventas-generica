@@ -22,17 +22,15 @@ builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
 builder.Services.Configure<SeedUserOptions>(builder.Configuration.GetSection(SeedUserOptions.SectionName));
+
+var jwtOptions = ResolveJwtOptions(builder.Configuration, builder.Environment);
 builder.Services.Configure<JwtOptions>(options =>
 {
-    builder.Configuration.GetSection(JwtOptions.SectionName).Bind(options);
-    options.Secret = FirstNonEmpty(builder.Configuration["JWT_SECRET"], options.Secret);
-    options.Issuer = FirstNonEmpty(builder.Configuration["JWT_ISSUER"], options.Issuer);
-    options.Audience = FirstNonEmpty(builder.Configuration["JWT_AUDIENCE"], options.Audience);
-
-    if (builder.Environment.IsEnvironment("Test") && string.IsNullOrWhiteSpace(options.Secret))
-    {
-        options.Secret = "test-only-jwt-secret-not-for-production-32chars";
-    }
+    options.Issuer = jwtOptions.Issuer;
+    options.Audience = jwtOptions.Audience;
+    options.Secret = jwtOptions.Secret;
+    options.AccessTokenMinutes = jwtOptions.AccessTokenMinutes;
+    options.RefreshTokenDays = jwtOptions.RefreshTokenDays;
 });
 
 builder.Services.Configure<JsonOptions>(options =>
@@ -49,8 +47,6 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower;
 });
 
-var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-jwtOptions.Secret = FirstNonEmpty(builder.Configuration["JWT_SECRET"], jwtOptions.Secret);
 if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(jwtOptions.Secret))
 {
     throw new InvalidOperationException("Jwt:Secret or JWT_SECRET must be configured in Production.");
@@ -279,6 +275,21 @@ static string[] GetAllowedOrigins(IConfiguration configuration)
         .Where(origin => !string.IsNullOrWhiteSpace(origin))
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
+}
+
+static JwtOptions ResolveJwtOptions(IConfiguration configuration, IHostEnvironment environment)
+{
+    var options = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+    options.Secret = FirstNonEmpty(configuration["JWT_SECRET"], options.Secret);
+    options.Issuer = FirstNonEmpty(configuration["JWT_ISSUER"], options.Issuer);
+    options.Audience = FirstNonEmpty(configuration["JWT_AUDIENCE"], options.Audience);
+
+    if (environment.IsEnvironment("Test") && string.IsNullOrWhiteSpace(options.Secret))
+    {
+        options.Secret = "test-only-jwt-secret-not-for-production-32chars";
+    }
+
+    return options;
 }
 
 static string FirstNonEmpty(params string?[] values)
