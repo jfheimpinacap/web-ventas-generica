@@ -1163,11 +1163,13 @@ No se detectan drops, renames, cambios de tipo ni alteraciones destructivas ines
 
 ## Plan controlado de aplicación en Plesk / SQL Server
 
-Antes de aplicar schema real en `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
+Para nuevas aplicaciones, reintentos o validaciones sobre `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
 
-A la fecha de este documento, desde este flujo todavía **no se ha aplicado schema real en Plesk/SQL Server**, no se ha conectado a `jemnexusb_prod` y no se ha ejecutado `dotnet ef database update` contra producción.
+Estado actualizado del hito Backend .NET 3: el schema fue aplicado correctamente en Plesk/SQL Server después del hotfix de cascadas. La base usada fue `jemnexusb_prod` y el esquema real donde quedaron las tablas es `jmnexusb_api`. `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
 
-Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; si la base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
+Estado actual: schema aplicado, API .NET aún no publicada. No se crearon usuarios reales y no se configuraron secretos en esta fase. El próximo paso es configurar variables/secretos fuera del repositorio y preparar una publicación controlada de la API .NET en Plesk/IIS.
+
+Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; no ejecutarlo nuevamente sobre `jemnexusb_prod` sin revisar primero `__EFMigrationsHistory` y la existencia real de tablas. Si otra base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
 
 ## Nota hotfix SQL Server cascades / Plesk
 

@@ -2,7 +2,7 @@
 
 Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (.NET 8), preparado para Windows Server + IIS + Plesk.
 
-> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`, pero no aplica cambios en Plesk/SQL Server real ni reemplaza todavía el backend Django existente.
+> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`, y el schema ya quedó aplicado en Plesk/SQL Server; todavía no reemplaza el backend Django existente ni publica la API .NET.
 
 ## Estructura
 
@@ -62,7 +62,7 @@ dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNex
 
 ## Aplicación controlada de schema en Plesk
 
-Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md`. El flujo correcto es:
+El schema ya quedó aplicado en `jemnexusb_prod`; para cualquier nueva base o reintento, revisar y seguir el checklist `../docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md`. El flujo correcto es:
 
 1. Diagnosticar primero el estado real de la base con queries de solo lectura.
 2. Revisar `__EFMigrationsHistory` y confirmar si existen tablas comerciales o auth.
@@ -71,6 +71,28 @@ Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs
 5. No guardar credenciales reales, cadenas de conexión completas ni secretos JWT en archivos versionados.
 
 `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es acumulado desde cero. Si la base ya tiene `InitialCommercialSchema`, se debe generar/revisar `backend-dotnet/sql/FromInitialCommercialSchemaToAddAuthUsersAndAuditRelations.sql` antes de aplicar cambios.
+
+
+### Schema aplicado en Plesk
+
+El schema ASP.NET Core / EF Core fue aplicado correctamente en Plesk SQL Server sobre la base `jemnexusb_prod` después del hotfix de cascadas. Las tablas quedaron bajo el esquema real `jmnexusb_api`.
+
+No ejecutar nuevamente `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` sobre la misma base sin revisar primero `__EFMigrationsHistory` y confirmar la existencia real de las tablas esperadas. El historial esperado contiene:
+
+- `20260603182917_InitialCommercialSchema`
+- `20260604020543_AddAuthUsersAndAuditRelations`
+
+Antes de publicar la API .NET en Plesk/IIS, configurar fuera del repositorio y sin secretos reales en git:
+
+- `ConnectionStrings__DefaultConnection`
+- `Jwt__Secret` o `JWT_SECRET`
+- `Jwt__Issuer`
+- `Jwt__Audience`
+- `SeedUsers__SellerUsername`
+- `SeedUsers__SellerPassword`
+- `SeedUsers__SupportUsername`
+- `SeedUsers__SupportPassword`
+- `FRONTEND_ORIGINS`
 
 ## Publicación para IIS/Plesk
 

@@ -2,7 +2,7 @@
 
 ## 0. Alcance y regla principal
 
-Este documento prepara la aplicación manual y controlada del schema ASP.NET Core / EF Core en Plesk, pero **no aplica SQL**, **no conecta a `jemnexusb_prod`**, **no ejecuta `dotnet ef database update`** y **no crea usuarios reales**.
+Este documento registra el plan y el resultado de la aplicación manual y controlada del schema ASP.NET Core / EF Core en Plesk. Desde el repositorio/Codex **no se aplica SQL**, **no se conecta a `jemnexusb_prod`**, **no se ejecuta `dotnet ef database update`** y **no se crean usuarios reales**.
 
 Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el estado real de la base. No asumir que la base está vacía.
 
@@ -14,7 +14,7 @@ Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el e
 - Base de datos: `jemnexusb_prod`.
 - Usuario de base de datos: `jemnexusb_api`.
 - Host visible en Plesk: `.\MSSQLSERVER2022`.
-- La base fue creada previamente, pero desde este flujo todavía no se ha aplicado schema real.
+- La base fue creada previamente y el schema ASP.NET Core / EF Core quedó aplicado correctamente en el hito documentado el 2026-06-04. La API .NET todavía no está publicada.
 
 > No incluir contraseñas, cadenas de conexión completas, claves JWT ni credenciales reales en este documento ni en el repositorio.
 
@@ -278,9 +278,45 @@ Publicación local revisable para IIS/Plesk:
 dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net8.0 -o backend-dotnet/publish-test
 ```
 
+## Resultado de aplicación controlada del schema
+
+Hito documentado el 2026-06-04, posterior al hotfix de cascadas SQL Server aplicado en el modelo EF Core y en el script acumulado. Este registro documenta resultados informados desde Plesk/SQL Server; desde este repositorio no se conectó a Plesk, no se ejecutó SQL real, no se ejecutó `dotnet ef database update` y no se crearon usuarios reales.
+
+Después del incidente `Msg 1785`, el intento fallido anterior fue limpiado de forma controlada. Antes del reintento, la base `jemnexusb_prod` quedó verificada con `0` tablas de usuario, evitando confiar solo en un `__EFMigrationsHistory` inconsistente del intento parcial.
+
+Luego se aplicó en Plesk/SQL Server el script corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`. El schema quedó aplicado correctamente bajo el esquema real `jmnexusb_api` en la base `jemnexusb_prod`.
+
+Tablas creadas bajo `jmnexusb_api`:
+
+- `__EFMigrationsHistory`
+- `AppRefreshTokens`
+- `AppUsers`
+- `Brands`
+- `Categories`
+- `HomeSectionItems`
+- `ProductImages`
+- `Products`
+- `ProductSpecs`
+- `Promotions`
+- `QuoteRequests`
+- `Suppliers`
+
+Migraciones registradas en `__EFMigrationsHistory`:
+
+- `20260603182917_InitialCommercialSchema`
+- `20260604020543_AddAuthUsersAndAuditRelations`
+
+Alcance de este hito:
+
+- No se crearon usuarios reales.
+- No se configuraron secretos todavía.
+- No se publicó la API .NET todavía.
+- No se modificó el frontend funcional.
+- No se reemplazó ni borró Django.
+
 ## Próximo paso recomendado
 
-Ejecutar solo las queries de diagnóstico en Plesk/SQL Server, registrar resultados exactos de tablas e `__EFMigrationsHistory`, y recién después elegir entre script acumulado, script diferencial o detención para revisión manual.
+Con el schema ya aplicado, preparar la publicación controlada de la API .NET sin ejecutar nuevamente el script sobre la misma base. Antes de iniciar la API en Plesk, configurar variables/secretos fuera del repositorio, confirmar `__EFMigrationsHistory`, definir el procedimiento seguro para usuarios iniciales y validar el paquete de publicación.
 
 ## Incidente de aplicación fallida por cascadas SQL Server
 
