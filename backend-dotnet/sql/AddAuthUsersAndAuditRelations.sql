@@ -39,7 +39,7 @@ CREATE TABLE [Categories] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_Categories] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_Categories_Categories_ParentId] FOREIGN KEY ([ParentId]) REFERENCES [Categories] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_Categories_Categories_ParentId] FOREIGN KEY ([ParentId]) REFERENCES [Categories] ([Id])
 );
 GO
 
@@ -84,9 +84,9 @@ CREATE TABLE [Products] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_Products] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_Products_Brands_BrandId] FOREIGN KEY ([BrandId]) REFERENCES [Brands] ([Id]) ON DELETE NO ACTION,
-    CONSTRAINT [FK_Products_Categories_CategoryId] FOREIGN KEY ([CategoryId]) REFERENCES [Categories] ([Id]) ON DELETE NO ACTION,
-    CONSTRAINT [FK_Products_Suppliers_SupplierId] FOREIGN KEY ([SupplierId]) REFERENCES [Suppliers] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_Products_Brands_BrandId] FOREIGN KEY ([BrandId]) REFERENCES [Brands] ([Id]),
+    CONSTRAINT [FK_Products_Categories_CategoryId] FOREIGN KEY ([CategoryId]) REFERENCES [Categories] ([Id]),
+    CONSTRAINT [FK_Products_Suppliers_SupplierId] FOREIGN KEY ([SupplierId]) REFERENCES [Suppliers] ([Id])
 );
 GO
 
@@ -101,7 +101,7 @@ CREATE TABLE [HomeSectionItems] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_HomeSectionItems] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_HomeSectionItems_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_HomeSectionItems_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id])
 );
 GO
 
@@ -117,7 +117,7 @@ CREATE TABLE [ProductImages] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_ProductImages] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_ProductImages_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_ProductImages_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id])
 );
 GO
 
@@ -133,7 +133,7 @@ CREATE TABLE [ProductSpecs] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_ProductSpecs] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_ProductSpecs_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_ProductSpecs_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id])
 );
 GO
 
@@ -154,7 +154,7 @@ CREATE TABLE [Promotions] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_Promotions] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_Promotions_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_Promotions_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id])
 );
 GO
 
@@ -179,7 +179,7 @@ CREATE TABLE [QuoteRequests] (
     [CreatedById] int NULL,
     [UpdatedById] int NULL,
     CONSTRAINT [PK_QuoteRequests] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_QuoteRequests_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE NO ACTION
+    CONSTRAINT [FK_QuoteRequests_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id])
 );
 GO
 
