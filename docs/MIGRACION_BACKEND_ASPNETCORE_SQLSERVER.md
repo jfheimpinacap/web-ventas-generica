@@ -1160,3 +1160,11 @@ No se detectan drops, renames, cambios de tipo ni alteraciones destructivas ines
 4. Configurar `Jwt__Secret`/`JWT_SECRET` y variables `SeedUsers__*` fuera del repositorio, sin secretos reales en git.
 5. Probar primero en una base temporal SQL Server 2022 equivalente.
 6. Aplicar en Plesk solo con ventana de mantenimiento, backup verificado y aprobación explícita.
+
+## Plan controlado de aplicación en Plesk / SQL Server
+
+Antes de aplicar schema real en `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
+
+A la fecha de este documento, desde este flujo todavía **no se ha aplicado schema real en Plesk/SQL Server**, no se ha conectado a `jemnexusb_prod` y no se ha ejecutado `dotnet ef database update` contra producción.
+
+Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; si la base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
