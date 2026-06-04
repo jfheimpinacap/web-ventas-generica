@@ -2,7 +2,7 @@
 
 Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (.NET 8), preparado para Windows Server + IIS + Plesk.
 
-> Esta fase prepara el modelo comercial EF Core para SQL Server, pero no conecta la base real de Plesk, no agrega autenticación y no reemplaza el backend Django existente.
+> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`, pero no aplica cambios en Plesk/SQL Server real ni reemplaza todavía el backend Django existente.
 
 ## Estructura
 
@@ -80,13 +80,25 @@ Para despliegue manual en Plesk, subir el contenido de la carpeta publicada al s
 
 La configuración base vive en `JemNexus.Api/appsettings.json` y `JemNexus.Api/appsettings.Development.json`, con soporte para override por variables de entorno.
 
-Variables sugeridas para futuras fases, sin valores reales en git:
+Variables sugeridas/necesarias, sin valores reales en git:
 
 - `ASPNETCORE_ENVIRONMENT`
 - `PUBLIC_SITE_URL`
 - `FRONTEND_ORIGINS`
-- `JWT_SECRET`
 - `ConnectionStrings__DefaultConnection`
+- `Jwt__Secret` o `JWT_SECRET`
+- `Jwt__Issuer` o `JWT_ISSUER`
+- `Jwt__Audience` o `JWT_AUDIENCE`
+- `Jwt__AccessTokenMinutes`
+- `Jwt__RefreshTokenDays`
+- `SeedUsers__SellerUsername`
+- `SeedUsers__SellerPassword`
+- `SeedUsers__SellerEmail`
+- `SeedUsers__SellerFullName`
+- `SeedUsers__SupportUsername`
+- `SeedUsers__SupportPassword`
+- `SeedUsers__SupportEmail`
+- `SeedUsers__SupportFullName`
 
 `FRONTEND_ORIGINS` puede contener orígenes separados por coma o punto y coma y se combina con `Cors:AllowedOrigins`.
 
@@ -234,9 +246,9 @@ Los refresh tokens se persisten en `AppRefreshTokens` como hash SHA-256 (`TokenH
 
 `CreatedById` y `UpdatedById` de entidades comerciales se relacionan opcionalmente con `AppUsers` mediante FKs nullable y `DeleteBehavior.NoAction`. Las requests públicas pueden dejar auditoría de usuario en `null`.
 
-### Migración requerida
+### Migración auth/auditoría generada y revisada
 
-Cuando el SDK .NET 8 y `dotnet-ef` estén disponibles, generar la migración y el script revisable:
+La migración `AddAuthUsersAndAuditRelations` fue generada localmente con el commit `5b30b07 Add auth users and audit relations migration`. Comando usado para crear la migración:
 
 ```bash
 dotnet ef migrations add AddAuthUsersAndAuditRelations \
@@ -245,6 +257,8 @@ dotnet ef migrations add AddAuthUsersAndAuditRelations \
   --output-dir Data/Migrations
 ```
 
+Comando usado para generar el script SQL revisable:
+
 ```bash
 dotnet ef migrations script \
   --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj \
@@ -252,4 +266,6 @@ dotnet ef migrations script \
   -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
 ```
 
-No ejecutar `dotnet ef database update` contra SQL Server real/Plesk en esta fase. Revisar primero el script, confirmar backup y ventana de mantenimiento.
+> Advertencia: no ejecutar `dotnet ef database update` contra SQL Server real/Plesk y no aplicar SQL sin backup verificado, revisión del script, confirmación del estado de `__EFMigrationsHistory`, ventana de mantenimiento y aprobación explícita. Si la base ya tiene aplicada `InitialCommercialSchema`, generar/revisar un script diferencial en vez de ejecutar un script acumulado desde cero.
+
+Antes de producción configurar `Jwt__Secret`/`JWT_SECRET` fuera del repo y definir si `SeedUsers__SellerPassword` y `SeedUsers__SupportPassword` se usarán para crear usuarios iniciales por seed controlado o si se crearán por un procedimiento separado seguro. No subir contraseñas reales ni connection strings reales al repositorio.
