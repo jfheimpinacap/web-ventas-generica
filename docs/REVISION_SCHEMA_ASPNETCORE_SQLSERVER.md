@@ -367,4 +367,22 @@ La observación pendiente sobre auditoría/usuarios del schema inicial pasa a im
 
 Las columnas comerciales `CreatedById` y `UpdatedById` se mantienen nullable y se configuran como FKs opcionales hacia `AppUsers` con `DeleteBehavior.NoAction` para evitar cascadas peligrosas. Esto aplica a `Category`, `Brand`, `Supplier`, `Product`, `ProductImage`, `ProductSpec`, `Promotion`, `HomeSectionItem` y `QuoteRequest`.
 
-Este cierre requiere una migración correctiva posterior llamada `AddAuthUsersAndAuditRelations` y un script SQL revisable antes de tocar SQL Server real/Plesk. En el entorno Codex no se generó migración ni script porque `dotnet` no estaba disponible; no se debe aplicar nada en `jemnexusb_prod` hasta generar y revisar esos artefactos localmente.
+Este cierre se materializó posteriormente en la migración `AddAuthUsersAndAuditRelations` y un script SQL revisable. La revisión técnica documentada abajo no ejecutó `dotnet ef database update`, no aplicó SQL en Plesk y no conectó a `jemnexusb_prod`.
+
+## Nota de revisión Backend .NET 3 - AddAuthUsersAndAuditRelations
+
+Se revisó la migración `20260604020543_AddAuthUsersAndAuditRelations` junto con su designer, el `JemNexusDbContextModelSnapshot` y el script `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`, correspondientes al commit `5b30b07 Add auth users and audit relations migration`.
+
+Impacto sobre el schema:
+
+- Agrega las tablas `AppUsers` y `AppRefreshTokens`.
+- Agrega índices únicos para `AppUsers.Username`, `AppUsers.Email` filtrado por `Email IS NOT NULL` y `AppRefreshTokens.TokenHash`.
+- Agrega índices auxiliares para `AppUsers.IsActive`, `AppUsers.Role`, `AppRefreshTokens.UserId/ExpiresAt` y campos comerciales de auditoría `CreatedById`/`UpdatedById`.
+- Agrega FK `AppRefreshTokens.UserId -> AppUsers.Id` con cascada limitada a tokens.
+- Agrega FKs opcionales `CreatedById`/`UpdatedById -> AppUsers.Id` en `Brands`, `Categories`, `HomeSectionItems`, `ProductImages`, `Products`, `ProductSpecs`, `Promotions`, `QuoteRequests` y `Suppliers`, configuradas en EF Core con `DeleteBehavior.NoAction`.
+
+Esta migración cierra la observación pendiente de auditoría/usuarios del schema inicial para el alcance actual: un `AppUser` liviano con roles `seller` y `support_admin`, JWT y refresh tokens persistidos. `QuoteRequests` conserva auditoría nullable, lo cual es compatible con solicitudes públicas anónimas.
+
+No se detectaron drops, renames, cambios de tipo ni alteraciones destructivas inesperadas sobre tablas comerciales existentes. No se requiere migración correctiva adicional obligatoria antes de Plesk por el diseño revisado. Se mantienen como decisiones futuras no bloqueantes los `CHECK CONSTRAINT` para roles/choices y una estrategia de limpieza de refresh tokens expirados/revocados.
+
+Observación operacional importante: el script SQL revisado es acumulado desde una base vacía e incluye también `20260603182917_InitialCommercialSchema`. Si la base de destino ya tuviera aplicada la migración inicial, se debe generar y revisar un script diferencial desde `20260603182917_InitialCommercialSchema` hasta `20260604020543_AddAuthUsersAndAuditRelations`; no ejecutar el script acumulado a ciegas sobre objetos existentes.

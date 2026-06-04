@@ -1063,6 +1063,100 @@ dotnet ef migrations script \
   -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
 ```
 
-En el entorno Codex de esta implementación `dotnet` no estaba disponible, por lo que no se inventó ni editó manualmente la migración o el script SQL. Deben generarse y validarse localmente con SDK .NET 8/dotnet-ef antes de aplicar cualquier cambio real.
+Posteriormente la migración y el script SQL fueron generados localmente y quedaron disponibles para revisión técnica. No ejecutar `dotnet ef database update` contra `jemnexusb_prod` sin revisión del script, backup y ventana de mantenimiento confirmada.
 
-> No ejecutar `dotnet ef database update` contra `jemnexusb_prod` sin revisión del script, backup y ventana de mantenimiento confirmada.
+## Backend .NET 3 - Revisión de migración auth/auditoría
+
+### Artefactos revisados
+
+- Migración EF Core revisada: `backend-dotnet/JemNexus.Api/Data/Migrations/20260604020543_AddAuthUsersAndAuditRelations.cs`.
+- Metadata/modelo revisado: `backend-dotnet/JemNexus.Api/Data/Migrations/20260604020543_AddAuthUsersAndAuditRelations.Designer.cs`.
+- Snapshot EF Core revisado: `backend-dotnet/JemNexus.Api/Data/Migrations/JemNexusDbContextModelSnapshot.cs`.
+- Script SQL revisado: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
+- Commit de origen revisado: `5b30b07 Add auth users and audit relations migration`.
+
+No se ejecutó `dotnet ef database update`, no se aplicó SQL en Plesk, no se conectó a `jemnexusb_prod` y no se regeneró la migración.
+
+### Tablas nuevas detectadas
+
+- `AppUsers`: tabla liviana de usuarios de aplicación con `Id`, `Username`, `Email`, `PasswordHash`, `Role`, `FullName`, flags (`IsActive`, `IsStaff`, `IsSuperuser`), `LastLoginAt`, `CreatedAt` y `UpdatedAt`.
+- `AppRefreshTokens`: tabla de refresh tokens persistidos con `UserId`, `TokenHash`, `ExpiresAt`, `RevokedAt`, `CreatedAt` y `UpdatedAt`.
+
+Longitudes relevantes revisadas:
+
+| Columna | Tipo SQL Server | Nullable | Observación |
+| --- | --- | --- | --- |
+| `AppUsers.Username` | `nvarchar(150)` | No | Índice único. |
+| `AppUsers.Email` | `nvarchar(254)` | Sí | Índice único filtrado con `WHERE [Email] IS NOT NULL`. |
+| `AppUsers.PasswordHash` | `nvarchar(500)` | No | Suficiente para hash de `PasswordHasher<AppUser>`. |
+| `AppUsers.Role` | `nvarchar(40)` | No | Sin `CHECK CONSTRAINT`; validación queda en aplicación. |
+| `AppRefreshTokens.TokenHash` | `nvarchar(128)` | No | Índice único; compatible con hash SHA-256 hexadecimal. |
+
+### FKs nuevas detectadas
+
+- `FK_AppRefreshTokens_AppUsers_UserId`: `AppRefreshTokens.UserId` hacia `AppUsers.Id`, con cascada al borrar usuario.
+- FKs opcionales de auditoría `CreatedById` y `UpdatedById` hacia `AppUsers.Id` en:
+  - `Brands`.
+  - `Categories`.
+  - `HomeSectionItems`.
+  - `ProductImages`.
+  - `Products`.
+  - `ProductSpecs`.
+  - `Promotions`.
+  - `QuoteRequests`.
+  - `Suppliers`.
+
+Las FKs de auditoría se mantienen nullable y sin cascada destructiva explícita en SQL; en el snapshot EF Core aparecen configuradas como `DeleteBehavior.NoAction`. Esto es seguro para evitar borrados en cadena de entidades comerciales, aunque exige manejo manual si se decide eliminar usuarios referenciados.
+
+### Índices nuevos detectados
+
+- `IX_AppUsers_Username`: único.
+- `IX_AppUsers_Email`: único filtrado por `Email IS NOT NULL`.
+- `IX_AppUsers_IsActive`: no único.
+- `IX_AppUsers_Role`: no único.
+- `IX_AppRefreshTokens_TokenHash`: único.
+- `IX_AppRefreshTokens_UserId_ExpiresAt`: no único, útil para lookup/limpieza por usuario y expiración.
+- Índices no únicos para `CreatedById` y `UpdatedById` en `Brands`, `Categories`, `HomeSectionItems`, `ProductImages`, `Products`, `ProductSpecs`, `Promotions`, `QuoteRequests` y `Suppliers`.
+
+### Revisión del SQL generado
+
+El script `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` está orientado a SQL Server: usa `GO`, `datetimeoffset`, `nvarchar`, `bit`, `IDENTITY`, `SYSUTCDATETIME()`, constraints e índices T-SQL.
+
+Resultado de revisión:
+
+- Crea `AppUsers` y `AppRefreshTokens` con las columnas esperadas.
+- Agrega las FKs e índices esperados.
+- Incluye registro EF en `__EFMigrationsHistory` para `20260604020543_AddAuthUsersAndAuditRelations`.
+- No contiene connection strings, credenciales, secretos, `USE [jemnexusb_prod]`, `CREATE DATABASE`, ni nombres de base reales.
+- No contiene `DROP TABLE`, `ALTER COLUMN`, `sp_rename` ni instrucciones destructivas sobre tablas comerciales.
+- Observación operacional: el script es acumulado desde una base vacía, porque también incluye `20260603182917_InitialCommercialSchema` antes de la migración auth. Si Plesk ya tuviera aplicada la migración inicial, se debe generar/revisar un script diferencial desde `20260603182917_InitialCommercialSchema` hasta `20260604020543_AddAuthUsersAndAuditRelations` o aplicar exclusivamente la parte correspondiente, nunca ejecutar a ciegas este script acumulado sobre una base con objetos existentes.
+
+### Riesgos y puntos a decidir antes de Plesk
+
+| Punto | Evaluación | ¿Bloquea aplicar? | Recomendación |
+| --- | --- | --- | --- |
+| `Email` nullable con índice único | En SQL Server un índice único normal limitaría múltiples `NULL`, pero aquí el índice está filtrado con `WHERE [Email] IS NOT NULL`, por lo que permite varios usuarios sin email y mantiene unicidad para emails informados. | No. | Mantener filtro; está correcto para usuarios demo/soporte con email opcional. |
+| `CreatedById`/`UpdatedById` opcionales en `QuoteRequests` | Correcto para cotizaciones públicas, porque el visitante anónimo no tiene `AppUser`. | No. | Mantener nullable. Completar `UpdatedById` solo cuando un usuario autenticado gestione la cotización. |
+| `DeleteBehavior.NoAction` en auditoría | Evita cascadas peligrosas sobre catálogo/cotizaciones, pero impide borrar usuarios referenciados sin limpiar/reasignar auditoría. | No. | En producción preferir desactivar usuarios (`IsActive=false`) sobre borrarlos. |
+| Cascada `AppUsers -> AppRefreshTokens` | Al borrar un usuario, sus refresh tokens se eliminan; no toca tablas comerciales. | No. | Aceptable. Aun así, preferir desactivación de usuarios. |
+| Limpieza/revocación de refresh tokens | Existe `RevokedAt`, pero falta job o endpoint administrativo de limpieza. | No para schema inicial. | Agregar limpieza periódica de expirados/revocados en fase operativa. |
+| Tabla `AppUsers` para 1 vendedor + 1 soporte | Suficiente para el alcance actual. | No. | No sobrediseñar con Identity completo salvo que cambien requisitos. |
+| Falta `CHECK CONSTRAINT` para roles | Roles quedan validados por aplicación, no por base. | No. | Considerar migración correctiva futura si se requiere integridad estricta SQL para `seller`/`support_admin`. |
+| Defaults SQL `CreatedAt`/`UpdatedAt` | Las tablas auth tienen defaults SQL; entidades comerciales ya los tenían desde schema inicial. | No. | Correcto. Recordar que `UpdatedAt` no se autoactualiza en SQL por sí solo; EF Core lo actualiza en `SaveChanges`. |
+| Usuarios demo/soporte por seed | El seed depende de variables seguras y no guarda contraseñas reales. | No. | Antes de producción, decidir si crear usuarios por seed controlado en primer arranque o por script/manual seguro con credenciales temporales rotadas. |
+| Script acumulado desde cero | Puede fallar si se ejecuta sobre una base donde ya existe el schema comercial inicial. | Sí, si Plesk ya tiene objetos creados. | Confirmar estado real de `__EFMigrationsHistory` en una ventana aprobada. Si la inicial ya existe, generar script diferencial revisable. |
+
+### Decisión
+
+**Apto con observaciones** para una aplicación controlada en SQL Server/Plesk, siempre que antes se confirme el estado real de la base y se use el script correcto para ese estado.
+
+No se detectan drops, renames, cambios de tipo ni alteraciones destructivas inesperadas sobre tablas comerciales existentes. No se requiere migración correctiva obligatoria antes de Plesk por el diseño de auth/auditoría. La única observación potencialmente bloqueante es operacional: no ejecutar el script acumulado sobre una base que ya tenga aplicada la migración inicial.
+
+### Próximos pasos antes de Plesk
+
+1. Confirmar backup de SQL Server y de uploads/archivos antes de cualquier aplicación.
+2. Confirmar en ambiente aprobado el estado de `__EFMigrationsHistory`.
+3. Si la base está vacía, usar un script acumulado revisado desde cero; si ya existe `InitialCommercialSchema`, generar y revisar script diferencial desde esa migración hasta `AddAuthUsersAndAuditRelations`.
+4. Configurar `Jwt__Secret`/`JWT_SECRET` y variables `SeedUsers__*` fuera del repositorio, sin secretos reales en git.
+5. Probar primero en una base temporal SQL Server 2022 equivalente.
+6. Aplicar en Plesk solo con ventana de mantenimiento, backup verificado y aprobación explícita.
