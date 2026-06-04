@@ -7,6 +7,7 @@ using JemNexus.Api.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -104,6 +105,9 @@ public sealed class AuthEndpointTests
 
     private static WebApplicationFactory<Program> CreateFactory()
     {
+        var databaseName = $"AuthEndpointTests-{Guid.NewGuid():N}";
+        var databaseRoot = new InMemoryDatabaseRoot();
+
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -116,7 +120,7 @@ public sealed class AuthEndpointTests
                 {
                     services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
                     services.AddDbContext<JemNexusDbContext>(options =>
-                        options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+                        options.UseInMemoryDatabase(databaseName, databaseRoot));
                 });
             });
     }
@@ -139,6 +143,9 @@ public sealed class AuthEndpointTests
         using var scope = factory.Services.CreateScope();
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
         await SeedData.SeedUsersAsync(factory.Services, environment);
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.Equal(2, await dbContext.AppUsers.CountAsync());
     }
 
     private static async Task<T> ReadSuccessfulJsonAsync<T>(HttpResponseMessage response)
