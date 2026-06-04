@@ -313,3 +313,41 @@ Si la aplicación manual de un script SQL falla en Plesk/SQL Server, detenerse a
 - existencia real de tablas esperadas mediante `OBJECT_ID` o `INFORMATION_SCHEMA.TABLES`.
 
 No confiar solo en `__EFMigrationsHistory` si hubo un error parcial: un script acumulado puede haber insertado filas de historial aunque la creación del schema haya quedado incompleta. En ese caso, limpiar o restaurar la base antes de aplicar un script corregido; no reejecutar a ciegas el script anterior.
+
+## Publicación controlada API .NET en Plesk/IIS
+
+El plan operativo para preparar la publicación manual de la API ASP.NET Core en `https://api.jem-nexus.cl` está documentado en `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md`.
+
+Puntos obligatorios antes de publicar:
+
+- No ejecutar `dotnet ef database update` contra Plesk/SQL Server durante la publicación.
+- No aplicar SQL ni migraciones como parte de este paso; el schema ya fue aplicado previamente.
+- No incluir secretos reales, passwords, JWT secrets ni connection strings con password real en git.
+- No cambiar todavía el frontend para consumir la API .NET.
+- Respaldar la carpeta actual del subdominio antes de reemplazar archivos.
+
+Variables de ejemplo sin secretos reales:
+
+- `backend-dotnet/env.plesk.example.txt`.
+
+Script local seguro de publicación:
+
+```powershell
+backend-dotnet\scripts\publish-plesk.ps1
+```
+
+El script ejecuta restore, build, test y publish localmente; falla si los tests fallan y deja la salida en `backend-dotnet\publish\JemNexus.Api`. No conecta a Plesk, no sube archivos, no ejecuta SQL y no ejecuta `dotnet ef database update`.
+
+Comandos equivalentes en Windows PowerShell:
+
+```powershell
+dotnet restore backend-dotnet\JemNexus.sln
+dotnet build backend-dotnet\JemNexus.sln -c Release
+dotnet test backend-dotnet\JemNexus.sln -c Release
+
+dotnet publish backend-dotnet\JemNexus.Api\JemNexus.Api.csproj `
+  -c Release `
+  -o backend-dotnet\publish\JemNexus.Api
+```
+
+La carpeta `backend-dotnet\publish\JemNexus.Api` es la que debe comprimirse/subirse manualmente al subdominio de API en Plesk después de configurar variables de entorno fuera del repositorio.
