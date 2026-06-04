@@ -59,6 +59,19 @@ Comando local para crear la migración inicial cuando el SDK .NET 8 y `dotnet-ef
 dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
 ```
 
+
+## Aplicación controlada de schema en Plesk
+
+Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md`. El flujo correcto es:
+
+1. Diagnosticar primero el estado real de la base con queries de solo lectura.
+2. Revisar `__EFMigrationsHistory` y confirmar si existen tablas comerciales o auth.
+3. Elegir el script correcto según el estado detectado: acumulado desde cero para base vacía, o diferencial si `InitialCommercialSchema` ya está aplicado.
+4. Nunca ejecutar `dotnet ef database update` directamente contra producción/Plesk.
+5. No guardar credenciales reales, cadenas de conexión completas ni secretos JWT en archivos versionados.
+
+`backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es acumulado desde cero. Si la base ya tiene `InitialCommercialSchema`, se debe generar/revisar `backend-dotnet/sql/FromInitialCommercialSchemaToAddAuthUsersAndAuditRelations.sql` antes de aplicar cambios.
+
 ## Publicación para IIS/Plesk
 
 Generar un paquete local de publicación:
