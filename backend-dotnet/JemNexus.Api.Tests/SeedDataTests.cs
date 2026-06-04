@@ -5,6 +5,7 @@ using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -16,24 +17,24 @@ public sealed class SeedDataTests
     [Fact]
     public async Task SeedUsersDoesNotDuplicateUsers()
     {
-        var services = CreateServices();
+        using var services = CreateServices();
         var environment = new TestHostEnvironment();
 
         await SeedData.SeedUsersAsync(services, environment);
-        await SeedData.SeedUsersAsync(services, environment);
+        await AssertSeededUsersCountAsync(services, expectedCount: 2);
 
-        using var scope = services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
-        Assert.Equal(2, await dbContext.AppUsers.CountAsync());
+        await SeedData.SeedUsersAsync(services, environment);
+        await AssertSeededUsersCountAsync(services, expectedCount: 2);
     }
 
     [Fact]
     public async Task SeedUsersSetsExpectedRolesAndActiveFlag()
     {
-        var services = CreateServices();
+        using var services = CreateServices();
         var environment = new TestHostEnvironment();
 
         await SeedData.SeedUsersAsync(services, environment);
+        await AssertSeededUsersCountAsync(services, expectedCount: 2);
 
         using var scope = services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
@@ -53,7 +54,11 @@ public sealed class SeedDataTests
     private static ServiceProvider CreateServices()
     {
         var services = new ServiceCollection();
-        services.AddDbContext<JemNexusDbContext>(options => options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        var databaseName = $"SeedDataTests-{Guid.NewGuid():N}";
+        var databaseRoot = new InMemoryDatabaseRoot();
+
+        services.AddDbContext<JemNexusDbContext>(options =>
+            options.UseInMemoryDatabase(databaseName, databaseRoot));
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IPasswordHasherService, PasswordHasherService>();
         services.AddOptions<SeedUserOptions>()
@@ -65,6 +70,13 @@ public sealed class SeedDataTests
                 options.SupportPassword = "DummyPassword123!";
             });
         return services.BuildServiceProvider();
+    }
+
+    private static async Task AssertSeededUsersCountAsync(IServiceProvider services, int expectedCount)
+    {
+        using var scope = services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.Equal(expectedCount, await dbContext.AppUsers.CountAsync());
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment
