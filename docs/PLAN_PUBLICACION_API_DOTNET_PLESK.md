@@ -105,7 +105,15 @@ dotnet publish backend-dotnet\JemNexus.Api\JemNexus.Api.csproj `
   -o backend-dotnet\publish\JemNexus.Api
 ```
 
-La carpeta `backend-dotnet\publish\JemNexus.Api` es la carpeta que se comprime/sube a Plesk. No publicar desde la carpeta de código fuente.
+La carpeta `backend-dotnet\publish\JemNexus.Api` es la carpeta local que se comprime/sube manualmente a Plesk. No publicar desde la carpeta de código fuente.
+
+`backend-dotnet\publish\` es un artefacto local de despliegue y no se versiona en Git. Si se necesita regenerar el paquete, ejecutar:
+
+```powershell
+.\backend-dotnet\scripts\publish-plesk.ps1
+```
+
+Antes de commitear, revisar `git status --short`; no usar `git add .` sin confirmar que `backend-dotnet\publish\`, binarios publicados, archivos locales y secretos no serán agregados.
 
 También se puede usar el script seguro del repo desde PowerShell:
 

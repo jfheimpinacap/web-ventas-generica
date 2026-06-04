@@ -109,6 +109,18 @@ La carpeta de salida debe incluir, entre otros artefactos:
 
 Para despliegue manual en Plesk, subir el contenido de la carpeta publicada al sitio de la API `https://api.jem-nexus.cl` y configurar las variables de entorno desde Plesk/IIS antes de iniciar la aplicación.
 
+### Artefacto local `backend-dotnet/publish/`
+
+`backend-dotnet/publish/` es un artefacto local de despliegue generado por el publish de .NET. No se versiona en Git: su contenido se comprime o sube manualmente a Plesk y debe permanecer fuera de commits y pull requests.
+
+Para regenerar el paquete local desde Windows PowerShell, ejecutar desde la raíz del repo:
+
+```powershell
+.\backend-dotnet\scripts\publish-plesk.ps1
+```
+
+Antes de preparar cualquier commit, revisar `git status --short` y evitar `git add .` sin verificar que no se estén incluyendo artefactos locales, binarios publicados ni secretos.
+
 ## Configuración y variables de entorno
 
 La configuración base vive en `JemNexus.Api/appsettings.json` y `JemNexus.Api/appsettings.Development.json`, con soporte para override por variables de entorno.
