@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -76,6 +77,11 @@ public sealed class AuthEndpointTests
         var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
         var login = await ReadSuccessfulJsonAsync<LoginPayload>(loginResponse);
 
+        Assert.False(string.IsNullOrWhiteSpace(login.Access));
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(login.Access);
+        Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && !string.IsNullOrWhiteSpace(claim.Value));
+        Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.UniqueName && claim.Value == "demo");
+
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
         var response = await client.GetAsync(mePath);
         var user = await ReadSuccessfulJsonAsync<UserPayload>(response);
@@ -129,7 +135,14 @@ public sealed class AuthEndpointTests
 
     private static readonly IReadOnlyDictionary<string, string?> TestConfiguration = new Dictionary<string, string?>
     {
-        ["Jwt:Secret"] = "endpoint-test-jwt-secret-not-for-production-32chars",
+        ["Jwt:Issuer"] = "JEM Nexus API Test",
+        ["Jwt:Audience"] = "JEM Nexus Frontend Test",
+        ["Jwt:Secret"] = "DummyJwtSecretForTests1234567890!",
+        ["Jwt:AccessTokenMinutes"] = "60",
+        ["Jwt:RefreshTokenDays"] = "7",
+        ["JWT_ISSUER"] = "JEM Nexus API Test",
+        ["JWT_AUDIENCE"] = "JEM Nexus Frontend Test",
+        ["JWT_SECRET"] = "DummyJwtSecretForTests1234567890!",
         ["SeedUsers:SellerUsername"] = "demo",
         ["SeedUsers:SellerPassword"] = TestPassword,
         ["SeedUsers:SellerEmail"] = "demo@example.test",
