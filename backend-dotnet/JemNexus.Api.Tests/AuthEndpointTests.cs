@@ -109,6 +109,19 @@ public sealed class AuthEndpointTests
         Assert.False(string.IsNullOrWhiteSpace(payload.Access));
     }
 
+    [Fact]
+    public async Task LoginWorksWithUserCreatedByStartupSeed()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { username = "demo", password = TestPassword });
+        var payload = await ReadSuccessfulJsonAsync<LoginPayload>(response);
+
+        Assert.Equal("demo", payload.User.Username);
+        Assert.Equal(AppRoles.Seller, payload.User.Role);
+    }
+
     private static WebApplicationFactory<Program> CreateFactory()
     {
         var databaseName = $"AuthEndpointTests-{Guid.NewGuid():N}";

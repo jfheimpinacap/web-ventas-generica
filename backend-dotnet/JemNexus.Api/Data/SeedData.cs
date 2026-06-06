@@ -2,6 +2,7 @@ using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace JemNexus.Api.Data;
@@ -14,13 +15,18 @@ public static class SeedData
         CancellationToken cancellationToken = default)
     {
         using var scope = services.CreateScope();
+        var logger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("JemNexus.Api.Data.SeedData");
         var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<SeedUserOptions>>().Value;
 
-        await SeedUserAsync(
+        var sellerCreated = await SeedUserAsync(
             dbContext,
             passwordHasher,
+            logger,
+            seedName: "seller",
             username: options.SellerUsername,
             password: options.SellerPassword,
             email: options.SellerEmail,
@@ -28,12 +34,13 @@ public static class SeedData
             role: AppRoles.Seller,
             isStaff: true,
             isSuperuser: false,
-            environment,
             cancellationToken);
 
-        await SeedUserAsync(
+        var supportCreated = await SeedUserAsync(
             dbContext,
             passwordHasher,
+            logger,
+            seedName: "support",
             username: options.SupportUsername,
             password: options.SupportPassword,
             email: options.SupportEmail,
@@ -41,15 +48,19 @@ public static class SeedData
             role: AppRoles.SupportAdmin,
             isStaff: true,
             isSuperuser: false,
-            environment,
             cancellationToken);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (sellerCreated || supportCreated)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
-    private static async Task SeedUserAsync(
+    private static async Task<bool> SeedUserAsync(
         JemNexusDbContext dbContext,
         IPasswordHasherService passwordHasher,
+        ILogger logger,
+        string seedName,
         string username,
         string password,
         string email,
@@ -57,32 +68,27 @@ public static class SeedData
         string role,
         bool isStaff,
         bool isSuperuser,
-        IHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(username))
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            if (environment.IsProduction())
-            {
-                return;
-            }
-
-            // Development/Test deliberately skip seed users without configured passwords.
-            return;
+            logger.LogInformation("SeedUsers {SeedName} skipped: missing username/password.", seedName);
+            return false;
         }
 
         var normalizedUsername = username.Trim();
-        var exists = await dbContext.AppUsers
-            .AnyAsync(user => user.Username == normalizedUsername, cancellationToken);
+        var usernameAlreadyPending = dbContext.AppUsers.Local
+            .Any(user => string.Equals(user.Username, normalizedUsername, StringComparison.Ordinal));
+        var existingUser = usernameAlreadyPending
+            ? new AppUser()
+            : await dbContext.AppUsers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(user => user.Username == normalizedUsername, cancellationToken);
 
-        if (exists)
+        if (existingUser is not null)
         {
-            return;
+            logger.LogInformation("SeedUsers {SeedName} already exists.", seedName);
+            return false;
         }
 
         var user = new AppUser
@@ -98,5 +104,7 @@ public static class SeedData
         user.PasswordHash = passwordHasher.HashPassword(user, password);
 
         dbContext.AppUsers.Add(user);
+        logger.LogInformation("SeedUsers {SeedName} created.", seedName);
+        return true;
     }
 }

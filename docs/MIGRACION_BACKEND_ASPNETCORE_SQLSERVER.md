@@ -419,11 +419,14 @@ Para reducir cambios simultáneos en el frontend, la API .NET debería replicar 
 - No guardar connection string ni JWT secret en git.
 - Variables en Plesk/IIS para:
   - `ConnectionStrings__DefaultConnection`.
-  - `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SigningKey`.
-  - `Cors__AllowedOrigins__0=https://jem-nexus.cl`.
+  - `Jwt__Issuer`, `Jwt__Audience`, `Jwt__Secret` o `JWT_SECRET`.
+  - `FRONTEND_ORIGINS` o `Cors__AllowedOrigins__0=https://jem-nexus.cl`.
+  - Seed controlado opcional: `SeedUsers__SellerUsername`/`SeedUsers:SellerUsername` + `SeedUsers__SellerPassword`/`SeedUsers:SellerPassword`, y `SeedUsers__SupportUsername`/`SeedUsers:SupportUsername` + `SeedUsers__SupportPassword`/`SeedUsers:SupportPassword`.
   - `Uploads__RootPath`.
   - `Uploads__PublicBaseUrl`.
   - SMTP/notificaciones.
+- El seed de usuarios iniciales se ejecuta al arranque incluso en `Production` cuando hay pares username/password válidos, es idempotente, no ejecuta migraciones, no cambia schema, no duplica usuarios existentes y no sobrescribe `PasswordHash`. Si se cambia una password seed después de creado el usuario, no se actualiza automáticamente; un reset debe resolverse con un flujo posterior/controlado.
+- Verificar `AppUsers` sin exponer hashes: `SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt FROM jmnexusb_api.AppUsers ORDER BY Username;`. No insertar usuarios manualmente por SQL porque el hash debe generarse por la lógica del backend.
 - Rate limiting con middleware de .NET (`System.Threading.RateLimiting`) para login, cotizaciones, lectura pública y admin.
 - Validación de uploads por extensión, content-type, tamaño y firma/magic bytes.
 - Logs con Serilog o logging estándar hacia archivos compatibles con Plesk/IIS.
@@ -466,7 +469,7 @@ Prompt sugerido:
 Entregables:
 
 - Auth controllers/services.
-- Seed seguro por variables de entorno.
+- Seed seguro por variables de entorno, idempotente en `Production`, con logs sin passwords/hashes y sin sobrescribir usuarios existentes.
 - Tests de login/me/roles.
 
 ### Fase Backend .NET 4: catálogo base

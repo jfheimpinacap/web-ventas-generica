@@ -161,6 +161,8 @@ app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(envir
 
 MapAuthEndpoints(app);
 
+await SeedData.SeedUsersAsync(app.Services, app.Environment);
+
 app.Run();
 
 static Task NormalizeKnownTrailingSlashPaths(HttpContext context, Func<Task> next)
