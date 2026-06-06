@@ -1219,3 +1219,26 @@ Estado actualizado:
 - No guardar secretos reales ni crear usuarios reales desde SQL como parte de este paso.
 
 Usar `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md` antes de publicar. El paquete local puede generarse con `backend-dotnet/scripts/publish-plesk.ps1` o con `dotnet publish` manual, y la salida esperada queda en `backend-dotnet/publish/JemNexus.Api` para subida manual a Plesk.
+
+## Backend .NET 3 - Publicación API en Plesk validada
+
+Estado confirmado el `2026-06-06`: el backend .NET quedó operativo en una publicación productiva controlada en Plesk Windows/IIS para `https://api.jem-nexus.cl`.
+
+### Validaciones de producción controlada
+
+- API .NET publicada manualmente en Plesk mediante ZIP generado localmente.
+- Schema SQL Server aplicado previamente sobre la base `jemnexusb_prod` y el schema real `jmnexusb_api`.
+- Usuarios seed creados y validados en `AppUsers`:
+  - `vendedor` con rol `seller`.
+  - `soporte` con rol `support_admin`.
+- Login probado correctamente con `POST https://api.jem-nexus.cl/api/auth/login` para `vendedor`.
+- Bearer auth probado correctamente con `GET https://api.jem-nexus.cl/api/auth/me` usando el access token retornado por login.
+- Estado funcional: backend .NET operativo en producción controlada.
+
+### Alcance pendiente
+
+- El frontend público aún no apunta a la API .NET.
+- Django no fue eliminado ni reemplazado todavía.
+- No se debe ejecutar `dotnet ef database update` contra producción como parte de este hito.
+- No se deben reejecutar scripts SQL ya aplicados.
+- Próximo paso recomendado: planificar la integración frontend/API .NET o ejecutar una rotación controlada de credenciales provisorias expuestas durante la validación manual.

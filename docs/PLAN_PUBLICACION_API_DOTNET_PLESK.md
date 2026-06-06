@@ -273,3 +273,39 @@ Sobre stdout:
 - CORS incluye `https://jem-nexus.cl` y `https://www.jem-nexus.cl`, y además acepta `FRONTEND_ORIGINS` por variable.
 - La conexión SQL se lee desde `ConnectionStrings__DefaultConnection` mediante la configuración estándar de ASP.NET Core.
 - `SeedData` omite creación de usuarios cuando faltan passwords configuradas.
+
+## Resultado de publicación controlada de API .NET en Plesk
+
+Hito confirmado el `2026-06-06` para la publicación manual y controlada de la API ASP.NET Core de JEM Nexus.
+
+### Estado de publicación
+
+- Dominio API: `https://api.jem-nexus.cl`.
+- Hosting: Plesk Windows/IIS.
+- Carpeta raíz del subdominio: `api.jem-nexus.cl`.
+- Método de publicación: publicación manual mediante ZIP generado localmente desde artefactos de `dotnet publish`.
+- Se creó un backup previo en Plesk antes de reemplazar archivos.
+- `web.config` quedó apuntando correctamente a `arguments=".\JemNexus.Api.dll"`.
+- `stdoutLogEnabled` debe quedar en `false`; solo puede habilitarse temporalmente para diagnóstico y debe volver a desactivarse.
+
+### Validaciones confirmadas
+
+- Health público validado: `GET https://api.jem-nexus.cl/health` respondió `status ok`, `app JEM Nexus API`, `environment Production`.
+- Health API validado: `GET https://api.jem-nexus.cl/api/health` respondió `status ok`, `app JEM Nexus API`, `environment Production`.
+- Conexión SQL Server productiva validada contra la base `jemnexusb_prod` y el schema real `jmnexusb_api`.
+- Schema SQL Server aplicado previamente; no corresponde reejecutar scripts SQL.
+- Seed productivo de usuarios validado en `AppUsers`:
+  - `vendedor`: `Role=seller`, `IsActive=1`, `IsStaff=1`, `IsSuperuser=0`.
+  - `soporte`: `Role=support_admin`, `IsActive=1`, `IsStaff=1`, `IsSuperuser=0`.
+- Login de `vendedor` validado con `POST https://api.jem-nexus.cl/api/auth/login`; la respuesta incluyó `access`, `refresh` y `user`.
+- Bearer token validado con `GET https://api.jem-nexus.cl/api/auth/me`; la respuesta confirmó `id=1`, `username=vendedor`, `role=seller`, `is_staff=true` e `is_superuser=false`.
+- SQL confirmó actualización de `LastLoginAt` para `vendedor` después del login.
+
+### Restricciones posteriores al hito
+
+- El frontend público todavía no fue migrado para consumir la API .NET.
+- No reejecutar scripts SQL ya aplicados sobre producción.
+- No ejecutar `dotnet ef database update` contra Plesk/SQL Server productivo.
+- No dejar ZIPs de publicación dentro de carpetas públicas.
+- No versionar ni documentar secretos reales, connection strings reales ni contraseñas.
+- Las contraseñas provisorias usadas durante la prueba quedaron expuestas fuera del repositorio y deben rotarse en una fase posterior y controlada.
