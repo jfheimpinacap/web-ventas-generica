@@ -5,8 +5,39 @@ const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
 
 interface AuthTokens {
+  accessToken: string
+  refreshToken: string
+  user?: AuthUser
+}
+
+type AuthResponse = Partial<{
   access: string
+  accessToken: string
+  access_token: string
+  token: string
   refresh: string
+  refreshToken: string
+  refresh_token: string
+  user: AuthUser
+}>
+
+export function normalizeAuthResponse(response: AuthResponse): AuthTokens {
+  const accessToken = response.access ?? response.accessToken ?? response.access_token ?? response.token
+  const refreshToken = response.refresh ?? response.refreshToken ?? response.refresh_token
+
+  if (!accessToken || !refreshToken) {
+    throw new ApiError('La respuesta de autenticación no incluyó tokens válidos.', 500, {
+      hasAccessToken: Boolean(accessToken),
+      hasRefreshToken: Boolean(refreshToken),
+      hasUser: Boolean(response.user),
+    })
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    user: response.user,
+  }
 }
 
 export function getAccessToken() {
@@ -18,8 +49,8 @@ export function getRefreshToken() {
 }
 
 function saveTokens(tokens: AuthTokens) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access)
-  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh)
+  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken)
+  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken)
 }
 
 export function clearSession() {
@@ -32,10 +63,11 @@ export function isAuthenticated() {
 }
 
 export async function login(username: string, password: string) {
-  const tokens = await apiRequest<AuthTokens>('/auth/login/', {
+  const response = await apiRequest<AuthResponse>('/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
+  const tokens = normalizeAuthResponse(response)
   saveTokens(tokens)
   return tokens
 }
@@ -48,12 +80,13 @@ export async function refreshToken() {
   }
 
   try {
-    const response = await apiRequest<{ access: string }>('/auth/refresh/', {
+    const response = await apiRequest<AuthResponse>('/auth/refresh/', {
       method: 'POST',
       body: JSON.stringify({ refresh }),
     })
-    localStorage.setItem(ACCESS_TOKEN_KEY, response.access)
-    return response.access
+    const tokens = normalizeAuthResponse({ ...response, refresh })
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken)
+    return tokens.accessToken
   } catch {
     clearSession()
     return null
