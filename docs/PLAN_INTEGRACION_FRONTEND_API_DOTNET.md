@@ -141,3 +141,14 @@ La ruta directa `/diagnostico-api` permite validar la API configurada por variab
    ```
 
 Esta validación no conecta a Plesk desde Codex, no ejecuta SQL, no aplica migraciones, no crea usuarios reales y no publica cambios. Tampoco hace corte total del frontend a .NET ni migra catálogo.
+
+## Migración controlada del login real
+
+- El login real de `/login` usa el servicio centralizado `authApi`, por lo que la URL base y el proveedor salen de `VITE_API_BASE_URL` y `VITE_API_PROVIDER` en lugar de quedar hardcodeados en componentes.
+- El modo Django/local sigue disponible con `VITE_API_PROVIDER=django`; el modo .NET se activa de forma explícita con `VITE_API_PROVIDER=dotnet` y una base como `https://api.jem-nexus.cl`.
+- La respuesta del login se normaliza internamente a `{ accessToken, refreshToken, user }`, aceptando la forma .NET `{ access, refresh, user }` y las variantes históricas de Django (`accessToken`, `access_token`, `token`, `refreshToken`, `refresh_token`).
+- Los tokens del login real sí se guardan según el flujo normal del panel vendedor, usando las claves históricas de `localStorage` (`ventas_access_token` y `ventas_refresh_token`). No se guardan passwords ni se muestran tokens.
+- El usuario actual del flujo real se valida con `/auth/me` usando `Authorization: Bearer <accessToken>` mediante `authApi`, con normalización de campos Django/.NET como `first_name`/`firstName`, `is_staff`/`isStaff` y `role`/`userRole`.
+- El guard del panel vendedor mantiene bloqueo para usuarios anónimos y valida que el usuario autenticado pueda operar como vendedor/staff/superuser o tenga rol compatible (`seller`, `support_admin`, `admin`, `staff`).
+- La pantalla `/diagnostico-api` sigue separada: usa las mismas utilidades de login y `/auth/me`, pero conserva el token solo en memoria del componente y no toca `localStorage`.
+- El catálogo público y los servicios comerciales todavía no fueron migrados a .NET; el panel vendedor queda como siguiente validación funcional manual antes de avanzar con productos, categorías, marcas, proveedores, promociones, imágenes o cotizaciones.

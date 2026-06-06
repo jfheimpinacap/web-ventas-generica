@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '../services/api'
 import { Seo } from '../components/common/Seo'
-import { getMe, login } from '../services/authApi'
+import { canAccessSellerPanel, getMe, login, logout } from '../services/authApi'
 import { buildPublicUrl } from '../utils/seo'
 
 export function LoginPage() {
@@ -20,7 +20,14 @@ export function LoginPage() {
 
     try {
       await login(username, password)
-      await getMe()
+      const currentUser = await getMe()
+
+      if (!canAccessSellerPanel(currentUser)) {
+        logout()
+        setError('Tu cuenta no tiene permisos para acceder al panel vendedor.')
+        return
+      }
+
       navigate('/admin/productos', { replace: true })
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
