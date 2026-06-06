@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '../components/admin/ProtectedRoute'
 import { AboutPage } from '../pages/AboutPage'
+import { ApiDiagnostics } from '../pages/ApiDiagnostics'
 import { CatalogPage } from '../pages/CatalogPage'
 import { ContactPage } from '../pages/ContactPage'
 import { FaqPage } from '../pages/FaqPage'
@@ -31,6 +32,7 @@ export function AppRouter() {
       <Route path="/catalogo" element={<CatalogPage />} />
       <Route path="/producto/:slug" element={<ProductDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/diagnostico-api" element={<ApiDiagnostics />} />
       <Route path="/cotizar" element={<QuotePage />} />
       <Route path="/contacto" element={<ContactPage />} />
       <Route path="/sobre-nosotros" element={<AboutPage />} />

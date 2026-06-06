@@ -101,3 +101,43 @@ Las llamadas autenticadas usan `Authorization: Bearer <accessToken>`. Esto permi
 - Smoke test post-build contra el backend configurado.
 - SEO/IA SEO posterior, fuera de esta fase.
 - Migración controlada de catálogo y cotizaciones cuando la API .NET tenga contratos confirmados para esos flujos.
+
+## Validación controlada desde frontend
+
+La ruta directa `/diagnostico-api` permite validar la API configurada por variables Vite sin cambiar la navegación pública ni migrar catálogo.
+
+1. Crear `frontend/.env.local` manualmente, no versionado:
+
+   ```env
+   VITE_API_BASE_URL=https://api.jem-nexus.cl
+   VITE_API_PROVIDER=dotnet
+   ```
+
+2. Ejecutar:
+
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+3. Abrir:
+
+   ```text
+   http://localhost:5174/diagnostico-api
+   ```
+
+   Si `start.py` o Vite usan otro puerto en el entorno local, abrir la misma ruta en ese puerto.
+
+4. Presionar **Probar health** y confirmar que el proveedor, la base URL y el endpoint resuelto coincidan con la configuración esperada.
+5. Probar login con el usuario vendedor validado manualmente en el entorno correspondiente.
+6. Presionar **Probar /auth/me** para confirmar que el access token normalizado funciona como Bearer token.
+7. Confirmar CORS desde el origen del frontend usado en la prueba.
+8. No dejar passwords, tokens ni respuestas sensibles en capturas públicas o registros compartidos.
+9. Volver a configuración Django/local cuando corresponda:
+
+   ```env
+   VITE_API_BASE_URL=http://127.0.0.1:8001/api
+   VITE_API_PROVIDER=django
+   ```
+
+Esta validación no conecta a Plesk desde Codex, no ejecuta SQL, no aplica migraciones, no crea usuarios reales y no publica cambios. Tampoco hace corte total del frontend a .NET ni migra catálogo.
