@@ -1,12 +1,39 @@
 import type { AuthUser } from '../types/catalog'
-import { apiRequest, ApiError } from './api'
+import { apiEndpoint, apiRequest, ApiError } from './api'
 
 const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
 
-interface AuthTokens {
-  access: string
-  refresh: string
+interface AuthResponseShape {
+  access?: string
+  accessToken?: string
+  access_token?: string
+  token?: string
+  refresh?: string
+  refreshToken?: string
+  refresh_token?: string
+  user?: AuthUser
+}
+
+export interface NormalizedAuthResponse {
+  accessToken: string
+  refreshToken: string
+  user?: AuthUser
+}
+
+export function normalizeAuthResponse(response: AuthResponseShape): NormalizedAuthResponse {
+  const accessToken = response.access ?? response.accessToken ?? response.access_token ?? response.token
+  const refreshToken = response.refresh ?? response.refreshToken ?? response.refresh_token
+
+  if (!accessToken || !refreshToken) {
+    throw new ApiError('Invalid auth response', 500)
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    user: response.user,
+  }
 }
 
 export function getAccessToken() {
@@ -17,9 +44,9 @@ export function getRefreshToken() {
   return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
-function saveTokens(tokens: AuthTokens) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access)
-  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh)
+function saveTokens(tokens: NormalizedAuthResponse) {
+  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken)
+  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken)
 }
 
 export function clearSession() {
@@ -32,12 +59,13 @@ export function isAuthenticated() {
 }
 
 export async function login(username: string, password: string) {
-  const tokens = await apiRequest<AuthTokens>('/auth/login/', {
+  const response = await apiRequest<AuthResponseShape>(apiEndpoint('/auth/login/'), {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
-  saveTokens(tokens)
-  return tokens
+  const normalizedAuth = normalizeAuthResponse(response)
+  saveTokens(normalizedAuth)
+  return normalizedAuth
 }
 
 export async function refreshToken() {
@@ -48,12 +76,19 @@ export async function refreshToken() {
   }
 
   try {
-    const response = await apiRequest<{ access: string }>('/auth/refresh/', {
+    const response = await apiRequest<AuthResponseShape>(apiEndpoint('/auth/refresh/'), {
       method: 'POST',
       body: JSON.stringify({ refresh }),
     })
-    localStorage.setItem(ACCESS_TOKEN_KEY, response.access)
-    return response.access
+    const responseWithRefresh = response.refresh || response.refreshToken || response.refresh_token
+      ? response
+      : { ...response, refresh }
+    const normalizedAuth = normalizeAuthResponse(responseWithRefresh)
+    localStorage.setItem(ACCESS_TOKEN_KEY, normalizedAuth.accessToken)
+    if (normalizedAuth.refreshToken !== refresh) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, normalizedAuth.refreshToken)
+    }
+    return normalizedAuth.accessToken
   } catch {
     clearSession()
     return null
@@ -71,12 +106,9 @@ export async function authFetch<T>(
   }
 
   try {
-    return await apiRequest<T>(path, {
+    return await apiRequest<T>(apiEndpoint(path), {
       ...options,
-      headers: {
-        ...(options.headers ?? {}),
-        Authorization: `Bearer ${token}`,
-      },
+      token,
     })
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
@@ -86,12 +118,9 @@ export async function authFetch<T>(
         throw error
       }
 
-      return apiRequest<T>(path, {
+      return apiRequest<T>(apiEndpoint(path), {
         ...options,
-        headers: {
-          ...(options.headers ?? {}),
-          Authorization: `Bearer ${nextAccess}`,
-        },
+        token: nextAccess,
       })
     }
 

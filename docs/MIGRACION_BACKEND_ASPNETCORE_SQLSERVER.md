@@ -1219,3 +1219,21 @@ Estado actualizado:
 - No guardar secretos reales ni crear usuarios reales desde SQL como parte de este paso.
 
 Usar `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md` antes de publicar. El paquete local puede generarse con `backend-dotnet/scripts/publish-plesk.ps1` o con `dotnet publish` manual, y la salida esperada queda en `backend-dotnet/publish/JemNexus.Api` para subida manual a Plesk.
+
+## 15. Integración frontend controlada con API .NET publicada
+
+La API .NET quedó publicada y validada manualmente en `https://api.jem-nexus.cl`, incluyendo `GET /health`, `GET /api/health`, `POST /api/auth/login` y `GET /api/auth/me` con Bearer token. El frontend no debe migrarse de golpe: debe usar variables Vite para elegir proveedor y URL base sin tocar código.
+
+Variables frontend recomendadas:
+
+```env
+# Django local/control actual
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_PROVIDER=django
+
+# .NET Plesk, activar manualmente cuando corresponda
+# VITE_API_BASE_URL=https://api.jem-nexus.cl
+# VITE_API_PROVIDER=dotnet
+```
+
+La normalización de login debe aceptar `access`, `refresh` y `user` desde .NET, manteniendo compatibilidad con nombres alternativos usados por clientes o backends anteriores. No se migran todavía el catálogo público ni el CRUD completo del panel vendedor; esos endpoints quedan para fases posteriores descritas en `docs/PLAN_INTEGRACION_FRONTEND_API_DOTNET.md`.

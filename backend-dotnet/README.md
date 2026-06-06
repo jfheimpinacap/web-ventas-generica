@@ -378,3 +378,9 @@ dotnet publish backend-dotnet\JemNexus.Api\JemNexus.Api.csproj `
 ```
 
 La carpeta `backend-dotnet\publish\JemNexus.Api` es la que debe comprimirse/subirse manualmente al subdominio de API en Plesk después de configurar variables de entorno fuera del repositorio.
+
+## Estado de publicación API .NET y frontend
+
+La API .NET fue publicada y validada manualmente en Plesk bajo `https://api.jem-nexus.cl`, con health checks en `/health` y `/api/health` y autenticación en `/api/auth/login` y `/api/auth/me` usando `Authorization: Bearer <access>`. El frontend público todavía no hace corte total hacia esta API: la integración debe activarse de forma controlada con `VITE_API_BASE_URL=https://api.jem-nexus.cl` y `VITE_API_PROVIDER=dotnet` cuando corresponda.
+
+Mantener `stdoutLogEnabled="false"` en producción salvo diagnóstico temporal muy acotado. No ejecutar `dotnet ef database update` contra Plesk/SQL Server productivo.
