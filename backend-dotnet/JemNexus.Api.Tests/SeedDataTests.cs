@@ -173,7 +173,7 @@ public sealed class SeedDataTests
 
         services.AddLogging();
         services.AddDbContext<JemNexusDbContext>(options =>
-            options.UseInMemoryDatabase(databaseName, databaseRoot));
+            InMemoryTestDatabase.Configure(options, databaseName, databaseRoot));
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IPasswordHasherService, PasswordHasherService>();
         services.AddOptions<SeedUserOptions>()

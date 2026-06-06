@@ -12,21 +12,26 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace JemNexus.Api.Tests;
 
-public sealed class AuthEndpointTests
+public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiFactory>
 {
+    private const string TestPassword = "DummyPassword123!";
+    private readonly AuthApiFactory _factory;
+
+    public AuthEndpointTests(AuthApiFactory factory)
+    {
+        _factory = factory;
+    }
+
     [Theory]
     [InlineData("/api/auth/login")]
     [InlineData("/api/auth/login/")]
     public async Task LoginWithValidCredentialsReturnsAccessRefreshAndUser(string loginPath)
     {
-        await using var factory = CreateFactory();
-        await SeedTestUsersAsync(factory);
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
         var payload = await ReadSuccessfulJsonAsync<LoginPayload>(response);
@@ -44,9 +49,7 @@ public sealed class AuthEndpointTests
     [InlineData("/api/auth/login/")]
     public async Task LoginWithInvalidCredentialsReturnsUnauthorized(string loginPath)
     {
-        await using var factory = CreateFactory();
-        await SeedTestUsersAsync(factory);
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = "wrong-password" });
 
@@ -58,8 +61,7 @@ public sealed class AuthEndpointTests
     [InlineData("/api/auth/me/")]
     public async Task MeWithoutBearerTokenReturnsUnauthorized(string mePath)
     {
-        await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
 
         var response = await client.GetAsync(mePath);
 
@@ -71,9 +73,7 @@ public sealed class AuthEndpointTests
     [InlineData("/api/auth/login/", "/api/auth/me/")]
     public async Task MeWithBearerTokenReturnsCurrentUser(string loginPath, string mePath)
     {
-        await using var factory = CreateFactory();
-        await SeedTestUsersAsync(factory);
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
         var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
         var login = await ReadSuccessfulJsonAsync<LoginPayload>(loginResponse);
 
@@ -96,9 +96,7 @@ public sealed class AuthEndpointTests
     [InlineData("/api/auth/login/", "/api/auth/refresh/")]
     public async Task RefreshWithPersistedRefreshTokenReturnsNewAccessToken(string loginPath, string refreshPath)
     {
-        await using var factory = CreateFactory();
-        await SeedTestUsersAsync(factory);
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
         var loginResponse = await client.PostAsJsonAsync(loginPath, new { username = "demo", password = TestPassword });
         var login = await ReadSuccessfulJsonAsync<LoginPayload>(loginResponse);
 
@@ -112,8 +110,7 @@ public sealed class AuthEndpointTests
     [Fact]
     public async Task LoginWorksWithUserCreatedByStartupSeed()
     {
-        await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        using var client = _factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/auth/login", new { username = "demo", password = TestPassword });
         var payload = await ReadSuccessfulJsonAsync<LoginPayload>(response);
@@ -121,30 +118,6 @@ public sealed class AuthEndpointTests
         Assert.Equal("demo", payload.User.Username);
         Assert.Equal(AppRoles.Seller, payload.User.Role);
     }
-
-    private static WebApplicationFactory<Program> CreateFactory()
-    {
-        var databaseName = $"AuthEndpointTests-{Guid.NewGuid():N}";
-        var databaseRoot = new InMemoryDatabaseRoot();
-
-        return new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Test");
-                builder.ConfigureAppConfiguration((_, configurationBuilder) =>
-                {
-                    configurationBuilder.AddInMemoryCollection(TestConfiguration);
-                });
-                builder.ConfigureServices(services =>
-                {
-                    services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
-                    services.AddDbContext<JemNexusDbContext>(options =>
-                        options.UseInMemoryDatabase(databaseName, databaseRoot));
-                });
-            });
-    }
-
-    private const string TestPassword = "DummyPassword123!";
 
     private static readonly IReadOnlyDictionary<string, string?> TestConfiguration = new Dictionary<string, string?>
     {
@@ -164,16 +137,6 @@ public sealed class AuthEndpointTests
         ["SeedUsers:SupportEmail"] = "support@example.test"
     };
 
-    private static async Task SeedTestUsersAsync(WebApplicationFactory<Program> factory)
-    {
-        using var scope = factory.Services.CreateScope();
-        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
-        await SeedData.SeedUsersAsync(factory.Services, environment);
-
-        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
-        Assert.Equal(2, await dbContext.AppUsers.CountAsync());
-    }
-
     private static async Task<T> ReadSuccessfulJsonAsync<T>(HttpResponseMessage response)
     {
         var body = await response.Content.ReadAsStringAsync();
@@ -183,6 +146,27 @@ public sealed class AuthEndpointTests
         Assert.True(payload is not null, $"Expected JSON response body for {typeof(T).Name}. Status: {response.StatusCode}, Body: {body}");
 
         return payload!;
+    }
+
+    public sealed class AuthApiFactory : WebApplicationFactory<Program>
+    {
+        private readonly string _databaseName = $"AuthEndpointTests-{Guid.NewGuid():N}";
+        private readonly InMemoryDatabaseRoot _databaseRoot = new();
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Test");
+            builder.ConfigureAppConfiguration((_, configurationBuilder) =>
+            {
+                configurationBuilder.AddInMemoryCollection(TestConfiguration);
+            });
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.AddDbContext<JemNexusDbContext>(options =>
+                    InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
+            });
+        }
     }
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
