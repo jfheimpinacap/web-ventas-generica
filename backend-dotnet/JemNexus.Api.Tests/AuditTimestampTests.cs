@@ -51,9 +51,7 @@ public sealed class AuditTimestampTests
 
     private static JemNexusDbContext CreateInMemoryContext()
     {
-        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
+        var options = InMemoryTestDatabase.CreateOptions(Guid.NewGuid().ToString());
 
         return new JemNexusDbContext(options);
     }
