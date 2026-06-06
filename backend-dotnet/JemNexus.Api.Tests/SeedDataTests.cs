@@ -5,7 +5,6 @@ using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -168,8 +167,8 @@ public sealed class SeedDataTests
     private static ServiceProvider CreateServices(Action<SeedUserOptions>? configureSeedUsers = null)
     {
         var services = new ServiceCollection();
-        var databaseName = $"SeedDataTests-{Guid.NewGuid():N}";
-        var databaseRoot = new InMemoryDatabaseRoot();
+        var databaseName = InMemoryTestDatabase.CreateDatabaseName("SeedDataTests");
+        var databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
 
         services.AddLogging();
         services.AddDbContext<JemNexusDbContext>(options =>

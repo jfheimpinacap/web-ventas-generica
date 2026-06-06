@@ -41,7 +41,9 @@ dotnet build backend-dotnet/JemNexus.sln
 dotnet test backend-dotnet/JemNexus.sln
 ```
 
-Los tests incluyen endpoints mínimos de health y validaciones de metadata del modelo comercial EF Core.
+Los tests incluyen endpoints mínimos de health, validaciones de metadata del modelo comercial EF Core, autenticación/seed inicial de usuarios y timestamps de auditoría.
+
+Los tests que usan EF Core InMemory mantienen bases aisladas por test/factory con nombres y `InMemoryDatabaseRoot` únicos. La configuración test-only deja que EF Core construya su provider interno para cada configuración; no se comparte `UseInternalServiceProvider` entre bases InMemory distintas. Para ese aislamiento intencional se ignora únicamente `ManyServiceProvidersCreatedWarning` dentro del helper de tests, sin afectar la configuración productiva ni el seed productivo.
 
 ## Entity Framework Core
 
