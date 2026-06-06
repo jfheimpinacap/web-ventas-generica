@@ -4,7 +4,7 @@ import { apiRequest, ApiError } from './api'
 const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
 
-interface AuthTokens {
+export interface AuthTokens {
   accessToken: string
   refreshToken: string
   user?: AuthUser
@@ -62,12 +62,17 @@ export function isAuthenticated() {
   return Boolean(getAccessToken())
 }
 
-export async function login(username: string, password: string) {
+export async function loginWithoutPersistingSession(username: string, password: string) {
   const response = await apiRequest<AuthResponse>('/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
-  const tokens = normalizeAuthResponse(response)
+
+  return normalizeAuthResponse(response)
+}
+
+export async function login(username: string, password: string) {
+  const tokens = await loginWithoutPersistingSession(username, password)
   saveTokens(tokens)
   return tokens
 }
@@ -134,6 +139,18 @@ export async function authFetch<T>(
 
 export async function getMe() {
   return authFetch<AuthUser>('/auth/me/')
+}
+
+export async function getMeWithAccessToken(accessToken: string) {
+  if (!accessToken) {
+    throw new ApiError('Unauthorized', 401)
+  }
+
+  return apiRequest<AuthUser>('/auth/me/', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
 }
 
 export function logout() {
