@@ -378,3 +378,19 @@ dotnet publish backend-dotnet\JemNexus.Api\JemNexus.Api.csproj `
 ```
 
 La carpeta `backend-dotnet\publish\JemNexus.Api` es la que debe comprimirse/subirse manualmente al subdominio de API en Plesk después de configurar variables de entorno fuera del repositorio.
+
+## Estado Plesk
+
+Estado confirmado el `2026-06-06`:
+
+- API publicada en `https://api.jem-nexus.cl` sobre Plesk Windows/IIS.
+- Endpoints de health validados:
+  - `GET https://api.jem-nexus.cl/health`.
+  - `GET https://api.jem-nexus.cl/api/health`.
+- Login y autenticación Bearer validados:
+  - `POST https://api.jem-nexus.cl/api/auth/login`.
+  - `GET https://api.jem-nexus.cl/api/auth/me`.
+- Las variables, connection strings y secretos productivos se administran fuera del repositorio en Plesk/IIS.
+- `backend-dotnet/publish/` es un artefacto local de despliegue y no se versiona.
+- Los stdout logs deben habilitarse solo temporalmente para diagnóstico; `stdoutLogEnabled` debe quedar en `false` después de revisar incidentes.
+- Las contraseñas provisorias usadas durante pruebas manuales deben rotarse si fueron expuestas en pantallas, chat, capturas o tickets.
