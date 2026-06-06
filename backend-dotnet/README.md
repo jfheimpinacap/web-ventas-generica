@@ -313,7 +313,22 @@ dotnet ef migrations script \
 
 > Advertencia: no ejecutar `dotnet ef database update` contra SQL Server real/Plesk y no aplicar SQL sin backup verificado, revisión del script, confirmación del estado de `__EFMigrationsHistory`, ventana de mantenimiento y aprobación explícita. Si la base ya tiene aplicada `InitialCommercialSchema`, generar/revisar un script diferencial en vez de ejecutar un script acumulado desde cero.
 
-Antes de producción configurar `Jwt__Secret`/`JWT_SECRET` fuera del repo y definir si `SeedUsers__SellerPassword` y `SeedUsers__SupportPassword` se usarán para crear usuarios iniciales por seed controlado o si se crearán por un procedimiento separado seguro. No subir contraseñas reales ni connection strings reales al repositorio.
+Antes de producción configurar `Jwt__Secret`/`JWT_SECRET` fuera del repo. El seed controlado de usuarios iniciales se ejecuta al arranque, también en `Production`, cuando existen pares completos no vacíos:
+
+- Seller: `SeedUsers__SellerUsername` o `SeedUsers:SellerUsername`, junto con `SeedUsers__SellerPassword` o `SeedUsers:SellerPassword`.
+- Support: `SeedUsers__SupportUsername` o `SeedUsers:SupportUsername`, junto con `SeedUsers__SupportPassword` o `SeedUsers:SupportPassword`.
+
+El seed no ejecuta migraciones, no cambia el schema, normaliza `Username` con `Trim`, usa el hasher del backend que valida `/api/auth/login`, asigna `IsActive=true`, `IsStaff=true` e `IsSuperuser=false`, y crea roles `seller`/`support_admin` según corresponda. Es idempotente: si el `Username` ya existe, no duplica el usuario y no sobrescribe `PasswordHash`; cambiar una password de seed en Plesk después de creado el usuario no la actualiza automáticamente. Para resetear passwords se requiere un flujo posterior/controlado.
+
+Los logs esperados son seguros y no muestran passwords ni hashes: `SeedUsers seller skipped: missing username/password.`, `SeedUsers seller already exists.`, `SeedUsers seller created.`, y equivalentes para `support`. Para verificar en SQL sin exponer secretos:
+
+```sql
+SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt
+FROM jmnexusb_api.AppUsers
+ORDER BY Username;
+```
+
+No insertar usuarios manualmente por SQL porque `PasswordHash` debe ser generado por la lógica del backend. No subir contraseñas reales ni connection strings reales al repositorio.
 
 ## Advertencia Plesk/SQL Server: errores parciales de aplicación SQL
 

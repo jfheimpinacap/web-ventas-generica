@@ -60,10 +60,10 @@ Variables mínimas/recomendadas:
 - `JWT_SECRET` o `Jwt__Secret`.
 - `Jwt__Issuer`.
 - `Jwt__Audience`.
-- `SeedUsers__SellerUsername`.
-- `SeedUsers__SellerPassword`.
-- `SeedUsers__SupportUsername`.
-- `SeedUsers__SupportPassword`.
+- `SeedUsers__SellerUsername` o `SeedUsers:SellerUsername`.
+- `SeedUsers__SellerPassword` o `SeedUsers:SellerPassword`.
+- `SeedUsers__SupportUsername` o `SeedUsers:SupportUsername`.
+- `SeedUsers__SupportPassword` o `SeedUsers:SupportPassword`.
 - `FRONTEND_ORIGINS`.
 - `Uploads__RootPath`, si aplica.
 - `Uploads__PublicBasePath`, si aplica.
@@ -71,8 +71,13 @@ Variables mínimas/recomendadas:
 Aclaraciones:
 
 - No guardar contraseñas reales, connection strings con password real ni claves JWT reales en README, docs ni `appsettings*.json` versionados.
-- `SeedUsers__*` solo debe configurarse si se desea crear usuarios iniciales mediante seed controlado.
-- Si no se configuran passwords, `SeedData` no crea usuarios.
+- `SeedUsers__*`/`SeedUsers:*` solo debe configurarse si se desea crear usuarios iniciales mediante seed controlado.
+- El seed se ejecuta al arranque también en `Production`, no ejecuta migraciones y no cambia el schema.
+- Para crear `seller` deben existir `SeedUsers__SellerUsername`/`SeedUsers:SellerUsername` y `SeedUsers__SellerPassword`/`SeedUsers:SellerPassword` con valores no vacíos.
+- Para crear `support` deben existir `SeedUsers__SupportUsername`/`SeedUsers:SupportUsername` y `SeedUsers__SupportPassword`/`SeedUsers:SupportPassword` con valores no vacíos.
+- Si falta username o password, `SeedData` omite ese usuario y registra un log seguro `SeedUsers <seller|support> skipped: missing username/password.` sin mostrar secretos.
+- El seed es idempotente: si `AppUsers.Username` ya existe, registra `already exists`, no duplica y no sobrescribe `PasswordHash`.
+- Si se cambia una password de seed en Plesk después de que el usuario ya fue creado, la password existente no se actualiza automáticamente; un reset deberá implementarse como flujo posterior/controlado.
 - En `Production`, la aplicación exige `JWT_SECRET` o `Jwt__Secret`; si falta, el arranque debe fallar de forma explícita.
 - `FRONTEND_ORIGINS` puede listar `https://jem-nexus.cl,https://www.jem-nexus.cl`.
 
@@ -188,6 +193,16 @@ Resultado esperado:
 - `200 OK` si el usuario existe y la contraseña es correcta.
 - Respuesta con `access`, `refresh` y `user`.
 
+Verificación SQL segura, sin exponer hashes ni secretos:
+
+```sql
+SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt
+FROM jmnexusb_api.AppUsers
+ORDER BY Username;
+```
+
+No consultar ni copiar `PasswordHash` en tickets, capturas o documentación, y no insertar usuarios manualmente por SQL porque el hash debe generarse con la lógica de backend usada por `/api/auth/login`.
+
 Luego probar el token:
 
 ```http
@@ -240,7 +255,8 @@ Sobre stdout:
 - El esquema real de SQL Server es `jmnexusb_api`; confirmar que el usuario `jemnexusb_api` usa permisos correctos sobre ese esquema.
 - La cadena de conexión debe usar la misma base `jemnexusb_prod` y usuario con permisos correctos.
 - Variables JWT son obligatorias en `Production`; falta de `JWT_SECRET`/`Jwt__Secret` debe impedir el arranque.
-- El seed de usuarios puede no crear usuarios si faltan passwords; esto es esperado y seguro.
+- El seed de usuarios puede no crear usuarios si faltan username/password; esto es esperado y seguro y queda registrado con logs sin secretos.
+- El seed no actualiza contraseñas de usuarios existentes; cambiar variables después del primer arranque no rota passwords.
 - No reejecutar scripts SQL ya aplicados.
 - No ejecutar `dotnet ef database update` contra producción durante publicación.
 - Uploads en IIS requieren permisos de escritura explícitos y ruta controlada.
