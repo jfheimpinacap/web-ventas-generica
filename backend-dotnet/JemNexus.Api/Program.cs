@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using JemNexus.Api.Contracts.Auth;
 using JemNexus.Api.Data;
+using JemNexus.Api.Endpoints;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
@@ -89,6 +90,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireSupportAdmin", policy =>
         policy.RequireAuthenticatedUser()
             .RequireRole(AppRoles.SupportAdmin));
+
+    options.AddPolicy("RequireCommercialRead", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context =>
+                context.User.IsInRole(AppRoles.Seller)
+                || context.User.IsInRole(AppRoles.SupportAdmin)
+                || context.User.HasClaim("is_staff", "true")
+                || context.User.HasClaim("is_superuser", "true")));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -160,6 +169,7 @@ app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(envir
     .WithOpenApi();
 
 MapAuthEndpoints(app);
+app.MapCommercialReadEndpoints();
 
 await SeedData.SeedUsersAsync(app.Services, app.Environment);
 
@@ -169,12 +179,11 @@ static Task NormalizeKnownTrailingSlashPaths(HttpContext context, Func<Task> nex
 {
     var path = context.Request.Path;
 
-    if (path.Equals("/api/health/", StringComparison.OrdinalIgnoreCase)
-        || path.Equals("/api/auth/login/", StringComparison.OrdinalIgnoreCase)
-        || path.Equals("/api/auth/refresh/", StringComparison.OrdinalIgnoreCase)
-        || path.Equals("/api/auth/me/", StringComparison.OrdinalIgnoreCase))
+    if ((path.StartsWithSegments("/api") || path.Equals("/health/", StringComparison.OrdinalIgnoreCase))
+        && path.Value is { Length: > 1 } pathValue
+        && pathValue.EndsWith('/'))
     {
-        context.Request.Path = path.Value!.TrimEnd('/');
+        context.Request.Path = pathValue.TrimEnd('/');
     }
 
     return next();

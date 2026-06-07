@@ -396,3 +396,35 @@ Estado confirmado el `2026-06-06`:
 - `backend-dotnet/publish/` es un artefacto local de despliegue y no se versiona.
 - Los stdout logs deben habilitarse solo temporalmente para diagnóstico; `stdoutLogEnabled` debe quedar en `false` después de revisar incidentes.
 - Las contraseñas provisorias usadas durante pruebas manuales deben rotarse si fueron expuestas en pantallas, chat, capturas o tickets.
+
+## Endpoints comerciales read-only para panel vendedor
+
+La API .NET expone endpoints comerciales de lectura bajo `/api` para validar listados del panel vendedor con Bearer token:
+
+- `GET /api/products/` y `GET /api/products/{id-or-slug}/`
+- `GET /api/categories/` y `GET /api/categories/{id}/`
+- `GET /api/brands/` y `GET /api/brands/{id}/`
+- `GET /api/suppliers/` y `GET /api/suppliers/{id}/`
+- `GET /api/promotions/` y `GET /api/promotions/{id}/`
+- `GET /api/quote-requests/` y `GET /api/quote-requests/{id}/`
+- `GET /api/home-section-items/` y `GET /api/home-section-items/{id}/`
+- `GET /api/product-images/` y `GET /api/product-images/{id}/`
+- `GET /api/product-specs/` y `GET /api/product-specs/{id}/`
+
+Todos estos endpoints son solo lectura y requieren `Authorization: Bearer <access>`. La identidad debe tener rol `seller`, rol `support_admin`, `is_staff=true` o `is_superuser=true`.
+
+Ejemplo de prueba manual controlada, sin registrar tokens en logs compartidos:
+
+```bash
+curl -H "Authorization: Bearer <access>" https://api.jem-nexus.cl/api/products/
+```
+
+Filtros principales:
+
+- Productos: `search`, `category`, `brand`, `product_type`, `condition`, `stock_status`, `is_featured`, `is_published`, `include_unpublished`, `ordering`.
+- Categorías/marcas/proveedores/promociones: `search`, `is_active`, `include_inactive`.
+- Cotizaciones: `search`, `status`, `product`, `ordering`.
+- Home sections: `section`, `is_active`, `include_inactive`.
+- Imágenes/especificaciones: `product`.
+
+No se implementan escrituras comerciales, eliminación, cambios de estado ni subida real de imágenes en esta fase. No ejecutar `dotnet ef database update` contra producción: los cambios son endpoints/DTOs/tests y documentación, sin schema changes. La siguiente fase recomendada es validar los listados del frontend/panel vendedor contra la API publicada y recién después planificar escritura y uploads.

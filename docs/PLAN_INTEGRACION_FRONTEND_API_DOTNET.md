@@ -219,3 +219,86 @@ El helper central de errores del frontend entrega mensajes seguros para:
 - Migrar escritura del panel vendedor solo en una fase posterior y con contratos .NET confirmados.
 - Implementar carga real de imágenes en una fase posterior.
 - Migrar catálogo público en una fase posterior; esta fase no cambia el comportamiento público de catálogo.
+
+## Endpoints .NET de lectura comercial
+
+### Alcance implementado
+
+La API ASP.NET Core agrega endpoints comerciales **solo lectura** bajo `/api` para habilitar la validación del panel vendedor con `VITE_API_PROVIDER=dotnet`. Los endpoints aceptan llamadas con y sin slash final por normalización de rutas antes del routing.
+
+Endpoints implementados:
+
+- `GET /api/products/`
+- `GET /api/products/{id-or-slug}/`
+- `GET /api/categories/`
+- `GET /api/categories/{id}/`
+- `GET /api/brands/`
+- `GET /api/brands/{id}/`
+- `GET /api/suppliers/`
+- `GET /api/suppliers/{id}/`
+- `GET /api/promotions/`
+- `GET /api/promotions/{id}/`
+- `GET /api/quote-requests/`
+- `GET /api/quote-requests/{id}/`
+- `GET /api/home-section-items/`
+- `GET /api/home-section-items/{id}/`
+- `GET /api/product-images/`
+- `GET /api/product-images/{id}/`
+- `GET /api/product-specs/`
+- `GET /api/product-specs/{id}/`
+
+Todos los endpoints anteriores requieren `Authorization: Bearer <access>` y una identidad compatible con panel vendedor/soporte: rol `seller`, rol `support_admin`, claim `is_staff=true` o claim `is_superuser=true`. No se abrió `quote-requests` a público.
+
+Las respuestas son listas directas para listados y objetos directos para detalle. Se mantienen campos `snake_case` por la configuración JSON global de la API .NET, compatible con los normalizadores del frontend.
+
+### Filtros soportados
+
+Productos (`/api/products/`):
+
+- `search`
+- `category` por id o slug
+- `brand` por id o slug
+- `product_type`
+- `condition`
+- `stock_status`
+- `is_featured`
+- `is_published`
+- `include_unpublished`
+- `ordering`: `name`, `-name`, `created_at`, `-created_at`, `updated_at`, `-updated_at`, `price`, `-price`
+
+Categorías, marcas, proveedores y promociones:
+
+- `search`
+- `is_active`
+- `include_inactive`
+
+Cotizaciones (`/api/quote-requests/`):
+
+- `search`
+- `status`
+- `product`
+- `ordering`: `created_at`, `-created_at`, `updated_at`, `-updated_at`, `status`, `-status`
+
+Home sections (`/api/home-section-items/`):
+
+- `section`
+- `is_active`
+- `include_inactive`
+
+Imágenes y especificaciones de producto:
+
+- `product`
+
+### Seguridad y datos expuestos
+
+Los DTOs de lectura excluyen `PasswordHash`, hashes de refresh tokens, claims internos no necesarios, connection strings, secretos y cualquier campo de autenticación. Los endpoints de cotizaciones son de administración autenticada y conservan respuesta solo lectura para que el vendedor pueda listar/revisar solicitudes existentes.
+
+### Pendientes fuera de esta fase
+
+- No se implementó `POST`, `PUT`, `PATCH` ni `DELETE` para entidades comerciales.
+- No se implementó subida real de imágenes.
+- No se migró el catálogo público a endpoints públicos .NET.
+- No se cambió el frontend público ni SEO.
+- No se aplicaron migraciones productivas, no se ejecutó SQL real y no se ejecutó `dotnet ef database update`.
+
+Siguiente validación recomendada: publicar la API .NET mediante el flujo controlado existente, confirmar Bearer/CORS desde el panel vendedor y probar listados reales con `VITE_API_PROVIDER=dotnet` antes de avanzar a escritura o uploads.
