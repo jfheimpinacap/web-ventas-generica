@@ -42,14 +42,10 @@ Desde Windows PowerShell, en la raíz del repositorio:
 cd C:\Users\Franz\desktop\web-ventas-generica
 
 .\backend-dotnet\scripts\publish-plesk.ps1
-
-Compress-Archive `
-  -Path backend-dotnet\publish\JemNexus.Api\* `
-  -DestinationPath backend-dotnet\publish\JemNexus.Api-plesk.zip `
-  -Force
+.\backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El script `backend-dotnet/scripts/publish-plesk.ps1` debe dejar la salida en `backend-dotnet/publish/JemNexus.Api`. La carpeta `backend-dotnet/publish/` es un artefacto local ignorado por git.
+El script `backend-dotnet/scripts/publish-plesk.ps1` debe dejar la salida en `backend-dotnet/publish/JemNexus.Api`. Luego `backend-dotnet/scripts/package-plesk.ps1` debe crear el ZIP seguro `backend-dotnet/publish/JemNexus.Api-plesk.zip`. La carpeta `backend-dotnet/publish/` es un artefacto local ignorado por git.
 
 El script local:
 
@@ -64,9 +60,23 @@ El script local:
 - no conecta a Plesk;
 - no sube archivos.
 
-## 4. `web.config` esperado dentro del ZIP
+El empaquetado seguro:
 
-Antes de subir el ZIP, confirmar que el publish contiene `web.config` generado por el SDK Web y que incluye:
+- excluye `web.config` por defecto para no sobrescribir variables productivas mantenidas en Plesk;
+- excluye `logs/`;
+- excluye archivos stdout (`stdout*.log` y `stdout*.txt`);
+- excluye `.env`, `.env.*`, `*.env.local` y archivos locales sensibles `*.local`;
+- no conecta a Plesk, no ejecuta SQL, no ejecuta migraciones y no toca secretos.
+
+No usar más `Compress-Archive -Path backend-dotnet\publish\JemNexus.Api\*` para este flujo: ese wildcard incluye `web.config` y puede sobrescribir el `web.config` productivo.
+
+`package-plesk.ps1` acepta `-IncludeWebConfig` solo para un caso excepcional y peligroso en el que se haya decidido reemplazar explícitamente el `web.config` productivo. No usar ese parámetro en publicaciones normales.
+
+## 4. `web.config` productivo conservado en Plesk
+
+El ZIP seguro normal **no debe incluir `web.config`**. El `web.config` real productivo se mantiene en Plesk porque contiene variables de entorno productivas y secretos que no se commitean ni se copian a documentación. Existe una plantilla sin secretos en `backend-dotnet/JemNexus.Api/web.config.template` solo como referencia de estructura.
+
+Antes de subir el ZIP, confirmar que la carpeta de publish local contiene `web.config` generado por el SDK Web, pero que el ZIP creado con `package-plesk.ps1` lo excluye. En Plesk, confirmar que el `web.config` productivo existente conserva:
 
 ```xml
 processPath="dotnet"
@@ -74,7 +84,7 @@ arguments=".\JemNexus.Api.dll"
 stdoutLogEnabled="false"
 ```
 
-No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si en una incidencia futura aparece error 500.30, puede habilitarse stdout temporalmente solo para diagnóstico manual y debe volver a `false` después.
+También confirmar que el `web.config` productivo mantiene el bloque `<environmentVariables>` con variables productivas configuradas en Plesk, sin copiar sus valores a git ni a documentación. No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si en una incidencia futura aparece error 500.30, puede habilitarse stdout temporalmente solo para diagnóstico manual y debe volver a `false` después.
 
 ## 5. Checklist previo
 
@@ -85,7 +95,9 @@ No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si
 - [ ] `python backend/manage.py check` OK.
 - [ ] `python backend/manage.py test core catalog -v 2` OK.
 - [ ] `cd frontend && npm run build` OK.
-- [ ] ZIP local `backend-dotnet/publish/JemNexus.Api-plesk.zip` generado.
+- [ ] ZIP local `backend-dotnet/publish/JemNexus.Api-plesk.zip` generado con `backend-dotnet/scripts/package-plesk.ps1`.
+- [ ] Confirmado que el ZIP seguro no contiene `web.config`.
+- [ ] Confirmado que no se usó `Compress-Archive` manual con wildcard sobre toda la carpeta de publish.
 - [ ] Confirmado que esta publicación no tiene migraciones pendientes.
 - [ ] Confirmado que no se requiere SQL.
 - [ ] Confirmado que el ZIP no contiene secretos reales ni `frontend/.env.local`.
@@ -109,19 +121,24 @@ No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si
 1. Entrar a la carpeta raíz de `api.jem-nexus.cl`.
 2. Subir `JemNexus.Api-plesk.zip`.
 3. Extraer el ZIP en la carpeta raíz de la API.
-4. Confirmar que existan al menos:
+4. Confirmar que el ZIP seguro reemplazó DLLs y dependencias, pero **no reemplazó `web.config`**.
+5. Confirmar que existan al menos:
    - `JemNexus.Api.dll`
    - `JemNexus.Api.runtimeconfig.json`
    - `JemNexus.Api.deps.json`
-   - `web.config`
+   - `web.config` productivo ya existente en Plesk
    - DLLs de dependencias
    - `runtimes/`
-5. Eliminar el ZIP subido después de extraerlo.
-6. No tocar variables de entorno.
-7. No tocar connection strings.
-8. No tocar la base de datos.
-9. No ejecutar SQL.
-10. No ejecutar `dotnet ef database update`.
+6. Verificar que el `web.config` productivo siga existiendo después de extraer.
+7. Verificar que contiene `<environmentVariables>`.
+8. Verificar `stdoutLogEnabled="false"`.
+9. Verificar `arguments=".\JemNexus.Api.dll"`.
+10. Eliminar el ZIP subido después de extraerlo.
+11. No tocar variables de entorno.
+12. No tocar connection strings.
+13. No tocar la base de datos.
+14. No ejecutar SQL.
+15. No ejecutar `dotnet ef database update`.
 
 ## 8. Reinicio
 
@@ -133,15 +150,41 @@ No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si
 
 Si falla la publicación:
 
-1. Restaurar el backup ZIP anterior de archivos.
-2. No ejecutar SQL.
-3. No ejecutar `dotnet ef database update`.
-4. No cambiar variables productivas al azar.
-5. Revisar `/health`, `/api/health` y logs disponibles.
-6. Si aparece error 500.30, habilitar stdout temporalmente solo para diagnóstico y volver a `false` después.
-7. Repetir smoke tests con la versión restaurada.
+1. Si aparece error 500.30 y el stdout indica variables faltantes, revisar primero si `web.config` fue sobrescrito o perdió `<environmentVariables>`.
+2. Si `web.config` fue sobrescrito, restaurar **solo `web.config`** desde el backup de Plesk y conservar los DLL nuevos si el resto de la publicación es correcta.
+3. Si el fallo no es de variables o no se puede aislar, restaurar el backup ZIP anterior de archivos.
+4. No ejecutar SQL.
+5. No ejecutar `dotnet ef database update`.
+6. No cambiar variables productivas al azar.
+7. Revisar `/health`, `/api/health` y logs disponibles.
+8. Si se habilita stdout temporalmente para diagnóstico, volver a `false` después.
+9. Repetir smoke tests con la versión restaurada.
 
 Rollback de esta publicación es restaurar archivos. No hay rollback de base de datos porque esta fase no cambia schema ni datos productivos.
+
+## Incidente corregido: no sobrescribir web.config productivo
+
+En la publicación manual read-only se detectó un incidente operacional: el ZIP anterior incluía el `web.config` generado por `dotnet publish`. Al extraerlo en Plesk, ese archivo sobrescribió el `web.config` productivo que contenía el bloque `<environmentVariables>`, dejando a la API sin variables de entorno productivas.
+
+Síntoma observado:
+
+- HTTP Error 500.30 - ASP.NET Core app failed to start.
+- stdout mostró: `Jwt:Secret or JWT_SECRET must be configured in Production.`
+
+Solución manual aplicada:
+
+- restaurar solo `web.config` desde el backup de Plesk;
+- conservar los DLL nuevos ya publicados;
+- no ejecutar SQL;
+- no ejecutar `dotnet ef database update`;
+- no cambiar secretos ni variables al azar.
+
+Procedimiento corregido desde este hotfix:
+
+- generar publish con `backend-dotnet/scripts/publish-plesk.ps1`;
+- generar ZIP con `backend-dotnet/scripts/package-plesk.ps1`;
+- subir y extraer el ZIP seguro;
+- no reemplazar `web.config` en publicaciones normales.
 
 ## 10. Smoke tests PowerShell post-publicación
 
@@ -268,6 +311,20 @@ Resultado esperado:
 - si no hay datos, se debe mostrar lista vacía o mensaje normal;
 - no probar escritura todavía;
 - no probar carga real de imágenes todavía.
+
+## Validación producción read-only completada
+
+Estado documentado después de restaurar el `web.config` productivo desde backup, sin copiar secretos ni tokens:
+
+- `/health` OK.
+- `/api/health` OK.
+- Login vendedor OK.
+- `/api/auth/me` OK.
+- Endpoints comerciales read-only OK: `/api/products/`, `/api/categories/`, `/api/brands/`, `/api/suppliers/`, `/api/promotions/`, `/api/quote-requests/`, `/api/home-section-items/`, `/api/product-images/` y `/api/product-specs/`.
+- Prueba sin Bearer devuelve `401 Unauthorized` OK.
+- Panel vendedor OK con `VITE_API_PROVIDER=dotnet`.
+- Los datos devueltos actualmente pueden ser listas vacías o sin registros; ese estado es esperado mientras no haya carga productiva en esas tablas.
+- Escritura comercial y uploads reales siguen pendientes y no forman parte de esta publicación.
 
 ## 12. Prohibiciones de esta publicación
 

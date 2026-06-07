@@ -781,7 +781,7 @@ El comando previsto para validar publicación manual es:
 dotnet publish backend-dotnet/JemNexus.Api/JemNexus.Api.csproj -c Release -f net8.0 -o backend-dotnet/publish-test
 ```
 
-La salida esperada para Plesk/IIS debe incluir `JemNexus.Api.dll`, `JemNexus.Api.exe`, `web.config` y `appsettings.json`. El contenido publicado debe subirse manualmente al sitio `https://api.jem-nexus.cl`, configurando variables de entorno en Plesk/IIS. Codex no sube artefactos a Plesk.
+La salida local de `dotnet publish` para Plesk/IIS incluye `JemNexus.Api.dll`, `JemNexus.Api.exe`, `web.config` y `appsettings.json`. Para publicaciones normales en Plesk, generar el ZIP con `backend-dotnet/scripts/package-plesk.ps1`: ese ZIP excluye `web.config` por defecto para no sobrescribir el archivo productivo que mantiene `<environmentVariables>` en Plesk. Codex no sube artefactos a Plesk.
 
 ### Tests agregados
 
@@ -1218,7 +1218,7 @@ Estado actualizado:
 - No ejecutar `dotnet ef database update`, SQL real ni scripts de migración durante la publicación controlada.
 - No guardar secretos reales ni crear usuarios reales desde SQL como parte de este paso.
 
-Usar `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md` antes de publicar. El paquete local puede generarse con `backend-dotnet/scripts/publish-plesk.ps1` o con `dotnet publish` manual, y la salida esperada queda en `backend-dotnet/publish/JemNexus.Api` para subida manual a Plesk.
+Usar `docs/PLAN_PUBLICACION_API_DOTNET_PLESK.md` antes de publicar. La salida local puede generarse con `backend-dotnet/scripts/publish-plesk.ps1` o con `dotnet publish` manual, y el ZIP seguro para subida manual a Plesk debe generarse con `backend-dotnet/scripts/package-plesk.ps1` para excluir `web.config` por defecto.
 
 ## Backend .NET 3 - Publicación API en Plesk validada
 

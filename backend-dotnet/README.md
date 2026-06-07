@@ -109,7 +109,7 @@ La carpeta de salida debe incluir, entre otros artefactos:
 - `web.config`
 - `appsettings.json`
 
-Para despliegue manual en Plesk, subir el contenido de la carpeta publicada al sitio de la API `https://api.jem-nexus.cl` y configurar las variables de entorno desde Plesk/IIS antes de iniciar la aplicación.
+Para despliegue manual en Plesk, no subir la carpeta publicada completa con wildcard. Generar el ZIP seguro con `backend-dotnet/scripts/package-plesk.ps1`, que excluye `web.config` por defecto para conservar las variables productivas configuradas en Plesk/IIS.
 
 ### Artefacto local `backend-dotnet/publish/`
 
@@ -359,13 +359,14 @@ Variables de ejemplo sin secretos reales:
 
 - `backend-dotnet/env.plesk.example.txt`.
 
-Script local seguro de publicación:
+Scripts locales seguros de publicación y empaquetado:
 
 ```powershell
 backend-dotnet\scripts\publish-plesk.ps1
+backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El script ejecuta restore, build, test y publish localmente; falla si los tests fallan y deja la salida en `backend-dotnet\publish\JemNexus.Api`. No conecta a Plesk, no sube archivos, no ejecuta SQL y no ejecuta `dotnet ef database update`.
+El script `publish-plesk.ps1` ejecuta restore, build, test y publish localmente; falla si los tests fallan y deja la salida en `backend-dotnet\publish\JemNexus.Api`. Luego `package-plesk.ps1` crea `backend-dotnet\publish\JemNexus.Api-plesk.zip` excluyendo `web.config` por defecto para no sobrescribir las variables productivas de Plesk. Los scripts no conectan a Plesk, no suben archivos, no ejecutan SQL y no ejecutan `dotnet ef database update`.
 
 Comandos equivalentes en Windows PowerShell:
 
@@ -440,11 +441,7 @@ Flujo de generación local desde Windows PowerShell, siempre desde la raíz del 
 cd C:\Users\Franz\desktop\web-ventas-generica
 
 .\backend-dotnet\scripts\publish-plesk.ps1
-
-Compress-Archive `
-  -Path backend-dotnet\publish\JemNexus.Api\* `
-  -DestinationPath backend-dotnet\publish\JemNexus.Api-plesk.zip `
-  -Force
+.\backend-dotnet\scripts\package-plesk.ps1
 ```
 
-Esta publicación es solo de archivos por ZIP manual en Plesk. No agrega escritura comercial, no agrega uploads reales, no requiere migraciones SQL porque el Prompt 021 no modificó modelos persistidos, `JemNexusDbContext` ni migraciones EF Core, y no debe ejecutarse `dotnet ef database update` contra producción.
+Esta publicación es solo de archivos por ZIP manual en Plesk usando el ZIP seguro que no incluye `web.config`. `package-plesk.ps1 -IncludeWebConfig` existe solo como opción excepcional y peligrosa; no usarla en publicaciones normales. No agrega escritura comercial, no agrega uploads reales, no requiere migraciones SQL porque el Prompt 021 no modificó modelos persistidos, `JemNexusDbContext` ni migraciones EF Core, y no debe ejecutarse `dotnet ef database update` contra producción.
