@@ -43,7 +43,7 @@ Revisar en Plesk antes de reemplazar archivos:
 - [ ] Confirmar permisos de escritura si se usará carpeta de uploads en IIS.
 - [ ] Confirmar la ruta final para uploads si `Uploads__RootPath` se configura en producción.
 - [ ] Respaldar la carpeta actual de `api.jem-nexus.cl` antes de reemplazar archivos.
-- [ ] Confirmar que no se sobreescribe el `web.config` generado por `dotnet publish` con un `web.config` viejo.
+- [ ] Confirmar que el `web.config` productivo de Plesk será conservado y no será sobrescrito por el ZIP normal.
 - [ ] Confirmar que `appsettings.Production.json`, si existe fuera del repo, no contiene secretos versionados.
 - [ ] Confirmar que variables de entorno y secretos se configuran en Plesk/IIS o en un `web.config` transformado fuera de git.
 - [ ] Confirmar que no se ejecutará `dotnet ef database update` durante la publicación.
@@ -116,7 +116,10 @@ La carpeta `backend-dotnet\publish\JemNexus.Api` es la carpeta local que se comp
 
 ```powershell
 .\backend-dotnet\scripts\publish-plesk.ps1
+.\backend-dotnet\scripts\package-plesk.ps1
 ```
+
+El ZIP seguro resultante excluye `web.config` por defecto para no sobrescribir variables productivas mantenidas en Plesk. No usar `Compress-Archive` manual con wildcard sobre toda la carpeta de publish porque incluye `web.config`.
 
 Antes de commitear, revisar `git status --short`; no usar `git add .` sin confirmar que `backend-dotnet\publish\`, binarios publicados, archivos locales y secretos no serán agregados.
 
@@ -124,9 +127,10 @@ También se puede usar el script seguro del repo desde PowerShell:
 
 ```powershell
 backend-dotnet\scripts\publish-plesk.ps1
+backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El script solo restaura, compila, prueba y publica localmente. No conecta a Plesk, no sube archivos, no ejecuta SQL y no ejecuta `dotnet ef database update`.
+El primer script restaura, compila, prueba y publica localmente. El segundo script crea el ZIP seguro para Plesk excluyendo `web.config`, `logs/`, stdout logs y archivos locales sensibles `.env*`/`*.local`. Ninguno conecta a Plesk, sube archivos, ejecuta SQL ni ejecuta `dotnet ef database update`.
 
 ## G. Archivos esperados en `publish`
 
@@ -156,7 +160,8 @@ Reglas de seguridad operacional:
 - No mezclar archivos publicados con fuentes del repo.
 - No subir archivos de desarrollo, `.git`, `obj`, `bin` de build intermedio ni secretos locales.
 - Configurar variables de entorno antes de iniciar o reiniciar la app en `Production`.
-- Confirmar que el `web.config` final corresponde al publish actual, no a un archivo viejo.
+- Confirmar que el `web.config` productivo existente en Plesk se conserva, contiene `<environmentVariables>`, mantiene `arguments=".\JemNexus.Api.dll"` y tiene `stdoutLogEnabled="false"`.
+- No sobrescribir `web.config` en publicaciones normales; usar el ZIP seguro generado por `package-plesk.ps1`.
 
 ## I. Smoke tests post-publicación
 
@@ -329,11 +334,7 @@ Comando de ZIP esperado desde Windows PowerShell:
 
 ```powershell
 .\backend-dotnet\scripts\publish-plesk.ps1
-
-Compress-Archive `
-  -Path backend-dotnet\publish\JemNexus.Api\* `
-  -DestinationPath backend-dotnet\publish\JemNexus.Api-plesk.zip `
-  -Force
+.\backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El ZIP debe incluir `web.config` con `processPath="dotnet"`, `arguments=".\JemNexus.Api.dll"` y `stdoutLogEnabled="false"` para producción normal.
+El ZIP seguro **no debe incluir `web.config`** en producción normal. `Compress-Archive -Path backend-dotnet\publish\JemNexus.Api\*` ya no es recomendado porque incluye `web.config` y puede borrar las variables productivas configuradas en Plesk. El `web.config` productivo real debe conservar `processPath="dotnet"`, `arguments=".\JemNexus.Api.dll"`, `stdoutLogEnabled="false"` y el bloque `<environmentVariables>` en Plesk.

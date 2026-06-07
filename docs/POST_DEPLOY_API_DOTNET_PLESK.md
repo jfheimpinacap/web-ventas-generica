@@ -80,10 +80,12 @@ finally {
 
 ## D. Checklist de seguridad inmediata
 
+- [ ] Si `/health` o `/api/health` devuelven 500.30, revisar primero que `web.config` productivo no haya sido sobrescrito y que conserve `<environmentVariables>`.
 - [ ] Confirmar `stdoutLogEnabled=false` en `web.config`.
 - [ ] Borrar archivos stdout temporales si existen.
 - [ ] Confirmar que no quedó un ZIP de publicación dentro de una carpeta pública.
 - [ ] Confirmar que no hay secrets en `appsettings*.json` ni `web.config` versionados.
+- [ ] Confirmar que el ZIP usado fue generado con `backend-dotnet/scripts/package-plesk.ps1` y no incluye `web.config`.
 - [ ] No subir capturas con variables, connection strings, JWT secrets o passwords visibles.
 - [ ] Rotar contraseñas expuestas durante pruebas manuales.
 - [ ] Rotar JWT secret si fue visible en pantallas, chat, tickets o capturas.
@@ -119,4 +121,4 @@ Validaciones mínimas:
   - `/api/home-section-items/`
 - Al menos un endpoint comercial sin Bearer devuelve `401 Unauthorized`.
 
-No ejecutar SQL ni `dotnet ef database update` durante estas verificaciones. Si falla la publicación, el rollback esperado es restaurar el backup de archivos de Plesk.
+No ejecutar SQL ni `dotnet ef database update` durante estas verificaciones. Si aparece 500.30 por variables faltantes, revisar `web.config` antes de tocar la base de datos o variables: si fue sobrescrito, restaurar solo `web.config` desde backup y conservar los DLL nuevos si el resto está correcto. Si falla la publicación por otra causa, el rollback esperado es restaurar el backup de archivos de Plesk.

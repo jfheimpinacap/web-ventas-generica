@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Safe production template for Plesk/IIS.
+
+  Do not commit or paste real production values. The real production web.config
+  is maintained in Plesk and must not be replaced during normal ZIP publishes.
+  Use backend-dotnet/scripts/package-plesk.ps1 to create ZIPs that exclude
+  web.config by default.
+-->
+<configuration>
+  <location path="." inheritInChildApplications="false">
+    <system.webServer>
+      <handlers>
+        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
+      </handlers>
+      <aspNetCore processPath="dotnet" arguments=".\JemNexus.Api.dll" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="inprocess">
+        <environmentVariables>
+          <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+          <environmentVariable name="ConnectionStrings__DefaultConnection" value="PLACEHOLDER_SQLSERVER_CONNECTION_STRING" />
+          <environmentVariable name="Jwt__Secret" value="PLACEHOLDER_LONG_RANDOM_JWT_SECRET" />
+          <environmentVariable name="JWT_SECRET" value="PLACEHOLDER_LONG_RANDOM_JWT_SECRET" />
+          <environmentVariable name="Jwt__Issuer" value="PLACEHOLDER_JWT_ISSUER" />
+          <environmentVariable name="Jwt__Audience" value="PLACEHOLDER_JWT_AUDIENCE" />
+          <environmentVariable name="FRONTEND_ORIGINS" value="https://PLACEHOLDER_FRONTEND_DOMAIN" />
+          <environmentVariable name="SeedUsers__SellerUsername" value="PLACEHOLDER_SELLER_USERNAME" />
+          <environmentVariable name="SeedUsers__SellerPassword" value="PLACEHOLDER_SELLER_PASSWORD" />
+          <environmentVariable name="SeedUsers__SupportUsername" value="PLACEHOLDER_SUPPORT_USERNAME" />
+          <environmentVariable name="SeedUsers__SupportPassword" value="PLACEHOLDER_SUPPORT_PASSWORD" />
+        </environmentVariables>
+      </aspNetCore>
+    </system.webServer>
+  </location>
+</configuration>
