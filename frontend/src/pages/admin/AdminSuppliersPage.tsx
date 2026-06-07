@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteSupplier, getAdminSuppliers } from '../../services/adminApi'
 import type { SupplierSummary } from '../../types/catalog'
 
@@ -15,8 +16,10 @@ export function AdminSuppliersPage() {
     try {
       setError(null)
       setItems(await getAdminSuppliers())
-    } catch {
-      setError('No se pudieron cargar los proveedores.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudieron cargar los proveedores.'),
+      )
     } finally {
       setLoading(false)
     }
@@ -27,14 +30,25 @@ export function AdminSuppliersPage() {
   }, [])
 
   const filtered = useMemo(
-    () => items.filter((item) => `${item.name} ${item.contact_name} ${item.email}`.toLowerCase().includes(search.toLowerCase())),
+    () =>
+      items.filter((item) =>
+        `${item.name} ${item.contact_name} ${item.email}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
     [items, search],
   )
 
   const handleDelete = async (item: SupplierSummary) => {
     if (!window.confirm(`¿Eliminar proveedor "${item.name}"?`)) return
-    await deleteSupplier(item.id)
-    await load()
+    try {
+      await deleteSupplier(item.id)
+      await load()
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudo eliminar el proveedor.'),
+      )
+    }
   }
 
   return (
@@ -42,7 +56,12 @@ export function AdminSuppliersPage() {
       <div className="admin-products-header">
         <h1>Proveedores</h1>
         <div className="admin-list-toolbar">
-          <input className="admin-search" placeholder="Buscar proveedor" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="admin-search"
+            placeholder="Buscar proveedor"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <Link className="btn btn--accent" to="/admin/proveedores/nuevo">
             Nuevo proveedor
           </Link>
@@ -71,13 +90,24 @@ export function AdminSuppliersPage() {
                   <td>{item.phone || '-'}</td>
                   <td>{item.email || '-'}</td>
                   <td>
-                    <span className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}>{item.is_active ? 'Sí' : 'No'}</span>
+                    <span
+                      className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}
+                    >
+                      {item.is_active ? 'Sí' : 'No'}
+                    </span>
                   </td>
                   <td>
-                    <Link className="table-action" to={`/admin/proveedores/${item.id}/editar`}>
+                    <Link
+                      className="table-action"
+                      to={`/admin/proveedores/${item.id}/editar`}
+                    >
                       Editar
                     </Link>{' '}
-                    <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>
+                    <button
+                      type="button"
+                      className="table-action table-action--button"
+                      onClick={() => void handleDelete(item)}
+                    >
                       Eliminar
                     </button>
                   </td>

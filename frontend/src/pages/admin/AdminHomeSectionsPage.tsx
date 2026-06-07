@@ -2,9 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
-import { createHomeSectionItem, deleteHomeSectionItem, getAdminHomeSectionItems, getProductsForHomeSection, updateHomeSectionItem } from '../../services/adminApi'
-import { ApiError, resolveMediaUrl } from '../../services/api'
-import type { HomeSection, HomeSectionItem, ProductListItem } from '../../types/catalog'
+import {
+  createHomeSectionItem,
+  deleteHomeSectionItem,
+  getAdminHomeSectionItems,
+  getProductsForHomeSection,
+  updateHomeSectionItem,
+} from '../../services/adminApi'
+import {
+  ApiError,
+  getSafeApiErrorMessage,
+  resolveMediaUrl,
+} from '../../services/api'
+import type {
+  HomeSection,
+  HomeSectionItem,
+  ProductListItem,
+} from '../../types/catalog'
 import { formatPrice, formatStockStatus } from '../../utils/formatters'
 
 type SectionConfig = {
@@ -17,7 +31,10 @@ type SectionConfig = {
   previewLabel: string
 }
 
-type SectionState = Record<HomeSection, { loading: boolean; error: string | null; success: string | null }>
+type SectionState = Record<
+  HomeSection,
+  { loading: boolean; error: string | null; success: string | null }
+>
 
 type ProductsBySection = Record<HomeSection, ProductListItem[]>
 type SelectionBySection = Record<HomeSection, number | ''>
@@ -27,7 +44,8 @@ const SECTION_CONFIG: SectionConfig[] = [
     key: 'machinery_promotions',
     title: 'Promociones en maquinarias',
     limit: 12,
-    description: 'Maquinarias publicadas para destacar en el carrusel de la Home.',
+    description:
+      'Maquinarias publicadas para destacar en el carrusel de la Home.',
     selectPlaceholder: 'Seleccionar maquinaria publicada...',
     emptyProductsText: 'No hay maquinarias publicadas disponibles.',
     previewLabel: 'Carrusel de productos',
@@ -70,14 +88,18 @@ const EMPTY_STATUS: SectionState = {
   repair_services: { loading: false, error: null, success: null },
 }
 
-const PREVIEW_PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
+const PREVIEW_PLACEHOLDER_IMAGE =
+  'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
 
 function sortByPosition(items: HomeSectionItem[]) {
   return [...items].sort((a, b) => a.position - b.position || a.id - b.id)
 }
 
 function buildSlots(sectionItems: HomeSectionItem[], limit: number) {
-  const slots: Array<HomeSectionItem | null> = Array.from({ length: limit }, () => null)
+  const slots: Array<HomeSectionItem | null> = Array.from(
+    { length: limit },
+    () => null,
+  )
 
   for (const item of sectionItems) {
     if (item.position >= 1 && item.position <= limit) {
@@ -88,7 +110,10 @@ function buildSlots(sectionItems: HomeSectionItem[], limit: number) {
   return slots
 }
 
-function getNextAvailablePosition(sectionItems: HomeSectionItem[], limit: number) {
+function getNextAvailablePosition(
+  sectionItems: HomeSectionItem[],
+  limit: number,
+) {
   const usedPositions = new Set(sectionItems.map((item) => item.position))
 
   for (let position = 1; position <= limit; position += 1) {
@@ -109,7 +134,8 @@ function getErrorMessage(error: unknown, fallback: string) {
 
       const firstKey = Object.keys(payload)[0]
       const firstValue = firstKey ? payload[firstKey] : undefined
-      if (Array.isArray(firstValue) && firstValue.length > 0) return firstValue[0]
+      if (Array.isArray(firstValue) && firstValue.length > 0)
+        return firstValue[0]
       if (typeof firstValue === 'string') return firstValue
     }
   }
@@ -122,7 +148,13 @@ function getProductImageUrl(product: ProductListItem) {
 }
 
 function ProductThumb({ item }: { item: HomeSectionItem }) {
-  return <img src={getProductImageUrl(item.product)} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+  return (
+    <img
+      src={getProductImageUrl(item.product)}
+      alt={item.product.main_image?.alt_text || item.product.name}
+      loading="lazy"
+    />
+  )
 }
 
 function PreviewCard({ item, tag }: { item: HomeSectionItem; tag: string }) {
@@ -139,21 +171,34 @@ function PreviewCard({ item, tag }: { item: HomeSectionItem; tag: string }) {
   )
 }
 
-function SectionPreview({ section, items }: { section: SectionConfig; items: HomeSectionItem[] }) {
+function SectionPreview({
+  section,
+  items,
+}: {
+  section: SectionConfig
+  items: HomeSectionItem[]
+}) {
   const sortedItems = sortByPosition(items)
   const slots = buildSlots(sortedItems, section.limit)
   const [machineryPreviewIndex, setMachineryPreviewIndex] = useState(0)
   const machineryGroups = useMemo(() => {
-    return Array.from({ length: Math.ceil(sortedItems.length / 4) }, (_, index) => sortedItems.slice(index * 4, index * 4 + 4))
+    return Array.from(
+      { length: Math.ceil(sortedItems.length / 4) },
+      (_, index) => sortedItems.slice(index * 4, index * 4 + 4),
+    )
   }, [sortedItems])
 
   useEffect(() => {
-    setMachineryPreviewIndex((current) => Math.min(current, Math.max(0, machineryGroups.length - 1)))
+    setMachineryPreviewIndex((current) =>
+      Math.min(current, Math.max(0, machineryGroups.length - 1)),
+    )
   }, [machineryGroups.length])
 
   const goPreviewPrev = () => {
     if (machineryGroups.length === 0) return
-    setMachineryPreviewIndex((prev) => (prev - 1 + machineryGroups.length) % machineryGroups.length)
+    setMachineryPreviewIndex(
+      (prev) => (prev - 1 + machineryGroups.length) % machineryGroups.length,
+    )
   }
 
   const goPreviewNext = () => {
@@ -162,43 +207,81 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
   }
 
   return (
-    <aside className="home-section-preview" aria-label={`Vista previa ${section.title}`}>
+    <aside
+      className="home-section-preview"
+      aria-label={`Vista previa ${section.title}`}
+    >
       <div className="home-section-preview__header">
         <span>Vista previa</span>
         <strong>{section.previewLabel}</strong>
       </div>
 
-      <div className={`home-preview home-preview--${section.key} admin-home-preview admin-home-preview--compact admin-home-preview--${section.key === 'machinery_promotions' ? 'machinery' : section.key === 'spare_parts_offers' ? 'spares' : 'services'}`}>
+      <div
+        className={`home-preview home-preview--${section.key} admin-home-preview admin-home-preview--compact admin-home-preview--${section.key === 'machinery_promotions' ? 'machinery' : section.key === 'spare_parts_offers' ? 'spares' : 'services'}`}
+      >
         {section.key === 'machinery_promotions' ? (
           <div className="featured-products home-preview-machinery">
             <div className="section-heading">
               <h3>Promociones en maquinarias</h3>
             </div>
 
-            <div className="machinery-carousel" aria-label="Carrusel manual de maquinarias en promoción">
-              <button className="carousel-control carousel-control--prev" type="button" onClick={goPreviewPrev} aria-label="Ver maquinarias anteriores">
+            <div
+              className="machinery-carousel"
+              aria-label="Carrusel manual de maquinarias en promoción"
+            >
+              <button
+                className="carousel-control carousel-control--prev"
+                type="button"
+                onClick={goPreviewPrev}
+                aria-label="Ver maquinarias anteriores"
+              >
                 ‹
               </button>
 
               <div className="machinery-carousel__viewport">
-                <div className="machinery-carousel__track" style={{ transform: `translateX(-${machineryPreviewIndex * 100}%)` }}>
+                <div
+                  className="machinery-carousel__track"
+                  style={{
+                    transform: `translateX(-${machineryPreviewIndex * 100}%)`,
+                  }}
+                >
                   {machineryGroups.map((group, groupIndex) => (
-                    <div className="machinery-carousel__slide" key={`admin-machinery-group-${groupIndex}`}>
+                    <div
+                      className="machinery-carousel__slide"
+                      key={`admin-machinery-group-${groupIndex}`}
+                    >
                       {group.map((item) => {
                         const imageUrl = getProductImageUrl(item.product)
                         return (
                           <article className="promo-product-card" key={item.id}>
-                            <img src={imageUrl} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+                            <img
+                              src={imageUrl}
+                              alt={
+                                item.product.main_image?.alt_text ||
+                                item.product.name
+                              }
+                              loading="lazy"
+                            />
                             <div className="promo-product-card__content">
-                              <p className="promo-product-card__tag">Maquinaria destacada</p>
+                              <p className="promo-product-card__tag">
+                                Maquinaria destacada
+                              </p>
                               <h3>{item.product.name}</h3>
-                              <p className="promo-product-card__price home-product-price">{formatPrice(item.product)}</p>
+                              <p className="promo-product-card__price home-product-price">
+                                {formatPrice(item.product)}
+                              </p>
                               {item.product.slug ? (
-                                <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                                <Link
+                                  className="btn btn--accent"
+                                  to={`/producto/${item.product.slug}`}
+                                >
                                   Ver detalle
                                 </Link>
                               ) : (
-                                <span className="btn btn--accent btn--disabled" aria-disabled="true">
+                                <span
+                                  className="btn btn--accent btn--disabled"
+                                  aria-disabled="true"
+                                >
                                   Ver detalle
                                 </span>
                               )}
@@ -211,7 +294,12 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
                 </div>
               </div>
 
-              <button className="carousel-control carousel-control--next" type="button" onClick={goPreviewNext} aria-label="Ver más maquinarias">
+              <button
+                className="carousel-control carousel-control--next"
+                type="button"
+                onClick={goPreviewNext}
+                aria-label="Ver más maquinarias"
+              >
                 ›
               </button>
             </div>
@@ -225,7 +313,10 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
             </div>
             <div className="spare-offers__grid home-preview-spares__grid">
               {slots.map((item, index) => (
-                <article className={`spare-offer-card home-preview-spares__slot ${index === 0 || index === 5 ? 'spare-offer-card--large is-large' : ''}`} key={index + 1}>
+                <article
+                  className={`spare-offer-card home-preview-spares__slot ${index === 0 || index === 5 ? 'spare-offer-card--large is-large' : ''}`}
+                  key={index + 1}
+                >
                   <header>Slot {index + 1}</header>
                   {item ? (
                     <div className="spare-offer-card__content home-preview-spares__compact-card">
@@ -233,9 +324,14 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
                       <div>
                         <span>Oferta destacada</span>
                         <strong>{item.product.name}</strong>
-                        <span className="home-product-price">{formatPrice(item.product) || 'Consultar'}</span>
+                        <span className="home-product-price">
+                          {formatPrice(item.product) || 'Consultar'}
+                        </span>
                         {item.product.slug ? (
-                          <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                          <Link
+                            className="btn btn--accent"
+                            to={`/producto/${item.product.slug}`}
+                          >
                             Ver detalle
                           </Link>
                         ) : null}
@@ -260,13 +356,28 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
                 const imageUrl = getProductImageUrl(item.product)
                 return (
                   <article className="repair-service-card" key={item.id}>
-                    <img src={imageUrl} alt={item.product.main_image?.alt_text || item.product.name} loading="lazy" />
+                    <img
+                      src={imageUrl}
+                      alt={
+                        item.product.main_image?.alt_text || item.product.name
+                      }
+                      loading="lazy"
+                    />
                     <div>
                       <h3>{item.product.name}</h3>
-                      <p>{item.product.short_description || 'Servicio técnico especializado para equipos de elevación.'}</p>
-                      <p className="home-product-price">{formatPrice(item.product) || 'Consulta precio y disponibilidad'}</p>
+                      <p>
+                        {item.product.short_description ||
+                          'Servicio técnico especializado para equipos de elevación.'}
+                      </p>
+                      <p className="home-product-price">
+                        {formatPrice(item.product) ||
+                          'Consulta precio y disponibilidad'}
+                      </p>
                       {item.product.slug ? (
-                        <Link className="btn btn--accent" to={`/producto/${item.product.slug}`}>
+                        <Link
+                          className="btn btn--accent"
+                          to={`/producto/${item.product.slug}`}
+                        >
                           Ver detalle
                         </Link>
                       ) : null}
@@ -278,7 +389,11 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
           </div>
         ) : null}
 
-        {sortedItems.length === 0 ? <span className="home-preview__empty">Agrega productos para completar esta vista previa.</span> : null}
+        {sortedItems.length === 0 ? (
+          <span className="home-preview__empty">
+            Agrega productos para completar esta vista previa.
+          </span>
+        ) : null}
       </div>
     </aside>
   )
@@ -286,22 +401,49 @@ function SectionPreview({ section, items }: { section: SectionConfig; items: Hom
 
 export function AdminHomeSectionsPage() {
   const [items, setItems] = useState<HomeSectionItem[]>([])
-  const [productsBySection, setProductsBySection] = useState<ProductsBySection>(EMPTY_PRODUCTS_BY_SECTION)
-  const [selectedBySection, setSelectedBySection] = useState<SelectionBySection>(EMPTY_SELECTIONS)
+  const [productsBySection, setProductsBySection] = useState<ProductsBySection>(
+    EMPTY_PRODUCTS_BY_SECTION,
+  )
+  const [selectedBySection, setSelectedBySection] =
+    useState<SelectionBySection>(EMPTY_SELECTIONS)
   const [loading, setLoading] = useState(true)
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [sectionStatus, setSectionStatus] = useState<SectionState>(EMPTY_STATUS)
-  const [pendingRemoval, setPendingRemoval] = useState<{ section: HomeSection; item: HomeSectionItem } | null>(null)
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    section: HomeSection
+    item: HomeSectionItem
+  } | null>(null)
 
   const grouped = useMemo(() => {
-    return SECTION_CONFIG.reduce((acc, section) => {
-      acc[section.key] = sortByPosition(items.filter((item) => item.section === section.key && item.is_active))
-      return acc
-    }, { machinery_promotions: [] as HomeSectionItem[], spare_parts_offers: [] as HomeSectionItem[], repair_services: [] as HomeSectionItem[] })
+    return SECTION_CONFIG.reduce(
+      (acc, section) => {
+        acc[section.key] = sortByPosition(
+          items.filter(
+            (item) => item.section === section.key && item.is_active,
+          ),
+        )
+        return acc
+      },
+      {
+        machinery_promotions: [] as HomeSectionItem[],
+        spare_parts_offers: [] as HomeSectionItem[],
+        repair_services: [] as HomeSectionItem[],
+      },
+    )
   }, [items])
 
-  const setSectionFeedback = (section: HomeSection, next: Partial<{ loading: boolean; error: string | null; success: string | null }>) => {
-    setSectionStatus((current) => ({ ...current, [section]: { ...current[section], ...next } }))
+  const setSectionFeedback = (
+    section: HomeSection,
+    next: Partial<{
+      loading: boolean
+      error: string | null
+      success: string | null
+    }>,
+  ) => {
+    setSectionStatus((current) => ({
+      ...current,
+      [section]: { ...current[section], ...next },
+    }))
   }
 
   const refreshItems = async () => setItems(await getAdminHomeSectionItems())
@@ -312,7 +454,12 @@ export function AdminHomeSectionsPage() {
       setGlobalError(null)
 
       try {
-        const [homeItems, machineryProducts, sparePartProducts, serviceProducts] = await Promise.all([
+        const [
+          homeItems,
+          machineryProducts,
+          sparePartProducts,
+          serviceProducts,
+        ] = await Promise.all([
           getAdminHomeSectionItems(),
           getProductsForHomeSection('machinery_promotions'),
           getProductsForHomeSection('spare_parts_offers'),
@@ -325,18 +472,45 @@ export function AdminHomeSectionsPage() {
           spare_parts_offers: sparePartProducts,
           repair_services: serviceProducts,
         })
-        const assignedBySection = SECTION_CONFIG.reduce((acc, section) => {
-          acc[section.key] = new Set(homeItems.filter((item) => item.section === section.key).map((item) => item.product.id))
-          return acc
-        }, { machinery_promotions: new Set<number>(), spare_parts_offers: new Set<number>(), repair_services: new Set<number>() })
+        const assignedBySection = SECTION_CONFIG.reduce(
+          (acc, section) => {
+            acc[section.key] = new Set(
+              homeItems
+                .filter((item) => item.section === section.key)
+                .map((item) => item.product.id),
+            )
+            return acc
+          },
+          {
+            machinery_promotions: new Set<number>(),
+            spare_parts_offers: new Set<number>(),
+            repair_services: new Set<number>(),
+          },
+        )
 
         setSelectedBySection({
-          machinery_promotions: machineryProducts.find((product) => !assignedBySection.machinery_promotions.has(product.id))?.id ?? '',
-          spare_parts_offers: sparePartProducts.find((product) => !assignedBySection.spare_parts_offers.has(product.id))?.id ?? '',
-          repair_services: serviceProducts.find((product) => !assignedBySection.repair_services.has(product.id))?.id ?? '',
+          machinery_promotions:
+            machineryProducts.find(
+              (product) =>
+                !assignedBySection.machinery_promotions.has(product.id),
+            )?.id ?? '',
+          spare_parts_offers:
+            sparePartProducts.find(
+              (product) =>
+                !assignedBySection.spare_parts_offers.has(product.id),
+            )?.id ?? '',
+          repair_services:
+            serviceProducts.find(
+              (product) => !assignedBySection.repair_services.has(product.id),
+            )?.id ?? '',
         })
-      } catch {
-        setGlobalError('No se pudo cargar la configuración de Promociones.')
+      } catch (error) {
+        setGlobalError(
+          getSafeApiErrorMessage(
+            error,
+            'No se pudo cargar la configuración de Promociones.',
+          ),
+        )
       } finally {
         setLoading(false)
       }
@@ -351,31 +525,51 @@ export function AdminHomeSectionsPage() {
     const nextPosition = getNextAvailablePosition(sectionItems, limit)
 
     if (!nextPosition) {
-      setSectionFeedback(section, { error: `Límite alcanzado: máximo ${limit} productos.`, success: null })
+      setSectionFeedback(section, {
+        error: `Límite alcanzado: máximo ${limit} productos.`,
+        success: null,
+      })
       return
     }
 
     if (sectionItems.some((item) => item.product.id === selectedProductId)) {
-      setSectionFeedback(section, { error: 'El producto ya está asignado en esta sección.', success: null })
+      setSectionFeedback(section, {
+        error: 'El producto ya está asignado en esta sección.',
+        success: null,
+      })
       return
     }
 
     setSectionFeedback(section, { loading: true, error: null, success: null })
 
     try {
-      await createHomeSectionItem({ section, product: selectedProductId, position: nextPosition, is_active: true })
+      await createHomeSectionItem({
+        section,
+        product: selectedProductId,
+        position: nextPosition,
+        is_active: true,
+      })
       await refreshItems()
       setSelectedBySection((current) => ({ ...current, [section]: '' }))
-      setSectionFeedback(section, { success: `Producto agregado en el slot ${nextPosition}.` })
+      setSectionFeedback(section, {
+        success: `Producto agregado en el slot ${nextPosition}.`,
+      })
     } catch (error) {
       await refreshItems().catch(() => undefined)
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible agregar el producto.'), success: null })
+      setSectionFeedback(section, {
+        error: getErrorMessage(error, 'No fue posible agregar el producto.'),
+        success: null,
+      })
     } finally {
       setSectionFeedback(section, { loading: false })
     }
   }
 
-  const moveItemToPosition = async (section: HomeSection, item: HomeSectionItem, nextPosition: number) => {
+  const moveItemToPosition = async (
+    section: HomeSection,
+    item: HomeSectionItem,
+    nextPosition: number,
+  ) => {
     if (item.position === nextPosition) return
 
     setSectionFeedback(section, { loading: true, error: null, success: null })
@@ -383,10 +577,18 @@ export function AdminHomeSectionsPage() {
     try {
       await updateHomeSectionItem(item.id, { position: nextPosition })
       await refreshItems()
-      setSectionFeedback(section, { success: `Producto movido al slot ${nextPosition}. Si el slot estaba ocupado, se intercambiaron las posiciones.` })
+      setSectionFeedback(section, {
+        success: `Producto movido al slot ${nextPosition}. Si el slot estaba ocupado, se intercambiaron las posiciones.`,
+      })
     } catch (error) {
       await refreshItems().catch(() => undefined)
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible mover el producto. La lista se actualizó para evitar duplicados.'), success: null })
+      setSectionFeedback(section, {
+        error: getErrorMessage(
+          error,
+          'No fue posible mover el producto. La lista se actualizó para evitar duplicados.',
+        ),
+        success: null,
+      })
     } finally {
       setSectionFeedback(section, { loading: false })
     }
@@ -398,12 +600,24 @@ export function AdminHomeSectionsPage() {
     try {
       await deleteHomeSectionItem(item.id)
       await refreshItems()
-      setPendingRemoval((current) => (current?.item.id === item.id ? null : current))
-      setSectionFeedback(section, { success: `Producto quitado. El slot ${item.position} quedó disponible.` })
+      setPendingRemoval((current) =>
+        current?.item.id === item.id ? null : current,
+      )
+      setSectionFeedback(section, {
+        success: `Producto quitado. El slot ${item.position} quedó disponible.`,
+      })
     } catch (error) {
       await refreshItems().catch(() => undefined)
-      setPendingRemoval((current) => (current?.item.id === item.id ? null : current))
-      setSectionFeedback(section, { error: getErrorMessage(error, 'No fue posible quitar el producto. La lista fue actualizada.'), success: null })
+      setPendingRemoval((current) =>
+        current?.item.id === item.id ? null : current,
+      )
+      setSectionFeedback(section, {
+        error: getErrorMessage(
+          error,
+          'No fue posible quitar el producto. La lista fue actualizada.',
+        ),
+        success: null,
+      })
     } finally {
       setSectionFeedback(section, { loading: false })
     }
@@ -414,12 +628,17 @@ export function AdminHomeSectionsPage() {
       <div className="admin-products-header">
         <div>
           <h1>Promociones</h1>
-          <p className="ui-note">Administra los tres bloques promocionales de la Home con slots y vista previa por sección.</p>
+          <p className="ui-note">
+            Administra los tres bloques promocionales de la Home con slots y
+            vista previa por sección.
+          </p>
         </div>
       </div>
 
       {loading ? <p className="ui-note">Cargando configuración...</p> : null}
-      {globalError ? <p className="ui-note ui-note--error">{globalError}</p> : null}
+      {globalError ? (
+        <p className="ui-note ui-note--error">{globalError}</p>
+      ) : null}
 
       {!loading && !globalError ? (
         <div className="home-sections-rows">
@@ -427,8 +646,12 @@ export function AdminHomeSectionsPage() {
             const sectionItems = grouped[section.key]
             const sectionProducts = productsBySection[section.key]
             const status = sectionStatus[section.key]
-            const assignedProductIds = new Set(sectionItems.map((item) => item.product.id))
-            const availableProducts = sectionProducts.filter((product) => !assignedProductIds.has(product.id))
+            const assignedProductIds = new Set(
+              sectionItems.map((item) => item.product.id),
+            )
+            const availableProducts = sectionProducts.filter(
+              (product) => !assignedProductIds.has(product.id),
+            )
 
             return (
               <section className="home-section-row" key={section.key}>
@@ -438,38 +661,69 @@ export function AdminHomeSectionsPage() {
                       <h2>{section.title}</h2>
                       <p className="ui-note">{section.description}</p>
                     </div>
-                    <p className="home-section-count">{sectionItems.length} / {section.limit}</p>
+                    <p className="home-section-count">
+                      {sectionItems.length} / {section.limit}
+                    </p>
                   </div>
 
                   <div className="home-section-add-row">
                     <select
                       className="home-section-select"
                       value={selectedBySection[section.key]}
-                      onChange={(event) => setSelectedBySection((current) => ({ ...current, [section.key]: event.target.value ? Number(event.target.value) : '' }))}
-                      disabled={availableProducts.length === 0 || status.loading}
+                      onChange={(event) =>
+                        setSelectedBySection((current) => ({
+                          ...current,
+                          [section.key]: event.target.value
+                            ? Number(event.target.value)
+                            : '',
+                        }))
+                      }
+                      disabled={
+                        availableProducts.length === 0 || status.loading
+                      }
                     >
-                      {availableProducts.length > 0 ? <option value="">{section.selectPlaceholder}</option> : <option value="">{section.emptyProductsText}</option>}
+                      {availableProducts.length > 0 ? (
+                        <option value="">{section.selectPlaceholder}</option>
+                      ) : (
+                        <option value="">{section.emptyProductsText}</option>
+                      )}
                       {availableProducts.map((product) => (
-                        <option key={product.id} value={product.id}>{product.name}</option>
+                        <option key={product.id} value={product.id}>
+                          {product.name}
+                        </option>
                       ))}
                     </select>
                     <button
                       className="btn btn--accent home-section-add-button"
                       type="button"
-                      onClick={() => void addProductToSection(section.key, section.limit)}
-                      disabled={status.loading || availableProducts.length === 0 || !selectedBySection[section.key]}
+                      onClick={() =>
+                        void addProductToSection(section.key, section.limit)
+                      }
+                      disabled={
+                        status.loading ||
+                        availableProducts.length === 0 ||
+                        !selectedBySection[section.key]
+                      }
                     >
                       Agregar
                     </button>
                   </div>
 
-                  {status.error ? <p className="ui-note ui-note--error">{status.error}</p> : null}
-                  {status.success ? <p className="ui-note ui-note--success">{status.success}</p> : null}
+                  {status.error ? (
+                    <p className="ui-note ui-note--error">{status.error}</p>
+                  ) : null}
+                  {status.success ? (
+                    <p className="ui-note ui-note--success">{status.success}</p>
+                  ) : null}
 
                   <div className="home-section-list">
-                    {sectionItems.length === 0 ? <p className="ui-note">Sin productos asignados.</p> : null}
+                    {sectionItems.length === 0 ? (
+                      <p className="ui-note">Sin productos asignados.</p>
+                    ) : null}
                     {sectionItems.map((item) => {
-                      const isConfirmingRemoval = pendingRemoval?.item.id === item.id && pendingRemoval.section === section.key
+                      const isConfirmingRemoval =
+                        pendingRemoval?.item.id === item.id &&
+                        pendingRemoval.section === section.key
 
                       return (
                         <article className="home-section-item" key={item.id}>
@@ -477,7 +731,10 @@ export function AdminHomeSectionsPage() {
                             <ProductThumb item={item} />
                             <div>
                               <strong>{item.product.name}</strong>
-                              <span>{item.product.brand?.name || item.product.category.name}</span>
+                              <span>
+                                {item.product.brand?.name ||
+                                  item.product.category.name}
+                              </span>
                             </div>
                           </div>
                           <div className="home-section-item__actions">
@@ -486,23 +743,62 @@ export function AdminHomeSectionsPage() {
                               <select
                                 className="home-section-slot-select"
                                 value={item.position}
-                                onChange={(event) => void moveItemToPosition(section.key, item, Number(event.target.value))}
+                                onChange={(event) =>
+                                  void moveItemToPosition(
+                                    section.key,
+                                    item,
+                                    Number(event.target.value),
+                                  )
+                                }
                                 disabled={status.loading}
                               >
-                                {Array.from({ length: section.limit }, (_, index) => (
-                                  <option key={index + 1} value={index + 1}>Slot {index + 1}</option>
-                                ))}
+                                {Array.from(
+                                  { length: section.limit },
+                                  (_, index) => (
+                                    <option key={index + 1} value={index + 1}>
+                                      Slot {index + 1}
+                                    </option>
+                                  ),
+                                )}
                               </select>
                             </label>
 
                             {isConfirmingRemoval ? (
                               <div className="home-section-confirm">
                                 <span>¿Quitar?</span>
-                                <button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval(null)} disabled={status.loading}>Cancelar</button>
-                                <button type="button" className="table-action table-action--button table-action--danger" onClick={() => void removeItem(section.key, item)} disabled={status.loading}>Quitar</button>
+                                <button
+                                  type="button"
+                                  className="table-action table-action--button"
+                                  onClick={() => setPendingRemoval(null)}
+                                  disabled={status.loading}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="table-action table-action--button table-action--danger"
+                                  onClick={() =>
+                                    void removeItem(section.key, item)
+                                  }
+                                  disabled={status.loading}
+                                >
+                                  Quitar
+                                </button>
                               </div>
                             ) : (
-                              <button type="button" className="table-action table-action--button" onClick={() => setPendingRemoval({ section: section.key, item })} disabled={status.loading}>Quitar</button>
+                              <button
+                                type="button"
+                                className="table-action table-action--button"
+                                onClick={() =>
+                                  setPendingRemoval({
+                                    section: section.key,
+                                    item,
+                                  })
+                                }
+                                disabled={status.loading}
+                              >
+                                Quitar
+                              </button>
                             )}
                           </div>
                         </article>

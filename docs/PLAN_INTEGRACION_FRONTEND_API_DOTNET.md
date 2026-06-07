@@ -12,10 +12,10 @@
 
 El frontend usa variables Vite seguras, sin secretos, para decidir el backend objetivo:
 
-| Variable | Uso | Valores esperados |
-| --- | --- | --- |
+| Variable            | Uso                                                                                                                                                         | Valores esperados                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `VITE_API_BASE_URL` | URL base del backend configurado. Puede incluir `/api` por compatibilidad con configuraciones anteriores, pero se recomienda apuntar al origen del backend. | `http://localhost:8000`, `http://127.0.0.1:8001/api`, `https://api.jem-nexus.cl` |
-| `VITE_API_PROVIDER` | Selector controlado de proveedor para pequeñas diferencias de rutas, principalmente health y trailing slash. | `django`, `dotnet` |
+| `VITE_API_PROVIDER` | Selector controlado de proveedor para pequeñas diferencias de rutas, principalmente health y trailing slash.                                                | `django`, `dotnet`                                                               |
 
 Ejemplo Django local actual:
 
@@ -41,7 +41,7 @@ La API .NET validada en Plesk responde al login con esta forma:
 {
   "access": "...",
   "refresh": "...",
-  "user": { }
+  "user": {}
 }
 ```
 
@@ -49,9 +49,7 @@ El frontend normaliza respuestas de autenticación hacia una forma interna estab
 
 ```ts
 {
-  accessToken,
-  refreshToken,
-  user
+  ;(accessToken, refreshToken, user)
 }
 ```
 
@@ -152,3 +150,72 @@ Esta validación no conecta a Plesk desde Codex, no ejecuta SQL, no aplica migra
 - El guard del panel vendedor mantiene bloqueo para usuarios anónimos y valida que el usuario autenticado pueda operar como vendedor/staff/superuser o tenga rol compatible (`seller`, `support_admin`, `admin`, `staff`).
 - La pantalla `/diagnostico-api` sigue separada: usa las mismas utilidades de login y `/auth/me`, pero conserva el token solo en memoria del componente y no toca `localStorage`.
 - El catálogo público y los servicios comerciales todavía no fueron migrados a .NET; el panel vendedor queda como siguiente validación funcional manual antes de avanzar con productos, categorías, marcas, proveedores, promociones, imágenes o cotizaciones.
+
+## Migración controlada de lectura del panel vendedor
+
+### Alcance aplicado
+
+- Se prepararon los servicios de lectura del panel vendedor para usar el cliente centralizado, `VITE_API_BASE_URL`, `VITE_API_PROVIDER` y `authFetch` con Bearer token.
+- Los listados revisados/preparados son productos, categorías, marcas, proveedores, promociones/ofertas Hero, cotizaciones y secciones administrables de Home.
+- No se implementó escritura .NET nueva: crear, editar, eliminar, cambiar estado, subir imágenes y editar especificaciones siguen como flujos existentes/pendientes según el backend configurado.
+- El catálogo público no fue migrado en esta fase; solo se tocaron helpers compartidos de API y servicios admin.
+
+### Endpoints Django usados por listados admin
+
+| Listado                 | Endpoint actual        | Parámetros detectados                                                                                                                                              |
+| ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Productos               | `/products/`           | `include_unpublished`, `search` local en página, filtros locales por categoría/marca/tipo/condición/stock/publicación; Home envía `product_type` e `is_published`. |
+| Categorías              | `/categories/`         | `include_inactive`.                                                                                                                                                |
+| Marcas                  | `/brands/`             | `include_inactive`.                                                                                                                                                |
+| Proveedores             | `/suppliers/`          | `include_inactive`.                                                                                                                                                |
+| Promociones Hero legacy | `/promotions/`         | `include_inactive`.                                                                                                                                                |
+| Cotizaciones            | `/quote-requests/`     | `status`, `search`, `ordering`, `product` soportado por servicio.                                                                                                  |
+| Home section admin      | `/home-section-items/` | `include_inactive`, `section`; además lee productos disponibles por sección desde `/products/`.                                                                    |
+
+### Endpoints .NET detectados
+
+La revisión de `backend-dotnet/JemNexus.Api/Program.cs` detectó endpoints reales para:
+
+- `GET /`, `GET /health`, `GET /api/health`.
+- `POST /api/auth/login`.
+- `POST /api/auth/refresh`.
+- `GET /api/auth/me`.
+
+No se detectaron controladores ni endpoints Minimal API reales para estos listados comerciales en la API .NET actual:
+
+- `GET /api/products`.
+- `GET /api/categories`.
+- `GET /api/brands`.
+- `GET /api/suppliers`.
+- `GET /api/promotions`.
+- `GET /api/quote-requests`.
+- `GET /api/home-section-items`.
+
+Por eso, con `VITE_API_PROVIDER=dotnet`, el frontend queda preparado para consumir esos paths cuando existan, pero mostrará un mensaje claro de endpoint pendiente si la API responde `404` o `501`. Con `VITE_API_PROVIDER=django`, los listados conservan compatibilidad con Django/local.
+
+### Normalización de shapes
+
+Los adaptadores admin normalizan respuestas de lista como arreglo directo o contenedores `{ results }`, `{ items }` y `{ data }`. También normalizan diferencias esperadas entre Django y .NET, principalmente:
+
+- Campos `snake_case` Django y `camelCase` .NET (`is_active`/`isActive`, `created_at`/`createdAt`, `product_type`/`productType`, etc.).
+- Relaciones anidadas de producto, categoría, marca, proveedor y producto de cotización.
+- Imágenes principales de producto desde `main_image`/`mainImage` o desde la colección `images`.
+- Fechas y campos opcionales nulos para mantener un shape interno estable en las páginas admin.
+
+### Manejo seguro de errores
+
+El helper central de errores del frontend entrega mensajes seguros para:
+
+- `401`: sesión expirada/no válida.
+- `403`: acceso no autorizado.
+- `404` con proveedor .NET: endpoint pendiente para este listado.
+- `501`: endpoint pendiente de implementación.
+- errores de red/CORS: revisar URL configurada, CORS o conectividad.
+- `5xx`: error interno seguro sin exponer stack traces, tokens ni headers.
+
+### Pendientes explícitos
+
+- Implementar endpoints comerciales de lectura en .NET antes de validar datos reales de productos, categorías, marcas, proveedores, promociones, cotizaciones y Home section contra `https://api.jem-nexus.cl`.
+- Migrar escritura del panel vendedor solo en una fase posterior y con contratos .NET confirmados.
+- Implementar carga real de imágenes en una fase posterior.
+- Migrar catálogo público en una fase posterior; esta fase no cambia el comportamiento público de catálogo.

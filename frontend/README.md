@@ -83,3 +83,32 @@ npm run dev
 Abrir `/login`, iniciar sesión con una cuenta válida del entorno y confirmar el acceso al panel vendedor. El flujo real guarda la sesión con las claves normales del sistema, pero no debe guardar passwords, imprimir tokens en consola ni incluir tokens/passwords en capturas.
 
 La ruta `/diagnostico-api` sigue disponible como apoyo para validar health, login y `/auth/me` con token solo en memoria. Usarla antes o después del login real si se necesita confirmar configuración de `VITE_API_BASE_URL`, `VITE_API_PROVIDER`, CORS o Bearer token sin persistir una sesión diagnóstica.
+
+## Probar lectura del panel vendedor contra API .NET
+
+Para probar la lectura del panel vendedor contra .NET de forma controlada, crear manualmente `frontend/.env.local` (no commitear):
+
+```env
+VITE_API_BASE_URL=https://api.jem-nexus.cl
+VITE_API_PROVIDER=dotnet
+```
+
+Luego ejecutar:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Abrir `/login`, iniciar sesión con un usuario vendedor válido del entorno y navegar por el panel:
+
+- `/admin/productos`
+- `/admin/categorias`
+- `/admin/marcas`
+- `/admin/proveedores`
+- `/admin/promociones`
+- `/admin/cotizaciones`
+
+Los listados admin usan el cliente API configurable y Bearer token. Si la API .NET aún no tiene un endpoint comercial de lectura, el panel debe mostrar un mensaje claro de endpoint pendiente en lugar de exponer tokens, headers o stack traces.
+
+No commitear `.env.local`, no guardar passwords/tokens en capturas y no usar esta prueba para crear, editar, borrar, subir imágenes ni aplicar cambios reales de datos.

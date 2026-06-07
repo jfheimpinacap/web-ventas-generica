@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { getSafeApiErrorMessage } from '../../services/api'
 import { deletePromotion, getAdminPromotions } from '../../services/adminApi'
 import type { Promotion } from '../../types/catalog'
 
@@ -15,8 +16,13 @@ export function AdminPromotionsPage() {
     try {
       setError(null)
       setItems(await getAdminPromotions())
-    } catch {
-      setError('No se pudieron cargar las ofertas de Hero.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(
+          error,
+          'No se pudieron cargar las ofertas de Hero.',
+        ),
+      )
     } finally {
       setLoading(false)
     }
@@ -27,13 +33,24 @@ export function AdminPromotionsPage() {
   }, [])
 
   const filtered = useMemo(
-    () => items.filter((item) => `${item.title} ${item.subtitle}`.toLowerCase().includes(search.toLowerCase())),
+    () =>
+      items.filter((item) =>
+        `${item.title} ${item.subtitle}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
     [items, search],
   )
   const handleDelete = async (item: Promotion) => {
     if (!window.confirm(`¿Eliminar oferta "${item.title}"?`)) return
-    await deletePromotion(item.id)
-    await load()
+    try {
+      await deletePromotion(item.id)
+      await load()
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudo eliminar la oferta de Hero.'),
+      )
+    }
   }
 
   return (
@@ -41,7 +58,12 @@ export function AdminPromotionsPage() {
       <div className="admin-products-header">
         <h1>Ofertas en Hero section</h1>
         <div className="admin-list-toolbar">
-          <input className="admin-search" placeholder="Buscar oferta" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="admin-search"
+            placeholder="Buscar oferta"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <Link className="btn btn--accent" to="/admin/ofertas-hero/nueva">
             Nueva oferta
           </Link>
@@ -49,7 +71,9 @@ export function AdminPromotionsPage() {
       </div>
       {loading ? <p className="ui-note">Cargando ofertas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-      {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin ofertas.</p> : null}
+      {!loading && !error && filtered.length === 0 ? (
+        <p className="ui-note">Sin ofertas.</p>
+      ) : null}
       {!loading && !error && filtered.length > 0 ? (
         <div className="admin-table-wrapper">
           <table className="admin-table">
@@ -70,16 +94,35 @@ export function AdminPromotionsPage() {
                   <td>{item.title}</td>
                   <td>{item.product?.name ?? '-'}</td>
                   <td>
-                    <span className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}>{item.is_active ? 'Sí' : 'No'}</span>
+                    <span
+                      className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}
+                    >
+                      {item.is_active ? 'Sí' : 'No'}
+                    </span>
                   </td>
                   <td>{item.order}</td>
-                  <td>{item.starts_at ? new Date(item.starts_at).toLocaleDateString() : '-'}</td>
-                  <td>{item.ends_at ? new Date(item.ends_at).toLocaleDateString() : '-'}</td>
                   <td>
-                    <Link className="table-action" to={`/admin/ofertas-hero/${item.id}/editar`}>
+                    {item.starts_at
+                      ? new Date(item.starts_at).toLocaleDateString()
+                      : '-'}
+                  </td>
+                  <td>
+                    {item.ends_at
+                      ? new Date(item.ends_at).toLocaleDateString()
+                      : '-'}
+                  </td>
+                  <td>
+                    <Link
+                      className="table-action"
+                      to={`/admin/ofertas-hero/${item.id}/editar`}
+                    >
                       Editar
                     </Link>{' '}
-                    <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>
+                    <button
+                      type="button"
+                      className="table-action table-action--button"
+                      onClick={() => void handleDelete(item)}
+                    >
                       Eliminar
                     </button>
                   </td>
