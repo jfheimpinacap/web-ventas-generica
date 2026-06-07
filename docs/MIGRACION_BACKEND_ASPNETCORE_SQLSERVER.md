@@ -1242,3 +1242,9 @@ Estado confirmado el `2026-06-06`: el backend .NET quedó operativo en una publi
 - No se debe ejecutar `dotnet ef database update` contra producción como parte de este hito.
 - No se deben reejecutar scripts SQL ya aplicados.
 - Próximo paso recomendado: planificar la integración frontend/API .NET o ejecutar una rotación controlada de credenciales provisorias expuestas durante la validación manual.
+
+## Nota Prompt 022: publicación read-only sin cambios de schema
+
+La preparación de publicación de endpoints comerciales read-only para Plesk no agrega ni modifica modelos persistidos, `JemNexusDbContext`, migraciones EF Core, tablas ni columnas. Por lo tanto, para esta publicación no se requiere script SQL, no se requiere migración productiva y no debe ejecutarse `dotnet ef database update` contra `jemnexusb_prod`.
+
+El despliegue correspondiente es únicamente reemplazo manual de archivos de la API .NET mediante ZIP en Plesk, con backup previo y rollback por restauración de archivos según `docs/PUBLICACION_API_DOTNET_READONLY_PLESK.md`.

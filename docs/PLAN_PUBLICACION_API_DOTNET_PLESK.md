@@ -309,3 +309,31 @@ Hito confirmado el `2026-06-06` para la publicación manual y controlada de la A
 - No dejar ZIPs de publicación dentro de carpetas públicas.
 - No versionar ni documentar secretos reales, connection strings reales ni contraseñas.
 - Las contraseñas provisorias usadas durante la prueba quedaron expuestas fuera del repositorio y deben rotarse en una fase posterior y controlada.
+
+
+## L. Publicación read-only endpoints comerciales
+
+Para la publicación de los endpoints comerciales read-only del Prompt 021, seguir `docs/PUBLICACION_API_DOTNET_READONLY_PLESK.md` como checklist principal.
+
+Confirmación de alcance:
+
+- Se publican endpoints read-only para productos, categorías, marcas, proveedores, promociones, cotizaciones, home sections, imágenes y specs.
+- Los endpoints comerciales requieren Bearer con la política `RequireCommercialRead`.
+- No se implementa escritura comercial ni carga real de imágenes.
+- La revisión del Prompt 021 no encontró cambios en modelos persistidos, `JemNexusDbContext`, migraciones EF Core, tablas ni columnas.
+- No se requiere SQL ni migración productiva para esta publicación.
+- No ejecutar `dotnet ef database update` en producción.
+- El método de publicación sigue siendo ZIP manual en Plesk con backup previo y rollback por restauración de archivos.
+
+Comando de ZIP esperado desde Windows PowerShell:
+
+```powershell
+.\backend-dotnet\scripts\publish-plesk.ps1
+
+Compress-Archive `
+  -Path backend-dotnet\publish\JemNexus.Api\* `
+  -DestinationPath backend-dotnet\publish\JemNexus.Api-plesk.zip `
+  -Force
+```
+
+El ZIP debe incluir `web.config` con `processPath="dotnet"`, `arguments=".\JemNexus.Api.dll"` y `stdoutLogEnabled="false"` para producción normal.

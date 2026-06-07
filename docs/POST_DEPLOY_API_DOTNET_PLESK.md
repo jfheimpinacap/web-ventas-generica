@@ -98,3 +98,25 @@ finally {
 - Validación CORS desde el frontend público.
 - Pruebas CRUD de catálogo en API .NET.
 - Definir monitoreo y logs productivos.
+
+
+## F. Smoke tests endpoints comerciales read-only
+
+Después de publicar el ZIP read-only, ejecutar los smoke tests PowerShell documentados en `docs/PUBLICACION_API_DOTNET_READONLY_PLESK.md`.
+
+Validaciones mínimas:
+
+- `/health` y `/api/health` siguen respondiendo OK.
+- Login vendedor sigue respondiendo OK sin imprimir password ni token.
+- `/api/auth/me` responde OK con Bearer.
+- Los listados read-only responden OK con Bearer:
+  - `/api/products/`
+  - `/api/categories/`
+  - `/api/brands/`
+  - `/api/suppliers/`
+  - `/api/promotions/`
+  - `/api/quote-requests/`
+  - `/api/home-section-items/`
+- Al menos un endpoint comercial sin Bearer devuelve `401 Unauthorized`.
+
+No ejecutar SQL ni `dotnet ef database update` durante estas verificaciones. Si falla la publicación, el rollback esperado es restaurar el backup de archivos de Plesk.

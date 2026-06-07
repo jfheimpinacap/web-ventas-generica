@@ -428,3 +428,23 @@ Filtros principales:
 - Imágenes/especificaciones: `product`.
 
 No se implementan escrituras comerciales, eliminación, cambios de estado ni subida real de imágenes en esta fase. No ejecutar `dotnet ef database update` contra producción: los cambios son endpoints/DTOs/tests y documentación, sin schema changes. La siguiente fase recomendada es validar los listados del frontend/panel vendedor contra la API publicada y recién después planificar escritura y uploads.
+
+
+## Publicación read-only Prompt 022
+
+Para publicar en Plesk los endpoints comerciales read-only agregados en el Prompt 021, usar la guía operativa `../docs/PUBLICACION_API_DOTNET_READONLY_PLESK.md`.
+
+Flujo de generación local desde Windows PowerShell, siempre desde la raíz del repo:
+
+```powershell
+cd C:\Users\Franz\desktop\web-ventas-generica
+
+.\backend-dotnet\scripts\publish-plesk.ps1
+
+Compress-Archive `
+  -Path backend-dotnet\publish\JemNexus.Api\* `
+  -DestinationPath backend-dotnet\publish\JemNexus.Api-plesk.zip `
+  -Force
+```
+
+Esta publicación es solo de archivos por ZIP manual en Plesk. No agrega escritura comercial, no agrega uploads reales, no requiere migraciones SQL porque el Prompt 021 no modificó modelos persistidos, `JemNexusDbContext` ni migraciones EF Core, y no debe ejecutarse `dotnet ef database update` contra producción.

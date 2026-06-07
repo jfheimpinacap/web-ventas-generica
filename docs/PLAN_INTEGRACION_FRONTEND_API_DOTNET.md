@@ -302,3 +302,24 @@ Los DTOs de lectura excluyen `PasswordHash`, hashes de refresh tokens, claims in
 - No se aplicaron migraciones productivas, no se ejecutó SQL real y no se ejecutó `dotnet ef database update`.
 
 Siguiente validación recomendada: publicar la API .NET mediante el flujo controlado existente, confirmar Bearer/CORS desde el panel vendedor y probar listados reales con `VITE_API_PROVIDER=dotnet` antes de avanzar a escritura o uploads.
+
+
+## Validación frontend después de publicar endpoints read-only
+
+Después de publicar la API .NET en Plesk con los endpoints comerciales read-only, validar el panel vendedor localmente con `frontend/.env.local` sin commitearlo:
+
+```dotenv
+VITE_API_BASE_URL=https://api.jem-nexus.cl
+VITE_API_PROVIDER=dotnet
+```
+
+Luego:
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Abrir `http://localhost:5174/login`, iniciar sesión con vendedor y revisar `/admin/productos` y los listados de productos, categorías, marcas, proveedores, promociones, cotizaciones y ofertas Hero section si aplica.
+
+Resultado esperado: ya no debería aparecer “endpoint pendiente” en los listados cubiertos por endpoints read-only. Si no hay datos, debe mostrarse lista vacía o mensaje normal. No probar escritura ni carga real de imágenes en esta fase.
