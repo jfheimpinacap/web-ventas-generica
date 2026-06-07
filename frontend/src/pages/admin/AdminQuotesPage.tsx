@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes } from '../../services/adminApi'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
@@ -24,7 +25,9 @@ export function AdminQuotesPage() {
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | ''>('')
   const [search, setSearch] = useState('')
-  const [ordering, setOrdering] = useState<'-created_at' | 'created_at' | '-updated_at' | 'status'>('-created_at')
+  const [ordering, setOrdering] = useState<
+    '-created_at' | 'created_at' | '-updated_at' | 'status'
+  >('-created_at')
 
   useEffect(() => {
     const load = async () => {
@@ -37,8 +40,13 @@ export function AdminQuotesPage() {
           ordering,
         })
         setItems(response)
-      } catch {
-        setError('No se pudieron cargar las cotizaciones.')
+      } catch (error) {
+        setError(
+          getSafeApiErrorMessage(
+            error,
+            'No se pudieron cargar las cotizaciones.',
+          ),
+        )
       } finally {
         setLoading(false)
       }
@@ -49,8 +57,15 @@ export function AdminQuotesPage() {
 
   const summary = useMemo(() => {
     return STATUS_OPTIONS.reduce(
-      (acc, current) => ({ ...acc, [current.value]: items.filter((item) => item.status === current.value).length }),
-      { new: 0, contacted: 0, quoted: 0, closed: 0, discarded: 0 } as Record<QuoteStatus, number>,
+      (acc, current) => ({
+        ...acc,
+        [current.value]: items.filter((item) => item.status === current.value)
+          .length,
+      }),
+      { new: 0, contacted: 0, quoted: 0, closed: 0, discarded: 0 } as Record<
+        QuoteStatus,
+        number
+      >,
     )
   }, [items])
 
@@ -61,7 +76,12 @@ export function AdminQuotesPage() {
       <div className="admin-inline-form">
         <label>
           Estado
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as QuoteStatus | '')}>
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as QuoteStatus | '')
+            }
+          >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -82,7 +102,15 @@ export function AdminQuotesPage() {
           Orden
           <select
             value={ordering}
-            onChange={(event) => setOrdering(event.target.value as '-created_at' | 'created_at' | '-updated_at' | 'status')}
+            onChange={(event) =>
+              setOrdering(
+                event.target.value as
+                  | '-created_at'
+                  | 'created_at'
+                  | '-updated_at'
+                  | 'status',
+              )
+            }
           >
             <option value="-created_at">Más recientes</option>
             <option value="created_at">Más antiguas</option>
@@ -133,14 +161,23 @@ export function AdminQuotesPage() {
                   <td>{item.city || '-'}</td>
                   <td>
                     {item.preferred_contact_method
-                      ? PREFERRED_CONTACT_METHOD_LABELS[item.preferred_contact_method]
+                      ? PREFERRED_CONTACT_METHOD_LABELS[
+                          item.preferred_contact_method
+                        ]
                       : '-'}
                   </td>
                   <td>
-                    <span className={`badge quote-status quote-status--${item.status}`}>{QUOTE_STATUS_LABELS[item.status]}</span>
+                    <span
+                      className={`badge quote-status quote-status--${item.status}`}
+                    >
+                      {QUOTE_STATUS_LABELS[item.status]}
+                    </span>
                   </td>
                   <td>
-                    <Link className="table-action" to={`/admin/cotizaciones/${item.id}`}>
+                    <Link
+                      className="table-action"
+                      to={`/admin/cotizaciones/${item.id}`}
+                    >
                       Ver / Editar
                     </Link>
                   </td>

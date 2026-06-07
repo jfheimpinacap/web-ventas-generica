@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteCategory, getAdminCategories } from '../../services/adminApi'
 import type { Category } from '../../types/catalog'
 
@@ -17,8 +18,10 @@ export function AdminCategoriesPage() {
       setError(null)
       const data = await getAdminCategories()
       setItems(data)
-    } catch {
-      setError('No se pudieron cargar las categorías.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudieron cargar las categorías.'),
+      )
     } finally {
       setLoading(false)
     }
@@ -29,7 +32,10 @@ export function AdminCategoriesPage() {
   }, [])
 
   const filtered = useMemo(
-    () => items.filter((i) => `${i.name} ${i.slug}`.toLowerCase().includes(search.toLowerCase())),
+    () =>
+      items.filter((i) =>
+        `${i.name} ${i.slug}`.toLowerCase().includes(search.toLowerCase()),
+      ),
     [items, search],
   )
 
@@ -39,8 +45,10 @@ export function AdminCategoriesPage() {
       await deleteCategory(item.id)
       setSuccess('Categoría eliminada.')
       await load()
-    } catch {
-      setError('No se pudo eliminar la categoría.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudo eliminar la categoría.'),
+      )
     }
   }
 
@@ -64,7 +72,9 @@ export function AdminCategoriesPage() {
       {loading ? <p className="ui-note">Cargando categorías...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
       {success ? <p className="ui-note ui-note--success">{success}</p> : null}
-      {!loading && !error && filtered.length === 0 ? <p className="ui-note">Sin categorías.</p> : null}
+      {!loading && !error && filtered.length === 0 ? (
+        <p className="ui-note">Sin categorías.</p>
+      ) : null}
       {!loading && !error && filtered.length > 0 ? (
         <div className="admin-table-wrapper">
           <table className="admin-table">
@@ -81,18 +91,29 @@ export function AdminCategoriesPage() {
               {filtered.map((item) => (
                 <tr key={item.id}>
                   <td>{item.name}</td>
-                  <td>{items.find((i) => i.id === item.parent)?.name ?? '-'}</td>
                   <td>
-                    <span className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}>
+                    {items.find((i) => i.id === item.parent)?.name ?? '-'}
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${item.is_active ? 'badge--ok' : 'badge--muted'}`}
+                    >
                       {item.is_active ? 'Sí' : 'No'}
                     </span>
                   </td>
                   <td>{item.order}</td>
                   <td>
-                    <Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>
+                    <Link
+                      className="table-action"
+                      to={`/admin/categorias/${item.id}/editar`}
+                    >
                       Editar
                     </Link>{' '}
-                    <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>
+                    <button
+                      type="button"
+                      className="table-action table-action--button"
+                      onClick={() => void handleDelete(item)}
+                    >
                       Eliminar
                     </button>
                   </td>

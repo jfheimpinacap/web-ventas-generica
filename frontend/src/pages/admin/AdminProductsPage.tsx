@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteProduct, getAdminProducts } from '../../services/adminApi'
 import type { ProductListItem } from '../../types/catalog'
-
 
 const PRODUCT_FILTERS_STORAGE_KEY = 'admin-products-filters'
 
@@ -62,12 +62,18 @@ export function AdminProductsPage() {
   const [products, setProducts] = useState<ProductListItem[]>([])
   const storedFilters = useMemo(() => readStoredFilters(), [])
   const [search, setSearch] = useState(storedFilters.search)
-  const [categoryFilter, setCategoryFilter] = useState(storedFilters.categoryFilter)
+  const [categoryFilter, setCategoryFilter] = useState(
+    storedFilters.categoryFilter,
+  )
   const [brandFilter, setBrandFilter] = useState(storedFilters.brandFilter)
   const [typeFilter, setTypeFilter] = useState(storedFilters.typeFilter)
-  const [conditionFilter, setConditionFilter] = useState(storedFilters.conditionFilter)
+  const [conditionFilter, setConditionFilter] = useState(
+    storedFilters.conditionFilter,
+  )
   const [stockFilter, setStockFilter] = useState(storedFilters.stockFilter)
-  const [publishedFilter, setPublishedFilter] = useState(storedFilters.publishedFilter)
+  const [publishedFilter, setPublishedFilter] = useState(
+    storedFilters.publishedFilter,
+  )
   const [loading, setLoading] = useState(false)
   const [hasLoadedProducts, setHasLoadedProducts] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,16 +92,38 @@ export function AdminProductsPage() {
       const response = await getAdminProducts()
       setProducts(response)
       setHasLoadedProducts(true)
-    } catch {
-      setError('No se pudo cargar el listado de productos.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(
+          error,
+          'No se pudo cargar el listado de productos.',
+        ),
+      )
     } finally {
       setLoading(false)
     }
   }
 
   const hasCriteria = useMemo(
-    () => [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter].some((value) => value.trim() !== ''),
-    [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter],
+    () =>
+      [
+        search,
+        categoryFilter,
+        brandFilter,
+        typeFilter,
+        conditionFilter,
+        stockFilter,
+        publishedFilter,
+      ].some((value) => value.trim() !== ''),
+    [
+      search,
+      categoryFilter,
+      brandFilter,
+      typeFilter,
+      conditionFilter,
+      stockFilter,
+      publishedFilter,
+    ],
   )
 
   useEffect(() => {
@@ -117,11 +145,32 @@ export function AdminProductsPage() {
       publishedFilter,
     }
 
-    window.sessionStorage.setItem(PRODUCT_FILTERS_STORAGE_KEY, JSON.stringify(filtersToStore))
-  }, [search, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter])
+    window.sessionStorage.setItem(
+      PRODUCT_FILTERS_STORAGE_KEY,
+      JSON.stringify(filtersToStore),
+    )
+  }, [
+    search,
+    categoryFilter,
+    brandFilter,
+    typeFilter,
+    conditionFilter,
+    stockFilter,
+    publishedFilter,
+  ])
 
-  const categoryOptions = useMemo(() => Array.from(new Set(products.map((p) => p.category?.name).filter(Boolean))), [products])
-  const brandOptions = useMemo(() => Array.from(new Set(products.map((p) => p.brand?.name).filter(Boolean))), [products])
+  const categoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(products.map((p) => p.category?.name).filter(Boolean)),
+      ),
+    [products],
+  )
+  const brandOptions = useMemo(
+    () =>
+      Array.from(new Set(products.map((p) => p.brand?.name).filter(Boolean))),
+    [products],
+  )
 
   const filteredProducts = useMemo(() => {
     if (!hasCriteria) return []
@@ -131,23 +180,50 @@ export function AdminProductsPage() {
     return products.filter((product) => {
       const matchesText =
         !query ||
-        [product.name, product.slug, product.brand?.name ?? '', product.category?.name ?? '']
-        .join(' ')
-        .toLowerCase()
-        .includes(query)
+        [
+          product.name,
+          product.slug,
+          product.brand?.name ?? '',
+          product.category?.name ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(query)
 
-      const matchesCategory = !categoryFilter || product.category?.name === categoryFilter
+      const matchesCategory =
+        !categoryFilter || product.category?.name === categoryFilter
       const matchesBrand = !brandFilter || product.brand?.name === brandFilter
       const matchesType = !typeFilter || product.product_type === typeFilter
-      const matchesCondition = !conditionFilter || product.condition === conditionFilter
+      const matchesCondition =
+        !conditionFilter || product.condition === conditionFilter
       const matchesStock = !stockFilter || product.stock_status === stockFilter
       const matchesPublished =
         !publishedFilter ||
-        (publishedFilter === 'published' ? product.is_published : !product.is_published)
+        (publishedFilter === 'published'
+          ? product.is_published
+          : !product.is_published)
 
-      return matchesText && matchesCategory && matchesBrand && matchesType && matchesCondition && matchesStock && matchesPublished
+      return (
+        matchesText &&
+        matchesCategory &&
+        matchesBrand &&
+        matchesType &&
+        matchesCondition &&
+        matchesStock &&
+        matchesPublished
+      )
     })
-  }, [products, search, hasCriteria, categoryFilter, brandFilter, typeFilter, conditionFilter, stockFilter, publishedFilter])
+  }, [
+    products,
+    search,
+    hasCriteria,
+    categoryFilter,
+    brandFilter,
+    typeFilter,
+    conditionFilter,
+    stockFilter,
+    publishedFilter,
+  ])
 
   const clearFilters = () => {
     setSearch('')
@@ -160,15 +236,19 @@ export function AdminProductsPage() {
   }
 
   const handleDelete = async (product: ProductListItem) => {
-    const confirmed = window.confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`)
+    const confirmed = window.confirm(
+      `¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`,
+    )
     if (!confirmed) return
 
     try {
       await deleteProduct(product.slug)
       setSuccess(`Producto "${product.name}" eliminado.`)
       await loadProducts()
-    } catch {
-      setError('No se pudo eliminar el producto.')
+    } catch (error) {
+      setError(
+        getSafeApiErrorMessage(error, 'No se pudo eliminar el producto.'),
+      )
     }
   }
 
@@ -182,7 +262,10 @@ export function AdminProductsPage() {
           </Link>
         </div>
       </div>
-      <section className="admin-products-filter-panel" aria-label="Filtros de productos">
+      <section
+        className="admin-products-filter-panel"
+        aria-label="Filtros de productos"
+      >
         <input
           className="admin-search admin-products-filter-panel__search"
           value={search}
@@ -190,41 +273,71 @@ export function AdminProductsPage() {
           placeholder="Buscar por nombre, marca, categoría o SKU"
         />
         <div className="admin-filter-strip admin-filter-strip--products">
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+          <select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+          >
             <option value="">Tipo</option>
             <option value="machinery">Maquinaria</option>
             <option value="spare_part">Repuesto</option>
             <option value="service">Servicio</option>
             <option value="other">Otro</option>
           </select>
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+          >
             <option value="">Categoría</option>
-            {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
-          <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
+          <select
+            value={brandFilter}
+            onChange={(event) => setBrandFilter(event.target.value)}
+          >
             <option value="">Marca</option>
-            {brandOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            {brandOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
-          <select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)}>
+          <select
+            value={conditionFilter}
+            onChange={(event) => setConditionFilter(event.target.value)}
+          >
             <option value="">Condición</option>
             <option value="new">Nuevo</option>
             <option value="used">Usado</option>
             <option value="refurbished">Reacondicionado</option>
             <option value="not_applicable">No aplica</option>
           </select>
-          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)}>
+          <select
+            value={stockFilter}
+            onChange={(event) => setStockFilter(event.target.value)}
+          >
             <option value="">Stock</option>
             <option value="available">Disponible</option>
             <option value="on_request">A pedido</option>
             <option value="reserved">Reservado</option>
             <option value="sold">Vendido</option>
           </select>
-          <select value={publishedFilter} onChange={(event) => setPublishedFilter(event.target.value)}>
+          <select
+            value={publishedFilter}
+            onChange={(event) => setPublishedFilter(event.target.value)}
+          >
             <option value="">Publicación</option>
             <option value="published">Publicado</option>
             <option value="unpublished">No publicado</option>
           </select>
-          <button type="button" className="btn btn--ghost" onClick={clearFilters}>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={clearFilters}
+          >
             Limpiar filtros
           </button>
         </div>
@@ -235,11 +348,15 @@ export function AdminProductsPage() {
       {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
       {!loading && !error && !hasCriteria ? (
-        <p className="ui-note">Usa el buscador o selecciona filtros para ver productos.</p>
+        <p className="ui-note">
+          Usa el buscador o selecciona filtros para ver productos.
+        </p>
       ) : null}
 
       {!loading && !error && hasCriteria && filteredProducts.length === 0 ? (
-        <p className="ui-note">No hay productos para los criterios seleccionados.</p>
+        <p className="ui-note">
+          No hay productos para los criterios seleccionados.
+        </p>
       ) : null}
 
       {!loading && !error && filteredProducts.length > 0 ? (
@@ -268,24 +385,41 @@ export function AdminProductsPage() {
                   <td>{product.product_type}</td>
                   <td>{product.condition}</td>
                   <td>
-                    <span className="badge badge--stock">{stockLabel(product.stock_status)}</span>
+                    <span className="badge badge--stock">
+                      {stockLabel(product.stock_status)}
+                    </span>
                   </td>
                   <td>
-                    <span className={`badge ${product.is_featured ? 'badge--ok' : 'badge--muted'}`}>
+                    <span
+                      className={`badge ${product.is_featured ? 'badge--ok' : 'badge--muted'}`}
+                    >
                       {product.is_featured ? 'Sí' : 'No'}
                     </span>
                   </td>
                   <td>
-                    <span className={`badge ${product.is_published ? 'badge--ok' : 'badge--muted'}`}>
+                    <span
+                      className={`badge ${product.is_published ? 'badge--ok' : 'badge--muted'}`}
+                    >
                       {product.is_published ? 'Sí' : 'No'}
                     </span>
                   </td>
-                  <td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString() : '-'}</td>
                   <td>
-                    <Link className="table-action" to={`/admin/productos/${product.slug}/editar`}>
+                    {product.updated_at
+                      ? new Date(product.updated_at).toLocaleDateString()
+                      : '-'}
+                  </td>
+                  <td>
+                    <Link
+                      className="table-action"
+                      to={`/admin/productos/${product.slug}/editar`}
+                    >
                       Editar
                     </Link>{' '}
-                    <button type="button" className="table-action table-action--button" onClick={() => void handleDelete(product)}>
+                    <button
+                      type="button"
+                      className="table-action table-action--button"
+                      onClick={() => void handleDelete(product)}
+                    >
                       Eliminar
                     </button>
                   </td>
