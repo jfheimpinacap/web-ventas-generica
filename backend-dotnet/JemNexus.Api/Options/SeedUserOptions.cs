@@ -12,4 +12,5 @@ public sealed class SeedUserOptions
     public string SupportPassword { get; set; } = string.Empty;
     public string SupportEmail { get; set; } = string.Empty;
     public string SupportFullName { get; set; } = "Administrador Soporte";
+    public bool UpdateExistingPasswords { get; set; }
 }

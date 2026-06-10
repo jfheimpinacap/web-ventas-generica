@@ -2,7 +2,7 @@
 
 ## 0. Alcance y regla principal
 
-Este documento prepara la aplicación manual y controlada del schema ASP.NET Core / EF Core en Plesk, pero **no aplica SQL**, **no conecta a `jemnexusb_prod`**, **no ejecuta `dotnet ef database update`** y **no crea usuarios reales**.
+Este documento prepara la aplicación manual y controlada del schema ASP.NET Core / EF Core en Plesk, pero **no aplica SQL**, **no conecta a `<SQL_DATABASE>`**, **no ejecuta `dotnet ef database update`** y **no crea usuarios reales**.
 
 Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el estado real de la base. No asumir que la base está vacía.
 
@@ -11,8 +11,8 @@ Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el e
 - Hosting: Plesk Windows/IIS.
 - Dominio API: `https://api.jem-nexus.cl`.
 - Motor: SQL Server 2022.
-- Base de datos: `jemnexusb_prod`.
-- Usuario de base de datos: `jemnexusb_api`.
+- Base de datos: `<SQL_DATABASE>`.
+- Usuario de base de datos: `<SQL_API_USER>`.
 - Host visible en Plesk: `.\MSSQLSERVER2022`.
 - La base fue creada previamente y el schema ASP.NET Core / EF Core quedó aplicado posteriormente en una aplicación controlada documentada en este mismo archivo.
 
@@ -22,9 +22,9 @@ Antes de ejecutar cualquier script en Plesk/SQL Server se debe diagnosticar el e
 
 Marcar cada punto antes de pegar o ejecutar SQL:
 
-- [ ] Confirmar backup reciente y restaurable de `jemnexusb_prod`.
+- [ ] Confirmar backup reciente y restaurable de `<SQL_DATABASE>`.
 - [ ] Confirmar ventana de trabajo y responsable de ejecución.
-- [ ] Confirmar que se está conectado a la base correcta (`jemnexusb_prod`), no a otra base del servidor.
+- [ ] Confirmar que se está conectado a la base correcta (`<SQL_DATABASE>`), no a otra base del servidor.
 - [ ] Confirmar si la base tiene tablas existentes.
 - [ ] Confirmar si existe la tabla `__EFMigrationsHistory`.
 - [ ] Confirmar si `__EFMigrationsHistory` tiene registros.
@@ -194,7 +194,7 @@ Decisión:
 
 ## E. Checklist después de aplicar
 
-- [ ] Verificar que `SELECT DB_NAME()` sigue mostrando `jemnexusb_prod`.
+- [ ] Verificar que `SELECT DB_NAME()` sigue mostrando `<SQL_DATABASE>`.
 - [ ] Verificar listado de tablas creado/actualizado.
 - [ ] Verificar que `__EFMigrationsHistory` tiene las migraciones esperadas para el caso aplicado.
 - [ ] Verificar que existen `AppUsers` y `AppRefreshTokens` si se aplicó la migración auth.
@@ -215,7 +215,7 @@ Decisión:
 
 Configurar en Plesk/IIS sin escribir secretos reales en archivos del repo:
 
-- `ConnectionStrings__DefaultConnection`: cadena SQL Server completa para `jemnexusb_prod` con usuario `jemnexusb_api` y contraseña configurada fuera de git.
+- `ConnectionStrings__DefaultConnection`: cadena SQL Server completa para `<SQL_DATABASE>` con usuario `<SQL_API_USER>` y contraseña configurada fuera de git.
 - `Jwt__Secret` o `JWT_SECRET`: secreto fuerte para firma JWT.
 - `Jwt__Issuer` o `JWT_ISSUER`: issuer esperado por la API.
 - `Jwt__Audience` o `JWT_AUDIENCE`: audience esperado por la API/frontend.
@@ -285,14 +285,14 @@ Hito documentado aproximadamente el 2026-06-04, después del hotfix de cascadas 
 Resultado operativo informado para Plesk/SQL Server:
 
 - El intento fallido anterior fue limpiado antes de reintentar.
-- La base `jemnexusb_prod` quedó con `0` tablas antes de aplicar nuevamente el script.
+- La base `<SQL_DATABASE>` quedó con `0` tablas antes de aplicar nuevamente el script.
 - Se aplicó el script acumulado corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
-- El schema quedó creado bajo el esquema real `jmnexusb_api`.
+- El schema quedó creado bajo el esquema real `<SQL_SCHEMA_NAME>`.
 - No se crearon usuarios reales en esta fase.
 - No se configuraron secretos reales ni variables productivas todavía.
 - No se publicó ni inició la API ASP.NET Core en Plesk todavía.
 
-Tablas creadas bajo el esquema `jmnexusb_api`:
+Tablas creadas bajo el esquema `<SQL_SCHEMA_NAME>`:
 
 - `__EFMigrationsHistory`
 - `AppRefreshTokens`
@@ -312,15 +312,15 @@ Migraciones registradas en `__EFMigrationsHistory`:
 - `20260603182917_InitialCommercialSchema`
 - `20260604020543_AddAuthUsersAndAuditRelations`
 
-Estado actual: schema aplicado correctamente en SQL Server/Plesk; la publicación de la API .NET, la configuración de variables/secretos y la creación controlada de usuarios quedan para una fase posterior. No repetir el script sobre `jemnexusb_prod` sin revisar previamente `__EFMigrationsHistory` y la existencia real de tablas.
+Estado actual: schema aplicado correctamente en SQL Server/Plesk; la publicación de la API .NET, la configuración de variables/secretos y la creación controlada de usuarios quedan para una fase posterior. No repetir el script sobre `<SQL_DATABASE>` sin revisar previamente `__EFMigrationsHistory` y la existencia real de tablas.
 
 ## Próximo paso recomendado
 
-Configurar variables/secretos fuera del repositorio y preparar una publicación controlada de la API ASP.NET Core en Plesk/IIS, con smoke tests y plan de rollback. No ejecutar nuevamente scripts SQL sobre `jemnexusb_prod` sin diagnóstico previo de tablas e `__EFMigrationsHistory`.
+Configurar variables/secretos fuera del repositorio y preparar una publicación controlada de la API ASP.NET Core en Plesk/IIS, con smoke tests y plan de rollback. No ejecutar nuevamente scripts SQL sobre `<SQL_DATABASE>` sin diagnóstico previo de tablas e `__EFMigrationsHistory`.
 
 ## Incidente de aplicación fallida por cascadas SQL Server
 
-Durante el intento de aplicar en SQL Server real/Plesk el script acumulado `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`, la base `jemnexusb_prod` había sido diagnosticada como vacía: `TABLES: 0`, sin `__EFMigrationsHistory`, sin `AppUsers` y sin `AppRefreshTokens`.
+Durante el intento de aplicar en SQL Server real/Plesk el script acumulado `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`, la base `<SQL_DATABASE>` había sido diagnosticada como vacía: `TABLES: 0`, sin `__EFMigrationsHistory`, sin `AppUsers` y sin `AppRefreshTokens`.
 
 El intento falló al crear la FK self-reference de categorías con el error SQL Server:
 
@@ -328,9 +328,9 @@ El intento falló al crear la FK self-reference de categorías con el error SQL 
 Msg 1785: Introducing FOREIGN KEY constraint 'FK_Categories_Categories_ParentId' on table 'Categories' may cause cycles or multiple cascade paths. Specify ON DELETE NO ACTION or ON UPDATE NO ACTION, or modify other FOREIGN KEY constraints.
 ```
 
-Después del error, el script continuó parcialmente y dejó la base en estado inconsistente. El diagnóstico post-error informado para `jemnexusb_prod` fue:
+Después del error, el script continuó parcialmente y dejó la base en estado inconsistente. El diagnóstico post-error informado para `<SQL_DATABASE>` fue:
 
-- Base actual: `jemnexusb_prod`.
+- Base actual: `<SQL_DATABASE>`.
 - Tablas existentes: `__EFMigrationsHistory`, `Suppliers`.
 - Tablas faltantes: `Brands`, `Categories`, `Products`, `AppUsers`, `AppRefreshTokens`.
 - `__EFMigrationsHistory` contiene `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.

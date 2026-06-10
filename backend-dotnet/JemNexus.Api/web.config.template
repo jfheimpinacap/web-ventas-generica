@@ -24,6 +24,7 @@
           <environmentVariable name="FRONTEND_ORIGINS" value="https://PLACEHOLDER_FRONTEND_DOMAIN" />
           <environmentVariable name="SeedUsers__SellerUsername" value="PLACEHOLDER_SELLER_USERNAME" />
           <environmentVariable name="SeedUsers__SellerPassword" value="PLACEHOLDER_SELLER_PASSWORD" />
+          <environmentVariable name="SeedUsers__UpdateExistingPasswords" value="false" />
           <environmentVariable name="SeedUsers__SupportUsername" value="PLACEHOLDER_SUPPORT_USERNAME" />
           <environmentVariable name="SeedUsers__SupportPassword" value="PLACEHOLDER_SUPPORT_PASSWORD" />
         </environmentVariables>

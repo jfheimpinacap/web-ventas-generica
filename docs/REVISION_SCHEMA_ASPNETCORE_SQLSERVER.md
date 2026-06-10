@@ -3,9 +3,9 @@
 Fecha de revisión: 2026-06-03  
 Repositorio: `web-ventas-generica`  
 Alcance: revisión técnica documental del schema EF Core/SQL Server inicial antes de aplicar migraciones en Plesk.  
-Base destino futura considerada: SQL Server 2022, Windows Server, IIS/Plesk, base `jemnexusb_prod`, usuario `jemnexusb_api`.
+Base destino futura considerada: SQL Server 2022, Windows Server, IIS/Plesk, base `<SQL_DATABASE>`, usuario `<SQL_API_USER>`.
 
-> Importante: esta revisión **no ejecutó** `dotnet ef database update`, **no conectó** a `jemnexusb_prod`, **no tocó** la base real, **no regeneró** migraciones, **no modificó** frontend y **no eliminó** Django.
+> Importante: esta revisión **no ejecutó** `dotnet ef database update`, **no conectó** a `<SQL_DATABASE>`, **no tocó** la base real, **no regeneró** migraciones, **no modificó** frontend y **no eliminó** Django.
 
 ## 1. Resumen ejecutivo
 
@@ -281,7 +281,7 @@ No se identifican riesgos críticos bloqueantes para una base nueva/vacía en SQ
 3. Las unicidades de home section aplican a registros inactivos, lo cual replica Django pero puede incomodar al panel vendedor.
 4. No hay índices compuestos específicos para consultas públicas combinadas; aceptable para fase inicial, optimizable con métricas reales.
 5. `PriceVisible`, `IsFeatured`, `IsPublished` sin default SQL puede afectar inserts manuales.
-6. La collation de la base no está fijada por el script; la sensibilidad a mayúsculas/minúsculas dependerá de la collation de `jemnexusb_prod`. Esto afecta unicidad de slugs y búsquedas.
+6. La collation de la base no está fijada por el script; la sensibilidad a mayúsculas/minúsculas dependerá de la collation de `<SQL_DATABASE>`. Esto afecta unicidad de slugs y búsquedas.
 
 ## 12. Hallazgos críticos
 
@@ -306,7 +306,7 @@ No se identifican riesgos críticos bloqueantes para una base nueva/vacía en SQ
 
 ## 15. Recomendaciones antes de aplicar en Plesk
 
-1. Confirmar que la base `jemnexusb_prod` está vacía o que no contiene tablas con los mismos nombres.
+1. Confirmar que la base `<SQL_DATABASE>` está vacía o que no contiene tablas con los mismos nombres.
 2. Definir si se mantendrán entidades comerciales en tablas pluralizadas (`Products`, `Categories`, etc.) sin esquema custom (`dbo` por default).
 3. Implementar en la API .NET generación de slugs para `Category`, `Brand` y `Product`, manteniendo unicidad.
 4. Implementar actualización automática de `UpdatedAt` en EF Core (`SaveChanges`/interceptor) antes de operar datos reales.
@@ -316,13 +316,13 @@ No se identifican riesgos críticos bloqueantes para una base nueva/vacía en SQ
 8. Mantener DTOs compatibles con frontend: especialmente `product_type`, `stock_status`, `is_published`, `images`, `specs.name` vs `ProductSpec.Key`.
 9. Evaluar collation de SQL Server para slugs únicos case-insensitive/case-sensitive según criterio SEO.
 10. Ejecutar `dotnet build` y pruebas .NET en un entorno con SDK disponible antes de aplicar la migración.
-11. Probar el script SQL primero en una base temporal SQL Server 2022, no en `jemnexusb_prod`.
+11. Probar el script SQL primero en una base temporal SQL Server 2022, no en `<SQL_DATABASE>`.
 
 ## 16. Checklist previo a `database update`
 
-- [ ] Confirmar backup/snapshot de `jemnexusb_prod` si ya existe contenido.
+- [ ] Confirmar backup/snapshot de `<SQL_DATABASE>` si ya existe contenido.
 - [ ] Confirmar que se usará cadena de conexión de staging o producción correcta, nunca accidentalmente local/demo.
-- [ ] Confirmar permisos mínimos del usuario `jemnexusb_api` para migración o usar usuario migrador separado.
+- [ ] Confirmar permisos mínimos del usuario `<SQL_API_USER>` para migración o usar usuario migrador separado.
 - [ ] Validar que `dotnet build backend-dotnet/JemNexus.sln` pasa en ambiente con SDK .NET.
 - [ ] Validar que `dotnet test backend-dotnet/JemNexus.sln` pasa en ambiente con SDK .NET.
 - [ ] Ejecutar el SQL generado en base temporal SQL Server 2022 y revisar resultado.
@@ -341,7 +341,7 @@ El schema es consistente con los modelos comerciales actuales y compatible con S
 
 ## Cierre de observaciones Backend .NET 2C
 
-> Alcance 2C: se cerraron o prepararon observaciones sin aplicar la base real, sin ejecutar `dotnet ef database update`, sin tocar `jemnexusb_prod`, sin regenerar la migración inicial y sin modificar el frontend.
+> Alcance 2C: se cerraron o prepararon observaciones sin aplicar la base real, sin ejecutar `dotnet ef database update`, sin tocar `<SQL_DATABASE>`, sin regenerar la migración inicial y sin modificar el frontend.
 
 | Observación 2B | Estado | Cambio realizado | Archivos afectados | ¿Requiere migración futura? |
 | --- | --- | --- | --- | --- |
@@ -367,7 +367,7 @@ La observación pendiente sobre auditoría/usuarios del schema inicial pasa a im
 
 Las columnas comerciales `CreatedById` y `UpdatedById` se mantienen nullable y se configuran como FKs opcionales hacia `AppUsers` con `DeleteBehavior.NoAction` para evitar cascadas peligrosas. Esto aplica a `Category`, `Brand`, `Supplier`, `Product`, `ProductImage`, `ProductSpec`, `Promotion`, `HomeSectionItem` y `QuoteRequest`.
 
-Este cierre se materializó posteriormente en la migración `AddAuthUsersAndAuditRelations` y un script SQL revisable. La revisión técnica documentada abajo no ejecutó `dotnet ef database update`, no aplicó SQL en Plesk y no conectó a `jemnexusb_prod`.
+Este cierre se materializó posteriormente en la migración `AddAuthUsersAndAuditRelations` y un script SQL revisable. La revisión técnica documentada abajo no ejecutó `dotnet ef database update`, no aplicó SQL en Plesk y no conectó a `<SQL_DATABASE>`.
 
 ## Nota de revisión Backend .NET 3 - AddAuthUsersAndAuditRelations
 
@@ -391,7 +391,7 @@ Observación operacional importante: el script SQL revisado es acumulado desde u
 
 La decisión anterior de la revisión inicial, **“APTO CON OBSERVACIONES”**, quedó reemplazada durante el incidente por: **NO APTO hasta corregir cascadas SQL Server y limpiar el intento fallido en Plesk**.
 
-Motivo: SQL Server rechazó la FK `FK_Categories_Categories_ParentId` por riesgo de ciclos o múltiples cascade paths (`Msg 1785`) durante la aplicación real del script acumulado. Además, el intento dejó `jemnexusb_prod` en estado parcial con `__EFMigrationsHistory` y `Suppliers`, pero sin tablas principales como `Brands`, `Categories`, `Products`, `AppUsers` y `AppRefreshTokens`.
+Motivo: SQL Server rechazó la FK `FK_Categories_Categories_ParentId` por riesgo de ciclos o múltiples cascade paths (`Msg 1785`) durante la aplicación real del script acumulado. Además, el intento dejó `<SQL_DATABASE>` en estado parcial con `__EFMigrationsHistory` y `Suppliers`, pero sin tablas principales como `Brands`, `Categories`, `Products`, `AppUsers` y `AppRefreshTokens`.
 
 La existencia de filas en `__EFMigrationsHistory` ya no prueba que el schema esté aplicado en este caso. Antes de una nueva aplicación se requiere limpiar la base parcial y usar el script hotfix con `DeleteBehavior.NoAction`/`ON DELETE NO ACTION` en las relaciones comerciales y en la self-reference de categorías.
 
@@ -405,7 +405,7 @@ Trazabilidad del incidente:
 - SQL Server rechazó inicialmente `FK_Categories_Categories_ParentId` con `Msg 1785` por posible ciclo o múltiples rutas de cascada.
 - El intento fallido dejó objetos parciales e historial EF no confiable, por lo que fue necesario limpiar antes de reintentar.
 - La corrección técnica fue configurar `DeleteBehavior.NoAction` en relaciones comerciales y self-reference, de modo que el SQL resultante use `ON DELETE NO ACTION` donde corresponde.
-- Después de limpiar el intento fallido, `jemnexusb_prod` quedó con `0` tablas y se aplicó el script corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
-- El schema quedó aplicado bajo `jmnexusb_api` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+- Después de limpiar el intento fallido, `<SQL_DATABASE>` quedó con `0` tablas y se aplicó el script corregido `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
+- El schema quedó aplicado bajo `<SQL_SCHEMA_NAME>` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
 
 No se requiere una migración correctiva adicional en este punto por el incidente `Msg 1785`, porque la base quedó aplicada desde cero con el script corregido. Las futuras migraciones deberán partir del historial EF ya registrado y no deben reejecutar el acumulado sobre la misma base sin diagnóstico previo.

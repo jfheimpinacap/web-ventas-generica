@@ -23,8 +23,8 @@ Fuera de alcance para este plan:
 Antes de publicar la API, confirmar que el estado previo de Plesk/SQL Server ya está completo:
 
 - El schema EF Core ya fue aplicado en SQL Server/Plesk.
-- La base de datos es `jemnexusb_prod`.
-- Los objetos quedaron bajo el esquema real `jmnexusb_api`.
+- La base de datos es `<SQL_DATABASE>`.
+- Los objetos quedaron bajo el esquema real `<SQL_SCHEMA_NAME>`.
 - `__EFMigrationsHistory` contiene estas dos migraciones:
   - `20260603182917_InitialCommercialSchema`.
   - `20260604020543_AddAuthUsersAndAuditRelations`.
@@ -64,6 +64,7 @@ Variables mínimas/recomendadas:
 - `SeedUsers__SellerPassword` o `SeedUsers:SellerPassword`.
 - `SeedUsers__SupportUsername` o `SeedUsers:SupportUsername`.
 - `SeedUsers__SupportPassword` o `SeedUsers:SupportPassword`.
+- `SeedUsers__UpdateExistingPasswords` o `SeedUsers:UpdateExistingPasswords` solo para reset controlado temporal.
 - `FRONTEND_ORIGINS`.
 - `Uploads__RootPath`, si aplica.
 - `Uploads__PublicBasePath`, si aplica.
@@ -76,8 +77,8 @@ Aclaraciones:
 - Para crear `seller` deben existir `SeedUsers__SellerUsername`/`SeedUsers:SellerUsername` y `SeedUsers__SellerPassword`/`SeedUsers:SellerPassword` con valores no vacíos.
 - Para crear `support` deben existir `SeedUsers__SupportUsername`/`SeedUsers:SupportUsername` y `SeedUsers__SupportPassword`/`SeedUsers:SupportPassword` con valores no vacíos.
 - Si falta username o password, `SeedData` omite ese usuario y registra un log seguro `SeedUsers <seller|support> skipped: missing username/password.` sin mostrar secretos.
-- El seed es idempotente: si `AppUsers.Username` ya existe, registra `already exists`, no duplica y no sobrescribe `PasswordHash`.
-- Si se cambia una password de seed en Plesk después de que el usuario ya fue creado, la password existente no se actualiza automáticamente; un reset deberá implementarse como flujo posterior/controlado.
+- El seed es idempotente por defecto: si `AppUsers.Username` ya existe, registra `already exists`, no duplica y no sobrescribe `PasswordHash`.
+- Para una rotación manual controlada, `SeedUsers__UpdateExistingPasswords=true` / `SeedUsers:UpdateExistingPasswords=true` permite actualizar passwords de usuarios seed existentes cuando username y password están presentes. La bandera debe volver a `false` o removerse al terminar. Ver `docs/ROTACION_CREDENCIALES_PRODUCCION.md`.
 - En `Production`, la aplicación exige `JWT_SECRET` o `Jwt__Secret`; si falta, el arranque debe fallar de forma explícita.
 - `FRONTEND_ORIGINS` puede listar `https://jem-nexus.cl,https://www.jem-nexus.cl`.
 
@@ -86,13 +87,13 @@ Aclaraciones:
 Formato de referencia sin password real:
 
 ```text
-Server=190.107.176.16;Database=jemnexusb_prod;User Id=jemnexusb_api;Password=***;TrustServerCertificate=True;Encrypt=True;
+Server=<SQL_SERVER_HOST>;Database=<SQL_DATABASE>;User Id=<SQL_API_USER>;Password=***;TrustServerCertificate=True;Encrypt=True;
 ```
 
 Notas:
 
 - El servidor real puede requerir la IP o el host indicado por Plesk.
-- En la validación con SSMS se conectó usando `190.107.176.16` y Trust Server Certificate.
+- En la validación con SSMS se conectó usando `<SQL_SERVER_HOST>` y Trust Server Certificate.
 - No incluir password real en commits, documentación, tickets, capturas ni mensajes de PR.
 - La variable esperada para ASP.NET Core es `ConnectionStrings__DefaultConnection`.
 
@@ -202,7 +203,7 @@ Verificación SQL segura, sin exponer hashes ni secretos:
 
 ```sql
 SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt
-FROM jmnexusb_api.AppUsers
+FROM <SQL_SCHEMA_NAME>.AppUsers
 ORDER BY Username;
 ```
 
@@ -257,11 +258,11 @@ Sobre stdout:
 
 ## L. Riesgos conocidos
 
-- El esquema real de SQL Server es `jmnexusb_api`; confirmar que el usuario `jemnexusb_api` usa permisos correctos sobre ese esquema.
-- La cadena de conexión debe usar la misma base `jemnexusb_prod` y usuario con permisos correctos.
+- El esquema real de SQL Server es `<SQL_SCHEMA_NAME>`; confirmar que el usuario `<SQL_API_USER>` usa permisos correctos sobre ese esquema.
+- La cadena de conexión debe usar la misma base `<SQL_DATABASE>` y usuario con permisos correctos.
 - Variables JWT son obligatorias en `Production`; falta de `JWT_SECRET`/`Jwt__Secret` debe impedir el arranque.
 - El seed de usuarios puede no crear usuarios si faltan username/password; esto es esperado y seguro y queda registrado con logs sin secretos.
-- El seed no actualiza contraseñas de usuarios existentes; cambiar variables después del primer arranque no rota passwords.
+- El seed no actualiza contraseñas de usuarios existentes por defecto; para una rotación controlada usar temporalmente `SeedUsers__UpdateExistingPasswords=true` o `SeedUsers:UpdateExistingPasswords=true` según `docs/ROTACION_CREDENCIALES_PRODUCCION.md`.
 - No reejecutar scripts SQL ya aplicados.
 - No ejecutar `dotnet ef database update` contra producción durante publicación.
 - Uploads en IIS requieren permisos de escritura explícitos y ruta controlada.
@@ -297,7 +298,7 @@ Hito confirmado el `2026-06-06` para la publicación manual y controlada de la A
 
 - Health público validado: `GET https://api.jem-nexus.cl/health` respondió `status ok`, `app JEM Nexus API`, `environment Production`.
 - Health API validado: `GET https://api.jem-nexus.cl/api/health` respondió `status ok`, `app JEM Nexus API`, `environment Production`.
-- Conexión SQL Server productiva validada contra la base `jemnexusb_prod` y el schema real `jmnexusb_api`.
+- Conexión SQL Server productiva validada contra la base `<SQL_DATABASE>` y el schema real `<SQL_SCHEMA_NAME>`.
 - Schema SQL Server aplicado previamente; no corresponde reejecutar scripts SQL.
 - Seed productivo de usuarios validado en `AppUsers`:
   - `vendedor`: `Role=seller`, `IsActive=1`, `IsStaff=1`, `IsSuperuser=0`.
