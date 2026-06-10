@@ -64,7 +64,7 @@ dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNex
 
 ## Aplicación controlada de schema en Plesk
 
-Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md`. El flujo correcto es:
+Antes de aplicar SQL en `<SQL_DATABASE>`, revisar y seguir el checklist `../docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md`. El flujo correcto es:
 
 1. Diagnosticar primero el estado real de la base con queries de solo lectura.
 2. Revisar `__EFMigrationsHistory` y confirmar si existen tablas comerciales o auth.
@@ -76,7 +76,7 @@ Antes de aplicar SQL en `jemnexusb_prod`, revisar y seguir el checklist `../docs
 
 ## Estado Plesk SQL Server
 
-El schema ASP.NET Core / EF Core quedó aplicado correctamente en Plesk SQL Server sobre `jemnexusb_prod`. Las tablas fueron creadas bajo el esquema real `jmnexusb_api` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
+El schema ASP.NET Core / EF Core quedó aplicado correctamente en Plesk SQL Server sobre `<SQL_DATABASE>`. Las tablas fueron creadas bajo el esquema real `<SQL_SCHEMA_NAME>` y `__EFMigrationsHistory` registra `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
 
 No ejecutar nuevamente `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` sobre la misma base sin revisar antes `__EFMigrationsHistory` y la existencia real de tablas. El script es acumulado desde cero y puede fallar o duplicar objetos si se usa sobre una base ya aplicada.
 
@@ -90,6 +90,7 @@ Antes de publicar la API en Plesk/IIS, configurar fuera del repositorio y sin se
 - `SeedUsers__SellerPassword`
 - `SeedUsers__SupportUsername`
 - `SeedUsers__SupportPassword`
+- `SeedUsers__UpdateExistingPasswords` solo para reset controlado temporal
 - `FRONTEND_ORIGINS`
 
 No crear usuarios reales ni iniciar la API productiva hasta que estas variables estén configuradas y exista un plan de publicación/rollback controlado.
@@ -156,7 +157,7 @@ Variables sugeridas/necesarias, sin valores reales en git:
 - `SeedUsers__SupportEmail`
 - `SeedUsers__SupportFullName`
 
-`FRONTEND_ORIGINS` puede contener orígenes separados por coma o punto y coma y se combina con `Cors:AllowedOrigins`.
+`FRONTEND_ORIGINS` puede contener orígenes separados por coma o punto y coma y se combina con `Cors:AllowedOrigins`. Para rotar credenciales expuestas manualmente, seguir `docs/ROTACION_CREDENCIALES_PRODUCCION.md`.
 
 No guardar secretos reales, connection strings reales ni claves JWT en `appsettings*.json`.
 
@@ -329,13 +330,13 @@ Antes de producción configurar `Jwt__Secret`/`JWT_SECRET` fuera del repo. El se
 - Seller: `SeedUsers__SellerUsername` o `SeedUsers:SellerUsername`, junto con `SeedUsers__SellerPassword` o `SeedUsers:SellerPassword`.
 - Support: `SeedUsers__SupportUsername` o `SeedUsers:SupportUsername`, junto con `SeedUsers__SupportPassword` o `SeedUsers:SupportPassword`.
 
-El seed no ejecuta migraciones, no cambia el schema, normaliza `Username` con `Trim`, usa el hasher del backend que valida `/api/auth/login`, asigna `IsActive=true`, `IsStaff=true` e `IsSuperuser=false`, y crea roles `seller`/`support_admin` según corresponda. Es idempotente: si el `Username` ya existe, no duplica el usuario y no sobrescribe `PasswordHash`; cambiar una password de seed en Plesk después de creado el usuario no la actualiza automáticamente. Para resetear passwords se requiere un flujo posterior/controlado.
+El seed no ejecuta migraciones, no cambia el schema, normaliza `Username` con `Trim`, usa el hasher del backend que valida `/api/auth/login`, asigna `IsActive=true`, `IsStaff=true` e `IsSuperuser=false`, y crea roles `seller`/`support_admin` según corresponda. Es idempotente por defecto: si el `Username` ya existe, no duplica el usuario y no sobrescribe `PasswordHash`. Para resetear passwords existentes de forma controlada, configurar temporalmente `SeedUsers__UpdateExistingPasswords=true` o `SeedUsers:UpdateExistingPasswords=true` junto con el username/password correspondiente, reiniciar, validar login y luego volver a `false` o remover la bandera y las seed passwords.
 
-Los logs esperados son seguros y no muestran passwords ni hashes: `SeedUsers seller skipped: missing username/password.`, `SeedUsers seller already exists.`, `SeedUsers seller created.`, y equivalentes para `support`. Para verificar en SQL sin exponer secretos:
+Los logs esperados son seguros y no muestran passwords ni hashes: `SeedUsers seller skipped: missing username/password.`, `SeedUsers seller already exists.`, `SeedUsers seller created.`, `SeedUsers seller password updated.`, y equivalentes para `support`. Para verificar en SQL sin exponer secretos:
 
 ```sql
 SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt
-FROM jmnexusb_api.AppUsers
+FROM <SQL_SCHEMA_NAME>.AppUsers
 ORDER BY Username;
 ```
 
@@ -454,3 +455,8 @@ cd C:\Users\Franz\desktop\web-ventas-generica
 ```
 
 Esta publicación es solo de archivos por ZIP manual en Plesk usando el ZIP seguro que no incluye `web.config`. `package-plesk.ps1 -IncludeWebConfig` existe solo como opción excepcional y peligrosa; no usarla en publicaciones normales. No agrega escritura comercial, no agrega uploads reales, no requiere migraciones SQL porque el Prompt 021 no modificó modelos persistidos, `JemNexusDbContext` ni migraciones EF Core, y no debe ejecutarse `dotnet ef database update` contra producción.
+
+
+## Rotación y resguardo de secretos
+
+Ver `docs/ROTACION_CREDENCIALES_PRODUCCION.md` para la rotación manual segura de JWT, usuarios seed y contraseña SQL. `backend-dotnet/scripts/package-plesk.ps1` excluye `web.config`; el `web.config` productivo se administra manualmente en Plesk, no se commitea y no debe compartirse en capturas completas.

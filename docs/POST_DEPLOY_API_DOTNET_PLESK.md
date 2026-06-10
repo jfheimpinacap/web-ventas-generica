@@ -4,8 +4,8 @@ Documento de seguimiento posterior a la publicación controlada de la API ASP.NE
 
 - Fecha del hito: `2026-06-06`.
 - Dominio API: `https://api.jem-nexus.cl`.
-- Base SQL Server productiva: `jemnexusb_prod`.
-- Schema real: `jmnexusb_api`.
+- Base SQL Server productiva: `<SQL_DATABASE>`.
+- Schema real: `<SQL_SCHEMA_NAME>`.
 
 ## A. Estado confirmado
 
@@ -33,7 +33,7 @@ SELECT
     LastLoginAt,
     CreatedAt,
     UpdatedAt
-FROM [jemnexusb_api].[AppUsers]
+FROM [<SQL_SCHEMA_NAME>].[AppUsers]
 ORDER BY Id;
 ```
 

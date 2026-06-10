@@ -18,8 +18,8 @@ Contexto de destino confirmado:
 - API futura: `https://api.jem-nexus.cl`
 - Hosting final: Windows Server + IIS + Plesk
 - Stack backend final: ASP.NET Core Web API + SQL Server 2022
-- Base SQL Server creada: `jemnexusb_prod`
-- Usuario SQL Server creado: `jemnexusb_api`
+- Base SQL Server creada: `<SQL_DATABASE>`
+- Usuario SQL Server creado: `<SQL_API_USER>`
 - Render/Django/Python no deben usarse en la versión final de hosting.
 
 ## 1. Diagnóstico del backend Django/DRF actual
@@ -425,8 +425,8 @@ Para reducir cambios simultáneos en el frontend, la API .NET debería replicar 
   - `Uploads__RootPath`.
   - `Uploads__PublicBaseUrl`.
   - SMTP/notificaciones.
-- El seed de usuarios iniciales se ejecuta al arranque incluso en `Production` cuando hay pares username/password válidos, es idempotente, no ejecuta migraciones, no cambia schema, no duplica usuarios existentes y no sobrescribe `PasswordHash`. Si se cambia una password seed después de creado el usuario, no se actualiza automáticamente; un reset debe resolverse con un flujo posterior/controlado.
-- Verificar `AppUsers` sin exponer hashes: `SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt FROM jmnexusb_api.AppUsers ORDER BY Username;`. No insertar usuarios manualmente por SQL porque el hash debe generarse por la lógica del backend.
+- El seed de usuarios iniciales se ejecuta al arranque incluso en `Production` cuando hay pares username/password válidos, es idempotente por defecto, no ejecuta migraciones, no cambia schema, no duplica usuarios existentes y no sobrescribe `PasswordHash`. Para rotación controlada, `SeedUsers__UpdateExistingPasswords=true` o `SeedUsers:UpdateExistingPasswords=true` permite resetear passwords seed existentes de forma explícita y temporal.
+- Verificar `AppUsers` sin exponer hashes: `SELECT Username, Role, IsActive, IsStaff, IsSuperuser, CreatedAt, UpdatedAt FROM <SQL_SCHEMA_NAME>.AppUsers ORDER BY Username;`. No insertar usuarios manualmente por SQL porque el hash debe generarse por la lógica del backend.
 - Rate limiting con middleware de .NET (`System.Threading.RateLimiting`) para login, cotizaciones, lectura pública y admin.
 - Validación de uploads por extensión, content-type, tamaño y firma/magic bytes.
 - Logs con Serilog o logging estándar hacia archivos compatibles con Plesk/IIS.
@@ -610,7 +610,7 @@ Prompt sugerido:
 - [ ] Confirmar app pool/IIS para `api.jem-nexus.cl`.
 - [ ] Confirmar HTTPS válido para `api.jem-nexus.cl`.
 - [ ] Confirmar SQL Server 2022 accesible desde el sitio.
-- [ ] Configurar base `jemnexusb_prod` y usuario `jemnexusb_api` con permisos mínimos necesarios.
+- [ ] Configurar base `<SQL_DATABASE>` y usuario `<SQL_API_USER>` con permisos mínimos necesarios.
 - [ ] Definir connection string sin guardarla en git.
 - [ ] Definir JWT signing key fuerte en variable de entorno.
 - [ ] Definir CORS para `https://jem-nexus.cl`.
@@ -876,7 +876,7 @@ La solución queda preparada para migraciones EF Core. En esta fase se debe inte
 dotnet ef migrations add InitialCommercialSchema --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
 ```
 
-Si `dotnet` o `dotnet-ef` no están instalados en el entorno de ejecución, la migración queda pendiente para un entorno local Windows/.NET 8. No se debe crear ni aplicar migración contra la base real `jemnexusb_prod` hasta una fase posterior con cadena segura configurada fuera de git.
+Si `dotnet` o `dotnet-ef` no están instalados en el entorno de ejecución, la migración queda pendiente para un entorno local Windows/.NET 8. No se debe crear ni aplicar migración contra la base real `<SQL_DATABASE>` hasta una fase posterior con cadena segura configurada fuera de git.
 
 ### Comandos locales para validar
 
@@ -927,7 +927,7 @@ cd frontend && npm run build
 
 Fecha: 2026-06-03.
 
-Se realizó una revisión técnica documental del schema EF Core/SQL Server inicial antes de aplicar migraciones en SQL Server/Plesk. La revisión no ejecutó `dotnet ef database update`, no conectó a `jemnexusb_prod`, no tocó la base real, no regeneró migraciones, no modificó frontend y no eliminó Django.
+Se realizó una revisión técnica documental del schema EF Core/SQL Server inicial antes de aplicar migraciones en SQL Server/Plesk. La revisión no ejecutó `dotnet ef database update`, no conectó a `<SQL_DATABASE>`, no tocó la base real, no regeneró migraciones, no modificó frontend y no eliminó Django.
 
 Archivos revisados principales:
 
@@ -955,7 +955,7 @@ Próximos pasos sugeridos:
 
 ## Backend .NET 2C - Cierre de observaciones pre-aplicación
 
-Backend .NET 2C cerró o dejó preparadas las observaciones principales de Backend .NET 2B sin aplicar cambios destructivos, sin modificar la migración inicial, sin ejecutar `dotnet ef database update` y sin conectar a `jemnexusb_prod`.
+Backend .NET 2C cerró o dejó preparadas las observaciones principales de Backend .NET 2B sin aplicar cambios destructivos, sin modificar la migración inicial, sin ejecutar `dotnet ef database update` y sin conectar a `<SQL_DATABASE>`.
 
 - **Slugs:** se agregó `SlugHelper` para normalizar texto a slugs seguros. La unicidad final se mantiene protegida por índices únicos del schema, pero la generación de sufijos ante colisiones queda para los endpoints de escritura de la fase CRUD.
 - **`UpdatedAt`:** `JemNexusDbContext` actualiza timestamps automáticamente en `SaveChanges` y `SaveChangesAsync` para las entidades comerciales principales. No requiere cambio de schema.
@@ -1066,7 +1066,7 @@ dotnet ef migrations script \
   -o backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql
 ```
 
-Posteriormente la migración y el script SQL fueron generados localmente y quedaron disponibles para revisión técnica. No ejecutar `dotnet ef database update` contra `jemnexusb_prod` sin revisión del script, backup y ventana de mantenimiento confirmada.
+Posteriormente la migración y el script SQL fueron generados localmente y quedaron disponibles para revisión técnica. No ejecutar `dotnet ef database update` contra `<SQL_DATABASE>` sin revisión del script, backup y ventana de mantenimiento confirmada.
 
 ## Backend .NET 3 - Revisión de migración auth/auditoría
 
@@ -1078,7 +1078,7 @@ Posteriormente la migración y el script SQL fueron generados localmente y queda
 - Script SQL revisado: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql`.
 - Commit de origen revisado: `5b30b07 Add auth users and audit relations migration`.
 
-No se ejecutó `dotnet ef database update`, no se aplicó SQL en Plesk, no se conectó a `jemnexusb_prod` y no se regeneró la migración.
+No se ejecutó `dotnet ef database update`, no se aplicó SQL en Plesk, no se conectó a `<SQL_DATABASE>` y no se regeneró la migración.
 
 ### Tablas nuevas detectadas
 
@@ -1130,7 +1130,7 @@ Resultado de revisión:
 - Crea `AppUsers` y `AppRefreshTokens` con las columnas esperadas.
 - Agrega las FKs e índices esperados.
 - Incluye registro EF en `__EFMigrationsHistory` para `20260604020543_AddAuthUsersAndAuditRelations`.
-- No contiene connection strings, credenciales, secretos, `USE [jemnexusb_prod]`, `CREATE DATABASE`, ni nombres de base reales.
+- No contiene connection strings, credenciales, secretos, `USE [<SQL_DATABASE>]`, `CREATE DATABASE`, ni nombres de base reales.
 - No contiene `DROP TABLE`, `ALTER COLUMN`, `sp_rename` ni instrucciones destructivas sobre tablas comerciales.
 - Observación operacional: el script es acumulado desde una base vacía, porque también incluye `20260603182917_InitialCommercialSchema` antes de la migración auth. Si Plesk ya tuviera aplicada la migración inicial, se debe generar/revisar un script diferencial desde `20260603182917_InitialCommercialSchema` hasta `20260604020543_AddAuthUsersAndAuditRelations` o aplicar exclusivamente la parte correspondiente, nunca ejecutar a ciegas este script acumulado sobre una base con objetos existentes.
 
@@ -1166,15 +1166,15 @@ No se detectan drops, renames, cambios de tipo ni alteraciones destructivas ines
 
 ## Plan controlado de aplicación en Plesk / SQL Server
 
-Antes de aplicar schema real en `jemnexusb_prod`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
+Antes de aplicar schema real en `<SQL_DATABASE>`, usar `docs/PLAN_APLICACION_SCHEMA_PLESK_SQLSERVER.md` como checklist operativo. Ese plan exige diagnosticar primero el estado de la base, revisar `__EFMigrationsHistory`, identificar si existen tablas comerciales o auth, elegir entre script acumulado o diferencial y confirmar backup/ventana de trabajo.
 
-Estado actualizado Backend .NET 3: el schema ASP.NET Core / EF Core fue aplicado correctamente en Plesk SQL Server sobre la base `jemnexusb_prod`, bajo el esquema real `jmnexusb_api`, después de limpiar el intento fallido previo y reintentar con el script corregido. La API .NET todavía no fue publicada y Codex no ejecutó `dotnet ef database update` ni conectó a Plesk.
+Estado actualizado Backend .NET 3: el schema ASP.NET Core / EF Core fue aplicado correctamente en Plesk SQL Server sobre la base `<SQL_DATABASE>`, bajo el esquema real `<SQL_SCHEMA_NAME>`, después de limpiar el intento fallido previo y reintentar con el script corregido. La API .NET todavía no fue publicada y Codex no ejecutó `dotnet ef database update` ni conectó a Plesk.
 
 Advertencia específica: `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` es un script acumulado desde cero hasta la migración `AddAuthUsersAndAuditRelations`; si la base ya contiene `InitialCommercialSchema`, se debe usar/generar un script diferencial desde `InitialCommercialSchema` hacia `AddAuthUsersAndAuditRelations` en vez de aplicar el acumulado completo.
 
 ## Nota hotfix SQL Server cascades / Plesk
 
-El script acumulado original `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` falló en SQL Server real por múltiples rutas/ciclos de cascada al crear `FK_Categories_Categories_ParentId` y dejó `jemnexusb_prod` parcialmente ensuciada con `__EFMigrationsHistory` y `Suppliers`. Ese intento no debía considerarse una aplicación válida del schema.
+El script acumulado original `backend-dotnet/sql/AddAuthUsersAndAuditRelations.sql` falló en SQL Server real por múltiples rutas/ciclos de cascada al crear `FK_Categories_Categories_ParentId` y dejó `<SQL_DATABASE>` parcialmente ensuciada con `__EFMigrationsHistory` y `Suppliers`. Ese intento no debía considerarse una aplicación válida del schema.
 
 El hotfix agregó `DeleteBehavior.NoAction` explícito para la self-reference de `Categories`, las relaciones comerciales principales hacia `Products`, las dependencias comerciales de `Products` y las FKs de auditoría hacia `AppUsers`. El objetivo fue que SQL Server pudiera crear el schema desde cero sin intentar cascadas múltiples o ciclos peligrosos.
 
@@ -1194,8 +1194,8 @@ dotnet ef migrations script \
 
 Estado documentado aproximadamente el 2026-06-04:
 
-- Base usada en Plesk/SQL Server: `jemnexusb_prod`.
-- Esquema real usado por los objetos creados: `jmnexusb_api`.
+- Base usada en Plesk/SQL Server: `<SQL_DATABASE>`.
+- Esquema real usado por los objetos creados: `<SQL_SCHEMA_NAME>`.
 - Estado: schema aplicado correctamente; API ASP.NET Core aún no publicada.
 - Migraciones registradas en `__EFMigrationsHistory`:
   - `20260603182917_InitialCommercialSchema`
@@ -1209,8 +1209,8 @@ No se requiere aplicar una migración correctiva adicional en este punto solo po
 Estado actualizado:
 
 - El schema ASP.NET Core / EF Core ya fue aplicado correctamente en Plesk SQL Server.
-- La base real documentada es `jemnexusb_prod`.
-- El esquema real de los objetos creados es `jmnexusb_api`.
+- La base real documentada es `<SQL_DATABASE>`.
+- El esquema real de los objetos creados es `<SQL_SCHEMA_NAME>`.
 - `__EFMigrationsHistory` debe contener `20260603182917_InitialCommercialSchema` y `20260604020543_AddAuthUsersAndAuditRelations`.
 - La publicación de la API .NET en `https://api.jem-nexus.cl` sigue pendiente.
 - El Prompt 009 prepara documentación, checklist, variables, comandos de publish, smoke tests, diagnóstico y rollback para una publicación controlada.
@@ -1227,7 +1227,7 @@ Estado confirmado el `2026-06-06`: el backend .NET quedó operativo en una publi
 ### Validaciones de producción controlada
 
 - API .NET publicada manualmente en Plesk mediante ZIP generado localmente.
-- Schema SQL Server aplicado previamente sobre la base `jemnexusb_prod` y el schema real `jmnexusb_api`.
+- Schema SQL Server aplicado previamente sobre la base `<SQL_DATABASE>` y el schema real `<SQL_SCHEMA_NAME>`.
 - Usuarios seed creados y validados en `AppUsers`:
   - `vendedor` con rol `seller`.
   - `soporte` con rol `support_admin`.
@@ -1245,6 +1245,6 @@ Estado confirmado el `2026-06-06`: el backend .NET quedó operativo en una publi
 
 ## Nota Prompt 022: publicación read-only sin cambios de schema
 
-La preparación de publicación de endpoints comerciales read-only para Plesk no agrega ni modifica modelos persistidos, `JemNexusDbContext`, migraciones EF Core, tablas ni columnas. Por lo tanto, para esta publicación no se requiere script SQL, no se requiere migración productiva y no debe ejecutarse `dotnet ef database update` contra `jemnexusb_prod`.
+La preparación de publicación de endpoints comerciales read-only para Plesk no agrega ni modifica modelos persistidos, `JemNexusDbContext`, migraciones EF Core, tablas ni columnas. Por lo tanto, para esta publicación no se requiere script SQL, no se requiere migración productiva y no debe ejecutarse `dotnet ef database update` contra `<SQL_DATABASE>`.
 
 El despliegue correspondiente es únicamente reemplazo manual de archivos de la API .NET mediante ZIP en Plesk, con backup previo y rollback por restauración de archivos según `docs/PUBLICACION_API_DOTNET_READONLY_PLESK.md`.

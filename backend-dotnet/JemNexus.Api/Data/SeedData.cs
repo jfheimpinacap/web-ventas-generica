@@ -34,6 +34,7 @@ public static class SeedData
             role: AppRoles.Seller,
             isStaff: true,
             isSuperuser: false,
+            updateExistingPassword: options.UpdateExistingPasswords,
             cancellationToken);
 
         var supportCreated = await SeedUserAsync(
@@ -48,6 +49,7 @@ public static class SeedData
             role: AppRoles.SupportAdmin,
             isStaff: true,
             isSuperuser: false,
+            updateExistingPassword: options.UpdateExistingPasswords,
             cancellationToken);
 
         if (sellerCreated || supportCreated)
@@ -68,6 +70,7 @@ public static class SeedData
         string role,
         bool isStaff,
         bool isSuperuser,
+        bool updateExistingPassword,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
@@ -77,18 +80,22 @@ public static class SeedData
         }
 
         var normalizedUsername = username.Trim();
-        var usernameAlreadyPending = dbContext.AppUsers.Local
-            .Any(user => string.Equals(user.Username, normalizedUsername, StringComparison.Ordinal));
-        var existingUser = usernameAlreadyPending
-            ? new AppUser()
-            : await dbContext.AppUsers
-                .AsNoTracking()
-                .FirstOrDefaultAsync(user => user.Username == normalizedUsername, cancellationToken);
+        var existingUser = dbContext.AppUsers.Local
+            .FirstOrDefault(user => string.Equals(user.Username, normalizedUsername, StringComparison.Ordinal));
+        existingUser ??= await dbContext.AppUsers
+            .FirstOrDefaultAsync(user => user.Username == normalizedUsername, cancellationToken);
 
         if (existingUser is not null)
         {
-            logger.LogInformation("SeedUsers {SeedName} already exists.", seedName);
-            return false;
+            if (!updateExistingPassword)
+            {
+                logger.LogInformation("SeedUsers {SeedName} already exists.", seedName);
+                return false;
+            }
+
+            existingUser.PasswordHash = passwordHasher.HashPassword(existingUser, password);
+            logger.LogInformation("SeedUsers {SeedName} password updated.", seedName);
+            return true;
         }
 
         var user = new AppUser

@@ -2,7 +2,7 @@
 
 Guía operativa para publicar manualmente en Plesk la API ASP.NET Core con endpoints comerciales **solo lectura** agregados en el Prompt 021.
 
-> Alcance: publicar archivos de la API .NET mediante ZIP. No conecta a Plesk desde el repo, no sube archivos automáticamente, no ejecuta SQL, no ejecuta `dotnet ef database update`, no modifica variables productivas y no toca secretos reales.
+> Alcance: publicar archivos de la API .NET mediante ZIP. No conecta a Plesk desde el repo, no sube archivos automáticamente, no ejecuta SQL, no ejecuta `dotnet ef database update`, no modifica variables productivas y no toca secretos reales. Para rotación manual de secretos expuestos, usar `docs/ROTACION_CREDENCIALES_PRODUCCION.md`.
 
 ## 1. Alcance funcional
 
@@ -45,7 +45,7 @@ cd C:\Users\Franz\desktop\web-ventas-generica
 .\backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El script `backend-dotnet/scripts/publish-plesk.ps1` debe dejar la salida en `backend-dotnet/publish/JemNexus.Api`. Luego `backend-dotnet/scripts/package-plesk.ps1` debe crear el ZIP seguro `backend-dotnet/publish/JemNexus.Api-plesk.zip`. La carpeta `backend-dotnet/publish/` es un artefacto local ignorado por git.
+El script `backend-dotnet/scripts/publish-plesk.ps1` debe dejar la salida en `backend-dotnet/publish/JemNexus.Api`. Luego `backend-dotnet/scripts/package-plesk.ps1` debe crear el ZIP seguro `backend-dotnet/publish/JemNexus.Api-plesk.zip`. La carpeta `backend-dotnet/publish/` es un artefacto local ignorado por git. El ZIP seguro de `package-plesk.ps1` no incluye `web.config`; el `web.config` productivo se administra manualmente en Plesk y no debe commitearse ni compartirse en capturas completas.
 
 `package-plesk.ps1` está ajustado para Windows PowerShell 5.1 y PowerShell moderno. El script carga explícitamente `System.IO.Compression` y `System.IO.Compression.FileSystem`, resuelve rutas absolutas desde el repo y valida automáticamente que el ZIP normal no incluya `web.config`. También verifica que el paquete contenga `JemNexus.Api.dll`, `JemNexus.Api.runtimeconfig.json` y `JemNexus.Api.deps.json`, por lo que ya no es necesario inspeccionar manualmente con rutas relativas, aunque se puede hacer un doble chequeo con ruta absoluta:
 
@@ -95,7 +95,7 @@ arguments=".\JemNexus.Api.dll"
 stdoutLogEnabled="false"
 ```
 
-También confirmar que el `web.config` productivo mantiene el bloque `<environmentVariables>` con variables productivas configuradas en Plesk, sin copiar sus valores a git ni a documentación. No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si en una incidencia futura aparece error 500.30, puede habilitarse stdout temporalmente solo para diagnóstico manual y debe volver a `false` después.
+También confirmar que el `web.config` productivo mantiene el bloque `<environmentVariables>` con variables productivas configuradas en Plesk, sin copiar sus valores a git ni a documentación y sin compartir capturas completas del archivo. No cambiar `stdoutLogEnabled` a `true` para operación normal de producción. Si en una incidencia futura aparece error 500.30, puede habilitarse stdout temporalmente solo para diagnóstico manual y debe volver a `false` después.
 
 ## 5. Checklist previo
 
