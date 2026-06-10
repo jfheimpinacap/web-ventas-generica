@@ -47,6 +47,15 @@ cd C:\Users\Franz\desktop\web-ventas-generica
 
 El script `backend-dotnet/scripts/publish-plesk.ps1` debe dejar la salida en `backend-dotnet/publish/JemNexus.Api`. Luego `backend-dotnet/scripts/package-plesk.ps1` debe crear el ZIP seguro `backend-dotnet/publish/JemNexus.Api-plesk.zip`. La carpeta `backend-dotnet/publish/` es un artefacto local ignorado por git.
 
+`package-plesk.ps1` está ajustado para Windows PowerShell 5.1 y PowerShell moderno. El script carga explícitamente `System.IO.Compression` y `System.IO.Compression.FileSystem`, resuelve rutas absolutas desde el repo y valida automáticamente que el ZIP normal no incluya `web.config`. También verifica que el paquete contenga `JemNexus.Api.dll`, `JemNexus.Api.runtimeconfig.json` y `JemNexus.Api.deps.json`, por lo que ya no es necesario inspeccionar manualmente con rutas relativas, aunque se puede hacer un doble chequeo con ruta absoluta:
+
+```powershell
+$zip = "C:\Users\Franz\desktop\web-ventas-generica\backend-dotnet\publish\JemNexus.Api-plesk.zip"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::OpenRead($zip).Entries | Select-Object FullName | Sort-Object FullName
+```
+
 El script local:
 
 - publica `JemNexus.Api` en `Release`;
@@ -66,6 +75,8 @@ El empaquetado seguro:
 - excluye `logs/`;
 - excluye archivos stdout (`stdout*.log` y `stdout*.txt`);
 - excluye `.env`, `.env.*`, `*.env.local` y archivos locales sensibles `*.local`;
+- valida automáticamente la ausencia de `web.config` salvo uso explícito de `-IncludeWebConfig`;
+- valida automáticamente la presencia de `JemNexus.Api.dll`, `JemNexus.Api.runtimeconfig.json` y `JemNexus.Api.deps.json`;
 - no conecta a Plesk, no ejecuta SQL, no ejecuta migraciones y no toca secretos.
 
 No usar más `Compress-Archive -Path backend-dotnet\publish\JemNexus.Api\*` para este flujo: ese wildcard incluye `web.config` y puede sobrescribir el `web.config` productivo.

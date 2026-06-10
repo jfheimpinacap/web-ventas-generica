@@ -111,6 +111,15 @@ La carpeta de salida debe incluir, entre otros artefactos:
 
 Para despliegue manual en Plesk, no subir la carpeta publicada completa con wildcard. Generar el ZIP seguro con `backend-dotnet/scripts/package-plesk.ps1`, que excluye `web.config` por defecto para conservar las variables productivas configuradas en Plesk/IIS.
 
+`package-plesk.ps1` está ajustado para Windows PowerShell 5.1 y PowerShell moderno: carga explícitamente `System.IO.Compression` y `System.IO.Compression.FileSystem`, resuelve rutas absolutas desde la ubicación del script y valida automáticamente que el ZIP normal no contenga `web.config` y sí contenga los artefactos principales de `JemNexus.Api`. Ya no es necesario inspeccionar manualmente con rutas relativas, aunque se puede hacer un doble chequeo con ruta absoluta:
+
+```powershell
+$zip = "C:\Users\Franz\desktop\web-ventas-generica\backend-dotnet\publish\JemNexus.Api-plesk.zip"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::OpenRead($zip).Entries | Select-Object FullName | Sort-Object FullName
+```
+
 ### Artefacto local `backend-dotnet/publish/`
 
 `backend-dotnet/publish/` es un artefacto local de despliegue generado por el publish de .NET. No se versiona en Git: su contenido se comprime o sube manualmente a Plesk y debe permanecer fuera de commits y pull requests.
@@ -366,7 +375,7 @@ backend-dotnet\scripts\publish-plesk.ps1
 backend-dotnet\scripts\package-plesk.ps1
 ```
 
-El script `publish-plesk.ps1` ejecuta restore, build, test y publish localmente; falla si los tests fallan y deja la salida en `backend-dotnet\publish\JemNexus.Api`. Luego `package-plesk.ps1` crea `backend-dotnet\publish\JemNexus.Api-plesk.zip` excluyendo `web.config` por defecto para no sobrescribir las variables productivas de Plesk. Los scripts no conectan a Plesk, no suben archivos, no ejecutan SQL y no ejecutan `dotnet ef database update`.
+El script `publish-plesk.ps1` ejecuta restore, build, test y publish localmente; falla si los tests fallan y deja la salida en `backend-dotnet\publish\JemNexus.Api`. Luego `package-plesk.ps1` crea `backend-dotnet\publish\JemNexus.Api-plesk.zip` excluyendo `web.config` por defecto para no sobrescribir las variables productivas de Plesk. `package-plesk.ps1` carga explícitamente los assemblies de compresión requeridos por Windows PowerShell 5.1 y valida automáticamente el contenido mínimo y la ausencia de `web.config` cuando no se usa `-IncludeWebConfig`. Los scripts no conectan a Plesk, no suben archivos, no ejecutan SQL y no ejecutan `dotnet ef database update`.
 
 Comandos equivalentes en Windows PowerShell:
 
