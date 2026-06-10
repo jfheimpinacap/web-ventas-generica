@@ -7,9 +7,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$sourceFullPath = Join-Path $repoRoot $SourcePath
-$destinationFullPath = Join-Path $repoRoot $DestinationPath
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+
+function Resolve-RepositoryPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+}
+
+$sourceFullPath = Resolve-RepositoryPath -Path $SourcePath
+$destinationFullPath = Resolve-RepositoryPath -Path $DestinationPath
 $destinationDirectory = Split-Path $destinationFullPath -Parent
 
 function Get-SafeRelativePath {
@@ -83,8 +99,6 @@ if (Test-Path $destinationFullPath) {
     Remove-Item $destinationFullPath -Force
 }
 
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
 $zipArchive = [System.IO.Compression.ZipFile]::Open($destinationFullPath, [System.IO.Compression.ZipArchiveMode]::Create)
 $includedCount = 0
 $excludedPaths = New-Object System.Collections.Generic.List[string]
@@ -104,6 +118,33 @@ try {
 }
 finally {
     $zipArchive.Dispose()
+}
+
+$requiredEntries = @(
+    "JemNexus.Api.dll",
+    "JemNexus.Api.runtimeconfig.json",
+    "JemNexus.Api.deps.json"
+)
+
+$validationArchive = [System.IO.Compression.ZipFile]::OpenRead($destinationFullPath)
+try {
+    $entryNames = @($validationArchive.Entries | ForEach-Object { $_.FullName })
+    $webConfigEntries = @($entryNames | Where-Object { [System.IO.Path]::GetFileName($_) -ieq "web.config" })
+
+    if (-not $IncludeWebConfig -and $webConfigEntries.Count -gt 0) {
+        throw "Unsafe ZIP validation failed: web.config is present even though -IncludeWebConfig was not used."
+    }
+
+    foreach ($requiredEntry in $requiredEntries) {
+        if ($entryNames -notcontains $requiredEntry) {
+            throw "ZIP validation failed: required entry '$requiredEntry' was not found."
+        }
+    }
+
+    Write-Host "ZIP validation passed. Packaged files: $($validationArchive.Entries.Count)"
+}
+finally {
+    $validationArchive.Dispose()
 }
 
 Write-Host "Safe Plesk ZIP ready: $destinationFullPath"
