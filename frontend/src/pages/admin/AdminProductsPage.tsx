@@ -25,7 +25,7 @@ const defaultFilters: ProductFiltersState = {
   typeFilter: '',
   conditionFilter: '',
   stockFilter: '',
-  publishedFilter: '',
+  publishedFilter: 'published',
 }
 
 function readStoredFilters(): ProductFiltersState {
@@ -43,7 +43,7 @@ function readStoredFilters(): ProductFiltersState {
       typeFilter: parsed.typeFilter ?? '',
       conditionFilter: parsed.conditionFilter ?? '',
       stockFilter: parsed.stockFilter ?? '',
-      publishedFilter: parsed.publishedFilter ?? '',
+      publishedFilter: parsed.publishedFilter ?? defaultFilters.publishedFilter,
     }
   } catch {
     return defaultFilters
@@ -232,7 +232,7 @@ export function AdminProductsPage() {
     setTypeFilter('')
     setConditionFilter('')
     setStockFilter('')
-    setPublishedFilter('')
+    setPublishedFilter(defaultFilters.publishedFilter)
   }
 
   const handleDelete = async (product: ProductListItem) => {
@@ -329,9 +329,9 @@ export function AdminProductsPage() {
             value={publishedFilter}
             onChange={(event) => setPublishedFilter(event.target.value)}
           >
-            <option value="">Publicación</option>
-            <option value="published">Publicado</option>
-            <option value="unpublished">No publicado</option>
+            <option value="published">Solo publicados</option>
+            <option value="unpublished">Solo no publicados</option>
+            <option value="">Todos</option>
           </select>
           <button
             type="button"

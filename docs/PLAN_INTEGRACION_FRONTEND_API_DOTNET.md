@@ -425,3 +425,10 @@ El panel vendedor conserva `authFetch` y las rutas admin protegidas. Las pantall
 - No se conectó a Plesk, no se subieron archivos y no se publicó.
 
 Uploads reales y cualquier migración de creación pública de cotizaciones en .NET quedan pendientes para una fase posterior controlada.
+
+## Nota UX pública post-migración
+
+- El acceso vendedor no se enlaza desde la navegación pública del header ni del footer.
+- El panel vendedor sigue disponible por ruta directa protegida (`/admin`, con login interno si no hay sesión válida).
+- En esta fase no existe login ni registro de clientes.
+- El registro de clientes queda como fase futura si se implementa historial de cotizaciones o cuenta cliente.

@@ -9,6 +9,7 @@ import type { SupplierSummary } from '../../types/catalog'
 export function AdminSuppliersPage() {
   const [items, setItems] = useState<SupplierSummary[]>([])
   const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,12 +32,17 @@ export function AdminSuppliersPage() {
 
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        `${item.name} ${item.contact_name} ${item.email}`
+      items.filter((item) => {
+        const matchesStatus =
+          activeFilter === 'all' ||
+          (activeFilter === 'active' ? item.is_active : !item.is_active)
+        const matchesSearch = `${item.name} ${item.contact_name} ${item.email}`
           .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [items, search],
+          .includes(search.toLowerCase())
+
+        return matchesStatus && matchesSearch
+      }),
+    [items, search, activeFilter],
   )
 
   const handleDelete = async (item: SupplierSummary) => {
@@ -62,6 +68,16 @@ export function AdminSuppliersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select
+            className="admin-search"
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value as 'active' | 'inactive' | 'all')}
+            aria-label="Filtrar por estado"
+          >
+            <option value="active">Solo activos</option>
+            <option value="inactive">Solo inactivos</option>
+            <option value="all">Todos</option>
+          </select>
           <Link className="btn btn--accent" to="/admin/proveedores/nuevo">
             Nuevo proveedor
           </Link>
