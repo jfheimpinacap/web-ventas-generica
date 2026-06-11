@@ -376,3 +376,52 @@ Todos los endpoints quedan bajo `/api`, requieren Bearer válido y aceptan las r
 - No se ejecutó SQL real, `dotnet ef database update` ni migraciones reales.
 - No se conectó a Plesk, no se subieron archivos y no se publicó.
 - Una publicación futura debe seguir usando `backend-dotnet/package-plesk.ps1`, que genera ZIP seguro sin `web.config` productivo.
+
+## Lectura pública separada de lectura admin
+
+Se agregaron endpoints públicos GET-only bajo `/api/public/*` para que Home, Catálogo y Detalle puedan leer contenido comercial publicado sin Bearer cuando el frontend usa `VITE_API_PROVIDER=dotnet`. Esto corrige el fallback público provocado por usar endpoints `/api/*` protegidos para datos que la web pública necesita consumir sin login.
+
+### Separación de rutas
+
+- Sitio público sin token:
+  - `GET /api/public/products/`
+  - `GET /api/public/products/{idOrSlug}/`
+  - `GET /api/public/categories/`
+  - `GET /api/public/brands/`
+  - `GET /api/public/promotions/`
+  - `GET /api/public/home-section-items/`
+  - `GET /api/public/product-specs/?product=...`
+  - `GET /api/public/product-images/?product=...`
+- Panel vendedor/admin con Bearer:
+  - `/api/products/`
+  - `/api/categories/`
+  - `/api/brands/`
+  - `/api/suppliers/`
+  - `/api/promotions/`
+  - `/api/quote-requests/`
+  - `/api/home-section-items/`
+  - `/api/product-specs/`
+  - `/api/product-images/`
+
+Los endpoints públicos filtran productos publicados (`is_published=true`), categorías activas, marcas activas, promociones activas/vigentes e ítems activos de Home. Specs e imágenes públicas solo se devuelven si pertenecen a productos publicados y con relaciones públicas activas. No se agregó `include_unpublished` ni `include_inactive` a rutas públicas.
+
+### Frontend
+
+Con `VITE_API_PROVIDER=dotnet`, los servicios públicos de Home/Catálogo/Detalle apuntan a `/api/public/*` y usan fetch público sin token. Con `VITE_API_PROVIDER=django`, se conservan las rutas históricas `/api/products/`, `/api/categories/`, `/api/brands/`, `/api/promotions/` y `/api/home-section-items/`.
+
+El panel vendedor conserva `authFetch` y las rutas admin protegidas. Las pantallas admin de creación/edición de producto usan servicios admin para categorías, marcas y proveedores cuando requieren datos protegidos.
+
+### Seguridad y alcance
+
+- La escritura sigue protegida con Bearer y `RequireCommercialWrite`.
+- La lectura admin sigue protegida con `RequireCommercialRead`.
+- Los DTOs públicos excluyen campos de auditoría (`created_at`, `updated_at`, `created_by`, `updated_by`), proveedores/contactos internos, hashes, tokens, secretos y datos de conexión.
+- No se agregaron endpoints públicos de listado de cotizaciones.
+- No se implementó upload real de imágenes.
+- No se cambió schema y no se crearon migraciones.
+- No se tocó `web.config` productivo.
+- No se tocaron credenciales.
+- No se ejecutó SQL real ni `dotnet ef database update`.
+- No se conectó a Plesk, no se subieron archivos y no se publicó.
+
+Uploads reales y cualquier migración de creación pública de cotizaciones en .NET quedan pendientes para una fase posterior controlada.

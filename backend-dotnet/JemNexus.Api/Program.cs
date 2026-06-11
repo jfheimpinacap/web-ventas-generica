@@ -177,6 +177,7 @@ app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(envir
     .WithOpenApi();
 
 MapAuthEndpoints(app);
+app.MapCommercialPublicReadEndpoints();
 app.MapCommercialReadEndpoints();
 app.MapCommercialWriteEndpoints();
 

@@ -137,3 +137,11 @@ Limitaciones de esta fase:
 - Marcas/promociones envían JSON sin `logo`/`image` binario en .NET.
 - Las acciones sobre imágenes de producto muestran pendiente/501 seguro con .NET.
 - Con `VITE_API_PROVIDER=django` se mantiene el flujo histórico compatible con `FormData`.
+
+## Lectura pública con API .NET
+
+Cuando `VITE_API_PROVIDER=dotnet`, Home, Catálogo y Detalle usan rutas públicas GET-only bajo `/api/public/*` para leer productos, categorías, marcas, promociones e ítems de home sin Bearer token. El cliente sigue usando `VITE_API_BASE_URL`; no hay URL productiva hardcodeada.
+
+Con `VITE_API_PROVIDER=django`, el frontend conserva las rutas históricas del backend Django bajo `/api/products/`, `/api/categories/`, `/api/brands/`, `/api/promotions/` y `/api/home-section-items/`.
+
+El panel vendedor no usa esas rutas públicas para administración: sus servicios continúan usando `authFetch` con Bearer contra `/api/*`. La escritura comercial sigue siendo autenticada, y la carga real de imágenes con .NET continúa pendiente.
