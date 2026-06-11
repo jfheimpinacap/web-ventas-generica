@@ -323,3 +323,56 @@ npm run dev
 Abrir `http://localhost:5174/login`, iniciar sesión con vendedor y revisar `/admin/productos` y los listados de productos, categorías, marcas, proveedores, promociones, cotizaciones y ofertas Hero section si aplica.
 
 Resultado esperado: ya no debería aparecer “endpoint pendiente” en los listados cubiertos por endpoints read-only. Si no hay datos, debe mostrarse lista vacía o mensaje normal. No probar escritura ni carga real de imágenes en esta fase.
+
+## Escritura controlada inicial del panel vendedor
+
+Esta fase habilita escritura inicial del panel vendedor contra la API .NET cuando el frontend se construye/ejecuta con `VITE_API_PROVIDER=dotnet`, manteniendo compatibilidad con Django/local mediante el mismo cliente configurable.
+
+### Endpoints write implementados en .NET
+
+Todos los endpoints quedan bajo `/api`, requieren Bearer válido y aceptan las rutas normalizadas con slash final por el middleware existente:
+
+- Categorías: `POST /api/categories/`, `PUT/PATCH /api/categories/{id}/`, `DELETE /api/categories/{id}/`.
+- Marcas: `POST /api/brands/`, `PUT/PATCH /api/brands/{id}/`, `DELETE /api/brands/{id}/`.
+- Proveedores: `POST /api/suppliers/`, `PUT/PATCH /api/suppliers/{id}/`, `DELETE /api/suppliers/{id}/`.
+- Promociones: `POST /api/promotions/`, `PUT/PATCH /api/promotions/{id}/`, `DELETE /api/promotions/{id}/`.
+- Productos base, sin upload: `POST /api/products/`, `PUT/PATCH /api/products/{idOrSlug}/`, `DELETE /api/products/{idOrSlug}/`.
+- Especificaciones de producto: `POST /api/product-specs/`, `PUT/PATCH /api/product-specs/{id}/`, `DELETE /api/product-specs/{id}/`.
+- Cotizaciones: `PATCH /api/quote-requests/{id}/` solo para `status`, `internal_notes` y `seller_response`.
+- Ítems de home: `POST /api/home-section-items/`, `PUT/PATCH /api/home-section-items/{id}/`, `DELETE /api/home-section-items/{id}/`.
+
+### Seguridad y validación
+
+- Se agregó la política `RequireCommercialWrite` para escritura comercial.
+- La política requiere usuario autenticado por Bearer y autoriza únicamente `seller`, `support_admin`, `is_staff=true` o `is_superuser=true`.
+- `RequireCommercialRead` se mantiene para lecturas comerciales y no se degradó a acceso público.
+- Los inputs de escritura usan DTOs específicos y no entidades EF directas.
+- Se validan nombres requeridos en creación, largos máximos alineados al modelo, enums controlados (`product_type`, `condition`, `stock_status`, `status`, `section`) y existencia de relaciones (`category`, `brand`, `supplier`, `product`).
+- El payload no puede escribir campos de auditoría, password, hashes, roles ni secretos.
+- `created_by` y `updated_by` se asignan desde el usuario autenticado cuando el modelo tiene `CreatedById`/`UpdatedById`; no se aceptan desde el payload.
+
+### Semántica delete
+
+- Soft delete/desactivación: categorías (`is_active=false`), marcas (`is_active=false`), proveedores (`is_active=false`), promociones (`is_active=false`), productos (`is_published=false`) e ítems de home (`is_active=false`).
+- Delete físico controlado: especificaciones de producto, porque el modelo actual no tiene campo `is_active`/`is_published` para specs.
+- Cotizaciones no tienen delete admin migrado en esta fase; solo se permite PATCH de estado/notas/respuesta.
+- Product images se mantienen read-only en .NET por ahora.
+
+### Frontend conectado
+
+- `frontend/src/services/adminApi.ts` usa `authFetch`, `VITE_API_BASE_URL` y `VITE_API_PROVIDER` para crear/editar/eliminar entidades admin sin hardcodear `https://api.jem-nexus.cl` ni duplicar `/api`.
+- Las acciones de crear, editar, eliminar/desactivar y cambiar estado de cotización usan el cliente configurable y normalizadores compartidos.
+- Para `VITE_API_PROVIDER=django`, marcas/promociones siguen usando `FormData` para conservar compatibilidad con uploads existentes.
+- Para `VITE_API_PROVIDER=dotnet`, marcas/promociones envían JSON sin archivo; los campos `logo`/`image` binarios quedan pendientes.
+- La edición de imágenes de producto muestra un mensaje claro de pendiente con .NET y las escrituras de `product-images` devuelven error seguro 501 desde el cliente.
+
+### Pendientes explícitos
+
+- No se implementó upload real de imágenes ni multipart en .NET.
+- `ProductImage` queda read-only en .NET salvo lectura de metadata existente.
+- No se cambió el catálogo público salvo helpers compartidos del cliente admin.
+- No se tocó `web.config` productivo.
+- No se tocaron credenciales, no se rotaron passwords y no se agregó `SeedUsers__UpdateExistingPasswords`.
+- No se ejecutó SQL real, `dotnet ef database update` ni migraciones reales.
+- No se conectó a Plesk, no se subieron archivos y no se publicó.
+- Una publicación futura debe seguir usando `backend-dotnet/package-plesk.ps1`, que genera ZIP seguro sin `web.config` productivo.
