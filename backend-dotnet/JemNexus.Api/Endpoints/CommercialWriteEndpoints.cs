@@ -30,33 +30,33 @@ public static class CommercialWriteEndpoints
             .WithTags("Commercial write");
 
         group.MapPost("/categories", CreateCategoryAsync).WithName("CommercialCategoriesCreate").WithOpenApi();
-        group.MapMethods("/categories/{id:int}", ["PUT", "PATCH"], UpdateCategoryAsync).WithName("CommercialCategoriesUpdate").WithOpenApi();
+        group.MapMethods("/categories/{id:int}", ["PUT", "PATCH"], UpdateCategoryAsync).WithName("CommercialCategoriesUpdate");
         group.MapDelete("/categories/{id:int}", DeleteCategoryAsync).WithName("CommercialCategoriesDelete").WithOpenApi();
 
         group.MapPost("/brands", CreateBrandAsync).WithName("CommercialBrandsCreate").WithOpenApi();
-        group.MapMethods("/brands/{id:int}", ["PUT", "PATCH"], UpdateBrandAsync).WithName("CommercialBrandsUpdate").WithOpenApi();
+        group.MapMethods("/brands/{id:int}", ["PUT", "PATCH"], UpdateBrandAsync).WithName("CommercialBrandsUpdate");
         group.MapDelete("/brands/{id:int}", DeleteBrandAsync).WithName("CommercialBrandsDelete").WithOpenApi();
 
         group.MapPost("/suppliers", CreateSupplierAsync).WithName("CommercialSuppliersCreate").WithOpenApi();
-        group.MapMethods("/suppliers/{id:int}", ["PUT", "PATCH"], UpdateSupplierAsync).WithName("CommercialSuppliersUpdate").WithOpenApi();
+        group.MapMethods("/suppliers/{id:int}", ["PUT", "PATCH"], UpdateSupplierAsync).WithName("CommercialSuppliersUpdate");
         group.MapDelete("/suppliers/{id:int}", DeleteSupplierAsync).WithName("CommercialSuppliersDelete").WithOpenApi();
 
         group.MapPost("/promotions", CreatePromotionAsync).WithName("CommercialPromotionsCreate").WithOpenApi();
-        group.MapMethods("/promotions/{id:int}", ["PUT", "PATCH"], UpdatePromotionAsync).WithName("CommercialPromotionsUpdate").WithOpenApi();
+        group.MapMethods("/promotions/{id:int}", ["PUT", "PATCH"], UpdatePromotionAsync).WithName("CommercialPromotionsUpdate");
         group.MapDelete("/promotions/{id:int}", DeletePromotionAsync).WithName("CommercialPromotionsDelete").WithOpenApi();
 
         group.MapPost("/products", CreateProductAsync).WithName("CommercialProductsCreate").WithOpenApi();
-        group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).WithName("CommercialProductsUpdate").WithOpenApi();
+        group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).WithName("CommercialProductsUpdate");
         group.MapDelete("/products/{idOrSlug}", DeleteProductAsync).WithName("CommercialProductsDelete").WithOpenApi();
 
         group.MapPost("/product-specs", CreateProductSpecAsync).WithName("CommercialProductSpecsCreate").WithOpenApi();
-        group.MapMethods("/product-specs/{id:int}", ["PUT", "PATCH"], UpdateProductSpecAsync).WithName("CommercialProductSpecsUpdate").WithOpenApi();
+        group.MapMethods("/product-specs/{id:int}", ["PUT", "PATCH"], UpdateProductSpecAsync).WithName("CommercialProductSpecsUpdate");
         group.MapDelete("/product-specs/{id:int}", DeleteProductSpecAsync).WithName("CommercialProductSpecsDelete").WithOpenApi();
 
         group.MapPatch("/quote-requests/{id:int}", UpdateQuoteRequestAsync).WithName("CommercialQuoteRequestsUpdate").WithOpenApi();
 
         group.MapPost("/home-section-items", CreateHomeSectionItemAsync).WithName("CommercialHomeSectionItemsCreate").WithOpenApi();
-        group.MapMethods("/home-section-items/{id:int}", ["PUT", "PATCH"], UpdateHomeSectionItemAsync).WithName("CommercialHomeSectionItemsUpdate").WithOpenApi();
+        group.MapMethods("/home-section-items/{id:int}", ["PUT", "PATCH"], UpdateHomeSectionItemAsync).WithName("CommercialHomeSectionItemsUpdate");
         group.MapDelete("/home-section-items/{id:int}", DeleteHomeSectionItemAsync).WithName("CommercialHomeSectionItemsDelete").WithOpenApi();
 
         return app;
