@@ -438,3 +438,55 @@ Uploads reales y cualquier migración de creación pública de cotizaciones en .
 - El frontend publicado como sitio estático en IIS/Plesk requiere un fallback SPA para que rutas directas como `/admin`, `/login`, `/catalogo`, `/producto/<slug>`, `/cotizar`, `/contacto`, `/maquinaria`, `/repuestos` y `/servicios` sirvan `index.html` y React Router pueda resolverlas del lado cliente.
 - El archivo `frontend/public/web.config` pertenece solo al build estático del frontend: Vite lo copia a `dist/web.config` y su regla de URL Rewrite reescribe únicamente requests que no correspondan a archivos ni directorios físicos hacia `/index.html`.
 - Este fallback no corresponde al `web.config` productivo del backend/API, no contiene secretos, no define connection strings y no debe reemplazar la configuración de publicación de `backend-dotnet`.
+
+## Prompt 033 - Flujo operativo de cotizaciones y aviso a vendedores
+
+El flujo operativo de cotizaciones queda definido así:
+
+1. El cliente solicita una cotización desde el sitio público, sin login, sin registro y sin cuenta cliente.
+2. El frontend envía la solicitud a la API .NET pública mediante `POST /api/public/quote-requests`.
+3. La API valida los datos básicos, guarda la solicitud en `QuoteRequests` y responde éxito si el registro quedó persistido.
+4. La solicitud aparece en el panel vendedor en `/admin/cotizaciones` para revisión y gestión interna.
+5. Luego de guardar, la API intenta enviar un aviso por correo a los vendedores configurados.
+6. El correo es solo una notificación adicional: si la configuración SMTP falta o el envío falla, la cotización no se pierde ni se revierte.
+7. El vendedor puede mantener el orden operativo marcando estados: `new`, `contacted`, `quoted`, `closed` o `discarded`.
+
+No se crea login de clientes, registro de clientes, panel cliente, rol `customer`, carrito, checkout, pagos, PDF de cotización ni respuesta automática con precios. Tampoco se envía correo automático al cliente en esta fase.
+
+### Configuración SMTP esperada
+
+Las credenciales SMTP deben configurarse en Plesk/IIS para el backend API usando variables de entorno en `web.config` o configuración segura equivalente. Codex no debe editar el `web.config` productivo ni versionar contraseñas reales.
+
+Ejemplo documentable sin secretos reales:
+
+```env
+Email__SmtpHost=smtp.jem-nexus.cl
+Email__SmtpPort=587
+Email__Username=notificaciones@jem-nexus.cl
+Email__Password=CONFIGURAR_EN_PLESK_NO_VERSIONAR
+Email__FromAddress=notificaciones@jem-nexus.cl
+Email__FromName=JEM Nexus
+Email__UseSsl=true
+QuoteNotifications__Recipients=jmateluna@jem-nexus.cl,fheim@jem-nexus.cl
+Frontend__BaseUrl=https://jem-nexus.cl
+```
+
+`QuoteNotifications__Recipients` soporta múltiples destinatarios separados por coma o punto y coma, por ejemplo:
+
+```env
+QuoteNotifications__Recipients=jmateluna@jem-nexus.cl,fheim@jem-nexus.cl
+QuoteNotifications__Recipients=jmateluna@jem-nexus.cl;fheim@jem-nexus.cl
+```
+
+Correos operativos esperados:
+
+- Cuenta emisora SMTP: `notificaciones@jem-nexus.cl`.
+- Destinatarios de aviso: `jmateluna@jem-nexus.cl` y `fheim@jem-nexus.cl`.
+
+### Contenido del aviso al vendedor
+
+El asunto del aviso es `Nueva solicitud de cotización - JEM Nexus`.
+
+El cuerpo incluye fecha/hora UTC, nombre del cliente, empresa si existe, correo, teléfono, producto asociado si existe, identificador/slug del producto cuando está disponible, mensaje del cliente, origen `sitio web JEM Nexus` y enlace al panel vendedor (`https://jem-nexus.cl/admin/cotizaciones` cuando `Frontend__BaseUrl` está configurado).
+
+Si el correo del cliente existe y es válido, se configura como `Reply-To` para facilitar que el vendedor pueda responder desde su cliente de correo. Esto no implica un correo saliente al cliente desde el sistema.

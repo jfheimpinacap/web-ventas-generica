@@ -72,6 +72,18 @@ public sealed record ProductSpecWriteDto(
     [property: StringLength(40)] string? Unit,
     int? Order);
 
+
+public sealed record QuoteRequestPublicCreateDto(
+    int? Product,
+    [property: JsonPropertyName("product_id")] int? ProductId,
+    [property: JsonPropertyName("customer_name"), StringLength(160)] string? CustomerName,
+    [property: JsonPropertyName("customer_phone"), StringLength(40)] string? CustomerPhone,
+    [property: JsonPropertyName("customer_email"), StringLength(254)] string? CustomerEmail,
+    [property: JsonPropertyName("company_name"), StringLength(160)] string? CompanyName,
+    [property: StringLength(120)] string? City,
+    [property: JsonPropertyName("preferred_contact_method"), StringLength(20)] string? PreferredContactMethod,
+    string? Message);
+
 public sealed record QuoteRequestWriteDto(
     [property: StringLength(20)] string? Status,
     [property: JsonPropertyName("internal_notes")] string? InternalNotes,

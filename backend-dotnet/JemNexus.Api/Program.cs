@@ -7,6 +7,7 @@ using JemNexus.Api.Endpoints;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
+using JemNexus.Api.Services.Notifications;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Json;
@@ -23,6 +24,9 @@ builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
 builder.Services.Configure<SeedUserOptions>(builder.Configuration.GetSection(SeedUserOptions.SectionName));
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.Configure<QuoteNotificationOptions>(builder.Configuration.GetSection(QuoteNotificationOptions.SectionName));
+builder.Services.Configure<FrontendOptions>(builder.Configuration.GetSection(FrontendOptions.SectionName));
 
 var jwtOptions = ResolveJwtOptions(builder.Configuration, builder.Environment);
 builder.Services.Configure<JwtOptions>(options =>
@@ -113,6 +117,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IQuoteNotificationService, SmtpQuoteNotificationService>();
 
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var defaultConnection = string.IsNullOrWhiteSpace(configuredConnection)

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { getSafeApiErrorMessage } from '../../services/api'
-import { getAdminQuotes } from '../../services/adminApi'
+import { getAdminQuotes, updateQuote } from '../../services/adminApi'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
   QUOTE_STATUS_LABELS,
@@ -28,6 +28,7 @@ export function AdminQuotesPage() {
   const [ordering, setOrdering] = useState<
     '-created_at' | 'created_at' | '-updated_at' | 'status'
   >('-created_at')
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -68,6 +69,22 @@ export function AdminQuotesPage() {
       >,
     )
   }, [items])
+
+
+  const onStatusChange = async (item: QuoteRequestAdmin, nextStatus: QuoteStatus) => {
+    if (item.status === nextStatus) return
+
+    try {
+      setUpdatingId(item.id)
+      setError(null)
+      const updated = await updateQuote(item.id, { status: nextStatus })
+      setItems((current) => current.map((candidate) => (candidate.id === item.id ? updated : candidate)))
+    } catch (error) {
+      setError(getSafeApiErrorMessage(error, 'No se pudo actualizar el estado de la cotización.'))
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   return (
     <AdminLayout>
@@ -120,9 +137,9 @@ export function AdminQuotesPage() {
         </label>
       </div>
 
-      <div className="admin-cards">
+      <div className="quote-summary-cards" aria-label="Resumen de estados de cotización">
         {STATUS_OPTIONS.map((status) => (
-          <article key={status.value} className="admin-card">
+          <article key={status.value} className="quote-summary-card">
             <p>{status.label}</p>
             <strong>{summary[status.value]}</strong>
           </article>
@@ -138,47 +155,65 @@ export function AdminQuotesPage() {
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Producto</th>
                 <th>Cliente</th>
-                <th>Teléfono</th>
-                <th>Email</th>
-                <th>Empresa</th>
-                <th>Ciudad</th>
-                <th>Método preferido</th>
+                <th>Producto / asunto</th>
+                <th>Email / teléfono</th>
                 <th>Estado</th>
+                <th>Cambiar estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <p className="ui-note">Aún no hay solicitudes de cotización.</p>
+                  </td>
+                </tr>
+              ) : null}
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{new Date(item.created_at).toLocaleDateString()}</td>
-                  <td>{item.product_name ?? item.product ?? '-'}</td>
-                  <td>{item.customer_name}</td>
-                  <td>{item.customer_phone}</td>
-                  <td>{item.customer_email || '-'}</td>
-                  <td>{item.company_name || '-'}</td>
-                  <td>{item.city || '-'}</td>
                   <td>
-                    {item.preferred_contact_method
-                      ? PREFERRED_CONTACT_METHOD_LABELS[
-                          item.preferred_contact_method
-                        ]
-                      : '-'}
+                    <strong>{item.customer_name}</strong>
+                    <span className="admin-table__muted">
+                      {item.company_name || item.city || 'Sin empresa registrada'}
+                    </span>
                   </td>
                   <td>
-                    <span
-                      className={`badge quote-status quote-status--${item.status}`}
-                    >
+                    <strong>{item.product_name || (item.product ? `Producto #${item.product}` : 'Solicitud general')}</strong>
+                    <span className="admin-table__muted">{item.message}</span>
+                  </td>
+                  <td>
+                    <span>{item.customer_email || '-'}</span>
+                    <span className="admin-table__muted">{item.customer_phone || '-'}</span>
+                    <span className="admin-table__muted">
+                      {item.preferred_contact_method ? PREFERRED_CONTACT_METHOD_LABELS[item.preferred_contact_method] : 'Sin preferencia'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge quote-status quote-status--${item.status}`}>
                       {QUOTE_STATUS_LABELS[item.status]}
                     </span>
                   </td>
                   <td>
-                    <Link
-                      className="table-action"
-                      to={`/admin/cotizaciones/${item.id}`}
+                    <select
+                      className="quote-status-select"
+                      value={item.status}
+                      onChange={(event) => void onStatusChange(item, event.target.value as QuoteStatus)}
+                      disabled={updatingId === item.id}
+                      aria-label={`Cambiar estado de cotización ${item.id}`}
                     >
-                      Ver / Editar
+                      {Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <Link className="table-action" to={`/admin/cotizaciones/${item.id}`}>
+                      Ver detalle
                     </Link>
                   </td>
                 </tr>

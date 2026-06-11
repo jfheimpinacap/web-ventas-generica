@@ -1,6 +1,8 @@
 using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
+using JemNexus.Api.Services.Notifications;
+using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,11 +46,64 @@ public static class CommercialPublicReadEndpoints
         group.MapGet("/categories", GetCategoriesAsync).WithName("CommercialPublicCategoriesList").WithOpenApi();
         group.MapGet("/brands", GetBrandsAsync).WithName("CommercialPublicBrandsList").WithOpenApi();
         group.MapGet("/promotions", GetPromotionsAsync).WithName("CommercialPublicPromotionsList").WithOpenApi();
+        group.MapPost("/quote-requests", CreateQuoteRequestAsync).WithName("CommercialPublicQuoteRequestsCreate").WithOpenApi();
         group.MapGet("/home-section-items", GetHomeSectionItemsAsync).WithName("CommercialPublicHomeSectionItemsList").WithOpenApi();
         group.MapGet("/product-images", GetProductImagesAsync).WithName("CommercialPublicProductImagesList").WithOpenApi();
         group.MapGet("/product-specs", GetProductSpecsAsync).WithName("CommercialPublicProductSpecsList").WithOpenApi();
 
         return app;
+    }
+
+    private static async Task<IResult> CreateQuoteRequestAsync(
+        QuoteRequestPublicCreateDto request,
+        JemNexusDbContext dbContext,
+        IQuoteNotificationService quoteNotificationService,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var productId = request.ProductId ?? request.Product;
+        Product? product = null;
+        if (productId.HasValue)
+        {
+            product = await dbContext.Products
+                .FirstOrDefaultAsync(candidate => candidate.Id == productId.Value && candidate.IsPublished, cancellationToken);
+            if (product is null) return Results.BadRequest(new { detail = "product does not exist." });
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var quote = new QuoteRequest
+        {
+            ProductId = productId,
+            CustomerName = Clean(request.CustomerName),
+            CustomerPhone = Clean(request.CustomerPhone),
+            CustomerEmail = Clean(request.CustomerEmail),
+            CompanyName = Clean(request.CompanyName),
+            City = Clean(request.City),
+            PreferredContactMethod = Clean(request.PreferredContactMethod),
+            Message = Clean(request.Message),
+            Status = QuoteStatuses.New,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        var validationErrors = CommercialValidation.ValidateQuoteRequest(quote);
+        if (validationErrors.Count > 0) return Results.BadRequest(new { detail = validationErrors });
+
+        dbContext.QuoteRequests.Add(quote);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        quote.Product = product;
+        try
+        {
+            await quoteNotificationService.SendNewQuoteRequestAsync(quote, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            var logger = loggerFactory.CreateLogger(nameof(CommercialPublicReadEndpoints));
+            logger.LogError(exception, "Quote request {QuoteRequestId} was saved but seller email notification failed.", quote.Id);
+        }
+
+        return Results.Created($"/api/quote-requests/{quote.Id}", QuoteRequestReadDto.FromQuoteRequest(quote));
     }
 
     private static async Task<IResult> GetProductsAsync(
@@ -317,4 +372,6 @@ public static class CommercialPublicReadEndpoints
         .Include(promotion => promotion.Product).ThenInclude(product => product!.Category)
         .Include(promotion => promotion.Product).ThenInclude(product => product!.Brand)
         .Include(promotion => promotion.Product).ThenInclude(product => product!.Images);
+
+    private static string Clean(string? value) => value?.Trim() ?? string.Empty;
 }
