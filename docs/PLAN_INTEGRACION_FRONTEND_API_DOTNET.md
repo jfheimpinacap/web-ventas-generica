@@ -403,7 +403,7 @@ Se agregaron endpoints públicos GET-only bajo `/api/public/*` para que Home, Ca
   - `/api/product-specs/`
   - `/api/product-images/`
 
-Los endpoints públicos filtran productos publicados (`is_published=true`), categorías activas, marcas activas, promociones activas/vigentes e ítems activos de Home. Specs e imágenes públicas solo se devuelven si pertenecen a productos publicados y con relaciones públicas activas. No se agregó `include_unpublished` ni `include_inactive` a rutas públicas.
+Los endpoints públicos filtran productos publicados (`is_published=true`), categorías activas, marcas activas, promociones activas/vigentes e ítems activos de Home. Specs e imágenes públicas solo se devuelven si pertenecen a productos publicados y con relaciones públicas activas. No se agregó `include_unpublished` ni `include_inactive` a rutas públicas. En `/api/public/products/`, los filtros `category` y `brand` aceptan ID numérico o slug, los filtros públicos de tipo/condición/stock se limitan a valores conocidos y el ordering público queda restringido a `name`, `-name`, `price` y `-price`; `/api/products/` continúa protegido para el panel vendedor/admin.
 
 ### Frontend
 

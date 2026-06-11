@@ -60,12 +60,16 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
 
         var published = await client.GetAsync("/api/public/products/excavadora/");
         var unpublished = await client.GetAsync("/api/public/products/borrador/");
+        var inactiveCategory = await client.GetAsync("/api/public/products/producto-inactivo/");
+        var inactiveBrand = await client.GetAsync("/api/public/products/marca-oculta/");
         var payload = await ReadJsonAsync<JsonElement>(published);
         var body = payload.ToString();
 
         Assert.Equal(HttpStatusCode.OK, published.StatusCode);
         Assert.Equal("excavadora", payload.GetProperty("slug").GetString());
         Assert.Equal(HttpStatusCode.NotFound, unpublished.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, inactiveCategory.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, inactiveBrand.StatusCode);
         Assert.DoesNotContain("created_at", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("supplier", body, StringComparison.OrdinalIgnoreCase);
     }
@@ -130,7 +134,17 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
 
         using var scope = _factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
-        if (await dbContext.Products.AnyAsync(product => product.Slug == "borrador")) return;
+        var spareProduct = await dbContext.Products.SingleOrDefaultAsync(product => product.Slug == "filtro");
+        if (spareProduct is not null)
+        {
+            spareProduct.IsPublished = false;
+        }
+
+        if (await dbContext.Products.AnyAsync(product => product.Slug == "borrador"))
+        {
+            await dbContext.SaveChangesAsync();
+            return;
+        }
 
         var inactiveCategory = new Category { Id = 3, Name = "Categoría Inactiva", Slug = "categoria-inactiva", IsActive = false, Description = "No pública", Order = 3 };
         var inactiveBrand = new Brand { Id = 2, Name = "Marca Inactiva", Slug = "marca-inactiva", IsActive = false };

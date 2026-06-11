@@ -540,7 +540,7 @@ Los endpoints públicos son exclusivamente GET y están bajo `/api/public/*`:
 - `GET /api/public/product-specs/?product=...`
 - `GET /api/public/product-images/?product=...`
 
-Estas rutas devuelven solo contenido seguro para Home, Catálogo y Detalle: productos publicados, categorías activas, marcas activas, promociones activas/vigentes, ítems activos de home y specs/imágenes de productos publicados. Los DTOs públicos no incluyen campos de auditoría, usuarios de auditoría, proveedores/contactos internos, hashes, tokens, connection strings ni secretos.
+Estas rutas devuelven solo contenido seguro para Home, Catálogo y Detalle: productos publicados, categorías activas, marcas activas, promociones activas/vigentes, ítems activos de home y specs/imágenes de productos publicados. En `GET /api/public/products/`, los filtros `category` y `brand` aceptan ID numérico o slug, los filtros `product_type`, `condition` y `stock_status` se aplican solo para valores públicos conocidos, y `ordering` queda limitado a `name`, `-name`, `price` y `-price` con orden estable por defecto. Los DTOs públicos no incluyen campos de auditoría, usuarios de auditoría, proveedores/contactos internos, hashes, tokens, connection strings ni secretos.
 
 ### Endpoints admin protegidos
 
