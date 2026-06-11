@@ -8,6 +8,30 @@ namespace JemNexus.Api.Endpoints;
 
 public static class CommercialPublicReadEndpoints
 {
+    private static readonly ISet<string> PublicProductTypes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ProductTypes.Machinery,
+        ProductTypes.SparePart,
+        ProductTypes.Service,
+        ProductTypes.Other
+    };
+
+    private static readonly ISet<string> PublicProductConditions = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ProductConditions.New,
+        ProductConditions.Used,
+        ProductConditions.Refurbished,
+        ProductConditions.NotApplicable
+    };
+
+    private static readonly ISet<string> PublicStockStatuses = new HashSet<string>(StringComparer.Ordinal)
+    {
+        StockStatuses.Available,
+        StockStatuses.OnRequest,
+        StockStatuses.Sold,
+        StockStatuses.Reserved
+    };
+
     public static IEndpointRouteBuilder MapCommercialPublicReadEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/public")
@@ -206,6 +230,7 @@ public static class CommercialPublicReadEndpoints
             query = query.Where(product =>
                 product.Name.ToLower().Contains(term)
                 || product.Slug.ToLower().Contains(term)
+                || product.Sku.ToLower().Contains(term)
                 || product.Model.ToLower().Contains(term)
                 || product.ShortDescription.ToLower().Contains(term)
                 || product.Description.ToLower().Contains(term));
@@ -242,19 +267,25 @@ public static class CommercialPublicReadEndpoints
         if (!string.IsNullOrWhiteSpace(productType))
         {
             var value = productType.Trim();
-            query = query.Where(product => product.ProductType == value);
+            query = PublicProductTypes.Contains(value)
+                ? query.Where(product => product.ProductType == value)
+                : query.Where(product => false);
         }
 
         if (!string.IsNullOrWhiteSpace(condition))
         {
             var value = condition.Trim();
-            query = query.Where(product => product.Condition == value);
+            query = PublicProductConditions.Contains(value)
+                ? query.Where(product => product.Condition == value)
+                : query.Where(product => false);
         }
 
         if (!string.IsNullOrWhiteSpace(stockStatus))
         {
             var value = stockStatus.Trim();
-            query = query.Where(product => product.StockStatus == value);
+            query = PublicStockStatuses.Contains(value)
+                ? query.Where(product => product.StockStatus == value)
+                : query.Where(product => false);
         }
 
         return query;
@@ -266,7 +297,7 @@ public static class CommercialPublicReadEndpoints
         "-name" => query.OrderByDescending(product => product.Name),
         "price" => query.OrderBy(product => product.Price),
         "-price" => query.OrderByDescending(product => product.Price),
-        _ => query.OrderByDescending(product => product.IsFeatured).ThenBy(product => product.Name)
+        _ => query.OrderByDescending(product => product.IsFeatured).ThenBy(product => product.Name).ThenBy(product => product.Id)
     };
 
     private static IQueryable<Product> ApplyPublicProductFilters(IQueryable<Product> query) => query
