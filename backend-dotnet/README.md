@@ -460,3 +460,65 @@ Esta publicación es solo de archivos por ZIP manual en Plesk usando el ZIP segu
 ## Rotación y resguardo de secretos
 
 Ver `docs/ROTACION_CREDENCIALES_PRODUCCION.md` para la rotación manual segura de JWT, usuarios seed y contraseña SQL. `backend-dotnet/scripts/package-plesk.ps1` excluye `web.config`; el `web.config` productivo se administra manualmente en Plesk, no se commitea y no debe compartirse en capturas completas.
+
+## Escritura comercial controlada del panel vendedor
+
+La API .NET expone una primera capa de escritura comercial para el panel vendedor, protegida por Bearer token y por la política `RequireCommercialWrite`.
+
+### Endpoints write disponibles
+
+- `POST /api/categories/`, `PUT/PATCH /api/categories/{id}/`, `DELETE /api/categories/{id}/`.
+- `POST /api/brands/`, `PUT/PATCH /api/brands/{id}/`, `DELETE /api/brands/{id}/`.
+- `POST /api/suppliers/`, `PUT/PATCH /api/suppliers/{id}/`, `DELETE /api/suppliers/{id}/`.
+- `POST /api/promotions/`, `PUT/PATCH /api/promotions/{id}/`, `DELETE /api/promotions/{id}/`.
+- `POST /api/products/`, `PUT/PATCH /api/products/{idOrSlug}/`, `DELETE /api/products/{idOrSlug}/` para datos base sin upload.
+- `POST /api/product-specs/`, `PUT/PATCH /api/product-specs/{id}/`, `DELETE /api/product-specs/{id}/`.
+- `PATCH /api/quote-requests/{id}/` para `status`, `internal_notes` y `seller_response`.
+- `POST /api/home-section-items/`, `PUT/PATCH /api/home-section-items/{id}/`, `DELETE /api/home-section-items/{id}/`.
+
+`ProductImage` permanece read-only en esta fase; no hay endpoints multipart ni carga binaria real de imágenes.
+
+### Autorización
+
+`RequireCommercialWrite` requiere Bearer válido y autoriza únicamente:
+
+- rol `seller`;
+- rol `support_admin`;
+- claim `is_staff=true`;
+- claim `is_superuser=true`.
+
+Las lecturas comerciales siguen protegidas por `RequireCommercialRead`. No abrir endpoints write sin token.
+
+### Prueba manual con Bearer
+
+1. Obtener token con login:
+
+   ```bash
+   curl -s -X POST "$API_BASE/api/auth/login/" \
+     -H "Content-Type: application/json" \
+     -d '{"username":"<usuario>","password":"<password>"}'
+   ```
+
+2. Usar el `access` devuelto para una escritura controlada:
+
+   ```bash
+   curl -i -X POST "$API_BASE/api/categories/" \
+     -H "Authorization: Bearer <access>" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Categoría demo","is_active":true,"order":10}'
+   ```
+
+No imprimir ni commitear tokens, passwords, connection strings ni headers `Authorization` reales.
+
+### Producción y publicación segura
+
+No ejecutar `dotnet ef database update` contra producción sin autorización explícita, backup validado y ventana de mantenimiento. Esta fase no requiere migraciones nuevas ni cambios de schema.
+
+Para publicación futura en Plesk, usar el flujo existente con ZIP seguro:
+
+```powershell
+./publish-plesk.ps1
+./package-plesk.ps1
+```
+
+No usar `Compress-Archive` manual con wildcard y no incluir `web.config` productivo real en el ZIP.

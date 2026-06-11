@@ -112,3 +112,28 @@ Abrir `/login`, iniciar sesión con un usuario vendedor válido del entorno y na
 Los listados admin usan el cliente API configurable y Bearer token. Si la API .NET aún no tiene un endpoint comercial de lectura, el panel debe mostrar un mensaje claro de endpoint pendiente en lugar de exponer tokens, headers o stack traces.
 
 No commitear `.env.local`, no guardar passwords/tokens en capturas y no usar esta prueba para crear, editar, borrar, subir imágenes ni aplicar cambios reales de datos.
+
+## Probar escritura controlada del panel vendedor contra API .NET
+
+Para probar creación/edición/desactivación desde el panel vendedor contra .NET, configurar manualmente `frontend/.env.local` (no commitear):
+
+```env
+VITE_API_BASE_URL=https://api.jem-nexus.cl
+VITE_API_PROVIDER=dotnet
+```
+
+Luego ejecutar:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Ingresar por `/login` con un usuario vendedor válido y probar las acciones admin de categorías, marcas, proveedores, promociones, productos base, especificaciones, cotizaciones e ítems de home. Las llamadas usan `authFetch` con Bearer y el cliente configurable; no hay URL productiva hardcodeada en componentes.
+
+Limitaciones de esta fase:
+
+- No subir imágenes reales con `VITE_API_PROVIDER=dotnet`.
+- Marcas/promociones envían JSON sin `logo`/`image` binario en .NET.
+- Las acciones sobre imágenes de producto muestran pendiente/501 seguro con .NET.
+- Con `VITE_API_PROVIDER=django` se mantiene el flujo histórico compatible con `FormData`.

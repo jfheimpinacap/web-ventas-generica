@@ -23,6 +23,7 @@ import type {
   SupplierFormValues,
   SupplierSummary,
 } from '../types/catalog'
+import { API_PROVIDER, ApiError } from './api'
 import { authFetch } from './authApi'
 
 type ApiRecord = Record<string, unknown>
@@ -433,6 +434,29 @@ export function normalizeHomeSectionItemListResponse(
   return normalizeListResponse(response, normalizeHomeSectionItem)
 }
 
+function jsonBody(payload: unknown) {
+  return JSON.stringify(payload)
+}
+
+function toDotnetBrandPayload(payload: BrandFormValues | Partial<BrandFormValues>) {
+  const { logo: _logo, ...rest } = payload
+  return rest
+}
+
+function toDotnetPromotionPayload(
+  payload: PromotionFormValues | Partial<PromotionFormValues>,
+) {
+  const { image: _image, ...rest } = payload
+  return rest
+}
+
+function dotnetUploadPending(): never {
+  throw new ApiError(
+    'La carga de imágenes todavía no está implementada en la API .NET.',
+    501,
+  )
+}
+
 export async function getAdminProducts(
   params?: Record<string, string | number | boolean | undefined>,
 ) {
@@ -448,20 +472,22 @@ export async function getAdminProduct(slug: string) {
 }
 
 export async function createProduct(payload: ProductFormValues) {
-  return authFetch<ProductDetail>('/products/', {
+  const response = await authFetch<unknown>('/products/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeProductDetail(response)
 }
 
 export async function updateProduct(
   slug: string,
   payload: Partial<ProductFormValues>,
 ) {
-  return authFetch<ProductDetail>(`/products/${slug}/`, {
+  const response = await authFetch<unknown>(`/products/${slug}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeProductDetail(response)
 }
 
 export async function deleteProduct(slug: string) {
@@ -484,6 +510,8 @@ export async function getProductImages(productId: number) {
 }
 
 export async function createProductImage(payload: ProductImageWritePayload) {
+  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
+
   const formData = new FormData()
   formData.append('product', String(payload.product))
   if (payload.image) {
@@ -509,6 +537,8 @@ export async function updateProductImage(
   id: number,
   payload: Partial<ProductImageWritePayload>,
 ) {
+  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
+
   return authFetch<ProductImage>(`/product-images/${id}/`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
@@ -516,6 +546,8 @@ export async function updateProductImage(
 }
 
 export async function deleteProductImage(id: number) {
+  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
+
   return authFetch<void>(`/product-images/${id}/`, {
     method: 'DELETE',
   })
@@ -532,20 +564,22 @@ export async function getProductSpecs(productId: number) {
 }
 
 export async function createProductSpec(payload: ProductSpecWritePayload) {
-  return authFetch<ProductSpec>('/product-specs/', {
+  const response = await authFetch<unknown>('/product-specs/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeProductSpec(response)
 }
 
 export async function updateProductSpec(
   id: number,
   payload: Partial<ProductSpecWritePayload>,
 ) {
-  return authFetch<ProductSpec>(`/product-specs/${id}/`, {
+  const response = await authFetch<unknown>(`/product-specs/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeProductSpec(response)
 }
 
 export async function deleteProductSpec(id: number) {
@@ -588,10 +622,11 @@ export async function updateQuote(
   id: number,
   payload: Partial<QuoteRequestAdmin>,
 ) {
-  return authFetch<QuoteRequestAdmin>(`/quote-requests/${id}/`, {
+  const response = await authFetch<unknown>(`/quote-requests/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeQuoteRequest(response)
 }
 
 export async function deleteQuote(id: number) {
@@ -617,20 +652,22 @@ export async function getAdminCategory(id: number) {
 }
 
 export async function createCategory(payload: CategoryFormValues) {
-  return authFetch<Category>('/categories/', {
+  const response = await authFetch<unknown>('/categories/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeCategory(response)
 }
 
 export async function updateCategory(
   id: number,
   payload: Partial<CategoryFormValues>,
 ) {
-  return authFetch<Category>(`/categories/${id}/`, {
+  const response = await authFetch<unknown>(`/categories/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeCategory(response)
 }
 
 export async function deleteCategory(id: number) {
@@ -652,6 +689,14 @@ export async function getAdminBrand(id: number) {
 }
 
 export async function createBrand(payload: BrandFormValues) {
+  if (API_PROVIDER === 'dotnet') {
+    const response = await authFetch<unknown>('/brands/', {
+      method: 'POST',
+      body: jsonBody(toDotnetBrandPayload(payload)),
+    })
+    return normalizeBrand(response)
+  }
+
   const formData = new FormData()
   formData.append('name', payload.name)
   if (payload.slug) formData.append('slug', payload.slug)
@@ -659,13 +704,22 @@ export async function createBrand(payload: BrandFormValues) {
   formData.append('is_active', String(payload.is_active))
   if (payload.logo) formData.append('logo', payload.logo)
 
-  return authFetch<Brand>('/brands/', { method: 'POST', body: formData })
+  const response = await authFetch<unknown>('/brands/', { method: 'POST', body: formData })
+  return normalizeBrand(response)
 }
 
 export async function updateBrand(
   id: number,
   payload: Partial<BrandFormValues>,
 ) {
+  if (API_PROVIDER === 'dotnet') {
+    const response = await authFetch<unknown>(`/brands/${id}/`, {
+      method: 'PATCH',
+      body: jsonBody(toDotnetBrandPayload(payload)),
+    })
+    return normalizeBrand(response)
+  }
+
   const formData = new FormData()
   if (payload.name !== undefined) formData.append('name', payload.name)
   if (payload.slug !== undefined) formData.append('slug', payload.slug)
@@ -675,10 +729,11 @@ export async function updateBrand(
     formData.append('is_active', String(payload.is_active))
   if (payload.logo instanceof File) formData.append('logo', payload.logo)
 
-  return authFetch<Brand>(`/brands/${id}/`, {
+  const response = await authFetch<unknown>(`/brands/${id}/`, {
     method: 'PATCH',
     body: formData,
   })
+  return normalizeBrand(response)
 }
 
 export async function deleteBrand(id: number) {
@@ -700,20 +755,22 @@ export async function getAdminSupplier(id: number) {
 }
 
 export async function createSupplier(payload: SupplierFormValues) {
-  return authFetch<SupplierSummary>('/suppliers/', {
+  const response = await authFetch<unknown>('/suppliers/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeSupplier(response)
 }
 
 export async function updateSupplier(
   id: number,
   payload: Partial<SupplierFormValues>,
 ) {
-  return authFetch<SupplierSummary>(`/suppliers/${id}/`, {
+  const response = await authFetch<unknown>(`/suppliers/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeSupplier(response)
 }
 
 export async function deleteSupplier(id: number) {
@@ -763,20 +820,26 @@ function toPromotionBody(
 }
 
 export async function createPromotion(payload: PromotionFormValues) {
-  return authFetch<Promotion>('/promotions/', {
+  const response = await authFetch<unknown>('/promotions/', {
     method: 'POST',
-    body: toPromotionBody(payload),
+    body: API_PROVIDER === 'dotnet'
+      ? jsonBody(toDotnetPromotionPayload(payload))
+      : toPromotionBody(payload),
   })
+  return normalizePromotion(response)
 }
 
 export async function updatePromotion(
   id: number,
   payload: Partial<PromotionFormValues>,
 ) {
-  return authFetch<Promotion>(`/promotions/${id}/`, {
+  const response = await authFetch<unknown>(`/promotions/${id}/`, {
     method: 'PATCH',
-    body: toPromotionBody(payload),
+    body: API_PROVIDER === 'dotnet'
+      ? jsonBody(toDotnetPromotionPayload(payload))
+      : toPromotionBody(payload),
   })
+  return normalizePromotion(response)
 }
 
 export async function deletePromotion(id: number) {
@@ -809,20 +872,22 @@ export async function getAdminHomeSectionItems(section?: HomeSection) {
 export async function createHomeSectionItem(
   payload: HomeSectionItemFormValues,
 ) {
-  return authFetch<HomeSectionItem>('/home-section-items/', {
+  const response = await authFetch<unknown>('/home-section-items/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeHomeSectionItem(response)
 }
 
 export async function updateHomeSectionItem(
   id: number,
   payload: Partial<HomeSectionItemFormValues>,
 ) {
-  return authFetch<HomeSectionItem>(`/home-section-items/${id}/`, {
+  const response = await authFetch<unknown>(`/home-section-items/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: jsonBody(payload),
   })
+  return normalizeHomeSectionItem(response)
 }
 
 export async function deleteHomeSectionItem(id: number) {

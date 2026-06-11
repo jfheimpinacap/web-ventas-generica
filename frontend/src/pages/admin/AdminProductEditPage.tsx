@@ -16,7 +16,7 @@ import {
   updateProductImage,
   updateProductSpec,
 } from '../../services/adminApi'
-import { resolveMediaUrl } from '../../services/api'
+import { API_PROVIDER, resolveMediaUrl } from '../../services/api'
 import { getBrands, getCategories, getSuppliers } from '../../services/catalogApi'
 import type {
   Brand,
@@ -334,6 +334,9 @@ export function AdminProductEditPage() {
                 <h2>Imagen principal</h2>
                 {imageError ? <p className="ui-note ui-note--error">{imageError}</p> : null}
                 {imageStatus ? <p className="ui-note ui-note--success">{imageStatus}</p> : null}
+                {API_PROVIDER === 'dotnet' ? (
+                  <p className="ui-note">La API .NET aún no implementa carga real de imágenes. Gestiona solo datos base y especificaciones por ahora.</p>
+                ) : null}
 
                 <form className="admin-image-upload-form" onSubmit={handleCreateImage}>
                   <label className="admin-image-upload-field">
@@ -344,7 +347,7 @@ export function AdminProductEditPage() {
                     Texto alternativo
                     <input value={imageAltText} onChange={(e) => setImageAltText(e.target.value)} placeholder={previewValues?.name || 'Imagen de producto'} />
                   </label>
-                  <button type="submit" className="btn btn--accent" disabled={imageSaving}>
+                  <button type="submit" className="btn btn--accent" disabled={imageSaving || API_PROVIDER === 'dotnet'}>
                     {imageSaving ? 'Guardando...' : 'Subir imagen'}
                   </button>
                 </form>

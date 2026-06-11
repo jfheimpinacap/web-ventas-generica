@@ -98,6 +98,14 @@ builder.Services.AddAuthorization(options =>
                 || context.User.IsInRole(AppRoles.SupportAdmin)
                 || context.User.HasClaim("is_staff", "true")
                 || context.User.HasClaim("is_superuser", "true")));
+
+    options.AddPolicy("RequireCommercialWrite", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context =>
+                context.User.IsInRole(AppRoles.Seller)
+                || context.User.IsInRole(AppRoles.SupportAdmin)
+                || context.User.HasClaim("is_staff", "true")
+                || context.User.HasClaim("is_superuser", "true")));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -170,6 +178,7 @@ app.MapGet("/api/health", (IHostEnvironment environment) => HealthResponse(envir
 
 MapAuthEndpoints(app);
 app.MapCommercialReadEndpoints();
+app.MapCommercialWriteEndpoints();
 
 await SeedData.SeedUsersAsync(app.Services, app.Environment);
 
