@@ -432,3 +432,9 @@ Uploads reales y cualquier migración de creación pública de cotizaciones en .
 - El panel vendedor sigue disponible por ruta directa protegida (`/admin`, con login interno si no hay sesión válida).
 - En esta fase no existe login ni registro de clientes.
 - El registro de clientes queda como fase futura si se implementa historial de cotizaciones o cuenta cliente.
+
+## Fallback SPA para frontend en IIS/Plesk
+
+- El frontend publicado como sitio estático en IIS/Plesk requiere un fallback SPA para que rutas directas como `/admin`, `/login`, `/catalogo`, `/producto/<slug>`, `/cotizar`, `/contacto`, `/maquinaria`, `/repuestos` y `/servicios` sirvan `index.html` y React Router pueda resolverlas del lado cliente.
+- El archivo `frontend/public/web.config` pertenece solo al build estático del frontend: Vite lo copia a `dist/web.config` y su regla de URL Rewrite reescribe únicamente requests que no correspondan a archivos ni directorios físicos hacia `/index.html`.
+- Este fallback no corresponde al `web.config` productivo del backend/API, no contiene secretos, no define connection strings y no debe reemplazar la configuración de publicación de `backend-dotnet`.

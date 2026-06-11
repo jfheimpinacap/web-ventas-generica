@@ -113,7 +113,7 @@ export function Sidebar() {
 
       <div className="sidebar__panel" id="sidebar-panel">
         <div className="sidebar__panel-header">
-          <h3>Filtros y categorías</h3>
+          <h3>{isCatalogPage ? 'Filtros' : 'Categorías'}</h3>
           <button type="button" className="sidebar__panel-close" onClick={() => setIsOpen(false)} aria-label="Cerrar panel de filtros">
             ✕
           </button>
@@ -198,10 +198,12 @@ export function Sidebar() {
           </>
         ) : null}
 
-        <div className="sidebar-categories-desktop">
-          {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
-          <SidebarMenu items={menuItems} />
-        </div>
+        {!isCatalogPage ? (
+          <div className="sidebar-categories-desktop">
+            {error ? <p className="ui-note">Mostrando categorías de respaldo.</p> : null}
+            <SidebarMenu items={menuItems} />
+          </div>
+        ) : null}
       </div>
     </aside>
   )
