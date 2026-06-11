@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 
 import type { Category, CategoryFormValues } from '../../types/catalog'
 
@@ -13,6 +13,11 @@ interface CategoryFormProps {
 
 export function CategoryForm({ initialValues, categories, onSubmit, submitLabel, isSubmitting, error }: CategoryFormProps) {
   const [values, setValues] = useState(initialValues)
+
+  const parentOptions = useMemo(
+    () => categories.filter((item) => item.is_active === true || item.id === values.parent),
+    [categories, values.parent],
+  )
 
   const setField = <K extends keyof CategoryFormValues>(field: K, value: CategoryFormValues[K]) => {
     setValues((prev) => ({ ...prev, [field]: value }))
@@ -44,7 +49,7 @@ export function CategoryForm({ initialValues, categories, onSubmit, submitLabel,
           Categoría padre
           <select value={values.parent ?? ''} onChange={(e) => setField('parent', e.target.value ? Number(e.target.value) : null)}>
             <option value="">Sin padre</option>
-            {categories.map((item) => (
+            {parentOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
