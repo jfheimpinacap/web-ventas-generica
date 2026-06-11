@@ -50,3 +50,14 @@
     padding: 0.35rem 0.45rem;
   }
 }
+
+.admin-table__muted {
+  color: #64748b;
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

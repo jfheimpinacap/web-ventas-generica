@@ -68,7 +68,7 @@ export async function getPromotions() {
 }
 
 export async function createQuoteRequest(payload: QuoteRequestPublicPayload) {
-  return apiRequest('/quote-requests/', {
+  return apiRequest(publicReadPath('/quote-requests/'), {
     method: 'POST',
     body: JSON.stringify(payload),
   })

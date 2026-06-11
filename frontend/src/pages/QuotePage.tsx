@@ -118,10 +118,10 @@ export function QuotePage() {
         product_name: selectedProduct?.name,
         preferred_contact_method: form.preferred_contact_method || undefined,
       })
-      setSuccess('¡Solicitud enviada! Un vendedor te contactará pronto para continuar con tu cotización.')
+      setSuccess('Solicitud enviada correctamente. Un vendedor se contactará contigo pronto.')
       setForm(initialForm)
     } catch {
-      setError('No se pudo enviar la cotización. Intenta nuevamente.')
+      setError('No se pudo enviar la solicitud en este momento. Intenta nuevamente o contáctanos por WhatsApp.')
     } finally {
       setLoading(false)
     }
