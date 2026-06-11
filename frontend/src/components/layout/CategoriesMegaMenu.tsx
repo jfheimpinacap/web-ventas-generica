@@ -10,6 +10,32 @@ interface CategoriesMegaMenuProps {
   onClose: () => void
 }
 
+type MenuCategory = {
+  id: number | string
+  name: string
+  href: string
+  order: number
+  source: 'api' | 'fallback'
+}
+
+const FALLBACK_ROOTS: MenuCategory[] = [
+  { id: 'machinery', name: 'Maquinaria', href: '/catalogo?product_type=machinery', order: 1, source: 'fallback' },
+  { id: 'spare_part', name: 'Repuestos', href: '/catalogo?product_type=spare_part', order: 2, source: 'fallback' },
+  { id: 'service', name: 'Servicios', href: '/catalogo?product_type=service', order: 3, source: 'fallback' },
+]
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function categoryHref(category: Category) {
+  return `/catalogo?category=${category.id}`
+}
+
 function chunkByCount<T>(items: T[], columns: number) {
   if (items.length === 0) return []
   const safeColumns = Math.max(1, columns)
@@ -20,18 +46,33 @@ function chunkByCount<T>(items: T[], columns: number) {
 }
 
 export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null, onClose }: CategoriesMegaMenuProps) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(activeCategoryId)
-  const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<number[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | string | null>(activeCategoryId)
+  const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<Array<number | string>>([])
 
-  const roots = useMemo(
-    () => categories.filter((category) => category.parent === null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
-    [categories],
-  )
+  const roots = useMemo<MenuCategory[]>(() => {
+    const apiRoots = categories
+      .filter((category) => category.parent === null && category.is_active !== false)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+      .map((category) => ({
+        id: category.id,
+        name: category.name,
+        href: categoryHref(category),
+        order: category.order,
+        source: 'api' as const,
+      }))
+
+    if (apiRoots.length === 0) return FALLBACK_ROOTS
+
+    const existingLabels = new Set(apiRoots.map((category) => normalizeLabel(category.name)))
+    const missingFallbacks = FALLBACK_ROOTS.filter((category) => !existingLabels.has(normalizeLabel(category.name)))
+
+    return [...apiRoots, ...missingFallbacks].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+  }, [categories])
 
   const childrenByParent = useMemo(() => {
     const map = new Map<number, Category[]>()
     categories
-      .filter((category) => category.parent !== null)
+      .filter((category) => category.parent !== null && category.is_active !== false)
       .forEach((category) => {
         const parentId = category.parent as number
         const existing = map.get(parentId) ?? []
@@ -61,9 +102,9 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
   if (!isOpen) return null
 
   const selectedCategory = roots.find((category) => category.id === selectedCategoryId) ?? roots[0] ?? null
-  const subcategories = selectedCategory ? childrenByParent.get(selectedCategory.id) ?? [] : []
+  const subcategories = typeof selectedCategory?.id === 'number' ? childrenByParent.get(selectedCategory.id) ?? [] : []
   const columns = chunkByCount(subcategories, subcategories.length > 18 ? 3 : subcategories.length > 8 ? 2 : 1)
-  const toggleMobileCategory = (categoryId: number) => {
+  const toggleMobileCategory = (categoryId: number | string) => {
     setExpandedMobileCategoryIds((current) =>
       current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId],
     )
@@ -89,7 +130,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
               return (
                 <Link
                   key={category.id}
-                  to={`/catalogo?category=${category.id}`}
+                  to={category.href}
                   className={`categories-modal__root-link ${isSelected ? 'categories-modal__root-link--active' : ''}`.trim()}
                   onMouseEnter={() => setSelectedCategoryId(category.id)}
                   onFocus={() => setSelectedCategoryId(category.id)}
@@ -109,7 +150,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                   <ul key={`${selectedCategory?.id ?? 'none'}-${index}`}>
                     {column.map((subcategory) => (
                       <li key={subcategory.id}>
-                        <Link to={`/catalogo?category=${subcategory.id}`} onClick={onClose}>
+                        <Link to={categoryHref(subcategory)} onClick={onClose}>
                           {subcategory.name}
                         </Link>
                       </li>
@@ -117,22 +158,27 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                   </ul>
                 ))}
               </div>
-            ) : (
-              <p className="categories-modal__empty">No hay subcategorías para esta categoría.</p>
-            )}
+            ) : selectedCategory ? (
+              <div className="categories-modal__direct">
+                <p>{selectedCategory.name} no tiene subcategorías cargadas.</p>
+                <Link className="btn btn--ghost" to={selectedCategory.href} onClick={onClose}>
+                  Ver {selectedCategory.name}
+                </Link>
+              </div>
+            ) : null}
           </div>
         </div>
 
         <nav className="categories-modal__mobile-accordion" aria-label="Categorías principales para móvil">
           {roots.map((category) => {
-            const subcategoriesForCategory = childrenByParent.get(category.id) ?? []
+            const subcategoriesForCategory = typeof category.id === 'number' ? childrenByParent.get(category.id) ?? [] : []
             const isExpanded = expandedMobileCategoryIds.includes(category.id)
 
             return (
               <div className="categories-modal__mobile-item" key={`mobile-${category.id}`}>
                 <div className="categories-modal__mobile-header">
                   <Link
-                    to={`/catalogo?category=${category.id}`}
+                    to={category.href}
                     className="categories-modal__mobile-link"
                     onClick={onClose}
                   >
@@ -159,7 +205,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                   >
                     {subcategoriesForCategory.map((subcategory) => (
                       <li key={subcategory.id}>
-                        <Link to={`/catalogo?category=${subcategory.id}`} onClick={onClose}>
+                        <Link to={categoryHref(subcategory)} onClick={onClose}>
                           {subcategory.name}
                         </Link>
                       </li>

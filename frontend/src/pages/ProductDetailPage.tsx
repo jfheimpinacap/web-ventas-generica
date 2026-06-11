@@ -8,7 +8,7 @@ import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
-import { resolveMediaUrl } from '../services/api'
+import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
@@ -50,8 +50,10 @@ export function ProductDetailPage() {
         } else {
           setRelatedProducts([])
         }
-      } catch {
-        setError('No se pudo cargar el detalle del producto.')
+      } catch (error) {
+        setProduct(null)
+        setRelatedProducts([])
+        setError(error instanceof ApiError && error.status === 404 ? 'Producto no disponible.' : 'Producto no disponible.')
       } finally {
         setLoading(false)
       }
@@ -162,7 +164,19 @@ export function ProductDetailPage() {
       {productJsonLd ? <JsonLd id="product-main" data={productJsonLd} /> : null}
       <section className="simple-page">
         {loading ? <p>Cargando detalle...</p> : null}
-        {!loading && error ? <p className="ui-note ui-note--error">{error}</p> : null}
+        {!loading && error ? (
+          <div className="ui-note ui-note--error product-detail__unavailable">
+            <p>{error}</p>
+            <div className="product-detail__unavailable-actions">
+              <Link className="btn btn--ghost" to="/catalogo">
+                Volver al catálogo
+              </Link>
+              <Link className="btn btn--accent" to="/">
+                Volver al inicio
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {!loading && !error && product ? (
           <div className="product-detail">

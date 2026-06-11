@@ -2,7 +2,6 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { useCategories } from '../../hooks/useCategories'
-import { isAuthenticated } from '../../services/authApi'
 import { trackQuoteClick, trackWhatsAppClick } from '../../utils/analytics'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 import { CategoriesMegaMenu } from './CategoriesMegaMenu'
@@ -13,7 +12,6 @@ export function Topbar() {
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const navigate = useNavigate()
-  const hasSession = isAuthenticated()
   const { categories } = useCategories()
 
   useEffect(() => {
@@ -97,15 +95,6 @@ export function Topbar() {
           <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
         </a>
 
-        {hasSession ? (
-          <Link className="topbar__panel-link topbar__seller-link" to="/admin">
-            Panel
-          </Link>
-        ) : (
-          <Link className="topbar__user-link topbar__seller-link" to="/login" title="Acceso vendedor" aria-label="Acceso vendedor">
-            <span aria-hidden="true">👤</span>
-          </Link>
-        )}
       </div>
       <CategoriesMegaMenu isOpen={isCategoriesOpen} categories={categories} onClose={() => setIsCategoriesOpen(false)} />
     </header>

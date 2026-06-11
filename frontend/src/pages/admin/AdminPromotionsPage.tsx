@@ -9,6 +9,7 @@ import type { Promotion } from '../../types/catalog'
 export function AdminPromotionsPage() {
   const [items, setItems] = useState<Promotion[]>([])
   const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,12 +35,17 @@ export function AdminPromotionsPage() {
 
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        `${item.title} ${item.subtitle}`
+      items.filter((item) => {
+        const matchesStatus =
+          activeFilter === 'all' ||
+          (activeFilter === 'active' ? item.is_active : !item.is_active)
+        const matchesSearch = `${item.title} ${item.subtitle}`
           .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [items, search],
+          .includes(search.toLowerCase())
+
+        return matchesStatus && matchesSearch
+      }),
+    [items, search, activeFilter],
   )
   const handleDelete = async (item: Promotion) => {
     if (!window.confirm(`¿Eliminar oferta "${item.title}"?`)) return
@@ -64,6 +70,16 @@ export function AdminPromotionsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select
+            className="admin-search"
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value as 'active' | 'inactive' | 'all')}
+            aria-label="Filtrar por estado"
+          >
+            <option value="active">Solo activos</option>
+            <option value="inactive">Solo inactivos</option>
+            <option value="all">Todos</option>
+          </select>
           <Link className="btn btn--accent" to="/admin/ofertas-hero/nueva">
             Nueva oferta
           </Link>

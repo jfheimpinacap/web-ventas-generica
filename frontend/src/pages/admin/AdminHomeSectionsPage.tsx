@@ -476,7 +476,7 @@ export function AdminHomeSectionsPage() {
           (acc, section) => {
             acc[section.key] = new Set(
               homeItems
-                .filter((item) => item.section === section.key)
+                .filter((item) => item.section === section.key && item.is_active)
                 .map((item) => item.product.id),
             )
             return acc

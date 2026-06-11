@@ -312,9 +312,16 @@
   background: #f1f5f9;
 }
 
-.categories-modal__empty {
-  color: #64748b;
-  margin: 0.3rem 0;
+.categories-modal__direct {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 0.7rem;
+  color: #475569;
+}
+
+.categories-modal__direct p {
+  margin: 0.3rem 0 0;
 }
 
 .categories-modal__mobile-accordion {

@@ -51,9 +51,6 @@ export function Footer() {
           <li>
             <Link to="/preguntas-frecuentes">Preguntas frecuentes</Link>
           </li>
-          <li>
-            <Link to="/login">Login vendedor</Link>
-          </li>
         </ul>
       </div>
 
