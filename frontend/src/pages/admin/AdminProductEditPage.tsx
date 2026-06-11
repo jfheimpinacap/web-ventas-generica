@@ -17,7 +17,7 @@ import {
   updateProductSpec,
 } from '../../services/adminApi'
 import { API_PROVIDER, resolveMediaUrl } from '../../services/api'
-import { getBrands, getCategories, getSuppliers } from '../../services/catalogApi'
+import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import type {
   Brand,
   Category,
@@ -116,9 +116,9 @@ export function AdminProductEditPage() {
         setError(null)
         const [product, categoriesData, brandsData, suppliersData] = await Promise.all([
           getAdminProduct(slug),
-          getCategories(),
-          getBrands(),
-          getSuppliers(),
+          getAdminCategories(),
+          getAdminBrands(),
+          getAdminSuppliers(),
         ])
 
         const [imagesData, specsData] = await Promise.all([getProductImages(product.id), getProductSpecs(product.id)])

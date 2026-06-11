@@ -522,3 +522,42 @@ Para publicación futura en Plesk, usar el flujo existente con ZIP seguro:
 ```
 
 No usar `Compress-Archive` manual con wildcard y no incluir `web.config` productivo real en el ZIP.
+
+## Lectura pública GET-only vs lectura admin protegida
+
+La API separa la lectura pública del sitio web y la lectura administrativa del panel vendedor:
+
+### Endpoints públicos sin token
+
+Los endpoints públicos son exclusivamente GET y están bajo `/api/public/*`:
+
+- `GET /api/public/products/`
+- `GET /api/public/products/{idOrSlug}/`
+- `GET /api/public/categories/`
+- `GET /api/public/brands/`
+- `GET /api/public/promotions/`
+- `GET /api/public/home-section-items/`
+- `GET /api/public/product-specs/?product=...`
+- `GET /api/public/product-images/?product=...`
+
+Estas rutas devuelven solo contenido seguro para Home, Catálogo y Detalle: productos publicados, categorías activas, marcas activas, promociones activas/vigentes, ítems activos de home y specs/imágenes de productos publicados. Los DTOs públicos no incluyen campos de auditoría, usuarios de auditoría, proveedores/contactos internos, hashes, tokens, connection strings ni secretos.
+
+### Endpoints admin protegidos
+
+Las rutas comerciales existentes bajo `/api/*` siguen protegidas con Bearer y `RequireCommercialRead`/`RequireCommercialWrite`, por ejemplo:
+
+- `/api/products/`
+- `/api/categories/`
+- `/api/brands/`
+- `/api/suppliers/`
+- `/api/promotions/`
+- `/api/quote-requests/`
+- `/api/home-section-items/`
+- `/api/product-specs/`
+- `/api/product-images/`
+
+Toda escritura permanece protegida con Bearer y `RequireCommercialWrite`. No se abrió escritura pública y no se agregó listado público de cotizaciones.
+
+### Advertencias operacionales
+
+No ejecutar `dotnet ef database update` contra producción sin aprobación explícita, backup verificado, revisión de connection string y ventana de mantenimiento. Las publicaciones futuras deben generarse con el flujo de ZIP seguro existente, sin incluir ni sobrescribir el `web.config` productivo y sin commitear credenciales ni archivos `.env.local`.

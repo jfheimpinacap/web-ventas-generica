@@ -5,7 +5,7 @@ import { AdminLayout } from '../../components/admin/AdminLayout'
 import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
 import { createProduct } from '../../services/adminApi'
-import { getBrands, getCategories, getSuppliers } from '../../services/catalogApi'
+import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import type { Brand, Category, ProductFormValues, SupplierSummary } from '../../types/catalog'
 import { formatCondition, formatStockStatus } from '../../utils/formatters'
 
@@ -59,9 +59,9 @@ export function AdminProductCreatePage() {
       try {
         setError(null)
         const [categoriesData, brandsData, suppliersData] = await Promise.all([
-          getCategories(),
-          getBrands(),
-          getSuppliers(),
+          getAdminCategories(),
+          getAdminBrands(),
+          getAdminSuppliers(),
         ])
         setCategories(categoriesData)
         setBrands(brandsData)

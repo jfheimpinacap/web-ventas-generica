@@ -9,17 +9,29 @@ import type {
   QuoteRequestPublicPayload,
   SupplierSummary,
 } from '../types/catalog'
-import { apiRequest } from './api'
+import { API_PROVIDER, apiRequest } from './api'
+import {
+  normalizeBrandListResponse,
+  normalizeCategoryListResponse,
+  normalizeHomeSectionItemListResponse,
+  normalizeProductDetail,
+  normalizeProductListResponse,
+  normalizePromotionListResponse,
+  normalizeSupplierListResponse,
+} from './adminApi'
 
 type ApiListResponse<T> = T[] | { results: T[] }
 
-function normalizeListResponse<T>(response: ApiListResponse<T>): T[] {
-  return Array.isArray(response) ? response : response.results
+function publicReadPath(path: string) {
+  if (API_PROVIDER !== 'dotnet') return path
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `/public${normalizedPath}`
 }
 
 export async function getProducts(params?: ProductQueryParams) {
-  const response = await apiRequest<ApiListResponse<ProductListItem>>('/products/', { params })
-  return normalizeListResponse(response)
+  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/products/'), { params })
+  return normalizeProductListResponse(response) as ProductListItem[]
 }
 
 export async function getFeaturedProducts() {
@@ -31,27 +43,28 @@ export async function searchProducts(search: string) {
 }
 
 export async function getProductBySlug(slug: string) {
-  return apiRequest<ProductDetail>(`/products/${slug}/`)
+  const response = await apiRequest<unknown>(publicReadPath(`/products/${slug}/`))
+  return normalizeProductDetail(response) as ProductDetail
 }
 
 export async function getCategories() {
-  const response = await apiRequest<ApiListResponse<Category>>('/categories/')
-  return normalizeListResponse(response)
+  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/categories/'))
+  return normalizeCategoryListResponse(response) as Category[]
 }
 
 export async function getBrands() {
-  const response = await apiRequest<ApiListResponse<Brand>>('/brands/')
-  return normalizeListResponse(response)
+  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/brands/'))
+  return normalizeBrandListResponse(response) as Brand[]
 }
 
 export async function getSuppliers() {
-  const response = await apiRequest<ApiListResponse<SupplierSummary>>('/suppliers/')
-  return normalizeListResponse(response)
+  const response = await apiRequest<ApiListResponse<unknown>>('/suppliers/')
+  return normalizeSupplierListResponse(response) as SupplierSummary[]
 }
 
 export async function getPromotions() {
-  const response = await apiRequest<ApiListResponse<Promotion>>('/promotions/')
-  return normalizeListResponse(response)
+  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/promotions/'))
+  return normalizePromotionListResponse(response) as Promotion[]
 }
 
 export async function createQuoteRequest(payload: QuoteRequestPublicPayload) {
@@ -62,8 +75,8 @@ export async function createQuoteRequest(payload: QuoteRequestPublicPayload) {
 }
 
 export async function getHomeSectionItems(section?: string) {
-  const response = await apiRequest<ApiListResponse<HomeSectionItem>>('/home-section-items/', {
+  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/home-section-items/'), {
     params: section ? { section } : undefined,
   })
-  return normalizeListResponse(response)
+  return normalizeHomeSectionItemListResponse(response) as HomeSectionItem[]
 }

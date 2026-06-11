@@ -83,7 +83,7 @@ function normalizeListResponse<T, R>(
   return values.map(normalizer)
 }
 
-function normalizeCategory(value: unknown): Category {
+export function normalizeCategory(value: unknown): Category {
   const record = isRecord(value) ? value : {}
 
   return {
@@ -108,7 +108,7 @@ function normalizeCategory(value: unknown): Category {
   }
 }
 
-function normalizeBrand(value: unknown): Brand {
+export function normalizeBrand(value: unknown): Brand {
   const record = isRecord(value) ? value : {}
 
   return {
@@ -129,7 +129,7 @@ function normalizeBrand(value: unknown): Brand {
   }
 }
 
-function normalizeSupplier(value: unknown): SupplierSummary {
+export function normalizeSupplier(value: unknown): SupplierSummary {
   const record = isRecord(value) ? value : {}
 
   return {
@@ -187,7 +187,7 @@ function normalizeProductSpec(value: unknown): ProductSpec {
   }
 }
 
-function normalizeProductListItem(value: unknown): ProductListItem {
+export function normalizeProductListItem(value: unknown): ProductListItem {
   const record = isRecord(value) ? value : {}
   const rawImages = pick<unknown[]>(record, 'images')
   const images = Array.isArray(rawImages)
@@ -244,7 +244,7 @@ function normalizeProductListItem(value: unknown): ProductListItem {
   }
 }
 
-function normalizeProductDetail(value: unknown): ProductDetail {
+export function normalizeProductDetail(value: unknown): ProductDetail {
   const record = isRecord(value) ? value : {}
   const rawImages = pick<unknown[]>(record, 'images')
   const rawSpecs = pick<unknown[]>(record, 'specs')
@@ -282,7 +282,7 @@ function normalizeProductDetail(value: unknown): ProductDetail {
   }
 }
 
-function normalizePromotion(value: unknown): Promotion {
+export function normalizePromotion(value: unknown): Promotion {
   const record = isRecord(value) ? value : {}
   const product = pick(record, 'product')
 
@@ -366,7 +366,7 @@ function sectionLabel(section: HomeSection) {
   return 'Servicios de reparación'
 }
 
-function normalizeHomeSectionItem(value: unknown): HomeSectionItem {
+export function normalizeHomeSectionItem(value: unknown): HomeSectionItem {
   const record = isRecord(value) ? value : {}
   const section = toStringValue(
     pick(record, 'section'),
