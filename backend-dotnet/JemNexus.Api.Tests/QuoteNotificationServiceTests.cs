@@ -2,7 +2,7 @@ using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services.Notifications;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Xunit;
 
 namespace JemNexus.Api.Tests;
@@ -26,9 +26,9 @@ public sealed class QuoteNotificationServiceTests
     public async Task QuoteNotificationServiceSkipsWithoutRequiredSmtpConfiguration()
     {
         var service = new SmtpQuoteNotificationService(
-            Options.Create(new EmailOptions()),
-            Options.Create(new QuoteNotificationOptions { Recipients = "jmateluna@jem-nexus.cl;fheim@jem-nexus.cl" }),
-            Options.Create(new FrontendOptions { BaseUrl = "https://jem-nexus.cl" }),
+            OptionsFactory.Create(new EmailOptions()),
+            OptionsFactory.Create(new QuoteNotificationOptions { Recipients = "jmateluna@jem-nexus.cl;fheim@jem-nexus.cl" }),
+            OptionsFactory.Create(new FrontendOptions { BaseUrl = "https://jem-nexus.cl" }),
             NullLogger<SmtpQuoteNotificationService>.Instance);
 
         await service.SendNewQuoteRequestAsync(new QuoteRequest
