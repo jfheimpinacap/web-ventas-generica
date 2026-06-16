@@ -490,3 +490,70 @@ El asunto del aviso es `Nueva solicitud de cotización - JEM Nexus`.
 El cuerpo incluye fecha/hora UTC, nombre del cliente, empresa si existe, correo, teléfono, producto asociado si existe, identificador/slug del producto cuando está disponible, mensaje del cliente, origen `sitio web JEM Nexus` y enlace al panel vendedor (`https://jem-nexus.cl/admin/cotizaciones` cuando `Frontend__BaseUrl` está configurado).
 
 Si el correo del cliente existe y es válido, se configura como `Reply-To` para facilitar que el vendedor pueda responder desde su cliente de correo. Esto no implica un correo saliente al cliente desde el sistema.
+
+## Prompt 035 - SMTP robusto con MailKit y diagnóstico protegido
+
+El envío de avisos de cotización del backend .NET usa MailKit (`MailKit.Net.Smtp.SmtpClient`) y mensajes `MimeKit.MimeMessage` para soportar de forma explícita STARTTLS y SSL implícito. La implementación ya no depende de `System.Net.Mail.SmtpClient` para enviar avisos SMTP.
+
+### Seguridad SMTP y timeout
+
+La configuración preferida es `Email__Security`, con estos valores soportados:
+
+- `Auto`
+- `StartTls`
+- `StartTlsWhenAvailable`
+- `SslOnConnect`
+- `None`
+
+Si `Email__Security` no se define, se aplican reglas compatibles hacia atrás:
+
+- Puerto `465`: `SslOnConnect` por defecto, recomendado para Plesk/Wirenet cuando el panel indica SMTP 465.
+- Puerto `587`: `StartTls` por defecto.
+- Otros puertos: `Auto` cuando `Email__UseSsl=true`; `None` cuando `Email__UseSsl=false`.
+
+`Email__UseSsl` se conserva por compatibilidad, pero para producción se recomienda definir `Email__Security` de forma explícita. `Email__TimeoutSeconds` controla el timeout SMTP y por defecto es `10`, para evitar que una falla de red o TLS bloquee indefinidamente la creación de una cotización.
+
+### Configuración recomendada para Plesk/Wirenet con SSL implícito
+
+```env
+Email__SmtpHost=jem-nexus.cl
+Email__SmtpPort=465
+Email__Username=notificaciones@jem-nexus.cl
+Email__Password=CONFIGURAR_EN_PLESK_NO_VERSIONAR
+Email__FromAddress=notificaciones@jem-nexus.cl
+Email__FromName=JEM Nexus
+Email__Security=SslOnConnect
+Email__TimeoutSeconds=10
+QuoteNotifications__Recipients=jmateluna@jem-nexus.cl,fheim@jem-nexus.cl
+Frontend__BaseUrl=https://jem-nexus.cl
+```
+
+Si Wirenet/Plesk indica usar STARTTLS, la alternativa es:
+
+```env
+Email__SmtpHost=jem-nexus.cl
+Email__SmtpPort=587
+Email__Security=StartTls
+Email__TimeoutSeconds=10
+```
+
+No se debe versionar una contraseña real ni editar el `web.config` productivo desde Codex. La contraseña debe configurarse directamente en Plesk/IIS o en el mecanismo seguro operativo.
+
+### Diagnóstico protegido
+
+Existe un endpoint operativo protegido para probar el envío sin crear cotizaciones falsas:
+
+```http
+POST /api/quote-notifications/test
+Authorization: Bearer <token-vendedor-o-staff>
+```
+
+El endpoint usa la misma política comercial del panel vendedor (`RequireCommercialRead`): requiere token y una identidad compatible con vendedor, soporte, staff o superuser. No acepta destinatarios arbitrarios desde el cliente; siempre usa `QuoteNotifications__Recipients`.
+
+La respuesta JSON es sanitizada e incluye `success`, `skipped`, `recipients_count`, `smtp_host`, `smtp_port`, `security_mode`, `message` y `error_code`. Nunca devuelve `Email__Password`, tokens, connection strings ni stack traces. Los errores típicos se clasifican como configuración faltante, autenticación, conexión, TLS/SSL, timeout, destinatario rechazado o error SMTP genérico.
+
+El correo de diagnóstico usa el asunto `Prueba de notificación SMTP - JEM Nexus` y el cuerpo simple `Prueba de configuración SMTP del sistema de cotizaciones JEM Nexus.`.
+
+### Comportamiento del flujo público
+
+`POST /api/public/quote-requests` mantiene el orden operativo: valida, guarda la cotización y luego intenta notificar. Si SMTP falta, falla, expira por timeout o rechaza destinatarios, el backend registra un warning/error sanitizado, pero la cotización guardada no se revierte y el cliente recibe éxito si el registro fue persistido. En esta fase no se envía correo automático al cliente.

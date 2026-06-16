@@ -95,12 +95,21 @@ public static class CommercialPublicReadEndpoints
         quote.Product = product;
         try
         {
-            await quoteNotificationService.SendNewQuoteRequestAsync(quote, cancellationToken);
+            var notificationResult = await quoteNotificationService.SendNewQuoteRequestAsync(quote, cancellationToken);
+            if (!notificationResult.Success)
+            {
+                var logger = loggerFactory.CreateLogger(nameof(CommercialPublicReadEndpoints));
+                logger.LogWarning(
+                    "Quote request {QuoteRequestId} was saved but seller email notification did not complete. Code: {ErrorCode}. Message: {ErrorMessage}.",
+                    quote.Id,
+                    notificationResult.ErrorCode,
+                    notificationResult.ErrorMessage);
+            }
         }
         catch (Exception exception)
         {
             var logger = loggerFactory.CreateLogger(nameof(CommercialPublicReadEndpoints));
-            logger.LogError(exception, "Quote request {QuoteRequestId} was saved but seller email notification failed.", quote.Id);
+            logger.LogError(exception, "Quote request {QuoteRequestId} was saved but seller email notification failed unexpectedly.", quote.Id);
         }
 
         return Results.Created($"/api/quote-requests/{quote.Id}", QuoteRequestReadDto.FromQuoteRequest(quote));

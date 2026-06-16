@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Net.Http.Json;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
@@ -84,6 +86,51 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
         Assert.True(await dbContext.QuoteRequests.AnyAsync(quote => quote.CustomerName == "Cliente Sin Email"));
     }
 
+
+    [Fact]
+    public async Task QuoteNotificationTestEndpointRequiresToken()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/quote-notifications/test/", new { recipients = "attacker@example.test" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(0, _notificationService.TestAttemptCount);
+    }
+
+    [Fact]
+    public async Task SellerCanRunQuoteNotificationTestWithoutArbitraryRecipients()
+    {
+        using var client = await CreateAuthorizedClientAsync();
+
+        var response = await client.PostAsJsonAsync("/api/quote-notifications/test/", new { recipients = "attacker@example.test" });
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, _notificationService.TestAttemptCount);
+        Assert.DoesNotContain("attacker@example.test", body, StringComparison.OrdinalIgnoreCase);
+        using var document = JsonDocument.Parse(body);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(2, document.RootElement.GetProperty("recipients_count").GetInt32());
+        Assert.Equal("smtp.example.test", document.RootElement.GetProperty("smtp_host").GetString());
+        Assert.False(document.RootElement.TryGetProperty("password", out _));
+    }
+
+    [Fact]
+    public async Task QuoteNotificationTestEndpointReturnsSanitizedFailure()
+    {
+        _notificationService.ResultToReturn = new QuoteNotificationResult(false, false, "smtp_authentication_failed", "SMTP authentication failed for [redacted].", 2, "jem-nexus.cl", 465, "SslOnConnect");
+        using var client = await CreateAuthorizedClientAsync();
+
+        var response = await client.PostAsJsonAsync("/api/quote-notifications/test/", new { });
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain("secret-password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("smtp_authentication_failed", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SslOnConnect", body, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task AdminQuoteStatusEndpointStillRequiresToken()
     {
@@ -93,6 +140,17 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
         var response = await client.PatchAsJsonAsync("/api/quote-requests/1/", new { status = QuoteStatuses.Contacted });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private async Task<HttpClient> CreateAuthorizedClientAsync()
+    {
+        var client = _factory.CreateClient();
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login/", new { username = "demo", password = TestPassword });
+        var body = await loginResponse.Content.ReadAsStringAsync();
+        Assert.True(loginResponse.IsSuccessStatusCode, $"Status: {loginResponse.StatusCode}, Body: {body}");
+        using var document = JsonDocument.Parse(body);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", document.RootElement.GetProperty("access").GetString());
+        return client;
     }
 
     public sealed class CommercialPublicQuoteApiFactory : WebApplicationFactory<Program>
@@ -148,15 +206,23 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
     public sealed class CapturingQuoteNotificationService : IQuoteNotificationService
     {
         public int AttemptCount { get; private set; }
+        public int TestAttemptCount { get; private set; }
         public QuoteRequest? LastQuote { get; private set; }
         public Exception? ExceptionToThrow { get; set; }
+        public QuoteNotificationResult ResultToReturn { get; set; } = new(true, false, string.Empty, "sent", 2, "smtp.example.test", 587, "StartTls");
 
-        public Task SendNewQuoteRequestAsync(QuoteRequest quoteRequest, CancellationToken cancellationToken = default)
+        public Task<QuoteNotificationResult> SendNewQuoteRequestAsync(QuoteRequest quoteRequest, CancellationToken cancellationToken = default)
         {
             AttemptCount++;
             LastQuote = quoteRequest;
             if (ExceptionToThrow is not null) throw ExceptionToThrow;
-            return Task.CompletedTask;
+            return Task.FromResult(ResultToReturn);
+        }
+
+        public Task<QuoteNotificationResult> SendTestNotificationAsync(CancellationToken cancellationToken = default)
+        {
+            TestAttemptCount++;
+            return Task.FromResult(ResultToReturn);
         }
     }
 
