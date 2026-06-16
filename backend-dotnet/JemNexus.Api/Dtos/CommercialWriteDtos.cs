@@ -8,6 +8,7 @@ public sealed record CategoryWriteDto(
     [property: StringLength(140)] string? Slug,
     int? Parent,
     [property: JsonPropertyName("parent_id")] int? ParentId,
+    [property: JsonPropertyName("product_type"), StringLength(20)] string? ProductType,
     string? Description,
     [property: JsonPropertyName("is_active")] bool? IsActive,
     int? Order);

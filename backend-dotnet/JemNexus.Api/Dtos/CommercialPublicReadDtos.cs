@@ -7,6 +7,7 @@ public sealed record PublicCategoryReadDto(
     string Name,
     string Slug,
     int? Parent,
+    string ProductType,
     string Description,
     int Order)
 {
@@ -15,6 +16,7 @@ public sealed record PublicCategoryReadDto(
         category.Name,
         category.Slug,
         category.ParentId,
+        category.ProductType,
         category.Description,
         category.Order);
 }

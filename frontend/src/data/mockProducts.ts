@@ -1,11 +1,12 @@
-import type { ProductListItem } from '../types/catalog'
+import type { Category, ProductListItem } from '../types/catalog'
 
-function buildFallbackCategory(id: number, name: string, parent: number | null = null) {
+function buildFallbackCategory(id: number, name: string, parent: number | null = null): Category {
   return {
     id,
     name,
     slug: name.toLowerCase().replace(/\s+/g, '-'),
     parent,
+    product_type: 'machinery',
     description: '',
     is_active: true,
     order: id,

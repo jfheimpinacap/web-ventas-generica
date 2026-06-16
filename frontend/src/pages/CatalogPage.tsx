@@ -24,7 +24,6 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
     machinery: 'Maquinaria',
     spare_part: 'Repuestos',
     service: 'Servicios',
-    other: 'Otros',
   },
   condition: {
     new: 'Nuevo',

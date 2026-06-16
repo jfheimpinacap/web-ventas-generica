@@ -244,6 +244,13 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int?>("ParentId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProductType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("machinery");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(140)
@@ -266,6 +273,8 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasIndex("Order");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("ProductType");
 
                     b.HasIndex("Slug")
                         .IsUnique();

@@ -175,6 +175,7 @@ public static class CommercialReadEndpoints
         JemNexusDbContext dbContext,
         [FromQuery(Name = "search")] string? search,
         [FromQuery(Name = "is_active")] bool? isActive,
+        [FromQuery(Name = "product_type")] string? productType,
         [FromQuery(Name = "include_inactive")] bool? includeInactive,
         CancellationToken cancellationToken)
     {
@@ -187,6 +188,12 @@ public static class CommercialReadEndpoints
         if (isActive.HasValue)
         {
             query = query.Where(category => category.IsActive == isActive.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(productType))
+        {
+            var value = productType.Trim();
+            query = query.Where(category => category.ProductType == value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))

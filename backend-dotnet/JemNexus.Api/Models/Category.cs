@@ -6,6 +6,7 @@ public sealed class Category
     public string Name { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
     public int? ParentId { get; set; }
+    public string ProductType { get; set; } = ProductTypes.Machinery;
     public Category? Parent { get; set; }
     public ICollection<Category> Children { get; set; } = new List<Category>();
     public string Description { get; set; } = string.Empty;

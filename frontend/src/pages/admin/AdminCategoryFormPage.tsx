@@ -7,7 +7,7 @@ import { CategoryForm } from '../../components/admin/CategoryForm'
 import { createCategory, getAdminCategories, getAdminCategory, updateCategory } from '../../services/adminApi'
 import type { Category, CategoryFormValues } from '../../types/catalog'
 
-const INITIAL_VALUES: CategoryFormValues = { name: '', slug: '', parent: null, description: '', is_active: true, order: 0 }
+const INITIAL_VALUES: CategoryFormValues = { name: '', slug: '', parent: null, product_type: 'machinery', description: '', is_active: true, order: 0 }
 
 export function AdminCategoryFormPage() {
   const { id } = useParams<{ id: string }>()
@@ -30,6 +30,7 @@ export function AdminCategoryFormPage() {
             name: entity.name,
             slug: entity.slug,
             parent: entity.parent,
+            product_type: entity.product_type,
             description: entity.description,
             is_active: entity.is_active,
             order: entity.order,

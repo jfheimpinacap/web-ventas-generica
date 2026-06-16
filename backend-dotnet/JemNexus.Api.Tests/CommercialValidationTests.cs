@@ -10,7 +10,6 @@ public sealed class CommercialValidationTests
     [InlineData(ProductTypes.Machinery, true)]
     [InlineData(ProductTypes.SparePart, true)]
     [InlineData(ProductTypes.Service, true)]
-    [InlineData(ProductTypes.Other, true)]
     [InlineData("invalid", false)]
     public void ProductTypesAreValidatedAgainstAllowedConstants(string value, bool expected)
     {

@@ -150,6 +150,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(category => category.Name).HasMaxLength(120).IsRequired();
             entity.Property(category => category.Slug).HasMaxLength(140).IsRequired();
             entity.Property(category => category.Description).HasDefaultValue(string.Empty);
+            entity.Property(category => category.ProductType).HasMaxLength(20).HasDefaultValue(ProductTypes.Machinery).IsRequired();
             entity.Property(category => category.IsActive).HasDefaultValue(true);
             entity.Property(category => category.Order).HasDefaultValue(0);
             entity.Property(category => category.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
@@ -158,6 +159,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasIndex(category => category.Slug).IsUnique();
             entity.HasIndex(category => category.IsActive);
             entity.HasIndex(category => category.Order);
+            entity.HasIndex(category => category.ProductType);
             entity.HasOne(category => category.Parent)
                 .WithMany(category => category.Children)
                 .HasForeignKey(category => category.ParentId)

@@ -4,7 +4,13 @@ import { Link } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteCategory, getAdminCategories } from '../../services/adminApi'
-import type { Category } from '../../types/catalog'
+import type { Category, ProductType } from '../../types/catalog'
+
+const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
+  machinery: 'Maquinaria',
+  spare_part: 'Repuestos',
+  service: 'Servicios',
+}
 
 export function AdminCategoriesPage() {
   const [items, setItems] = useState<Category[]>([])
@@ -99,6 +105,7 @@ export function AdminCategoriesPage() {
             <thead>
               <tr>
                 <th>Nombre</th>
+                <th>Tipo</th>
                 <th>Padre</th>
                 <th>Activa</th>
                 <th>Orden</th>
@@ -109,6 +116,7 @@ export function AdminCategoriesPage() {
               {filtered.map((item) => (
                 <tr key={item.id}>
                   <td>{item.name}</td>
+                  <td>{PRODUCT_TYPE_LABELS[item.product_type] ?? item.product_type}</td>
                   <td>
                     {items.find((i) => i.id === item.parent)?.name ?? '-'}
                   </td>

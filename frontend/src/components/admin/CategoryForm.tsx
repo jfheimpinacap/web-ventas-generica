@@ -1,6 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react'
 
-import type { Category, CategoryFormValues } from '../../types/catalog'
+import type { Category, CategoryFormValues, ProductType } from '../../types/catalog'
+
+const PRODUCT_TYPES: Array<{ value: ProductType; label: string }> = [
+  { value: 'machinery', label: 'Maquinaria' },
+  { value: 'spare_part', label: 'Repuestos' },
+  { value: 'service', label: 'Servicios' },
+]
 
 interface CategoryFormProps {
   initialValues: CategoryFormValues
@@ -15,12 +21,17 @@ export function CategoryForm({ initialValues, categories, onSubmit, submitLabel,
   const [values, setValues] = useState(initialValues)
 
   const parentOptions = useMemo(
-    () => categories.filter((item) => item.is_active === true || item.id === values.parent),
-    [categories, values.parent],
+    () => categories.filter((item) => item.product_type === values.product_type && (item.is_active === true || item.id === values.parent)),
+    [categories, values.parent, values.product_type],
   )
 
   const setField = <K extends keyof CategoryFormValues>(field: K, value: CategoryFormValues[K]) => {
-    setValues((prev) => ({ ...prev, [field]: value }))
+    setValues((prev) => {
+      if (field === 'product_type') {
+        return { ...prev, product_type: value as ProductType, parent: null }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -43,6 +54,17 @@ export function CategoryForm({ initialValues, categories, onSubmit, submitLabel,
         <label>
           Slug (opcional)
           <input value={values.slug ?? ''} onChange={(e) => setField('slug', e.target.value)} />
+        </label>
+
+        <label>
+          Tipo
+          <select value={values.product_type} onChange={(e) => setField('product_type', e.target.value as ProductType)} required>
+            {PRODUCT_TYPES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label>
