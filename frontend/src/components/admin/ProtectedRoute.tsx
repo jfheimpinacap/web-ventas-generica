@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
+import { AdminIdleSessionTimeout } from './AdminIdleSessionTimeout'
 import { Seo } from '../common/Seo'
 import { canAccessSellerPanel, clearSession, getMe, isAuthenticated } from '../../services/authApi'
 import { buildPublicUrl } from '../../utils/seo'
@@ -52,6 +53,7 @@ export function ProtectedRoute() {
 
   return (
     <>
+      <AdminIdleSessionTimeout />
       <Seo
         title="Panel vendedor | JEM Nexus"
         description="Panel interno de gestión comercial."
