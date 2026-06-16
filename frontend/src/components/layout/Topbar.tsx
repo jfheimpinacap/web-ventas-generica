@@ -6,7 +6,7 @@ import { trackQuoteClick, trackWhatsAppClick } from '../../utils/analytics'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 import { CategoriesMegaMenu } from './CategoriesMegaMenu'
 
-const WHATSAPP_PHONE = '+51 987 654 321'
+const WHATSAPP_PHONE = '+56 9 4611 5064'
 
 export function Topbar() {
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
@@ -80,7 +80,7 @@ export function Topbar() {
 
         <a
           className="topbar__whatsapp-contact"
-          href={buildWhatsAppUrl('Hola, quiero asesoría comercial.')}
+          href={buildWhatsAppUrl('Hola, quiero consultar por una cotización en JEM Nexus.')}
           target="_blank"
           rel="noreferrer"
           aria-label="Abrir WhatsApp con asesor comercial"
@@ -92,7 +92,7 @@ export function Topbar() {
             </svg>
           </span>
           <span className="topbar__phone">{WHATSAPP_PHONE}</span>
-          <span className="topbar__phone-compact" aria-hidden="true">987 654 321</span>
+          <span className="topbar__phone-compact" aria-hidden="true">9 4611 5064</span>
         </a>
 
       </div>

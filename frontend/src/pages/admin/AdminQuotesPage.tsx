@@ -11,6 +11,8 @@ import {
   type QuoteStatus,
 } from '../../types/catalog'
 
+const formatQuoteFolio = (id: number) => `COT-${String(id).padStart(6, '0')}`
+
 const STATUS_OPTIONS: Array<{ value: QuoteStatus; label: string }> = [
   { value: 'new', label: 'Nuevas' },
   { value: 'contacted', label: 'Contactadas' },
@@ -138,6 +140,10 @@ export function AdminQuotesPage() {
       </div>
 
       <div className="quote-summary-cards" aria-label="Resumen de estados de cotización">
+        <article className="quote-summary-card">
+          <p>Total</p>
+          <strong>{items.length}</strong>
+        </article>
         {STATUS_OPTIONS.map((status) => (
           <article key={status.value} className="quote-summary-card">
             <p>{status.label}</p>
@@ -154,28 +160,33 @@ export function AdminQuotesPage() {
           <table className="admin-table">
             <thead>
               <tr>
+                <th>Folio</th>
                 <th>Fecha</th>
                 <th>Cliente</th>
                 <th>Producto / asunto</th>
                 <th>Email / teléfono</th>
                 <th>Estado</th>
                 <th>Cambiar estado</th>
-                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <p className="ui-note">Aún no hay solicitudes de cotización.</p>
                   </td>
                 </tr>
               ) : null}
               {items.map((item) => (
                 <tr key={item.id}>
+                  <td>
+                    <span className="quote-folio">{formatQuoteFolio(item.id)}</span>
+                  </td>
                   <td>{new Date(item.created_at).toLocaleDateString()}</td>
                   <td>
-                    <strong>{item.customer_name}</strong>
+                    <Link className="quote-customer-link" to={`/admin/cotizaciones/${item.id}`}>
+                      {item.customer_name}
+                    </Link>
                     <span className="admin-table__muted">
                       {item.company_name || item.city || 'Sin empresa registrada'}
                     </span>
@@ -210,11 +221,6 @@ export function AdminQuotesPage() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td>
-                    <Link className="table-action" to={`/admin/cotizaciones/${item.id}`}>
-                      Ver detalle
-                    </Link>
                   </td>
                 </tr>
               ))}

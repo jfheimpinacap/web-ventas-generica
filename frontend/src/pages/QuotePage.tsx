@@ -241,7 +241,7 @@ export function QuotePage() {
           {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
             <button className="btn btn--accent" type="submit" disabled={loading}>
-              {loading ? 'Enviando...' : 'Enviar cotización'}
+              {loading ? 'Enviando...' : 'Enviar'}
             </button>
           </form>
         </div>
