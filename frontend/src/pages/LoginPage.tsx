@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ApiError } from '../services/api'
 import { Seo } from '../components/common/Seo'
@@ -8,10 +8,14 @@ import { buildPublicUrl } from '../utils/seo'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const logoutReason = (location.state as { reason?: string } | null)?.reason ?? searchParams.get('reason')
+  const idleMessage = logoutReason === 'idle' ? 'Sesión cerrada por inactividad. Vuelve a iniciar sesión para continuar.' : null
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -28,7 +32,7 @@ export function LoginPage() {
         return
       }
 
-      navigate('/admin/productos', { replace: true })
+      navigate('/admin/productos', { replace: true, state: null })
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError('Credenciales inválidas. Verifica usuario y contraseña.')
@@ -54,6 +58,8 @@ export function LoginPage() {
         <p className="login-card__eyebrow">Acceso vendedor</p>
         <h1>Panel privado</h1>
         <p>Ingresa con tu cuenta para administrar catálogo, cotizaciones y promociones.</p>
+
+        {idleMessage ? <p className="ui-note ui-note--success">{idleMessage}</p> : null}
 
         <form onSubmit={handleSubmit} className="login-form">
           <label>

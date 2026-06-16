@@ -563,3 +563,11 @@ El correo de diagnóstico usa el asunto `Prueba de notificación SMTP - JEM Nexu
 - El folio mostrado como `COT-000001` es un identificador visual para el panel vendedor.
 - El folio se calcula en frontend a partir del `id` existente de la cotización.
 - No agrega campos nuevos, no cambia el schema y no requiere migración.
+
+## Timeout frontend por inactividad del panel vendedor
+
+El panel vendedor (`/admin` y rutas hijas protegidas) cierra la sesión en el frontend tras 60 minutos de inactividad. El temporizador se ejecuta solo dentro del guard de rutas administrativas y se reinicia con actividad de usuario como click, teclado, movimiento de mouse, scroll, touch y navegación interna del panel.
+
+Al cumplirse el timeout, el frontend limpia la sesión/tokens usando el mismo mecanismo centralizado de autenticación y redirige a `/login`, donde se muestra el mensaje: “Sesión cerrada por inactividad. Vuelve a iniciar sesión para continuar.”
+
+Este cambio es solo de frontend/admin: no se implementó login ni registro de clientes, no se modificó la duración de JWT en backend y no se tocaron credenciales, SMTP ni configuración productiva.

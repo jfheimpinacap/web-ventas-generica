@@ -1,7 +1,7 @@
 import type { AuthUser } from '../types/catalog'
 import { apiRequest, ApiError } from './api'
 
-const ACCESS_TOKEN_KEY = 'ventas_access_token'
+export const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
 
 export interface AuthTokens {
