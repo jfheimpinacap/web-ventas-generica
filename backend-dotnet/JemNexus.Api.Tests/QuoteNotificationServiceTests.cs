@@ -73,7 +73,11 @@ public sealed class QuoteNotificationServiceTests
         Assert.True(result.Skipped);
         Assert.Equal("smtp_configuration_missing", result.ErrorCode);
         Assert.Equal(2, result.RecipientsCount);
+        Assert.Contains("SMTP configuration", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("password", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Email:Password", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Email__Password", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -96,7 +100,11 @@ public sealed class QuoteNotificationServiceTests
         Assert.Equal("jem-nexus.cl", result.SmtpHost);
         Assert.Equal(465, result.SmtpPort);
         Assert.Equal(EmailSecurityModes.SslOnConnect, result.SecurityMode);
-        Assert.DoesNotContain("secret-password", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SMTP configuration", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("password", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Email:Password", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Email__Password", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     private static SmtpQuoteNotificationService CreateService(EmailOptions emailOptions, string recipients) => new(

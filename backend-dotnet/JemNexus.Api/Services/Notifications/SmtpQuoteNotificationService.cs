@@ -60,7 +60,7 @@ public sealed class SmtpQuoteNotificationService : IQuoteNotificationService
             {
                 Skipped = true,
                 ErrorCode = "smtp_configuration_missing",
-                ErrorMessage = $"SMTP notification skipped because required configuration is missing: {string.Join(", ", missing)}."
+                ErrorMessage = "Required SMTP configuration is incomplete."
             };
         }
 
