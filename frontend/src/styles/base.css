@@ -91,6 +91,36 @@ a {
   margin-bottom: 0.3rem;
 }
 
+.footer__social {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.footer__social h4 {
+  margin-bottom: 0.15rem;
+}
+
+.footer__social a,
+.footer__social p {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.footer__social span[aria-hidden="true"] {
+  align-items: center;
+  border: 1px solid rgba(229, 237, 255, 0.55);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  height: 1.25rem;
+  justify-content: center;
+  line-height: 1;
+  width: 1.25rem;
+}
+
 .footer a {
   color: #e5edff;
 }

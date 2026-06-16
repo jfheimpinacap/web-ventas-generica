@@ -10,6 +10,8 @@ import {
   type QuoteStatus,
 } from '../../types/catalog'
 
+const formatQuoteFolio = (id: number) => `COT-${String(id).padStart(6, '0')}`
+
 export function AdminQuoteDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -63,15 +65,10 @@ export function AdminQuoteDetailPage() {
     }
   }
 
-  const applyQuickStatus = (nextStatus: QuoteStatus) => {
-    setStatus(nextStatus)
-    setSuccess(null)
-  }
-
   return (
     <AdminLayout>
       <div className="admin-products-header">
-        <h1>Detalle de cotización</h1>
+        <h1>{item ? `Cotización ${formatQuoteFolio(item.id)}` : 'Detalle de cotización'}</h1>
         <button className="btn btn--ghost" onClick={() => navigate('/admin/cotizaciones')} type="button">
           Volver
         </button>
@@ -82,6 +79,9 @@ export function AdminQuoteDetailPage() {
 
       {!loading && item ? (
         <form className="admin-block" onSubmit={onSave}>
+          <p>
+            <strong>Folio:</strong> {formatQuoteFolio(item.id)}
+          </p>
           <p>
             <strong>Cliente:</strong> {item.customer_name}
           </p>
@@ -139,21 +139,6 @@ export function AdminQuoteDetailPage() {
             </label>
           </div>
 
-          <div className="admin-media-item__actions">
-            <button className="btn btn--ghost" type="button" onClick={() => applyQuickStatus('contacted')}>
-              Marcar contactado
-            </button>
-            <button className="btn btn--ghost" type="button" onClick={() => applyQuickStatus('quoted')}>
-              Marcar cotizado
-            </button>
-            <button className="btn btn--ghost" type="button" onClick={() => applyQuickStatus('closed')}>
-              Cerrar
-            </button>
-            <button className="btn btn--ghost" type="button" onClick={() => applyQuickStatus('discarded')}>
-              Descartar
-            </button>
-          </div>
-
           <div>
             <p>
               <strong>Fechas:</strong> Contactado {item.contacted_at ? new Date(item.contacted_at).toLocaleString() : '-'} · Cotizado{' '}
@@ -163,9 +148,11 @@ export function AdminQuoteDetailPage() {
           </div>
 
           {success ? <p className="ui-note ui-note--success">{success}</p> : null}
-          <button className="btn btn--accent" type="submit" disabled={saving}>
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </button>
+          <div className="quote-detail-actions">
+            <button className="btn btn--accent" type="submit" disabled={saving}>
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
         </form>
       ) : null}
     </AdminLayout>

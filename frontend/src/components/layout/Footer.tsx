@@ -19,9 +19,22 @@ export function Footer() {
     <footer className="footer">
       <div id="contacto">
         <h4>Contacto</h4>
-        <p>WhatsApp: +51 987 654 321</p>
-        <p>Correo: ventas@alturacomercial.com</p>
-        <p>Dirección: Av. Industrial 1234, Lima</p>
+        <p>WhatsApp: +56 9 4611 5064</p>
+        <p>
+          Correo:{' '}
+          <a href="mailto:jmateluna@jem-nexus.cl">jmateluna@jem-nexus.cl</a>
+        </p>
+        <div className="footer__social">
+          <h4>Redes</h4>
+          <p>
+            <a href="https://www.facebook.com/jem.gestion.5" target="_blank" rel="noreferrer">
+              <span aria-hidden="true">f</span> Facebook
+            </a>
+          </p>
+          <p>
+            <span aria-hidden="true">◎</span> Instagram
+          </p>
+        </div>
       </div>
 
       <div>
@@ -55,8 +68,12 @@ export function Footer() {
       </div>
 
       <div>
-        <h4>Redes</h4>
-        <p>LinkedIn · Facebook · Instagram</p>
+        <h4>Diseño Web y aplicaciones</h4>
+        <p>
+          Correo:{' '}
+          <a href="mailto:fheim@jem-nexus.cl">fheim@jem-nexus.cl</a>
+        </p>
+        <p>WhatsApp: +56 9 9994 2951</p>
       </div>
     </footer>
   )

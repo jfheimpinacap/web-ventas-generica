@@ -430,6 +430,7 @@
   }
 
 .quote-page {
+  border-radius: 8px;
   font-family: "Ubuntu", system-ui, sans-serif;
 }
 
@@ -452,7 +453,7 @@
 .quote-form {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 1rem;
 }
 
@@ -469,7 +470,7 @@
 .quote-preview__placeholder {
   width: 100%;
   min-height: 220px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
 }
@@ -510,10 +511,22 @@
 .quote-form textarea,
 .quote-form select {
   width: 100%;
+  font-weight: 400;
+}
+
+.quote-form input::placeholder,
+.quote-form textarea::placeholder {
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .quote-form .btn--accent {
   background: #0077b6;
+  justify-self: center;
+  width: auto;
+  min-height: 46px;
+  padding: 0.75rem 1.65rem;
+  font-size: 1rem;
 }
 
 @media (min-width: 960px) {

@@ -29,10 +29,39 @@
   white-space: nowrap;
 }
 
+.admin-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.admin-table tbody tr:hover {
+  background: #f8fafc;
+}
+
 .table-action {
   color: #ea580c;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.quote-folio {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.quote-customer-link {
+  color: #0f4c81;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.quote-customer-link:hover,
+.quote-customer-link:focus-visible {
+  color: #ea580c;
 }
 
 @media (max-width: 768px) {

@@ -557,3 +557,9 @@ El correo de diagnóstico usa el asunto `Prueba de notificación SMTP - JEM Nexu
 ### Comportamiento del flujo público
 
 `POST /api/public/quote-requests` mantiene el orden operativo: valida, guarda la cotización y luego intenta notificar. Si SMTP falta, falla, expira por timeout o rechaza destinatarios, el backend registra un warning/error sanitizado, pero la cotización guardada no se revierte y el cliente recibe éxito si el registro fue persistido. En esta fase no se envía correo automático al cliente.
+
+## Prompt 037 - Folio visual de cotizaciones
+
+- El folio mostrado como `COT-000001` es un identificador visual para el panel vendedor.
+- El folio se calcula en frontend a partir del `id` existente de la cotización.
+- No agrega campos nuevos, no cambia el schema y no requiere migración.
