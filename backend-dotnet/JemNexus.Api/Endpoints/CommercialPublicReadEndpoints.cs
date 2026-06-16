@@ -14,8 +14,7 @@ public static class CommercialPublicReadEndpoints
     {
         ProductTypes.Machinery,
         ProductTypes.SparePart,
-        ProductTypes.Service,
-        ProductTypes.Other
+        ProductTypes.Service
     };
 
     private static readonly ISet<string> PublicProductConditions = new HashSet<string>(StringComparer.Ordinal)
@@ -154,9 +153,16 @@ public static class CommercialPublicReadEndpoints
     private static async Task<IResult> GetCategoriesAsync(
         JemNexusDbContext dbContext,
         [FromQuery(Name = "search")] string? search,
+        [FromQuery(Name = "product_type")] string? productType,
         CancellationToken cancellationToken)
     {
         var query = dbContext.Categories.AsNoTracking().Where(category => category.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(productType))
+        {
+            var value = productType.Trim();
+            query = query.Where(category => category.ProductType == value);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

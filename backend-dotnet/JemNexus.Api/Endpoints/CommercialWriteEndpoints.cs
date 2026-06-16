@@ -13,7 +13,7 @@ public static class CommercialWriteEndpoints
 {
     private const string CommercialWritePolicy = "RequireCommercialWrite";
     private static readonly ISet<string> ProductTypeValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { ProductTypes.Machinery, ProductTypes.SparePart, ProductTypes.Service, ProductTypes.Other };
+        { ProductTypes.Machinery, ProductTypes.SparePart, ProductTypes.Service };
     private static readonly ISet<string> ProductConditionValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { ProductConditions.New, ProductConditions.Used, ProductConditions.Refurbished, ProductConditions.NotApplicable };
     private static readonly ISet<string> StockStatusValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -66,9 +66,8 @@ public static class CommercialWriteEndpoints
     {
         var validation = ValidateRequest(request, nameof(request.Name));
         if (validation is not null) return validation;
-        var parentId = request.ParentId ?? request.Parent;
-        if (parentId.HasValue && !await dbContext.Categories.AnyAsync(category => category.Id == parentId.Value, cancellationToken))
-            return Results.BadRequest(new { detail = "parent category does not exist." });
+        var categoryValidation = await ValidateCategoryAsync(request, dbContext, currentCategoryId: null, isCreate: true, cancellationToken);
+        if (categoryValidation is not null) return categoryValidation;
 
         var category = new Category();
         await ApplyCategoryAsync(category, request, dbContext, user, isCreate: true, cancellationToken);
@@ -83,6 +82,8 @@ public static class CommercialWriteEndpoints
         if (category is null) return Results.NotFound(new { detail = "category not found." });
         var validation = ValidateRequest(request);
         if (validation is not null) return validation;
+        var categoryValidation = await ValidateCategoryAsync(request, dbContext, currentCategoryId: id, isCreate: false, cancellationToken);
+        if (categoryValidation is not null) return categoryValidation;
         await ApplyCategoryAsync(category, request, dbContext, user, isCreate: false, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(CategoryReadDto.FromCategory(category));
@@ -104,6 +105,7 @@ public static class CommercialWriteEndpoints
         if (!string.IsNullOrWhiteSpace(name)) category.Name = name;
         if (request.Slug is not null || (isCreate && string.IsNullOrWhiteSpace(category.Slug))) category.Slug = await UniqueSlugAsync(dbContext.Categories, Clean(request.Slug) ?? category.Name, category.Id, cancellationToken);
         if (request.ParentId.HasValue || request.Parent.HasValue) category.ParentId = request.ParentId ?? request.Parent;
+        if (request.ProductType is not null) category.ProductType = request.ProductType.Trim();
         if (request.Description is not null) category.Description = request.Description.Trim();
         if (request.IsActive.HasValue) category.IsActive = request.IsActive.Value;
         if (request.Order.HasValue) category.Order = request.Order.Value;
@@ -256,6 +258,7 @@ public static class CommercialWriteEndpoints
     {
         var validation = ValidateRequest(request, nameof(request.Name));
         if (validation is not null) return validation;
+        if (string.IsNullOrWhiteSpace(request.ProductType)) return Results.BadRequest(new { detail = "product_type is required." });
         var relation = await ValidateProductRelationsAsync(request, dbContext, requireCategory: true, cancellationToken);
         if (relation is not null) return relation;
         var valueValidation = ValidateProductValues(request);
@@ -277,6 +280,12 @@ public static class CommercialWriteEndpoints
         if (relation is not null) return relation;
         var valueValidation = ValidateProductValues(request);
         if (valueValidation is not null) return valueValidation;
+        var finalRelation = await ValidateProductCategoryTypeAsync(
+            request.CategoryId ?? request.Category ?? product.CategoryId,
+            request.ProductType ?? product.ProductType,
+            dbContext,
+            cancellationToken);
+        if (finalRelation is not null) return finalRelation;
         await ApplyProductAsync(product, request, dbContext, user, isCreate: false, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(await ProductDetailAsync(dbContext, product.Id, cancellationToken));
@@ -442,6 +451,32 @@ public static class CommercialWriteEndpoints
         return null;
     }
 
+    private static async Task<IResult?> ValidateCategoryAsync(CategoryWriteDto request, JemNexusDbContext dbContext, int? currentCategoryId, bool isCreate, CancellationToken cancellationToken)
+    {
+        var productType = request.ProductType?.Trim();
+        if (!isCreate && string.IsNullOrWhiteSpace(productType) && currentCategoryId.HasValue)
+        {
+            productType = await dbContext.Categories
+                .AsNoTracking()
+                .Where(category => category.Id == currentCategoryId.Value)
+                .Select(category => category.ProductType)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        if (isCreate && string.IsNullOrWhiteSpace(productType)) return Results.BadRequest(new { detail = "product_type is required." });
+        if (!string.IsNullOrWhiteSpace(productType) && !ProductTypeValues.Contains(productType)) return Results.BadRequest(new { detail = "invalid product_type." });
+
+        var parentId = request.ParentId ?? request.Parent;
+        if (!parentId.HasValue) return null;
+        if (currentCategoryId.HasValue && parentId.Value == currentCategoryId.Value) return Results.BadRequest(new { detail = "category cannot be its own parent." });
+
+        var parent = await dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(category => category.Id == parentId.Value, cancellationToken);
+        if (parent is null) return Results.BadRequest(new { detail = "parent category does not exist." });
+        if (!parent.IsActive) return Results.BadRequest(new { detail = "parent category must be active." });
+        if (!string.IsNullOrWhiteSpace(productType) && !string.Equals(parent.ProductType, productType, StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { detail = "parent category must belong to the same product_type." });
+        return null;
+    }
+
     private static IResult? ValidateProductValues(ProductWriteDto request)
     {
         if (request.ProductType is not null && !ProductTypeValues.Contains(request.ProductType.Trim())) return Results.BadRequest(new { detail = "invalid product_type." });
@@ -471,11 +506,26 @@ public static class CommercialWriteEndpoints
     {
         var categoryId = request.CategoryId ?? request.Category;
         if (requireCategory && !categoryId.HasValue) return Results.BadRequest(new { detail = "category is required." });
-        if (categoryId.HasValue && !await dbContext.Categories.AnyAsync(category => category.Id == categoryId.Value, cancellationToken)) return Results.BadRequest(new { detail = "category does not exist." });
+        if (categoryId.HasValue)
+        {
+            var categoryValidation = await ValidateProductCategoryTypeAsync(categoryId.Value, request.ProductType, dbContext, cancellationToken);
+            if (categoryValidation is not null) return categoryValidation;
+        }
         var brandId = request.BrandId ?? request.Brand;
         if (brandId.HasValue && !await dbContext.Brands.AnyAsync(brand => brand.Id == brandId.Value, cancellationToken)) return Results.BadRequest(new { detail = "brand does not exist." });
         var supplierId = request.SupplierId ?? request.Supplier;
         if (supplierId.HasValue && !await dbContext.Suppliers.AnyAsync(supplier => supplier.Id == supplierId.Value, cancellationToken)) return Results.BadRequest(new { detail = "supplier does not exist." });
+        return null;
+    }
+
+    private static async Task<IResult?> ValidateProductCategoryTypeAsync(int categoryId, string? productType, JemNexusDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var category = await dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(category => category.Id == categoryId, cancellationToken);
+        if (category is null) return Results.BadRequest(new { detail = "category does not exist." });
+        if (!category.IsActive) return Results.BadRequest(new { detail = "category must be active." });
+        var normalizedProductType = productType?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedProductType) && !string.Equals(category.ProductType, normalizedProductType, StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { detail = "category must belong to the selected product_type." });
         return null;
     }
 

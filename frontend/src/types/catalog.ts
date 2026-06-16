@@ -3,6 +3,7 @@ export interface Category {
   name: string
   slug: string
   parent: number | null
+  product_type: ProductType
   description: string
   is_active: boolean
   order: number
@@ -71,7 +72,7 @@ export interface ProductSpecWritePayload {
 
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
-export type ProductType = 'machinery' | 'spare_part' | 'service' | 'other'
+export type ProductType = 'machinery' | 'spare_part' | 'service'
 
 export interface ProductListItem {
   id: number
@@ -226,6 +227,7 @@ export interface CategoryFormValues {
   name: string
   slug?: string
   parent: number | null
+  product_type: ProductType
   description: string
   is_active: boolean
   order: number

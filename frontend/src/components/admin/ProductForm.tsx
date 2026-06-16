@@ -17,8 +17,7 @@ interface ProductFormProps {
 const PRODUCT_TYPES: Array<{ value: ProductType; label: string }> = [
   { value: 'machinery', label: 'Maquinaria' },
   { value: 'spare_part', label: 'Repuesto' },
-  { value: 'service', label: 'Servicio' },
-  { value: 'other', label: 'Otro' },
+  { value: 'service', label: 'Servicios' },
 ]
 
 const PRODUCT_CONDITIONS: Array<{ value: ProductCondition; label: string }> = [
@@ -62,12 +61,17 @@ export function ProductForm({
     onValuesChange?.(values)
   }, [onValuesChange, values])
 
-  const categoriesOptions = useMemo(() => categories.filter((item) => item.is_active), [categories])
+  const categoriesOptions = useMemo(() => categories.filter((item) => item.is_active && item.product_type === values.product_type), [categories, values.product_type])
   const brandsOptions = useMemo(() => brands.filter((item) => item.is_active), [brands])
   const suppliersOptions = useMemo(() => suppliers.filter((item) => item.is_active), [suppliers])
 
   const setField = <K extends keyof ProductFormValues>(field: K, nextValue: ProductFormValues[K]) => {
-    setValues((prev) => ({ ...prev, [field]: nextValue }))
+    setValues((prev) => {
+      if (field === 'product_type') {
+        return { ...prev, product_type: nextValue as ProductType, category: 0 }
+      }
+      return { ...prev, [field]: nextValue }
+    })
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -88,8 +92,19 @@ export function ProductForm({
         </label>
 
         <label>
+          Tipo de producto
+          <select value={values.product_type} onChange={(e) => setField('product_type', e.target.value as ProductType)} required>
+            {PRODUCT_TYPES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
           Categoría
-          <select value={values.category} onChange={(e) => setField('category', Number(e.target.value))} required>
+          <select value={values.category || ''} onChange={(e) => setField('category', Number(e.target.value))} required>
             <option value="">Selecciona categoría</option>
             {categoriesOptions.map((item) => (
               <option key={item.id} value={item.id}>
@@ -97,6 +112,9 @@ export function ProductForm({
               </option>
             ))}
           </select>
+          {categoriesOptions.length === 0 ? (
+            <span className="ui-note">No hay categorías activas para este tipo. Puedes crearlas desde Categorías.</span>
+          ) : null}
         </label>
 
         <label>
@@ -123,16 +141,6 @@ export function ProductForm({
           </select>
         </label>
 
-        <label>
-          Tipo de producto
-          <select value={values.product_type} onChange={(e) => setField('product_type', e.target.value as ProductType)} required>
-            {PRODUCT_TYPES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
 
         <label>
           Condición

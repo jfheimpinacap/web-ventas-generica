@@ -11,7 +11,6 @@ const PRODUCT_TYPE_OPTIONS = [
   { value: 'machinery', label: 'Maquinaria' },
   { value: 'spare_part', label: 'Repuestos' },
   { value: 'service', label: 'Servicios' },
-  { value: 'other', label: 'Otros' },
 ]
 
 const CONDITION_OPTIONS = [

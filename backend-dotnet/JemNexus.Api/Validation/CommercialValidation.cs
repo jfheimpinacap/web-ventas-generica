@@ -13,8 +13,7 @@ public static class CommercialValidation
     [
         ProductTypes.Machinery,
         ProductTypes.SparePart,
-        ProductTypes.Service,
-        ProductTypes.Other
+        ProductTypes.Service
     ];
 
     public static readonly string[] AllowedProductConditions =

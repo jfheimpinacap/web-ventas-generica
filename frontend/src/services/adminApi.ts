@@ -94,6 +94,7 @@ export function normalizeCategory(value: unknown): Category {
       pick(record, 'parent') === null
         ? null
         : toNumber(pick(record, 'parent', 'parentId', 'parent_id'), 0) || null,
+    product_type: toStringValue(pick(record, 'product_type', 'productType'), 'machinery') as ProductType,
     description: toStringValue(pick(record, 'description')),
     is_active: toBoolean(pick(record, 'is_active', 'isActive'), true),
     order: toNumber(pick(record, 'order')),
@@ -216,7 +217,7 @@ export function normalizeProductListItem(value: unknown): ProductListItem {
         : normalizeBrand(brandValue),
     product_type: toStringValue(
       pick(record, 'product_type', 'productType'),
-      'other',
+      'machinery',
     ) as ProductType,
     condition: toStringValue(
       pick(record, 'condition'),

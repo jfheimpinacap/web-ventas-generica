@@ -42,7 +42,6 @@ public static class ProductTypes
     public const string Machinery = "machinery";
     public const string SparePart = "spare_part";
     public const string Service = "service";
-    public const string Other = "other";
 }
 
 public static class ProductConditions

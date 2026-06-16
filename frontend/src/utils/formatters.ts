@@ -38,7 +38,6 @@ const productTypeMap: Record<ProductType, string> = {
   machinery: 'Maquinaria',
   spare_part: 'Repuesto',
   service: 'Servicio',
-  other: 'Otro',
 }
 
 export function formatProductType(type: ProductType) {
