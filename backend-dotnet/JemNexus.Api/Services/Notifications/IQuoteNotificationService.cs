@@ -4,5 +4,6 @@ namespace JemNexus.Api.Services.Notifications;
 
 public interface IQuoteNotificationService
 {
-    Task SendNewQuoteRequestAsync(QuoteRequest quoteRequest, CancellationToken cancellationToken = default);
+    Task<QuoteNotificationResult> SendNewQuoteRequestAsync(QuoteRequest quoteRequest, CancellationToken cancellationToken = default);
+    Task<QuoteNotificationResult> SendTestNotificationAsync(CancellationToken cancellationToken = default);
 }
