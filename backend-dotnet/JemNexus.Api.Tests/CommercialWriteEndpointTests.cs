@@ -33,7 +33,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         await _factory.SeedCommercialDataAsync();
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PATCH") request.Content = JsonContent.Create(new { name = "Demo" });
+        if (method is "POST" or "PATCH") request.Content = JsonContent.Create(new { name = "Demo", product_type = ProductTypes.Machinery });
 
         var response = await client.SendAsync(request);
 
@@ -47,7 +47,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         await _factory.SeedUnauthorizedUserAsync();
         using var client = await CreateAuthorizedClientAsync("viewer");
 
-        var response = await client.PostAsJsonAsync("/api/categories/", new { name = "Bloqueada" });
+        var response = await client.PostAsJsonAsync("/api/categories/", new { name = "Bloqueada", product_type = ProductTypes.Machinery });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -58,9 +58,9 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         await _factory.SeedCommercialDataAsync();
         using var client = await CreateAuthorizedClientAsync();
 
-        var category = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/categories/", new { name = "Filtros", order = 9 }));
+        var category = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/categories/", new { name = "Filtros", product_type = ProductTypes.Machinery, order = 9 }));
         var categoryId = category.GetProperty("id").GetInt32();
-        var categoryUpdate = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/categories/{categoryId}/", new { description = "Editada", is_active = true }));
+        var categoryUpdate = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/categories/{categoryId}/", new { description = "Editada", product_type = ProductTypes.Machinery, is_active = true }));
         Assert.Equal("Editada", categoryUpdate.GetProperty("description").GetString());
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/categories/{categoryId}/")).StatusCode);
 
@@ -238,8 +238,8 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
             if (await dbContext.Categories.AnyAsync()) return;
 
-            var category = new Category { Id = 1, Name = "Maquinaria", Slug = "maquinaria", Description = "Categoría", IsActive = true, Order = 1 };
-            var spareCategory = new Category { Id = 2, Name = "Repuestos", Slug = "repuestos", Description = "Repuestos", IsActive = true, Order = 2 };
+            var category = new Category { Id = 1, Name = "Maquinaria", Slug = "maquinaria", ProductType = ProductTypes.Machinery, Description = "Categoría", IsActive = true, Order = 1 };
+            var spareCategory = new Category { Id = 2, Name = "Repuestos", Slug = "repuestos", ProductType = ProductTypes.SparePart, Description = "Repuestos", IsActive = true, Order = 2 };
             var brand = new Brand { Id = 1, Name = "ACME", Slug = "acme", Description = "Marca", IsActive = true };
             var supplier = new Supplier { Id = 1, Name = "Proveedor", ContactName = "Contacto", Phone = "+569", Email = "proveedor@example.test", IsActive = true };
             var product = new Product { Id = 1, Name = "Excavadora", Slug = "excavadora", Category = category, Brand = brand, Supplier = supplier, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
