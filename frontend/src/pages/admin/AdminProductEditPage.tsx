@@ -28,7 +28,7 @@ import type {
   ProductSpecWritePayload,
   SupplierSummary,
 } from '../../types/catalog'
-import { formatCondition, formatStockStatus } from '../../utils/formatters'
+import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
 
 function mapProductToFormValues(product: Awaited<ReturnType<typeof getAdminProduct>>): ProductFormValues {
   return {
@@ -60,18 +60,6 @@ const initialSpecForm = {
 }
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
-
-function formatPreviewPrice(price: string | null, priceVisible: boolean) {
-  if (!priceVisible || !price) return 'Consultar'
-  const amount = Number(price)
-  if (Number.isNaN(amount)) return 'Consultar'
-
-  return new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
 
 export function AdminProductEditPage() {
   const navigate = useNavigate()
@@ -376,7 +364,7 @@ export function AdminProductEditPage() {
                       <strong>Stock:</strong> {formatStockStatus(previewValues?.stock_status ?? initialValues.stock_status)}
                     </p>
                     <p className="product-card__price">
-                      {formatPreviewPrice(previewValues?.price ?? initialValues.price, previewValues?.price_visible ?? initialValues.price_visible)}
+                      {formatPriceValue(previewValues?.price ?? initialValues.price, previewValues?.price_visible ?? initialValues.price_visible)}
                     </p>
                   </div>
                   <div className="product-card__actions">

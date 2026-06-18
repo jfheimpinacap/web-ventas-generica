@@ -24,6 +24,7 @@ import type {
   SupplierSummary,
 } from '../types/catalog'
 import { API_PROVIDER, ApiError } from './api'
+import { normalizeChileanPriceInput } from '../utils/formatters'
 import { authFetch } from './authApi'
 
 type ApiRecord = Record<string, unknown>
@@ -451,6 +452,15 @@ function toDotnetPromotionPayload(
   return rest
 }
 
+function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payload: T): T {
+  if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return payload
+
+  return {
+    ...payload,
+    price: normalizeChileanPriceInput(payload.price),
+  }
+}
+
 function dotnetUploadPending(): never {
   throw new ApiError(
     'La carga de imágenes todavía no está implementada en la API .NET.',
@@ -475,7 +485,7 @@ export async function getAdminProduct(slug: string) {
 export async function createProduct(payload: ProductFormValues) {
   const response = await authFetch<unknown>('/products/', {
     method: 'POST',
-    body: jsonBody(payload),
+    body: jsonBody(normalizeProductWritePayload(payload)),
   })
   return normalizeProductDetail(response)
 }
@@ -486,7 +496,7 @@ export async function updateProduct(
 ) {
   const response = await authFetch<unknown>(`/products/${slug}/`, {
     method: 'PATCH',
-    body: jsonBody(payload),
+    body: jsonBody(normalizeProductWritePayload(payload)),
   })
   return normalizeProductDetail(response)
 }

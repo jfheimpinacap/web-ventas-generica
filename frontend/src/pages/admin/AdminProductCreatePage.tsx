@@ -7,7 +7,7 @@ import { ProductForm } from '../../components/admin/ProductForm'
 import { createProduct } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import type { Brand, Category, ProductFormValues, SupplierSummary } from '../../types/catalog'
-import { formatCondition, formatStockStatus } from '../../utils/formatters'
+import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
 
 const INITIAL_VALUES: ProductFormValues = {
   name: '',
@@ -30,18 +30,6 @@ const INITIAL_VALUES: ProductFormValues = {
 }
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
-
-function formatPreviewPrice(price: string | null, priceVisible: boolean) {
-  if (!priceVisible || !price) return 'Consultar'
-  const amount = Number(price)
-  if (Number.isNaN(amount)) return 'Consultar'
-
-  return new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
 
 export function AdminProductCreatePage() {
   const navigate = useNavigate()
@@ -159,7 +147,7 @@ export function AdminProductCreatePage() {
                     <p className="product-card__meta">
                       <strong>Stock:</strong> {formatStockStatus(formValues.stock_status)}
                     </p>
-                    <p className="product-card__price">{formatPreviewPrice(formValues.price, formValues.price_visible)}</p>
+                    <p className="product-card__price">{formatPriceValue(formValues.price, formValues.price_visible)}</p>
                   </div>
                   <div className="product-card__actions">
                     <button type="button" className="btn btn--accent" disabled>
