@@ -106,7 +106,7 @@ export function ProductForm({
     <form className="admin-product-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
-      <section className="admin-form-panel">
+      <section className="admin-form-panel admin-form-panel--columns-2">
         <h3>Información general</h3>
 
         <label>
@@ -178,17 +178,33 @@ export function ProductForm({
         </label>
 
         <label>
-          Descripción corta
-          <input value={values.short_description} onChange={(e) => setField('short_description', e.target.value)} />
+          Stock
+          <select value={values.stock_status} onChange={(e) => setField('stock_status', e.target.value as StockStatus)} required>
+            {STOCK_STATUSES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </label>
 
-        <label className="admin-form-panel__full">
-          Descripción completa
-          <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
+        <label>
+          Precio
+          <input
+            inputMode="numeric"
+            value={values.price ?? ''}
+            onChange={(e) => {
+              setField('price', e.target.value || null)
+              if (priceError) setPriceError(null)
+            }}
+            aria-invalid={Boolean(priceError)}
+            aria-describedby={priceError ? 'product-price-error' : undefined}
+          />
+          {priceError ? <span id="product-price-error" className="ui-note ui-note--error">{priceError}</span> : null}
         </label>
       </section>
 
-      <section className="admin-form-panel">
+      <section className="admin-form-panel admin-form-panel--columns-2">
         <h3>Información técnica / comercial</h3>
 
         <label>
@@ -219,30 +235,14 @@ export function ProductForm({
           />
         </label>
 
-        <label>
-          Precio
-          <input
-            inputMode="numeric"
-            value={values.price ?? ''}
-            onChange={(e) => {
-              setField('price', e.target.value || null)
-              if (priceError) setPriceError(null)
-            }}
-            aria-invalid={Boolean(priceError)}
-            aria-describedby={priceError ? 'product-price-error' : undefined}
-          />
-          {priceError ? <span id="product-price-error" className="ui-note ui-note--error">{priceError}</span> : null}
+        <label className="admin-form-panel__full">
+          Descripción corta
+          <input value={values.short_description} onChange={(e) => setField('short_description', e.target.value)} />
         </label>
 
-        <label>
-          Estado stock
-          <select value={values.stock_status} onChange={(e) => setField('stock_status', e.target.value as StockStatus)} required>
-            {STOCK_STATUSES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+        <label className="admin-form-panel__full">
+          Descripción completa
+          <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
         </label>
 
         <div className="admin-form-switches">

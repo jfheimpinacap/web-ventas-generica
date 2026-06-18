@@ -18,7 +18,6 @@ export function AdminQuoteDetailPage() {
   const [item, setItem] = useState<QuoteRequestAdmin | null>(null)
   const [status, setStatus] = useState<QuoteStatus>('new')
   const [internalNotes, setInternalNotes] = useState('')
-  const [sellerResponse, setSellerResponse] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +32,6 @@ export function AdminQuoteDetailPage() {
         setItem(data)
         setStatus(data.status)
         setInternalNotes(data.internal_notes)
-        setSellerResponse(data.seller_response)
       } catch {
         setError('No se pudo cargar la cotización.')
       } finally {
@@ -54,7 +52,7 @@ export function AdminQuoteDetailPage() {
       const updated = await updateQuote(Number(id), {
         status,
         internal_notes: internalNotes,
-        seller_response: sellerResponse,
+        seller_response: item?.seller_response ?? '',
       })
       setItem(updated)
       setSuccess('Cotización actualizada correctamente.')
@@ -78,47 +76,44 @@ export function AdminQuoteDetailPage() {
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
 
       {!loading && item ? (
-        <form className="admin-block" onSubmit={onSave}>
-          <p>
-            <strong>Folio:</strong> {formatQuoteFolio(item.id)}
-          </p>
-          <p>
-            <strong>Cliente:</strong> {item.customer_name}
-          </p>
-          <p>
-            <strong>Teléfono:</strong> {item.customer_phone}
-          </p>
-          <p>
-            <strong>Email:</strong> {item.customer_email || '-'}
-          </p>
-          <p>
-            <strong>Empresa:</strong> {item.company_name || '-'}
-          </p>
-          <p>
-            <strong>Ciudad:</strong> {item.city || '-'}
-          </p>
-          <p>
-            <strong>Método preferido:</strong>{' '}
-            {item.preferred_contact_method ? PREFERRED_CONTACT_METHOD_LABELS[item.preferred_contact_method] : '-'}
-          </p>
-          <p>
-            <strong>Producto:</strong>{' '}
-            {item.product_name ? (
-              <Link className="table-action" to={`/catalogo?search=${encodeURIComponent(item.product_name)}`}>
-                {item.product_name}
-              </Link>
-            ) : (
-              'Sin producto asociado'
-            )}
-          </p>
-          <p>
-            <strong>Mensaje:</strong> {item.message}
-          </p>
-          <p>
-            <strong>Estado actual:</strong> <span className={`badge quote-status quote-status--${item.status}`}>{QUOTE_STATUS_LABELS[item.status]}</span>
-          </p>
+        <form className="admin-block quote-detail-form" onSubmit={onSave}>
+          <div className="quote-detail-grid">
+            <div className="quote-detail-column">
+              <p className="quote-detail-row"><strong>Folio:</strong> <span>{formatQuoteFolio(item.id)}</span></p>
+              <p className="quote-detail-row"><strong>Empresa:</strong> <span>{item.company_name || '-'}</span></p>
+              <p className="quote-detail-row"><strong>Nombre:</strong> <span>{item.customer_name}</span></p>
+              <p className="quote-detail-row"><strong>Teléfono:</strong> <span>{item.customer_phone}</span></p>
+              <p className="quote-detail-row"><strong>Email:</strong> <span>{item.customer_email || '-'}</span></p>
+              <p className="quote-detail-row"><strong>Mensaje:</strong> <span>{item.message}</span></p>
+            </div>
 
-          <div className="admin-inline-form">
+            <div className="quote-detail-column">
+              <p className="quote-detail-row"><strong>Fecha:</strong> <span>{new Date(item.created_at).toLocaleDateString()}</span></p>
+              <p className="quote-detail-row"><strong>Ciudad:</strong> <span>{item.city || '-'}</span></p>
+              <p className="quote-detail-row">
+                <strong>Tipo contacto:</strong>
+                <span>{item.preferred_contact_method ? PREFERRED_CONTACT_METHOD_LABELS[item.preferred_contact_method] : '-'}</span>
+              </p>
+              <p className="quote-detail-row">
+                <strong>Producto:</strong>
+                <span>
+                  {item.product_name ? (
+                    <Link className="table-action" to={`/catalogo?search=${encodeURIComponent(item.product_name)}`}>
+                      {item.product_name}
+                    </Link>
+                  ) : (
+                    'Sin producto asociado'
+                  )}
+                </span>
+              </p>
+              <p className="quote-detail-row">
+                <strong>Estado actual:</strong>
+                <span><span className={`badge quote-status quote-status--${item.status}`}>{QUOTE_STATUS_LABELS[item.status]}</span></span>
+              </p>
+            </div>
+          </div>
+
+          <div className="admin-inline-form quote-detail-edit-form">
             <label>
               Estado
               <select value={status} onChange={(event) => setStatus(event.target.value as QuoteStatus)}>
@@ -133,18 +128,6 @@ export function AdminQuoteDetailPage() {
               Notas internas
               <textarea rows={4} value={internalNotes} onChange={(event) => setInternalNotes(event.target.value)} />
             </label>
-            <label className="admin-product-form__full">
-              Respuesta comercial
-              <textarea rows={4} value={sellerResponse} onChange={(event) => setSellerResponse(event.target.value)} />
-            </label>
-          </div>
-
-          <div>
-            <p>
-              <strong>Fechas:</strong> Contactado {item.contacted_at ? new Date(item.contacted_at).toLocaleString() : '-'} · Cotizado{' '}
-              {item.quoted_at ? new Date(item.quoted_at).toLocaleString() : '-'} · Cerrado{' '}
-              {item.closed_at ? new Date(item.closed_at).toLocaleString() : '-'}
-            </p>
           </div>
 
           {success ? <p className="ui-note ui-note--success">{success}</p> : null}

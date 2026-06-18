@@ -527,3 +527,76 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Prompt 044: visual polish for seller panel forms */
+.admin-content input,
+.admin-content select,
+.admin-content textarea {
+  border-radius: 6px;
+  font-weight: 400;
+}
+
+.admin-form-panel--columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-form-panel h3,
+.admin-form-panel__full,
+.admin-form-switches {
+  grid-column: 1 / -1;
+}
+
+.quote-detail-form {
+  gap: 0.9rem;
+}
+
+.quote-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.quote-detail-column {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.quote-detail-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.38fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+.quote-detail-row strong {
+  color: #334155;
+}
+
+.quote-detail-row span {
+  min-width: 0;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.quote-detail-edit-form {
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.quote-detail-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 768px) {
+  .admin-form-panel--columns-2,
+  .quote-detail-grid,
+  .quote-detail-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-detail-row {
+    grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  }
+}
