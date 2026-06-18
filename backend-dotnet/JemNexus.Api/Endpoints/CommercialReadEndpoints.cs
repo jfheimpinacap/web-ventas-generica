@@ -103,12 +103,12 @@ public static class CommercialReadEndpoints
             var value = category.Trim();
             if (int.TryParse(value, out var categoryId))
             {
-                query = query.Where(product => product.CategoryId == categoryId);
+                query = query.Where(product => product.CategoryId == categoryId || product.Category.ParentId == categoryId);
             }
             else
             {
                 var slug = value.ToLower();
-                query = query.Where(product => product.Category.Slug.ToLower() == slug);
+                query = query.Where(product => product.Category.Slug.ToLower() == slug || (product.Category.Parent != null && product.Category.Parent.Slug.ToLower() == slug));
             }
         }
 
@@ -469,7 +469,7 @@ public static class CommercialReadEndpoints
 
     private static IQueryable<JemNexus.Api.Models.Product> ProductReadQuery(IQueryable<JemNexus.Api.Models.Product> products) => products
         .AsNoTracking()
-        .Include(product => product.Category)
+        .Include(product => product.Category).ThenInclude(category => category.Parent)
         .Include(product => product.Brand)
         .Include(product => product.Supplier)
         .Include(product => product.Images)

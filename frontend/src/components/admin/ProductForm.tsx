@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
-import type { Brand, Category, ProductCondition, ProductFormValues, ProductType, StockStatus, SupplierSummary } from '../../types/catalog'
-import { isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
+import type { Brand, Category, ProductCondition, ProductFormValues, StockStatus, SupplierSummary } from '../../types/catalog'
+import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 
 interface ProductFormProps {
   initialValues: ProductFormValues
@@ -14,12 +14,6 @@ interface ProductFormProps {
   error: string | null
   onValuesChange?: (values: ProductFormValues) => void
 }
-
-const PRODUCT_TYPES: Array<{ value: ProductType; label: string }> = [
-  { value: 'machinery', label: 'Maquinaria' },
-  { value: 'spare_part', label: 'Repuesto' },
-  { value: 'service', label: 'Servicios' },
-]
 
 const PRODUCT_CONDITIONS: Array<{ value: ProductCondition; label: string }> = [
   { value: 'new', label: 'Nuevo' },
@@ -54,9 +48,11 @@ export function ProductForm({
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
   const [priceError, setPriceError] = useState<string | null>(null)
+  const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
 
   useEffect(() => {
     setValues(initialValues)
+    setPrimaryCategoryId(null)
     setPriceError(null)
   }, [initialValues])
 
@@ -64,14 +60,27 @@ export function ProductForm({
     onValuesChange?.(values)
   }, [onValuesChange, values])
 
-  const categoriesOptions = useMemo(() => categories.filter((item) => item.is_active && item.product_type === values.product_type), [categories, values.product_type])
+  const rootCategories = useMemo(() => categories.filter((item) => item.is_active && item.parent === null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)), [categories])
+  const selectedCategory = useMemo(() => categories.find((item) => item.id === values.category) ?? null, [categories, values.category])
+  const categoryRoot = useMemo(() => getRootCategory(selectedCategory, categories), [categories, selectedCategory])
+  const selectedRootId = categoryRoot?.id ?? primaryCategoryId
+  const selectedRoot = useMemo(() => categories.find((item) => item.id === selectedRootId) ?? categoryRoot, [categories, categoryRoot, selectedRootId])
+  const subcategoryOptions = useMemo(() => selectedRootId ? categories.filter((item) => item.is_active && item.parent === selectedRootId).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) : [], [categories, selectedRootId])
   const brandsOptions = useMemo(() => brands.filter((item) => item.is_active), [brands])
   const suppliersOptions = useMemo(() => suppliers.filter((item) => item.is_active), [suppliers])
 
   const setField = <K extends keyof ProductFormValues>(field: K, nextValue: ProductFormValues[K]) => {
     setValues((prev) => {
-      if (field === 'product_type') {
-        return { ...prev, product_type: nextValue as ProductType, category: 0 }
+      if (field === 'product_type') return prev
+      if (field === 'category') {
+        const selected = categories.find((item) => item.id === nextValue) ?? null
+        const root = getRootCategory(selected, categories) ?? selected
+        if (selected?.parent === null) {
+          setPrimaryCategoryId(selected.id)
+          return { ...prev, category: 0, product_type: inferProductTypeFromRootCategory(selected) }
+        }
+        setPrimaryCategoryId(root?.id ?? null)
+        return { ...prev, category: Number(nextValue), product_type: inferProductTypeFromRootCategory(root) }
       }
       return { ...prev, [field]: nextValue }
     })
@@ -88,6 +97,7 @@ export function ProductForm({
     setPriceError(null)
     await onSubmit({
       ...values,
+      product_type: inferProductTypeFromRootCategory(selectedRoot),
       price: normalizeChileanPriceInput(values.price),
     })
   }
@@ -105,28 +115,29 @@ export function ProductForm({
         </label>
 
         <label>
-          Tipo de producto
-          <select value={values.product_type} onChange={(e) => setField('product_type', e.target.value as ProductType)} required>
-            {PRODUCT_TYPES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
+          Categoría principal
+          <select value={selectedRootId ?? ''} onChange={(e) => setField('category', Number(e.target.value))} required>
+            <option value="">Selecciona categoría principal</option>
+            {rootCategories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
               </option>
             ))}
           </select>
         </label>
 
         <label>
-          Categoría
-          <select value={values.category || ''} onChange={(e) => setField('category', Number(e.target.value))} required>
-            <option value="">Selecciona categoría</option>
-            {categoriesOptions.map((item) => (
+          Subcategoría
+          <select value={selectedCategory?.parent ? values.category : ''} onChange={(e) => setField('category', Number(e.target.value))} required disabled={!selectedRootId || subcategoryOptions.length === 0}>
+            <option value="">Selecciona subcategoría</option>
+            {subcategoryOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
             ))}
           </select>
-          {categoriesOptions.length === 0 ? (
-            <span className="ui-note">No hay categorías activas para este tipo. Puedes crearlas desde Categorías.</span>
+          {selectedRootId && subcategoryOptions.length === 0 ? (
+            <span className="ui-note">No hay subcategorías activas para esta categoría principal. Puedes crearlas desde Categorías.</span>
           ) : null}
         </label>
 

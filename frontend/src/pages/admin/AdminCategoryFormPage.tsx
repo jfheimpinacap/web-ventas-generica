@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
@@ -12,6 +12,8 @@ const INITIAL_VALUES: CategoryFormValues = { name: '', slug: '', parent: null, p
 export function AdminCategoryFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedParentId = Number(searchParams.get('parent')) || null
   const isEdit = Boolean(id)
   const [categories, setCategories] = useState<Category[]>([])
   const [initialValues, setInitialValues] = useState(INITIAL_VALUES)
@@ -24,6 +26,10 @@ export function AdminCategoryFormPage() {
       try {
         const list = await getAdminCategories()
         setCategories(list)
+        if (!id && requestedParentId) {
+          const parent = list.find((item) => item.id === requestedParentId)
+          setInitialValues({ ...INITIAL_VALUES, parent: requestedParentId, product_type: parent?.product_type ?? 'machinery' })
+        }
         if (id) {
           const entity = await getAdminCategory(Number(id))
           setInitialValues({
@@ -43,7 +49,7 @@ export function AdminCategoryFormPage() {
       }
     }
     void load()
-  }, [id])
+  }, [id, requestedParentId])
 
   const handleSubmit = async (values: CategoryFormValues) => {
     try {
@@ -69,11 +75,11 @@ export function AdminCategoryFormPage() {
           form={
             <CategoryForm
               initialValues={initialValues}
-              categories={categories.filter((item) => String(item.id) !== id)}
               onSubmit={handleSubmit}
               submitLabel={isEdit ? 'Guardar cambios' : 'Crear categoría'}
               isSubmitting={isSubmitting}
               error={error}
+              parentName={categories.find((item) => item.id === initialValues.parent)?.name ?? null}
             />
           }
         />

@@ -68,10 +68,38 @@ export function formatProductType(type: ProductType) {
   return productTypeMap[type] ?? type
 }
 
+
+export function getRootCategory(category: Category | null | undefined, categories: Category[]) {
+  if (!category) return null
+  const byId = new Map(categories.map((item) => [item.id, item]))
+  let current: Category | null = byId.get(category.id) ?? category
+  const visited = new Set<number>()
+
+  while (current?.parent) {
+    if (visited.has(current.id)) break
+    visited.add(current.id)
+    current = byId.get(current.parent) ?? null
+  }
+
+  return current
+}
+
+export function inferProductTypeFromRootCategory(category: Category | null | undefined): ProductType {
+  const normalized = category?.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
+  if (normalized === 'repuestos') return 'spare_part'
+  if (normalized === 'servicios') return 'service'
+  return category?.product_type ?? 'machinery'
+}
+
 export function buildSidebarMenuFromCategories(categories: Category[]) {
   const grouped = new Map<number | null, Category[]>()
 
-  categories.forEach((category) => {
+  categories.filter((category) => category.is_active !== false).forEach((category) => {
     const key = category.parent
     if (!grouped.has(key)) {
       grouped.set(key, [])
@@ -92,5 +120,7 @@ export function buildSidebarMenuFromCategories(categories: Category[]) {
     }
   }
 
-  return (grouped.get(null) ?? []).map(buildNode)
+  return (grouped.get(null) ?? [])
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+    .map(buildNode)
 }

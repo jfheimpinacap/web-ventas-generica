@@ -106,6 +106,15 @@ public static class CommercialWriteEndpoints
         if (request.Slug is not null || (isCreate && string.IsNullOrWhiteSpace(category.Slug))) category.Slug = await UniqueSlugAsync(dbContext.Categories, Clean(request.Slug) ?? category.Name, category.Id, cancellationToken);
         if (request.ParentId.HasValue || request.Parent.HasValue) category.ParentId = request.ParentId ?? request.Parent;
         if (request.ProductType is not null) category.ProductType = request.ProductType.Trim();
+        if ((isCreate || request.ParentId.HasValue || request.Parent.HasValue) && category.ParentId.HasValue)
+        {
+            var parentProductType = await dbContext.Categories
+                .AsNoTracking()
+                .Where(parent => parent.Id == category.ParentId.Value)
+                .Select(parent => parent.ProductType)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(parentProductType)) category.ProductType = parentProductType;
+        }
         if (request.Description is not null) category.Description = request.Description.Trim();
         if (request.IsActive.HasValue) category.IsActive = request.IsActive.Value;
         if (request.Order.HasValue) category.Order = request.Order.Value;
@@ -258,7 +267,6 @@ public static class CommercialWriteEndpoints
     {
         var validation = ValidateRequest(request, nameof(request.Name));
         if (validation is not null) return validation;
-        if (string.IsNullOrWhiteSpace(request.ProductType)) return Results.BadRequest(new { detail = "product_type is required." });
         var relation = await ValidateProductRelationsAsync(request, dbContext, requireCategory: true, cancellationToken);
         if (relation is not null) return relation;
         var valueValidation = ValidateProductValues(request);
@@ -307,6 +315,15 @@ public static class CommercialWriteEndpoints
         if (!string.IsNullOrWhiteSpace(name)) product.Name = name;
         if (request.Slug is not null || (isCreate && string.IsNullOrWhiteSpace(product.Slug))) product.Slug = await UniqueSlugAsync(dbContext.Products, Clean(request.Slug) ?? product.Name, product.Id, cancellationToken);
         if (request.CategoryId.HasValue || request.Category.HasValue) product.CategoryId = (request.CategoryId ?? request.Category)!.Value;
+        if (isCreate || request.CategoryId.HasValue || request.Category.HasValue || request.ProductType is null)
+        {
+            var categoryProductType = await dbContext.Categories
+                .AsNoTracking()
+                .Where(category => category.Id == product.CategoryId)
+                .Select(category => category.ProductType)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(categoryProductType)) product.ProductType = categoryProductType;
+        }
         if (request.BrandId.HasValue || request.Brand.HasValue) product.BrandId = request.BrandId ?? request.Brand;
         if (request.SupplierId.HasValue || request.Supplier.HasValue) product.SupplierId = request.SupplierId ?? request.Supplier;
         if (request.ProductType is not null) product.ProductType = request.ProductType.Trim();
@@ -462,15 +479,24 @@ public static class CommercialWriteEndpoints
                 .Select(category => category.ProductType)
                 .FirstOrDefaultAsync(cancellationToken);
         }
-        if (isCreate && string.IsNullOrWhiteSpace(productType)) return Results.BadRequest(new { detail = "product_type is required." });
+        var parentId = request.ParentId ?? request.Parent;
+        if (parentId.HasValue && string.IsNullOrWhiteSpace(productType))
+        {
+            productType = await dbContext.Categories
+                .AsNoTracking()
+                .Where(category => category.Id == parentId.Value)
+                .Select(category => category.ProductType)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        if (isCreate && string.IsNullOrWhiteSpace(productType)) productType = ProductTypes.Machinery;
         if (!string.IsNullOrWhiteSpace(productType) && !ProductTypeValues.Contains(productType)) return Results.BadRequest(new { detail = "invalid product_type." });
 
-        var parentId = request.ParentId ?? request.Parent;
         if (!parentId.HasValue) return null;
         if (currentCategoryId.HasValue && parentId.Value == currentCategoryId.Value) return Results.BadRequest(new { detail = "category cannot be its own parent." });
 
         var parent = await dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(category => category.Id == parentId.Value, cancellationToken);
         if (parent is null) return Results.BadRequest(new { detail = "parent category does not exist." });
+        if (parent.ParentId.HasValue) return Results.BadRequest(new { detail = "category hierarchy is limited to two levels." });
         if (!parent.IsActive) return Results.BadRequest(new { detail = "parent category must be active." });
         if (!string.IsNullOrWhiteSpace(productType) && !string.Equals(parent.ProductType, productType, StringComparison.OrdinalIgnoreCase))
             return Results.BadRequest(new { detail = "parent category must belong to the same product_type." });
@@ -524,6 +550,8 @@ public static class CommercialWriteEndpoints
         if (category is null) return Results.BadRequest(new { detail = "category does not exist." });
         if (!category.IsActive) return Results.BadRequest(new { detail = "category must be active." });
         var normalizedProductType = productType?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedProductType) && !ProductTypeValues.Contains(normalizedProductType))
+            return Results.BadRequest(new { detail = "invalid product_type." });
         if (!string.IsNullOrWhiteSpace(normalizedProductType) && !string.Equals(category.ProductType, normalizedProductType, StringComparison.OrdinalIgnoreCase))
             return Results.BadRequest(new { detail = "category must belong to the selected product_type." });
         return null;
