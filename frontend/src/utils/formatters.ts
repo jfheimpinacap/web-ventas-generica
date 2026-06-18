@@ -1,15 +1,39 @@
 import type { Category, ProductCondition, ProductListItem, ProductType, StockStatus } from '../types/catalog'
 
-export function formatPrice(product: ProductListItem) {
-  if (!product.price_visible || !product.price) return 'Consultar'
-  const amount = Number(product.price)
+export function normalizeChileanPriceInput(value: string | null | undefined) {
+  if (value === null || value === undefined) return null
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return null
+  if (!/^[0-9.]+$/.test(trimmedValue)) return null
+
+  const normalizedValue = trimmedValue.replace(/\./g, '')
+  if (!normalizedValue || !/^[0-9]+$/.test(normalizedValue)) return null
+
+  return normalizedValue
+}
+
+export function isValidChileanPriceInput(value: string | null | undefined) {
+  if (value === null || value === undefined || value.trim() === '') return true
+  return normalizeChileanPriceInput(value) !== null
+}
+
+export function formatPriceValue(price: string | null | undefined, priceVisible = true) {
+  const normalizedPrice = normalizeChileanPriceInput(price)
+  if (!priceVisible || !normalizedPrice) return 'Consultar'
+
+  const amount = Number(normalizedPrice)
   if (Number.isNaN(amount)) return 'Consultar'
 
   return new Intl.NumberFormat('es-CL', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CLP',
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+export function formatPrice(product: ProductListItem) {
+  return formatPriceValue(product.price, product.price_visible)
 }
 
 const conditionMap: Record<ProductCondition, string> = {

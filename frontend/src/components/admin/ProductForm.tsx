@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import type { Brand, Category, ProductCondition, ProductFormValues, ProductType, StockStatus, SupplierSummary } from '../../types/catalog'
+import { isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 
 interface ProductFormProps {
   initialValues: ProductFormValues
@@ -52,9 +53,11 @@ export function ProductForm({
   onValuesChange,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
+  const [priceError, setPriceError] = useState<string | null>(null)
 
   useEffect(() => {
     setValues(initialValues)
+    setPriceError(null)
   }, [initialValues])
 
   useEffect(() => {
@@ -76,7 +79,17 @@ export function ProductForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await onSubmit(values)
+
+    if (!isValidChileanPriceInput(values.price)) {
+      setPriceError('Ingresa un precio válido usando solo números y puntos como separador de miles.')
+      return
+    }
+
+    setPriceError(null)
+    await onSubmit({
+      ...values,
+      price: normalizeChileanPriceInput(values.price),
+    })
   }
 
   return (
@@ -197,7 +210,17 @@ export function ProductForm({
 
         <label>
           Precio
-          <input value={values.price ?? ''} onChange={(e) => setField('price', e.target.value || null)} />
+          <input
+            inputMode="numeric"
+            value={values.price ?? ''}
+            onChange={(e) => {
+              setField('price', e.target.value || null)
+              if (priceError) setPriceError(null)
+            }}
+            aria-invalid={Boolean(priceError)}
+            aria-describedby={priceError ? 'product-price-error' : undefined}
+          />
+          {priceError ? <span id="product-price-error" className="ui-note ui-note--error">{priceError}</span> : null}
         </label>
 
         <label>
