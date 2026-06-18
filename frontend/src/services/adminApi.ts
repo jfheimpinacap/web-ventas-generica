@@ -461,6 +461,16 @@ function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payl
   }
 }
 
+function normalizeCategoryWritePayload(payload: CategoryFormValues | Partial<CategoryFormValues>) {
+  return {
+    name: payload.name,
+    slug: payload.slug || undefined,
+    parent: payload.parent ?? null,
+    product_type: payload.product_type ?? 'machinery',
+    is_active: payload.is_active,
+  }
+}
+
 function dotnetUploadPending(): never {
   throw new ApiError(
     'La carga de imágenes todavía no está implementada en la API .NET.',
@@ -665,7 +675,7 @@ export async function getAdminCategory(id: number) {
 export async function createCategory(payload: CategoryFormValues) {
   const response = await authFetch<unknown>('/categories/', {
     method: 'POST',
-    body: jsonBody(payload),
+    body: jsonBody(normalizeCategoryWritePayload(payload)),
   })
   return normalizeCategory(response)
 }
@@ -676,7 +686,7 @@ export async function updateCategory(
 ) {
   const response = await authFetch<unknown>(`/categories/${id}/`, {
     method: 'PATCH',
-    body: jsonBody(payload),
+    body: jsonBody(normalizeCategoryWritePayload(payload)),
   })
   return normalizeCategory(response)
 }
