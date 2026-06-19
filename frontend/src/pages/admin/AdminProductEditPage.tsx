@@ -45,6 +45,8 @@ function mapProductToFormValues(product: Awaited<ReturnType<typeof getAdminProdu
     year: product.year,
     hours_meter: product.hours_meter,
     price: product.price,
+    price_currency: product.price_currency ?? 'CLP',
+    price_tax_mode: product.price_tax_mode ?? 'plus_vat',
     price_visible: product.price_visible,
     stock_status: product.stock_status,
     is_featured: product.is_featured,
@@ -364,7 +366,7 @@ export function AdminProductEditPage() {
                       <strong>Stock:</strong> {formatStockStatus(previewValues?.stock_status ?? initialValues.stock_status)}
                     </p>
                     <p className="product-card__price">
-                      {formatPriceValue(previewValues?.price ?? initialValues.price, previewValues?.price_visible ?? initialValues.price_visible)}
+                      {formatPriceValue(previewValues?.price ?? initialValues.price, previewValues?.price_visible ?? initialValues.price_visible, previewValues?.price_currency ?? initialValues.price_currency, previewValues?.price_tax_mode ?? initialValues.price_tax_mode)}
                     </p>
                   </div>
                   <div className="product-card__actions">
@@ -441,7 +443,7 @@ export function AdminProductEditPage() {
         </section>
       ) : null}
 
-      {!loading && productId ? (
+      {false && !loading && productId ? (
         <section className="admin-block admin-block--compact">
           <h2>Especificaciones técnicas</h2>
           {specError ? <p className="ui-note ui-note--error">{specError}</p> : null}

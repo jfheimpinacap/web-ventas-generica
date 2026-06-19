@@ -80,6 +80,8 @@ export function AdminCategoryFormPage() {
               isSubmitting={isSubmitting}
               error={error}
               parentName={categories.find((item) => item.id === initialValues.parent)?.name ?? null}
+              categories={categories}
+              currentCategoryId={id ? Number(id) : null}
             />
           }
         />

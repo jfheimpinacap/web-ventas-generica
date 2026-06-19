@@ -73,6 +73,8 @@ export interface ProductSpecWritePayload {
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
 export type ProductType = 'machinery' | 'spare_part' | 'service'
+export type ProductPriceCurrency = 'CLP' | 'USD'
+export type ProductPriceTaxMode = 'plus_vat' | 'vat_included'
 
 export interface ProductListItem {
   id: number
@@ -84,6 +86,8 @@ export interface ProductListItem {
   condition: ProductCondition
   short_description: string
   price: string | null
+  price_currency?: ProductPriceCurrency
+  price_tax_mode?: ProductPriceTaxMode
   price_visible: boolean
   stock_status: StockStatus
   is_featured: boolean
@@ -277,6 +281,8 @@ export interface ProductFormValues {
   year: number | null
   hours_meter: number | null
   price: string | null
+  price_currency: ProductPriceCurrency
+  price_tax_mode: ProductPriceTaxMode
   price_visible: boolean
   stock_status: StockStatus
   is_featured: boolean

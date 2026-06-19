@@ -50,13 +50,13 @@ export function AdminCategoriesPage() {
   )
 
   const handleDelete = async (item: Category) => {
-    if (!window.confirm(`¿Inactivar categoría "${item.name}"?`)) return
+    if (!window.confirm(`¿Seguro que deseas borrar esta categoría? Esta acción no se puede deshacer.`)) return
     try {
       await deleteCategory(item.id)
-      setSuccess('Categoría inactivada.')
+      setSuccess('Categoría borrada.')
       await load()
     } catch (error) {
-      setError(getSafeApiErrorMessage(error, 'No se pudo inactivar la categoría.'))
+      setError(getSafeApiErrorMessage(error, 'No se pudo borrar la categoría.'))
     }
   }
 
@@ -94,7 +94,7 @@ export function AdminCategoriesPage() {
                   <tr key={item.id} className={item.id === selectedRootId ? 'admin-table__row--selected' : ''}>
                     <td><button type="button" className="table-action table-action--button" onClick={() => setSelectedRootId(item.id)}>{item.name}</button></td>
                     <td>{renderStatus(item)}</td>
-                    <td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Inactivar</button></td>
+                    <td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Borrar</button></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -110,7 +110,7 @@ export function AdminCategoriesPage() {
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (
               <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
-                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Inactivar</button></td></tr>
+                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Borrar</button></td></tr>
               ))}</tbody></table></div>
             ) : null}
           </section>

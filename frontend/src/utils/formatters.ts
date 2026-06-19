@@ -1,4 +1,4 @@
-import type { Category, ProductCondition, ProductListItem, ProductType, StockStatus } from '../types/catalog'
+import type { Category, ProductCondition, ProductListItem, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus } from '../types/catalog'
 
 export function normalizeChileanPriceInput(value: string | null | undefined) {
   if (value === null || value === undefined) return null
@@ -18,22 +18,27 @@ export function isValidChileanPriceInput(value: string | null | undefined) {
   return normalizeChileanPriceInput(value) !== null
 }
 
-export function formatPriceValue(price: string | null | undefined, priceVisible = true) {
+export function formatPriceValue(
+  price: string | null | undefined,
+  priceVisible = true,
+  currency: ProductPriceCurrency = 'CLP',
+  taxMode: ProductPriceTaxMode = 'plus_vat',
+) {
   const normalizedPrice = normalizeChileanPriceInput(price)
   if (!priceVisible || !normalizedPrice) return 'Consultar'
 
   const amount = Number(normalizedPrice)
   if (Number.isNaN(amount)) return 'Consultar'
 
-  return new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'CLP',
-    maximumFractionDigits: 0,
-  }).format(amount)
+  const formattedAmount = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(amount)
+  const currencyLabel = currency === 'USD' ? 'USD' : '$'
+  const taxLabel = taxMode === 'vat_included' ? 'IVA incluido' : '+ IVA'
+
+  return `${currencyLabel}${currency === 'USD' ? ' ' : ''}${formattedAmount} ${taxLabel}`
 }
 
 export function formatPrice(product: ProductListItem) {
-  return formatPriceValue(product.price, product.price_visible)
+  return formatPriceValue(product.price, product.price_visible, product.price_currency, product.price_tax_mode)
 }
 
 const conditionMap: Record<ProductCondition, string> = {

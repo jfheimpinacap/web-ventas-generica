@@ -18,6 +18,10 @@ public static class CommercialWriteEndpoints
         { ProductConditions.New, ProductConditions.Used, ProductConditions.Refurbished, ProductConditions.NotApplicable };
     private static readonly ISet<string> StockStatusValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { StockStatuses.Available, StockStatuses.OnRequest, StockStatuses.Sold, StockStatuses.Reserved };
+    private static readonly ISet<string> PriceCurrencyValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { ProductPriceCurrencies.Clp, ProductPriceCurrencies.Usd };
+    private static readonly ISet<string> PriceTaxModeValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { ProductPriceTaxModes.PlusVat, ProductPriceTaxModes.VatIncluded };
     private static readonly ISet<string> QuoteStatusValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { QuoteStatuses.New, QuoteStatuses.Contacted, QuoteStatuses.Quoted, QuoteStatuses.Closed, QuoteStatuses.Discarded };
     private static readonly ISet<string> HomeSectionValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -93,8 +97,12 @@ public static class CommercialWriteEndpoints
     {
         var category = await dbContext.Categories.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (category is null) return Results.NotFound(new { detail = "category not found." });
-        category.IsActive = false;
-        SetUpdatedBy(category, user);
+        if (await dbContext.Products.AnyAsync(product => product.CategoryId == id, cancellationToken))
+            return Results.BadRequest(new { detail = "No se puede borrar porque tiene productos asociados. Puedes inactivarla o mover los productos primero." });
+        if (await dbContext.Categories.AnyAsync(candidate => candidate.ParentId == id, cancellationToken))
+            return Results.BadRequest(new { detail = "No se puede borrar porque tiene subcategorías. Elimina o mueve sus subcategorías primero." });
+
+        dbContext.Categories.Remove(category);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
     }
@@ -335,6 +343,8 @@ public static class CommercialWriteEndpoints
         if (request.Year.HasValue) product.Year = request.Year;
         if (request.HoursMeter.HasValue) product.HoursMeter = request.HoursMeter;
         if (request.Price.HasValue) product.Price = request.Price;
+        if (request.PriceCurrency is not null) product.PriceCurrency = request.PriceCurrency.Trim().ToUpperInvariant();
+        if (request.PriceTaxMode is not null) product.PriceTaxMode = request.PriceTaxMode.Trim().ToLowerInvariant();
         if (request.PriceVisible.HasValue) product.PriceVisible = request.PriceVisible.Value;
         if (request.StockStatus is not null) product.StockStatus = request.StockStatus.Trim();
         if (request.IsFeatured.HasValue) product.IsFeatured = request.IsFeatured.Value;
@@ -497,6 +507,8 @@ public static class CommercialWriteEndpoints
         var parent = await dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(category => category.Id == parentId.Value, cancellationToken);
         if (parent is null) return Results.BadRequest(new { detail = "parent category does not exist." });
         if (parent.ParentId.HasValue) return Results.BadRequest(new { detail = "category hierarchy is limited to two levels." });
+        if (currentCategoryId.HasValue && await dbContext.Categories.AnyAsync(child => child.ParentId == currentCategoryId.Value, cancellationToken))
+            return Results.BadRequest(new { detail = "category hierarchy is limited to two levels. Move or delete subcategories before moving this category under another parent." });
         if (!parent.IsActive) return Results.BadRequest(new { detail = "parent category must be active." });
         if (!string.IsNullOrWhiteSpace(productType) && !string.Equals(parent.ProductType, productType, StringComparison.OrdinalIgnoreCase))
             return Results.BadRequest(new { detail = "parent category must belong to the same product_type." });
@@ -508,6 +520,8 @@ public static class CommercialWriteEndpoints
         if (request.ProductType is not null && !ProductTypeValues.Contains(request.ProductType.Trim())) return Results.BadRequest(new { detail = "invalid product_type." });
         if (request.Condition is not null && !ProductConditionValues.Contains(request.Condition.Trim())) return Results.BadRequest(new { detail = "invalid condition." });
         if (request.StockStatus is not null && !StockStatusValues.Contains(request.StockStatus.Trim())) return Results.BadRequest(new { detail = "invalid stock_status." });
+        if (request.PriceCurrency is not null && !PriceCurrencyValues.Contains(request.PriceCurrency.Trim())) return Results.BadRequest(new { detail = "invalid price_currency. Use CLP or USD." });
+        if (request.PriceTaxMode is not null && !PriceTaxModeValues.Contains(request.PriceTaxMode.Trim())) return Results.BadRequest(new { detail = "invalid price_tax_mode. Use plus_vat or vat_included." });
         return null;
     }
 

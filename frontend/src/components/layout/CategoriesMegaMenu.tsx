@@ -159,12 +159,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                 ))}
               </div>
             ) : selectedCategory ? (
-              <div className="categories-modal__direct">
-                <p>Ver productos de {selectedCategory.name}</p>
-                <Link className="btn btn--ghost" to={selectedCategory.href} onClick={onClose}>
-                  Ver {selectedCategory.name}
-                </Link>
-              </div>
+              <p className="ui-note">Sin subcategorías disponibles</p>
             ) : null}
           </div>
         </div>

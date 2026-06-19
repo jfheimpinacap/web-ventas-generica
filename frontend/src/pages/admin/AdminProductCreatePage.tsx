@@ -23,6 +23,8 @@ const INITIAL_VALUES: ProductFormValues = {
   year: null,
   hours_meter: null,
   price: null,
+  price_currency: 'CLP',
+  price_tax_mode: 'plus_vat',
   price_visible: true,
   stock_status: 'on_request',
   is_featured: false,
@@ -147,7 +149,7 @@ export function AdminProductCreatePage() {
                     <p className="product-card__meta">
                       <strong>Stock:</strong> {formatStockStatus(formValues.stock_status)}
                     </p>
-                    <p className="product-card__price">{formatPriceValue(formValues.price, formValues.price_visible)}</p>
+                    <p className="product-card__price">{formatPriceValue(formValues.price, formValues.price_visible, formValues.price_currency, formValues.price_tax_mode)}</p>
                   </div>
                   <div className="product-card__actions">
                     <button type="button" className="btn btn--accent" disabled>
