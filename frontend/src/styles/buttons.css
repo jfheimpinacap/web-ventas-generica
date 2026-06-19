@@ -172,3 +172,13 @@
     padding: 0.42rem 0.5rem;
     min-height: 34px;
   }
+
+.btn--danger {
+  border: 1px solid #b91c1c;
+  color: #b91c1c;
+}
+
+.btn--danger:hover {
+  background: #b91c1c;
+  color: #ffffff;
+}
