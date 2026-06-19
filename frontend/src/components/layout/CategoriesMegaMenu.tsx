@@ -11,25 +11,10 @@ interface CategoriesMegaMenuProps {
 }
 
 type MenuCategory = {
-  id: number | string
+  id: number
   name: string
   href: string
   order: number
-  source: 'api' | 'fallback'
-}
-
-const FALLBACK_ROOTS: MenuCategory[] = [
-  { id: 'machinery', name: 'Maquinaria', href: '/catalogo?product_type=machinery', order: 1, source: 'fallback' },
-  { id: 'spare_part', name: 'Repuestos', href: '/catalogo?product_type=spare_part', order: 2, source: 'fallback' },
-  { id: 'service', name: 'Servicios', href: '/catalogo?product_type=service', order: 3, source: 'fallback' },
-]
-
-function normalizeLabel(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
 }
 
 function categoryHref(category: Category) {
@@ -46,8 +31,8 @@ function chunkByCount<T>(items: T[], columns: number) {
 }
 
 export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null, onClose }: CategoriesMegaMenuProps) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | string | null>(activeCategoryId)
-  const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<Array<number | string>>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(activeCategoryId)
+  const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<number[]>([])
 
   const roots = useMemo<MenuCategory[]>(() => {
     const apiRoots = categories
@@ -58,15 +43,9 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
         name: category.name,
         href: categoryHref(category),
         order: category.order,
-        source: 'api' as const,
       }))
 
-    if (apiRoots.length === 0) return FALLBACK_ROOTS
-
-    const existingLabels = new Set(apiRoots.map((category) => normalizeLabel(category.name)))
-    const missingFallbacks = FALLBACK_ROOTS.filter((category) => !existingLabels.has(normalizeLabel(category.name)))
-
-    return [...apiRoots, ...missingFallbacks].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+    return apiRoots
   }, [categories])
 
   const childrenByParent = useMemo(() => {
@@ -102,9 +81,9 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
   if (!isOpen) return null
 
   const selectedCategory = roots.find((category) => category.id === selectedCategoryId) ?? roots[0] ?? null
-  const subcategories = typeof selectedCategory?.id === 'number' ? childrenByParent.get(selectedCategory.id) ?? [] : []
+  const subcategories = selectedCategory ? childrenByParent.get(selectedCategory.id) ?? [] : []
   const columns = chunkByCount(subcategories, subcategories.length > 18 ? 3 : subcategories.length > 8 ? 2 : 1)
-  const toggleMobileCategory = (categoryId: number | string) => {
+  const toggleMobileCategory = (categoryId: number) => {
     setExpandedMobileCategoryIds((current) =>
       current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId],
     )
@@ -166,7 +145,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
 
         <nav className="categories-modal__mobile-accordion" aria-label="Categorías principales para móvil">
           {roots.map((category) => {
-            const subcategoriesForCategory = typeof category.id === 'number' ? childrenByParent.get(category.id) ?? [] : []
+            const subcategoriesForCategory = childrenByParent.get(category.id) ?? []
             const isExpanded = expandedMobileCategoryIds.includes(category.id)
 
             return (
