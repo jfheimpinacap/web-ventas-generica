@@ -228,6 +228,8 @@ export function normalizeProductListItem(value: unknown): ProductListItem {
       pick(record, 'short_description', 'shortDescription'),
     ),
     price: toNullableString(pick(record, 'price')),
+    price_currency: toStringValue(pick(record, 'price_currency', 'priceCurrency'), 'CLP') as ProductListItem['price_currency'],
+    price_tax_mode: toStringValue(pick(record, 'price_tax_mode', 'priceTaxMode'), 'plus_vat') as ProductListItem['price_tax_mode'],
     price_visible: toBoolean(
       pick(record, 'price_visible', 'priceVisible'),
       true,
@@ -453,10 +455,18 @@ function toDotnetPromotionPayload(
 }
 
 function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payload: T): T {
-  if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return payload
+  const nextPayload = {
+    ...payload,
+    short_description:
+      payload.short_description !== undefined
+        ? payload.short_description
+        : payload.description?.trim().slice(0, 280) ?? '',
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return nextPayload
 
   return {
-    ...payload,
+    ...nextPayload,
     price: normalizeChileanPriceInput(payload.price),
   }
 }
@@ -466,7 +476,6 @@ function normalizeCategoryWritePayload(payload: CategoryFormValues | Partial<Cat
     name: payload.name,
     slug: payload.slug || undefined,
     parent: payload.parent ?? null,
-    product_type: payload.product_type ?? 'machinery',
     is_active: payload.is_active,
   }
 }

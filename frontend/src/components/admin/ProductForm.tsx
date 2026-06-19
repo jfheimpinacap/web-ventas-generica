@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
-import type { Brand, Category, ProductCondition, ProductFormValues, StockStatus, SupplierSummary } from '../../types/catalog'
+import type { Brand, Category, ProductCondition, ProductFormValues, ProductPriceCurrency, ProductPriceTaxMode, StockStatus, SupplierSummary } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 
 interface ProductFormProps {
@@ -98,6 +98,7 @@ export function ProductForm({
     await onSubmit({
       ...values,
       product_type: inferProductTypeFromRootCategory(selectedRoot),
+      short_description: values.short_description || values.description.trim().slice(0, 280),
       price: normalizeChileanPriceInput(values.price),
     })
   }
@@ -188,20 +189,38 @@ export function ProductForm({
           </select>
         </label>
 
-        <label>
-          Precio
-          <input
-            inputMode="numeric"
-            value={values.price ?? ''}
-            onChange={(e) => {
-              setField('price', e.target.value || null)
-              if (priceError) setPriceError(null)
-            }}
-            aria-invalid={Boolean(priceError)}
-            aria-describedby={priceError ? 'product-price-error' : undefined}
-          />
-          {priceError ? <span id="product-price-error" className="ui-note ui-note--error">{priceError}</span> : null}
-        </label>
+        <div className="admin-form-panel__full admin-price-row">
+          <label>
+            Moneda
+            <select value={values.price_currency} onChange={(e) => setField('price_currency', e.target.value as ProductPriceCurrency)} required>
+              <option value="CLP">CLP / $</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+
+          <label>
+            Precio
+            <input
+              inputMode="numeric"
+              value={values.price ?? ''}
+              onChange={(e) => {
+                setField('price', e.target.value || null)
+                if (priceError) setPriceError(null)
+              }}
+              aria-invalid={Boolean(priceError)}
+              aria-describedby={priceError ? 'product-price-error' : undefined}
+            />
+            {priceError ? <span id="product-price-error" className="ui-note ui-note--error">{priceError}</span> : null}
+          </label>
+
+          <label>
+            IVA
+            <select value={values.price_tax_mode} onChange={(e) => setField('price_tax_mode', e.target.value as ProductPriceTaxMode)} required>
+              <option value="plus_vat">+ IVA</option>
+              <option value="vat_included">IVA incluido</option>
+            </select>
+          </label>
+        </div>
       </section>
 
       <section className="admin-form-panel admin-form-panel--columns-2">
@@ -236,12 +255,7 @@ export function ProductForm({
         </label>
 
         <label className="admin-form-panel__full">
-          Descripción corta
-          <input value={values.short_description} onChange={(e) => setField('short_description', e.target.value)} />
-        </label>
-
-        <label className="admin-form-panel__full">
-          Descripción completa
+          Descripción
           <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
         </label>
 

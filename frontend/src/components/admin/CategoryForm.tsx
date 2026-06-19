@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
-import type { CategoryFormValues } from '../../types/catalog'
+import type { Category, CategoryFormValues } from '../../types/catalog'
 
 interface CategoryFormProps {
   initialValues: CategoryFormValues
@@ -9,9 +9,11 @@ interface CategoryFormProps {
   isSubmitting: boolean
   error: string | null
   parentName?: string | null
+  categories?: Category[]
+  currentCategoryId?: number | null
 }
 
-export function CategoryForm({ initialValues, onSubmit, submitLabel, isSubmitting, error, parentName = null }: CategoryFormProps) {
+export function CategoryForm({ initialValues, onSubmit, submitLabel, isSubmitting, error, parentName = null, categories = [], currentCategoryId = null }: CategoryFormProps) {
   const [values, setValues] = useState(initialValues)
 
   useEffect(() => {
@@ -21,6 +23,10 @@ export function CategoryForm({ initialValues, onSubmit, submitLabel, isSubmittin
   const setField = <K extends keyof CategoryFormValues>(field: K, value: CategoryFormValues[K]) => {
     setValues((prev) => ({ ...prev, [field]: value }))
   }
+
+  const rootOptions = categories
+    .filter((category) => category.parent === null && category.id !== currentCategoryId)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -42,6 +48,16 @@ export function CategoryForm({ initialValues, onSubmit, submitLabel, isSubmittin
         <label>
           Nombre
           <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
+        </label>
+
+        <label>
+          Ubicación
+          <select value={values.parent ?? ''} onChange={(e) => setField('parent', e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Categoría principal</option>
+            {rootOptions.map((category) => (
+              <option key={category.id} value={category.id}>Subcategoría de: {category.name}</option>
+            ))}
+          </select>
         </label>
 
         <div className="admin-form-panel__full admin-form-switches">

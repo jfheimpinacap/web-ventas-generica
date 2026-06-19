@@ -682,3 +682,15 @@
     width: 100%;
   }
 }
+
+.admin-price-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.4fr) minmax(150px, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .admin-price-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -222,6 +222,8 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.Model).HasMaxLength(120).HasDefaultValue(string.Empty);
             entity.Property(product => product.Sku).HasMaxLength(120).HasDefaultValue(string.Empty);
             entity.Property(product => product.Price).HasColumnType("decimal(12,2)");
+            entity.Property(product => product.PriceCurrency).HasMaxLength(3).HasDefaultValue(ProductPriceCurrencies.Clp).IsRequired();
+            entity.Property(product => product.PriceTaxMode).HasMaxLength(20).HasDefaultValue(ProductPriceTaxModes.PlusVat).IsRequired();
             entity.Property(product => product.PriceVisible).HasDefaultValue(true);
             entity.Property(product => product.StockStatus).HasMaxLength(20).HasDefaultValue(StockStatuses.OnRequest).IsRequired();
             entity.Property(product => product.IsFeatured).HasDefaultValue(false);

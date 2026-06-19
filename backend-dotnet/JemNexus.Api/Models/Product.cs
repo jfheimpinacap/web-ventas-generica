@@ -20,6 +20,8 @@ public sealed class Product
     public int? Year { get; set; }
     public int? HoursMeter { get; set; }
     public decimal? Price { get; set; }
+    public string PriceCurrency { get; set; } = ProductPriceCurrencies.Clp;
+    public string PriceTaxMode { get; set; } = ProductPriceTaxModes.PlusVat;
     public bool PriceVisible { get; set; } = true;
     public string StockStatus { get; set; } = StockStatuses.OnRequest;
     public bool IsFeatured { get; set; }
@@ -58,4 +60,17 @@ public static class StockStatuses
     public const string OnRequest = "on_request";
     public const string Sold = "sold";
     public const string Reserved = "reserved";
+}
+
+
+public static class ProductPriceCurrencies
+{
+    public const string Clp = "CLP";
+    public const string Usd = "USD";
+}
+
+public static class ProductPriceTaxModes
+{
+    public const string PlusVat = "plus_vat";
+    public const string VatIncluded = "vat_included";
 }

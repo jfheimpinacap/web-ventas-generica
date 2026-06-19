@@ -59,6 +59,8 @@ public sealed record ProductWriteDto(
     int? Year,
     [property: JsonPropertyName("hours_meter")] int? HoursMeter,
     decimal? Price,
+    [property: JsonPropertyName("price_currency"), StringLength(3)] string? PriceCurrency,
+    [property: JsonPropertyName("price_tax_mode"), StringLength(20)] string? PriceTaxMode,
     [property: JsonPropertyName("price_visible")] bool? PriceVisible,
     [property: JsonPropertyName("stock_status"), StringLength(20)] string? StockStatus,
     [property: JsonPropertyName("is_featured")] bool? IsFeatured,
