@@ -95,7 +95,10 @@ public static class CommercialReadEndpoints
                 || product.Slug.ToLower().Contains(term)
                 || product.Sku.ToLower().Contains(term)
                 || product.Model.ToLower().Contains(term)
-                || product.ShortDescription.ToLower().Contains(term));
+                || product.ShortDescription.ToLower().Contains(term)
+                || product.Category.Name.ToLower().Contains(term)
+                || (product.Brand != null && product.Brand.Name.ToLower().Contains(term))
+                || (product.Supplier != null && product.Supplier.Name.ToLower().Contains(term)));
         }
 
         if (!string.IsNullOrWhiteSpace(category))

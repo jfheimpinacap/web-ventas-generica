@@ -600,3 +600,19 @@
     grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
   }
 }
+
+.admin-danger-zone {
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+}
+
+.admin-delete-confirmation {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-delete-confirmation p {
+  margin: 0;
+  color: #7f1d1d;
+  font-weight: 700;
+}

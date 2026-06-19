@@ -1,256 +1,272 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
-import { AdminLayout } from '../../components/admin/AdminLayout'
-import { getSafeApiErrorMessage } from '../../services/api'
-import { deleteProduct, getAdminProducts } from '../../services/adminApi'
-import type { ProductListItem } from '../../types/catalog'
+import { AdminLayout } from "../../components/admin/AdminLayout";
+import { getSafeApiErrorMessage } from "../../services/api";
+import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
+import type { Category, ProductListItem } from "../../types/catalog";
 
-const PRODUCT_FILTERS_STORAGE_KEY = 'admin-products-filters'
+const PRODUCT_FILTERS_STORAGE_KEY = "admin-products-filters";
 
 type ProductFiltersState = {
-  search: string
-  categoryFilter: string
-  brandFilter: string
-  typeFilter: string
-  conditionFilter: string
-  stockFilter: string
-  publishedFilter: string
-}
+  search: string;
+  rootCategoryFilter: string;
+  subcategoryFilter: string;
+  brandFilter: string;
+  conditionFilter: string;
+  stockFilter: string;
+  publishedFilter: string;
+};
 
 const defaultFilters: ProductFiltersState = {
-  search: '',
-  categoryFilter: '',
-  brandFilter: '',
-  typeFilter: '',
-  conditionFilter: '',
-  stockFilter: '',
-  publishedFilter: 'published',
-}
+  search: "",
+  rootCategoryFilter: "",
+  subcategoryFilter: "",
+  brandFilter: "",
+  conditionFilter: "",
+  stockFilter: "",
+  publishedFilter: "published",
+};
 
 function readStoredFilters(): ProductFiltersState {
-  if (typeof window === 'undefined') return defaultFilters
+  if (typeof window === "undefined") return defaultFilters;
 
-  const rawFilters = window.sessionStorage.getItem(PRODUCT_FILTERS_STORAGE_KEY)
-  if (!rawFilters) return defaultFilters
+  const rawFilters = window.sessionStorage.getItem(PRODUCT_FILTERS_STORAGE_KEY);
+  if (!rawFilters) return defaultFilters;
 
   try {
-    const parsed = JSON.parse(rawFilters) as Partial<ProductFiltersState>
+    const parsed = JSON.parse(rawFilters) as Partial<ProductFiltersState> & {
+      typeFilter?: string;
+      categoryFilter?: string;
+    };
     return {
-      search: parsed.search ?? '',
-      categoryFilter: parsed.categoryFilter ?? '',
-      brandFilter: parsed.brandFilter ?? '',
-      typeFilter: parsed.typeFilter ?? '',
-      conditionFilter: parsed.conditionFilter ?? '',
-      stockFilter: parsed.stockFilter ?? '',
+      search: parsed.search ?? "",
+      rootCategoryFilter: parsed.rootCategoryFilter ?? parsed.typeFilter ?? "",
+      subcategoryFilter:
+        parsed.subcategoryFilter ?? parsed.categoryFilter ?? "",
+      brandFilter: parsed.brandFilter ?? "",
+      conditionFilter: parsed.conditionFilter ?? "",
+      stockFilter: parsed.stockFilter ?? "",
       publishedFilter: parsed.publishedFilter ?? defaultFilters.publishedFilter,
-    }
+    };
   } catch {
-    return defaultFilters
+    return defaultFilters;
   }
 }
 
-function stockLabel(stock: ProductListItem['stock_status']) {
-  if (stock === 'available') return 'Disponible'
-  if (stock === 'on_request') return 'A pedido'
-  if (stock === 'reserved') return 'Reservado'
-  return 'Vendido'
+function stockLabel(stock: ProductListItem["stock_status"]) {
+  if (stock === "available") return "Disponible";
+  if (stock === "on_request") return "A pedido";
+  if (stock === "reserved") return "Reservado";
+  return "Vendido";
 }
 
 export function AdminProductsPage() {
-  const [searchParams] = useSearchParams()
-  const [products, setProducts] = useState<ProductListItem[]>([])
-  const storedFilters = useMemo(() => readStoredFilters(), [])
-  const [search, setSearch] = useState(storedFilters.search)
-  const [categoryFilter, setCategoryFilter] = useState(
-    storedFilters.categoryFilter,
-  )
-  const [brandFilter, setBrandFilter] = useState(storedFilters.brandFilter)
-  const [typeFilter, setTypeFilter] = useState(storedFilters.typeFilter)
+  const [searchParams] = useSearchParams();
+  const [products, setProducts] = useState<ProductListItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const storedFilters = useMemo(() => readStoredFilters(), []);
+  const [search, setSearch] = useState(storedFilters.search);
+  const [rootCategoryFilter, setRootCategoryFilter] = useState(
+    storedFilters.rootCategoryFilter,
+  );
+  const [subcategoryFilter, setSubcategoryFilter] = useState(
+    storedFilters.subcategoryFilter,
+  );
+  const [brandFilter, setBrandFilter] = useState(storedFilters.brandFilter);
   const [conditionFilter, setConditionFilter] = useState(
     storedFilters.conditionFilter,
-  )
-  const [stockFilter, setStockFilter] = useState(storedFilters.stockFilter)
+  );
+  const [stockFilter, setStockFilter] = useState(storedFilters.stockFilter);
   const [publishedFilter, setPublishedFilter] = useState(
     storedFilters.publishedFilter,
-  )
-  const [loading, setLoading] = useState(false)
-  const [hasLoadedProducts, setHasLoadedProducts] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  );
+  const [loading, setLoading] = useState(false);
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(
-    searchParams.get('status') === 'created'
-      ? 'Producto creado correctamente.'
-      : searchParams.get('status') === 'updated'
-        ? 'Producto actualizado correctamente.'
-        : null,
-  )
+    searchParams.get("status") === "created"
+      ? "Producto creado correctamente."
+      : searchParams.get("status") === "updated"
+        ? "Producto actualizado correctamente."
+        : searchParams.get("status") === "deleted"
+          ? "Producto eliminado correctamente."
+          : null,
+  );
 
-  const loadProducts = async () => {
+  const loadProducts = async (
+    overrideFilters?: Partial<ProductFiltersState>,
+  ) => {
     try {
-      setLoading(true)
-      setError(null)
-      const response = await getAdminProducts()
-      setProducts(response)
-      setHasLoadedProducts(true)
+      setLoading(true);
+      setError(null);
+      const activeFilters = {
+        search,
+        rootCategoryFilter,
+        subcategoryFilter,
+        brandFilter,
+        conditionFilter,
+        stockFilter,
+        publishedFilter,
+        ...(overrideFilters ?? {}),
+      };
+      const selectedCategory =
+        activeFilters.subcategoryFilter || activeFilters.rootCategoryFilter;
+      const response = await getAdminProducts({
+        search: activeFilters.search.trim() || undefined,
+        category: selectedCategory || undefined,
+        brand: activeFilters.brandFilter || undefined,
+        condition: activeFilters.conditionFilter || undefined,
+        stock_status: activeFilters.stockFilter || undefined,
+        is_published:
+          activeFilters.publishedFilter === "published"
+            ? true
+            : activeFilters.publishedFilter === "unpublished"
+              ? false
+              : undefined,
+      });
+      setProducts(response);
+      setHasLoadedProducts(true);
     } catch (error) {
       setError(
         getSafeApiErrorMessage(
           error,
-          'No se pudo cargar el listado de productos.',
+          "No se pudo cargar el listado de productos.",
         ),
-      )
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const hasCriteria = useMemo(
     () =>
       [
         search,
-        categoryFilter,
+        rootCategoryFilter,
+        subcategoryFilter,
         brandFilter,
-        typeFilter,
         conditionFilter,
         stockFilter,
         publishedFilter,
-      ].some((value) => value.trim() !== ''),
+      ].some((value) => value.trim() !== ""),
     [
       search,
-      categoryFilter,
+      rootCategoryFilter,
+      subcategoryFilter,
       brandFilter,
-      typeFilter,
       conditionFilter,
       stockFilter,
       publishedFilter,
     ],
-  )
+  );
 
   useEffect(() => {
     if (hasCriteria && !hasLoadedProducts && !loading) {
-      void loadProducts()
+      void loadProducts();
     }
-  }, [hasCriteria, hasLoadedProducts, loading])
+  }, [hasCriteria, hasLoadedProducts, loading]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === "undefined") return;
 
     const filtersToStore: ProductFiltersState = {
       search,
-      categoryFilter,
+      rootCategoryFilter,
+      subcategoryFilter,
       brandFilter,
-      typeFilter,
       conditionFilter,
       stockFilter,
       publishedFilter,
-    }
+    };
 
     window.sessionStorage.setItem(
       PRODUCT_FILTERS_STORAGE_KEY,
       JSON.stringify(filtersToStore),
-    )
+    );
   }, [
     search,
-    categoryFilter,
+    rootCategoryFilter,
+    subcategoryFilter,
     brandFilter,
-    typeFilter,
     conditionFilter,
     stockFilter,
     publishedFilter,
-  ])
+  ]);
 
-  const categoryOptions = useMemo(
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await getAdminCategories();
+        setCategories(response);
+      } catch (error) {
+        setError(
+          getSafeApiErrorMessage(
+            error,
+            "No se pudieron cargar las categorías.",
+          ),
+        );
+      }
+    };
+
+    void loadCategories();
+    void loadProducts();
+  }, []);
+
+  useEffect(() => {
+    if (!rootCategoryFilter) {
+      if (subcategoryFilter) setSubcategoryFilter("");
+      return;
+    }
+
+    const subcategory = categories.find(
+      (item) => item.id.toString() === subcategoryFilter,
+    );
+    if (subcategory && subcategory.parent?.toString() !== rootCategoryFilter) {
+      setSubcategoryFilter("");
+    }
+  }, [categories, rootCategoryFilter, subcategoryFilter]);
+
+  const rootCategoryOptions = useMemo(
     () =>
-      Array.from(
-        new Set(products.map((p) => p.category?.name).filter(Boolean)),
+      categories.filter(
+        (category) => category.parent === null && category.is_active,
       ),
-    [products],
-  )
+    [categories],
+  );
+  const subcategoryOptions = useMemo(
+    () =>
+      rootCategoryFilter
+        ? categories.filter(
+            (category) =>
+              category.parent?.toString() === rootCategoryFilter &&
+              category.is_active,
+          )
+        : [],
+    [categories, rootCategoryFilter],
+  );
   const brandOptions = useMemo(
     () =>
       Array.from(new Set(products.map((p) => p.brand?.name).filter(Boolean))),
     [products],
-  )
+  );
 
-  const filteredProducts = useMemo(() => {
-    if (!hasCriteria) return []
+  const filteredProducts = products;
 
-    const query = search.trim().toLowerCase()
-
-    return products.filter((product) => {
-      const matchesText =
-        !query ||
-        [
-          product.name,
-          product.slug,
-          product.brand?.name ?? '',
-          product.category?.name ?? '',
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(query)
-
-      const matchesCategory =
-        !categoryFilter || product.category?.name === categoryFilter
-      const matchesBrand = !brandFilter || product.brand?.name === brandFilter
-      const matchesType = !typeFilter || product.product_type === typeFilter
-      const matchesCondition =
-        !conditionFilter || product.condition === conditionFilter
-      const matchesStock = !stockFilter || product.stock_status === stockFilter
-      const matchesPublished =
-        !publishedFilter ||
-        (publishedFilter === 'published'
-          ? product.is_published
-          : !product.is_published)
-
-      return (
-        matchesText &&
-        matchesCategory &&
-        matchesBrand &&
-        matchesType &&
-        matchesCondition &&
-        matchesStock &&
-        matchesPublished
-      )
-    })
-  }, [
-    products,
-    search,
-    hasCriteria,
-    categoryFilter,
-    brandFilter,
-    typeFilter,
-    conditionFilter,
-    stockFilter,
-    publishedFilter,
-  ])
+  const handleSearch = () => {
+    void loadProducts();
+  };
 
   const clearFilters = () => {
-    setSearch('')
-    setCategoryFilter('')
-    setBrandFilter('')
-    setTypeFilter('')
-    setConditionFilter('')
-    setStockFilter('')
-    setPublishedFilter(defaultFilters.publishedFilter)
-  }
-
-  const handleDelete = async (product: ProductListItem) => {
-    const confirmed = window.confirm(
-      `¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`,
-    )
-    if (!confirmed) return
-
-    try {
-      await deleteProduct(product.slug)
-      setSuccess(`Producto "${product.name}" eliminado.`)
-      await loadProducts()
-    } catch (error) {
-      setError(
-        getSafeApiErrorMessage(error, 'No se pudo eliminar el producto.'),
-      )
-    }
-  }
+    setSearch("");
+    setRootCategoryFilter("");
+    setSubcategoryFilter("");
+    setBrandFilter("");
+    setConditionFilter("");
+    setStockFilter("");
+    setPublishedFilter(defaultFilters.publishedFilter);
+    void loadProducts(defaultFilters);
+  };
 
   return (
     <AdminLayout>
@@ -274,23 +290,29 @@ export function AdminProductsPage() {
         />
         <div className="admin-filter-strip admin-filter-strip--products">
           <select
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-          >
-            <option value="">Tipo</option>
-            <option value="machinery">Maquinaria</option>
-            <option value="spare_part">Repuesto</option>
-            <option value="service">Servicio</option>
-            <option value="other">Otro</option>
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
+            value={rootCategoryFilter}
+            onChange={(event) => setRootCategoryFilter(event.target.value)}
           >
             <option value="">Categoría</option>
-            {categoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
+            {rootCategoryOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={subcategoryFilter}
+            onChange={(event) => setSubcategoryFilter(event.target.value)}
+            disabled={!rootCategoryFilter}
+          >
+            <option value="">
+              {rootCategoryFilter
+                ? "Subcategoría"
+                : "Selecciona una categoría primero"}
+            </option>
+            {subcategoryOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
               </option>
             ))}
           </select>
@@ -335,6 +357,13 @@ export function AdminProductsPage() {
           </select>
           <button
             type="button"
+            className="btn btn--accent"
+            onClick={handleSearch}
+          >
+            Buscar
+          </button>
+          <button
+            type="button"
             className="btn btn--ghost"
             onClick={clearFilters}
           >
@@ -347,13 +376,7 @@ export function AdminProductsPage() {
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
       {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
-      {!loading && !error && !hasCriteria ? (
-        <p className="ui-note">
-          Usa el buscador o selecciona filtros para ver productos.
-        </p>
-      ) : null}
-
-      {!loading && !error && hasCriteria && filteredProducts.length === 0 ? (
+      {!loading && !error && filteredProducts.length === 0 ? (
         <p className="ui-note">
           No hay productos para los criterios seleccionados.
         </p>
@@ -367,7 +390,7 @@ export function AdminProductsPage() {
                 <th>Nombre</th>
                 <th>Categoría</th>
                 <th>Marca</th>
-                <th>Tipo</th>
+                <th>Subcategoría</th>
                 <th>Condición</th>
                 <th>Stock</th>
                 <th>Destacado</th>
@@ -380,9 +403,11 @@ export function AdminProductsPage() {
               {filteredProducts.map((product) => (
                 <tr key={product.id}>
                   <td>{product.name}</td>
-                  <td>{product.category?.name ?? '-'}</td>
-                  <td>{product.brand?.name ?? '-'}</td>
-                  <td>{product.product_type}</td>
+                  <td>{product.category?.name ?? "-"}</td>
+                  <td>{product.brand?.name ?? "-"}</td>
+                  <td>
+                    {product.category?.parent ? product.category.name : "-"}
+                  </td>
                   <td>{product.condition}</td>
                   <td>
                     <span className="badge badge--stock">
@@ -391,22 +416,22 @@ export function AdminProductsPage() {
                   </td>
                   <td>
                     <span
-                      className={`badge ${product.is_featured ? 'badge--ok' : 'badge--muted'}`}
+                      className={`badge ${product.is_featured ? "badge--ok" : "badge--muted"}`}
                     >
-                      {product.is_featured ? 'Sí' : 'No'}
+                      {product.is_featured ? "Sí" : "No"}
                     </span>
                   </td>
                   <td>
                     <span
-                      className={`badge ${product.is_published ? 'badge--ok' : 'badge--muted'}`}
+                      className={`badge ${product.is_published ? "badge--ok" : "badge--muted"}`}
                     >
-                      {product.is_published ? 'Sí' : 'No'}
+                      {product.is_published ? "Sí" : "No"}
                     </span>
                   </td>
                   <td>
                     {product.updated_at
                       ? new Date(product.updated_at).toLocaleDateString()
-                      : '-'}
+                      : "-"}
                   </td>
                   <td>
                     <Link
@@ -414,14 +439,7 @@ export function AdminProductsPage() {
                       to={`/admin/productos/${product.slug}/editar`}
                     >
                       Editar
-                    </Link>{' '}
-                    <button
-                      type="button"
-                      className="table-action table-action--button"
-                      onClick={() => void handleDelete(product)}
-                    >
-                      Eliminar
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -430,5 +448,5 @@ export function AdminProductsPage() {
         </div>
       ) : null}
     </AdminLayout>
-  )
+  );
 }
