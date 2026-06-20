@@ -115,6 +115,58 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteProductWithoutQuotesPhysicallyRemovesProductAndTechnicalRelations()
+    {
+        await _factory.SeedCommercialDataAsync();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await dbContext.Products.FirstAsync(product => product.Id == 2);
+            dbContext.ProductImages.Add(new ProductImage { Id = 10, Product = product, Image = "products/filtro.jpg", AltText = "Filtro" });
+            dbContext.ProductSpecs.Add(new ProductSpec { Id = 10, Product = product, Key = "Medida", Value = "10", Unit = "cm" });
+            dbContext.Promotions.Add(new Promotion { Id = 10, Title = "Oferta filtro", Product = product, IsActive = true });
+            dbContext.HomeSectionItems.Add(new HomeSectionItem { Id = 10, Section = HomeSections.SparePartsOffers, Product = product, Position = 1, IsActive = true });
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthorizedClientAsync();
+        var deleteResponse = await client.DeleteAsync("/api/products/filtro/");
+        var listResponse = await client.GetAsync("/api/products/?include_unpublished=true");
+        var listBody = await listResponse.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        Assert.DoesNotContain("filtro", listBody, StringComparison.OrdinalIgnoreCase);
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await assertContext.Products.AnyAsync(product => product.Id == 2));
+        Assert.False(await assertContext.ProductImages.AnyAsync(image => image.ProductId == 2));
+        Assert.False(await assertContext.ProductSpecs.AnyAsync(spec => spec.ProductId == 2));
+        Assert.False(await assertContext.HomeSectionItems.AnyAsync(item => item.ProductId == 2));
+        var promotion = await assertContext.Promotions.SingleAsync(promotion => promotion.Id == 10);
+        Assert.Null(promotion.ProductId);
+    }
+
+    [Fact]
+    public async Task DeleteProductWithQuotesReturnsConflictAndKeepsCommercialData()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var response = await client.DeleteAsync("/api/products/excavadora/");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("No se puede eliminar este producto porque tiene cotizaciones asociadas", body);
+
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.True(await dbContext.Products.AnyAsync(product => product.Id == 1 && product.IsPublished));
+        Assert.True(await dbContext.QuoteRequests.AnyAsync(quote => quote.Id == 1 && quote.ProductId == 1 && quote.Status == QuoteStatuses.New));
+    }
+
+    [Fact]
     public async Task ProductRejectsMissingRelationsAndInvalidEnums()
     {
         await _factory.SeedCommercialDataAsync();
