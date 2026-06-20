@@ -308,6 +308,7 @@ public static class CommercialWriteEndpoints
     }
 
     private const string ProductDeleteBlockedByQuotesMessage = "No se puede eliminar este producto porque tiene cotizaciones asociadas. Puedes despublicarlo o inactivarlo.";
+    private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
 
     private static async Task<IResult> DeleteProductAsync(string idOrSlug, JemNexusDbContext dbContext, ClaimsPrincipal user, CancellationToken cancellationToken)
     {
@@ -317,7 +318,7 @@ public static class CommercialWriteEndpoints
         var hasQuoteRequests = await dbContext.QuoteRequests.AnyAsync(quote => quote.ProductId == product.Id, cancellationToken);
         if (hasQuoteRequests) return Results.Conflict(new { detail = ProductDeleteBlockedByQuotesMessage });
 
-        if (dbContext.Database.IsInMemory())
+        if (IsInMemoryProvider(dbContext))
         {
             await DeleteProductWithTechnicalRelationsAsync(dbContext, product, cancellationToken);
             return Results.NoContent();
@@ -329,9 +330,12 @@ public static class CommercialWriteEndpoints
         return Results.NoContent();
     }
 
+    private static bool IsInMemoryProvider(JemNexusDbContext dbContext) =>
+        string.Equals(dbContext.Database.ProviderName, InMemoryProviderName, StringComparison.Ordinal);
+
     private static async Task DeleteProductWithTechnicalRelationsAsync(JemNexusDbContext dbContext, Product product, CancellationToken cancellationToken)
     {
-        if (dbContext.Database.IsInMemory())
+        if (IsInMemoryProvider(dbContext))
         {
             dbContext.ProductImages.RemoveRange(dbContext.ProductImages.Where(image => image.ProductId == product.Id));
             dbContext.ProductSpecs.RemoveRange(dbContext.ProductSpecs.Where(spec => spec.ProductId == product.Id));
