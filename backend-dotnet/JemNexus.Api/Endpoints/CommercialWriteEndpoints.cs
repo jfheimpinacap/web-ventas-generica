@@ -307,14 +307,53 @@ public static class CommercialWriteEndpoints
         return Results.Ok(await ProductDetailAsync(dbContext, product.Id, cancellationToken));
     }
 
+    private const string ProductDeleteBlockedByQuotesMessage = "No se puede eliminar este producto porque tiene cotizaciones asociadas. Puedes despublicarlo o inactivarlo.";
+
     private static async Task<IResult> DeleteProductAsync(string idOrSlug, JemNexusDbContext dbContext, ClaimsPrincipal user, CancellationToken cancellationToken)
     {
         var product = await dbContext.Products.FirstOrDefaultAsync(candidate => candidate.Id.ToString() == idOrSlug || candidate.Slug == idOrSlug, cancellationToken);
         if (product is null) return Results.NotFound(new { detail = "product not found." });
-        product.IsPublished = false;
-        SetUpdatedBy(product, user);
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var hasQuoteRequests = await dbContext.QuoteRequests.AnyAsync(quote => quote.ProductId == product.Id, cancellationToken);
+        if (hasQuoteRequests) return Results.Conflict(new { detail = ProductDeleteBlockedByQuotesMessage });
+
+        if (dbContext.Database.IsInMemory())
+        {
+            await DeleteProductWithTechnicalRelationsAsync(dbContext, product, cancellationToken);
+            return Results.NoContent();
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await DeleteProductWithTechnicalRelationsAsync(dbContext, product, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return Results.NoContent();
+    }
+
+    private static async Task DeleteProductWithTechnicalRelationsAsync(JemNexusDbContext dbContext, Product product, CancellationToken cancellationToken)
+    {
+        if (dbContext.Database.IsInMemory())
+        {
+            dbContext.ProductImages.RemoveRange(dbContext.ProductImages.Where(image => image.ProductId == product.Id));
+            dbContext.ProductSpecs.RemoveRange(dbContext.ProductSpecs.Where(spec => spec.ProductId == product.Id));
+            dbContext.HomeSectionItems.RemoveRange(dbContext.HomeSectionItems.Where(item => item.ProductId == product.Id));
+
+            foreach (var promotion in dbContext.Promotions.Where(promotion => promotion.ProductId == product.Id))
+            {
+                promotion.ProductId = null;
+            }
+        }
+        else
+        {
+            await dbContext.ProductImages.Where(image => image.ProductId == product.Id).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.ProductSpecs.Where(spec => spec.ProductId == product.Id).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.HomeSectionItems.Where(item => item.ProductId == product.Id).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.Promotions.Where(promotion => promotion.ProductId == product.Id).ExecuteUpdateAsync(
+                setters => setters.SetProperty(promotion => promotion.ProductId, (int?)null),
+                cancellationToken);
+        }
+
+        dbContext.Products.Remove(product);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task ApplyProductAsync(Product product, ProductWriteDto request, JemNexusDbContext dbContext, ClaimsPrincipal user, bool isCreate, CancellationToken cancellationToken)

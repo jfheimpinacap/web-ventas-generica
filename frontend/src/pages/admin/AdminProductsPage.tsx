@@ -5,6 +5,7 @@ import { AdminLayout } from "../../components/admin/AdminLayout";
 import { getSafeApiErrorMessage } from "../../services/api";
 import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
 import type { Category, ProductListItem } from "../../types/catalog";
+import { getRootCategory } from "../../utils/formatters";
 
 const PRODUCT_FILTERS_STORAGE_KEY = "admin-products-filters";
 
@@ -251,6 +252,22 @@ export function AdminProductsPage() {
     [products],
   );
 
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
+
+  const getProductCategoryDisplay = (product: ProductListItem) => {
+    const category = categoryById.get(product.category.id) ?? product.category;
+    const rootCategory = getRootCategory(category, categories) ?? category;
+    const subcategory = category.parent ? category : null;
+
+    return {
+      rootName: rootCategory?.name ?? "-",
+      subcategoryName: subcategory?.name ?? "—",
+    };
+  };
+
   const filteredProducts = products;
 
   const handleSearch = () => {
@@ -400,14 +417,15 @@ export function AdminProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product) => {
+                const categoryDisplay = getProductCategoryDisplay(product);
+
+                return (
                 <tr key={product.id}>
                   <td>{product.name}</td>
-                  <td>{product.category?.name ?? "-"}</td>
+                  <td>{categoryDisplay.rootName}</td>
                   <td>{product.brand?.name ?? "-"}</td>
-                  <td>
-                    {product.category?.parent ? product.category.name : "-"}
-                  </td>
+                  <td>{categoryDisplay.subcategoryName}</td>
                   <td>{product.condition}</td>
                   <td>
                     <span className="badge badge--stock">
@@ -442,7 +460,8 @@ export function AdminProductsPage() {
                     </Link>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
