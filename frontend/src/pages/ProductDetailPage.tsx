@@ -10,7 +10,7 @@ import { getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
 import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
-import { formatCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
+import { formatProductCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
@@ -45,7 +45,10 @@ export function ProductDetailPage() {
         setProduct(detail)
         setSelectedImageId(null)
         if (detail.category?.id) {
-          const related = await getProducts({ category: String(detail.category.id), ordering: '-created_at' })
+          const related = await getProducts({
+            category: String(detail.category.id), ordering: '-created_at',
+            ...(detail.product_type === 'machinery' ? { product_type: 'machinery', condition: detail.condition } : {}),
+          })
           setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
         } else {
           setRelatedProducts([])
@@ -78,7 +81,9 @@ export function ProductDetailPage() {
   }, [categories, product])
 
   const rootCategory = categoryPath[0]?.parent === null ? categoryPath[0] : null
-  const backHref = rootCategory ? `/catalogo?category=${rootCategory.id}` : '/'
+  const commercialPath = product?.product_type === 'machinery' && product.condition === 'new' ? '/maquinaria-nueva'
+    : product?.product_type === 'machinery' && product.condition === 'used' ? '/maquinaria-usada' : null
+  const backHref = commercialPath ?? (rootCategory ? `/catalogo?category=${rootCategory.id}` : '/')
 
   useEffect(() => {
     if (!product) return
@@ -96,13 +101,14 @@ export function ProductDetailPage() {
 
     return [
       { label: 'Inicio', to: '/' },
+      ...(commercialPath ? [{ label: product.condition === 'new' ? 'Venta de maquinaria nueva' : 'Venta de maquinaria usada', to: commercialPath }] : []),
       ...categoryPath.map((category) => ({
         label: category.name,
         to: `/catalogo?category=${category.id}`,
       })),
       { label: product.name },
     ]
-  }, [categoryPath, product])
+  }, [categoryPath, commercialPath, product])
 
   const galleryImages = useMemo<GalleryImage[]>(() => {
     if (!product) return []
@@ -224,7 +230,7 @@ export function ProductDetailPage() {
                 </div>
 
                 <div className="product-card__badges product-detail__badges">
-                  <span className="badge badge--condition">{formatCondition(product.condition)}</span>
+                  <span className="badge badge--condition">{formatProductCondition(product)}</span>
                   <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
                 </div>
 
@@ -245,7 +251,7 @@ export function ProductDetailPage() {
                   </div>
                   <div>
                     <dt>Condición</dt>
-                    <dd>{formatCondition(product.condition)}</dd>
+                    <dd>{formatProductCondition(product)}</dd>
                   </div>
                   <div>
                     <dt>Disponibilidad</dt>

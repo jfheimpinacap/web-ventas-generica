@@ -145,3 +145,9 @@ Cuando `VITE_API_PROVIDER=dotnet`, Home, Catálogo y Detalle usan rutas pública
 Con `VITE_API_PROVIDER=django`, el frontend conserva las rutas históricas del backend Django bajo `/api/products/`, `/api/categories/`, `/api/brands/`, `/api/promotions/` y `/api/home-section-items/`.
 
 El panel vendedor no usa esas rutas públicas para administración: sus servicios continúan usando `authFetch` con Bearer contra `/api/*`. La escritura comercial sigue siendo autenticada, y la carga real de imágenes con .NET continúa pendiente.
+
+## Rutas comerciales de maquinaria
+
+Las rutas públicas `/maquinaria-nueva` y `/maquinaria-usada` reutilizan el catálogo con filtros fijos `product_type=machinery` y, respectivamente, `condition=new` o `condition=used`. Esos valores definidos por la ruta tienen prioridad sobre parámetros manipulables de la URL; las subcategorías, marcas, disponibilidad, búsqueda y ordenamiento siguen disponibles.
+
+Estas líneas comerciales no son categorías de base de datos. Las ilustraciones locales reemplazables están en `public/images/maquinaria-nueva.svg` y `public/images/maquinaria-usada.svg`. El arriendo de maquinaria queda explícitamente fuera de alcance.

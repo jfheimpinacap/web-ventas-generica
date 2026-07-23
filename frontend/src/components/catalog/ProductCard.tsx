@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { resolveMediaUrl } from '../../services/api'
 import type { ProductListItem } from '../../types/catalog'
 import { trackProductDetailClick } from '../../utils/analytics'
-import { formatCondition, formatPrice, formatStockStatus } from '../../utils/formatters'
+import { formatProductCondition, formatPrice, formatStockStatus } from '../../utils/formatters'
 
 interface ProductCardProps {
   product: ProductListItem
@@ -26,7 +26,7 @@ export function ProductCard({ product }: ProductCardProps) {
       </Link>
       <div className="product-card__content">
         <div className="product-card__badges">
-          <span className="badge badge--condition">{formatCondition(product.condition)}</span>
+          <span className="badge badge--condition">{formatProductCondition(product)}</span>
           <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
         </div>
         <h3>{product.name}</h3>
