@@ -52,6 +52,14 @@ export function formatCondition(condition: ProductCondition) {
   return conditionMap[condition] ?? condition
 }
 
+export function formatProductCondition(product: Pick<ProductListItem, 'product_type' | 'condition'>) {
+  if (product.product_type !== 'machinery') return formatCondition(product.condition)
+  const machineryConditionMap: Partial<Record<ProductCondition, string>> = {
+    new: 'Maquinaria nueva', used: 'Maquinaria usada', refurbished: 'Maquinaria reacondicionada',
+  }
+  return machineryConditionMap[product.condition] ?? formatCondition(product.condition)
+}
+
 const stockMap: Record<StockStatus, string> = {
   available: 'Disponible',
   on_request: 'A pedido',

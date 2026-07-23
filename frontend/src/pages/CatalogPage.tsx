@@ -78,7 +78,15 @@ function getNumericPrice(product: ProductListItem) {
   return Number.isNaN(parsedPrice) ? null : parsedPrice
 }
 
-export function CatalogPage() {
+export interface CommercialCatalogConfig {
+  title: string
+  description: string
+  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada'
+  fixedProductType: 'machinery'
+  fixedCondition: 'new' | 'used'
+}
+
+export function CatalogPage({ commercialConfig }: { commercialConfig?: CommercialCatalogConfig }) {
   const PRODUCTS_PER_PAGE = 12
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
@@ -90,12 +98,13 @@ export function CatalogPage() {
       search: searchParams.get('search') ?? '',
       category: searchParams.get('category') ?? '',
       brand: searchParams.get('brand') ?? '',
-      product_type: (searchParams.get('product_type') as ProductQueryParams['product_type']) ?? '',
-      condition: (searchParams.get('condition') as ProductQueryParams['condition']) ?? '',
+      // Route configuration takes precedence over user-controlled URL parameters.
+      product_type: commercialConfig?.fixedProductType ?? (searchParams.get('product_type') as ProductQueryParams['product_type']) ?? '',
+      condition: commercialConfig?.fixedCondition ?? (searchParams.get('condition') as ProductQueryParams['condition']) ?? '',
       stock_status: (searchParams.get('stock_status') as ProductQueryParams['stock_status']) ?? '',
       ordering: (searchParams.get('ordering') as ProductQueryParams['ordering']) ?? '',
     }),
-    [searchParams],
+    [commercialConfig, searchParams],
   )
 
   const { products, loading, error } = useCatalogProducts(query)
@@ -180,24 +189,28 @@ export function CatalogPage() {
     : selectedCategory
       ? `Ver productos disponibles en ${selectedCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
       : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
-  const canonicalPath = selectedCategory
+  const canonicalPath = commercialConfig?.canonicalPath ?? (selectedCategory
     ? `/catalogo?category=${selectedCategory.id}`
-    : '/catalogo'
+    : '/catalogo')
   const seoRobots = hasSearch ? 'noindex,follow' : 'index,follow'
   const canonicalUrl = buildPublicUrl(canonicalPath)
 
   const buildCatalogHref = (categoryId?: number) => {
     const next = new URLSearchParams(searchParams)
+    next.delete('product_type')
+    next.delete('condition')
     if (categoryId) next.set('category', String(categoryId))
     else next.delete('category')
 
     const queryString = next.toString()
-    return queryString ? `/catalogo?${queryString}` : '/catalogo'
+    const basePath = commercialConfig?.canonicalPath ?? '/catalogo'
+    return queryString ? `${basePath}?${queryString}` : basePath
   }
 
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     const trail: BreadcrumbItem[] = [
       { label: 'Inicio', to: '/' },
+      ...(commercialConfig ? [{ label: commercialConfig.title, to: commercialConfig.canonicalPath }] : []),
       ...categoryPath.map((category) => ({
         label: category.name,
         to: buildCatalogHref(category.id),
@@ -208,7 +221,7 @@ export function CatalogPage() {
     extraFilterTrail.forEach((item) => trail.push({ label: item }))
 
     return trail
-  }, [categoryPath, selectedBrand, extraFilterTrail, searchParams])
+  }, [categoryPath, commercialConfig, selectedBrand, extraFilterTrail, searchParams])
 
   const pageTitle = useMemo(() => {
     const categoryName = categoryPath[categoryPath.length - 1]?.name
@@ -218,10 +231,11 @@ export function CatalogPage() {
     if (categoryName) return categoryName
     if (brandName) return brandName
 
+    if (commercialConfig) return commercialConfig.title
     if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
     if (query.search) return `Resultados para "${query.search}"`
     return 'Productos'
-  }, [categoryPath, selectedBrand, query.product_type, query.search])
+  }, [categoryPath, commercialConfig, selectedBrand, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
 
@@ -313,7 +327,11 @@ export function CatalogPage() {
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{searchOnlyView ? 'Resultados de búsqueda' : pageTitle}</h1>
-          {mainCategorySeo ? (
+          {commercialConfig ? (
+            <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${commercialConfig.title}`}>
+              <p>{commercialConfig.description}</p>
+            </div>
+          ) : mainCategorySeo ? (
             <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${mainCategorySeo.title}`}>
               <p>{mainCategorySeo.description}</p>
             </div>

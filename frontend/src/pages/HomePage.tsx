@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
+import { MachinerySalesSection } from '../components/catalog/MachinerySalesSection'
 import { FeaturedProducts } from '../components/catalog/FeaturedProducts'
 import { JsonLd } from '../components/common/JsonLd'
 import { Seo } from '../components/common/Seo'
@@ -51,7 +52,7 @@ export function HomePage() {
       <JsonLd id="home-organization" data={organizationJsonLd} />
       <JsonLd id="home-website" data={websiteJsonLd} />
       <HeroSection />
-
+      <MachinerySalesSection />
       <FeaturedProducts />
     </Layout>
   )

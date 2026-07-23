@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '../components/admin/ProtectedRoute'
 import { AboutPage } from '../pages/AboutPage'
 import { ApiDiagnostics } from '../pages/ApiDiagnostics'
-import { CatalogPage } from '../pages/CatalogPage'
+import { CatalogPage, type CommercialCatalogConfig } from '../pages/CatalogPage'
 import { ContactPage } from '../pages/ContactPage'
 import { FaqPage } from '../pages/FaqPage'
 import { HomePage } from '../pages/HomePage'
@@ -25,11 +25,29 @@ import { AdminQuotesPage } from '../pages/admin/AdminQuotesPage'
 import { AdminSupplierFormPage } from '../pages/admin/AdminSupplierFormPage'
 import { AdminSuppliersPage } from '../pages/admin/AdminSuppliersPage'
 
+const newMachineryConfig: CommercialCatalogConfig = {
+  title: 'Venta de maquinaria nueva',
+  description: 'Equipos nuevos para operaciones industriales, disponibles para revisar y cotizar con atención comercial especializada.',
+  canonicalPath: '/maquinaria-nueva',
+  fixedProductType: 'machinery',
+  fixedCondition: 'new',
+}
+
+const usedMachineryConfig: CommercialCatalogConfig = {
+  title: 'Venta de maquinaria usada',
+  description: 'Equipos usados seleccionados y disponibles para cotización, con información comercial clara para tu operación.',
+  canonicalPath: '/maquinaria-usada',
+  fixedProductType: 'machinery',
+  fixedCondition: 'used',
+}
+
 export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/catalogo" element={<CatalogPage />} />
+      <Route path="/maquinaria-nueva" element={<CatalogPage commercialConfig={newMachineryConfig} />} />
+      <Route path="/maquinaria-usada" element={<CatalogPage commercialConfig={usedMachineryConfig} />} />
       <Route path="/producto/:slug" element={<ProductDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/diagnostico-api" element={<ApiDiagnostics />} />
