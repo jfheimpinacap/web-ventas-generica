@@ -7,6 +7,16 @@ namespace JemNexus.Api.Tests;
 public sealed class CommercialValidationTests
 {
     [Theory]
+    [InlineData(ProductPowerSources.Diesel, true)]
+    [InlineData(ProductPowerSources.Electric24V, true)]
+    [InlineData(ProductPowerSources.ElectricLithium, true)]
+    [InlineData("solar", false)]
+    public void ProductPowerSourcesAreValidatedAgainstAllowedConstants(string value, bool expected)
+    {
+        Assert.Equal(expected, CommercialValidation.IsAllowedProductPowerSource(value));
+    }
+
+    [Theory]
     [InlineData(ProductTypes.Machinery, true)]
     [InlineData(ProductTypes.SparePart, true)]
     [InlineData(ProductTypes.Service, true)]

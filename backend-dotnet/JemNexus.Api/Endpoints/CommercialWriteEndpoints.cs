@@ -4,6 +4,7 @@ using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Utils;
+using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -385,6 +386,12 @@ public static class CommercialWriteEndpoints
         if (request.Sku is not null) product.Sku = request.Sku.Trim();
         if (request.Year.HasValue) product.Year = request.Year;
         if (request.HoursMeter.HasValue) product.HoursMeter = request.HoursMeter;
+        if (request.MaximumLoadCapacityKg.HasValue) product.MaximumLoadCapacityKg = request.MaximumLoadCapacityKg;
+        if (request.PowerSource is not null) product.PowerSource = request.PowerSource.Trim();
+        var defaultsToIncluded = isCreate && product.ProductType == ProductTypes.Machinery;
+        if (request.IncludesTechnicalReview.HasValue || defaultsToIncluded) product.IncludesTechnicalReview = request.IncludesTechnicalReview ?? true;
+        if (request.IncludesCommercialTechnicalAdvice.HasValue || defaultsToIncluded) product.IncludesCommercialTechnicalAdvice = request.IncludesCommercialTechnicalAdvice ?? true;
+        if (request.IncludesCoordinatedDelivery.HasValue || defaultsToIncluded) product.IncludesCoordinatedDelivery = request.IncludesCoordinatedDelivery ?? true;
         if (request.Price.HasValue) product.Price = request.Price;
         if (request.PriceCurrency is not null) product.PriceCurrency = request.PriceCurrency.Trim().ToUpperInvariant();
         if (request.PriceTaxMode is not null) product.PriceTaxMode = request.PriceTaxMode.Trim().ToLowerInvariant();
@@ -565,6 +572,10 @@ public static class CommercialWriteEndpoints
         if (request.StockStatus is not null && !StockStatusValues.Contains(request.StockStatus.Trim())) return Results.BadRequest(new { detail = "invalid stock_status." });
         if (request.PriceCurrency is not null && !PriceCurrencyValues.Contains(request.PriceCurrency.Trim())) return Results.BadRequest(new { detail = "invalid price_currency. Use CLP or USD." });
         if (request.PriceTaxMode is not null && !PriceTaxModeValues.Contains(request.PriceTaxMode.Trim())) return Results.BadRequest(new { detail = "invalid price_tax_mode. Use plus_vat or vat_included." });
+        if (request.MaximumLoadCapacityKg is <= 0) return Results.BadRequest(new { detail = "maximum_load_capacity_kg must be greater than zero." });
+        if (request.PowerSource is not null && !CommercialValidation.IsAllowedProductPowerSource(request.PowerSource.Trim())) return Results.BadRequest(new { detail = "invalid power_source." });
+        var maxYear = DateTimeOffset.UtcNow.Year + CommercialValidation.MaxFutureYearOffset;
+        if (request.Year is not null && (request.Year < CommercialValidation.MinReasonableYear || request.Year > maxYear)) return Results.BadRequest(new { detail = $"year must be between {CommercialValidation.MinReasonableYear} and {maxYear}." });
         return null;
     }
 

@@ -383,6 +383,21 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int?>("HoursMeter")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IncludesCommercialTechnicalAdvice")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IncludesCoordinatedDelivery")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IncludesTechnicalReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsFeatured")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -400,6 +415,9 @@ namespace JemNexus.Api.Data.Migrations
                         .HasColumnType("nvarchar(120)")
                         .HasDefaultValue("");
 
+                    b.Property<decimal?>("MaximumLoadCapacityKg")
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(220)
@@ -407,6 +425,10 @@ namespace JemNexus.Api.Data.Migrations
 
                     b.Property<decimal?>("Price")
                         .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("PowerSource")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("PriceCurrency")
                         .IsRequired()

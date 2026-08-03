@@ -19,6 +19,11 @@ public sealed class Product
     public string Sku { get; set; } = string.Empty;
     public int? Year { get; set; }
     public int? HoursMeter { get; set; }
+    public decimal? MaximumLoadCapacityKg { get; set; }
+    public string? PowerSource { get; set; }
+    public bool IncludesTechnicalReview { get; set; }
+    public bool IncludesCommercialTechnicalAdvice { get; set; }
+    public bool IncludesCoordinatedDelivery { get; set; }
     public decimal? Price { get; set; }
     public string PriceCurrency { get; set; } = ProductPriceCurrencies.Clp;
     public string PriceTaxMode { get; set; } = ProductPriceTaxModes.PlusVat;
@@ -52,6 +57,13 @@ public static class ProductConditions
     public const string Used = "used";
     public const string Refurbished = "refurbished";
     public const string NotApplicable = "not_applicable";
+}
+
+public static class ProductPowerSources
+{
+    public const string Diesel = "diesel";
+    public const string Electric24V = "electric_24v";
+    public const string ElectricLithium = "electric_lithium";
 }
 
 public static class StockStatuses
