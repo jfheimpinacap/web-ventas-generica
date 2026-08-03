@@ -24,6 +24,13 @@ public static class CommercialValidation
         ProductConditions.NotApplicable
     ];
 
+    public static readonly string[] AllowedProductPowerSources =
+    [
+        ProductPowerSources.Diesel,
+        ProductPowerSources.Electric24V,
+        ProductPowerSources.ElectricLithium
+    ];
+
     public static readonly string[] AllowedStockStatuses =
     [
         StockStatuses.Available,
@@ -51,6 +58,7 @@ public static class CommercialValidation
 
     public static bool IsAllowedProductType(string? value) => IsAllowed(value, AllowedProductTypes);
     public static bool IsAllowedProductCondition(string? value) => IsAllowed(value, AllowedProductConditions);
+    public static bool IsAllowedProductPowerSource(string? value) => value is null || IsAllowed(value, AllowedProductPowerSources);
     public static bool IsAllowedStockStatus(string? value) => IsAllowed(value, AllowedStockStatuses);
     public static bool IsAllowedQuoteStatus(string? value) => IsAllowed(value, AllowedQuoteStatuses);
     public static bool IsAllowedPreferredContactMethod(string? value) => IsAllowed(value, AllowedPreferredContactMethods);
@@ -85,6 +93,17 @@ public static class CommercialValidation
         if (product.Price is < 0)
         {
             errors.Add("Product price cannot be negative.");
+        }
+
+
+        if (product.MaximumLoadCapacityKg is <= 0)
+        {
+            errors.Add("Product maximum load capacity must be greater than zero kilograms.");
+        }
+
+        if (!IsAllowedProductPowerSource(product.PowerSource))
+        {
+            errors.Add("Product power source is not allowed.");
         }
 
         var maxYear = DateTimeOffset.UtcNow.Year + MaxFutureYearOffset;

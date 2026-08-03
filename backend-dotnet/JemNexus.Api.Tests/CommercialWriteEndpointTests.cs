@@ -114,6 +114,69 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/products/{slug}/")).StatusCode);
     }
 
+    [Theory]
+    [InlineData(ProductPowerSources.Diesel)]
+    [InlineData(ProductPowerSources.Electric24V)]
+    [InlineData(ProductPowerSources.ElectricLithium)]
+    public async Task MachineryTechnicalDataSupportsAllowedPowerSourcesAndPurchaseDefaults(string powerSource)
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var created = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = $"Equipo {powerSource}", category = 1, product_type = ProductTypes.Machinery,
+            condition = ProductConditions.New, stock_status = StockStatuses.Available,
+            maximum_load_capacity_kg = 2000.50m, power_source = powerSource, year = 2024
+        }));
+
+        Assert.Equal(powerSource, created.GetProperty("power_source").GetString());
+        Assert.Equal(2000.50m, created.GetProperty("maximum_load_capacity_kg").GetDecimal());
+        Assert.True(created.GetProperty("includes_technical_review").GetBoolean());
+        Assert.True(created.GetProperty("includes_commercial_technical_advice").GetBoolean());
+        Assert.True(created.GetProperty("includes_coordinated_delivery").GetBoolean());
+
+        var slug = created.GetProperty("slug").GetString();
+        var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/products/{slug}/", new
+        {
+            maximum_load_capacity_kg = 2500m, includes_technical_review = false
+        }));
+        Assert.Equal(2500m, updated.GetProperty("maximum_load_capacity_kg").GetDecimal());
+        Assert.False(updated.GetProperty("includes_technical_review").GetBoolean());
+    }
+
+    [Fact]
+    public async Task MachineryTechnicalDataRejectsInvalidValuesAndSparePartsKeepFalseDefaults()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+        var invalidCapacity = await client.PostAsJsonAsync("/api/products/", new { name = "Inválido", category = 1, maximum_load_capacity_kg = 0 });
+        var invalidPower = await client.PostAsJsonAsync("/api/products/", new { name = "Inválido", category = 1, power_source = "solar" });
+        var invalidYear = await client.PostAsJsonAsync("/api/products/", new { name = "Inválido", category = 1, year = 1800 });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidCapacity.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPower.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidYear.StatusCode);
+
+        var spare = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Repuesto compatible", category = 2, product_type = ProductTypes.SparePart,
+            condition = ProductConditions.New, stock_status = StockStatuses.Available
+        }));
+        Assert.False(spare.GetProperty("includes_technical_review").GetBoolean());
+        Assert.False(spare.GetProperty("includes_commercial_technical_advice").GetBoolean());
+        Assert.False(spare.GetProperty("includes_coordinated_delivery").GetBoolean());
+
+        var used = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Maquinaria usada", category = 1, product_type = ProductTypes.Machinery,
+            condition = ProductConditions.Used, stock_status = StockStatuses.Available,
+            includes_coordinated_delivery = false
+        }));
+        Assert.True(used.GetProperty("includes_technical_review").GetBoolean());
+        Assert.True(used.GetProperty("includes_commercial_technical_advice").GetBoolean());
+        Assert.False(used.GetProperty("includes_coordinated_delivery").GetBoolean());
+    }
+
     [Fact]
     public async Task DeleteProductWithoutQuotesPhysicallyRemovesProductAndTechnicalRelations()
     {
