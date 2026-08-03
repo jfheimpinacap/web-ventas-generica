@@ -22,6 +22,7 @@ import type {
   StockStatus,
   SupplierFormValues,
   SupplierSummary,
+  TechnicalSheet,
 } from '../types/catalog'
 import { API_PROVIDER, ApiError } from './api'
 import { normalizeChileanPriceInput } from '../utils/formatters'
@@ -922,4 +923,31 @@ export async function updateHomeSectionItem(
 
 export async function deleteHomeSectionItem(id: number) {
   return authFetch<void>(`/home-section-items/${id}/`, { method: 'DELETE' })
+}
+
+export async function getTechnicalSheets(search = '') {
+  return authFetch<TechnicalSheet[]>('/technical-sheets/', { params: { search } })
+}
+
+export async function createTechnicalSheet(name: string, file: File) {
+  const body = new FormData()
+  body.append('name', name)
+  body.append('file', file)
+  return authFetch<TechnicalSheet>('/technical-sheets/', { method: 'POST', body })
+}
+
+export async function renameTechnicalSheet(id: number, name: string) {
+  return authFetch<TechnicalSheet>(`/technical-sheets/${id}/`, {
+    method: 'PATCH', body: JSON.stringify({ name }),
+  })
+}
+
+export async function replaceTechnicalSheetFile(id: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return authFetch<TechnicalSheet>(`/technical-sheets/${id}/file/`, { method: 'POST', body })
+}
+
+export async function deleteTechnicalSheet(id: number) {
+  return authFetch<void>(`/technical-sheets/${id}/`, { method: 'DELETE' })
 }

@@ -34,6 +34,17 @@ export interface SupplierSummary {
   updated_at: string
 }
 
+export interface TechnicalSheet {
+  id: number
+  name: string
+  original_file_name: string
+  content_type: string
+  size_bytes: number
+  created_at: string
+  updated_at: string
+  file_url: string
+}
+
 export interface ProductImage {
   id: number
   product?: number

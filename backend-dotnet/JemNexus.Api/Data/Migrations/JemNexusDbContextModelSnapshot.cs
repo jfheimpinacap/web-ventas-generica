@@ -852,6 +852,21 @@ namespace JemNexus.Api.Data.Migrations
                     b.ToTable("QuoteRequests", (string)null);
                 });
 
+            modelBuilder.Entity("JemNexus.Api.Models.TechnicalSheet", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("ContentType").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(220).HasColumnType("nvarchar(220)");
+                    b.Property<string>("OriginalFileName").IsRequired().HasMaxLength(255).HasColumnType("nvarchar(255)");
+                    b.Property<long>("SizeBytes").HasColumnType("bigint");
+                    b.Property<string>("StorageKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<DateTimeOffset>("UpdatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
+                    b.HasKey("Id");
+                    b.ToTable("TechnicalSheets", (string)null);
+                });
+
             modelBuilder.Entity("JemNexus.Api.Models.Supplier", b =>
                 {
                     b.Property<int>("Id")

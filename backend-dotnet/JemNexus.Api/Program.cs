@@ -8,6 +8,7 @@ using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
 using JemNexus.Api.Services.Notifications;
+using JemNexus.Api.Services.TechnicalSheets;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Json;
@@ -118,6 +119,7 @@ builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQuoteNotificationService, SmtpQuoteNotificationService>();
+builder.Services.AddSingleton<ITechnicalSheetStorage, LocalTechnicalSheetStorage>();
 
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var defaultConnection = string.IsNullOrWhiteSpace(configuredConnection)
@@ -185,6 +187,7 @@ MapAuthEndpoints(app);
 app.MapCommercialPublicReadEndpoints();
 app.MapCommercialReadEndpoints();
 app.MapCommercialWriteEndpoints();
+app.MapTechnicalSheetEndpoints();
 
 await SeedData.SeedUsersAsync(app.Services, app.Environment);
 

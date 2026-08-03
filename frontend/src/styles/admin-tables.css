@@ -90,3 +90,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.technical-sheet-form { background: #fff; border: 1px solid #e2e8f0; border-radius: var(--radius-card); display: grid; gap: 1rem; margin: 1rem 0; padding: 1rem; }
+.technical-sheet-form label { display: grid; font-weight: 600; gap: .35rem; }
+.technical-sheet-form input { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .65rem; }
