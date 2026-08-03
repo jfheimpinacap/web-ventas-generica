@@ -39,7 +39,7 @@ public static class TechnicalSheetEndpoints
         return item is null ? Results.NotFound() : Results.Ok(ToResponse(item));
     }
 
-    private static async Task<IResult> CreateAsync([FromForm] string? name, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, CancellationToken ct)
+    private static async Task<IResult> CreateAsync([FromForm] string? name, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var error = Validate(name, file);
         if (error is not null) return Results.BadRequest(new { detail = error });
@@ -47,7 +47,13 @@ public static class TechnicalSheetEndpoints
         var item = new TechnicalSheet { Name = name!.Trim(), OriginalFileName = Path.GetFileName(file.FileName), StorageKey = storageKey, ContentType = file.ContentType, SizeBytes = file.Length };
         db.TechnicalSheets.Add(item);
         try { await db.SaveChangesAsync(ct); }
-        catch { await storage.DeleteAsync(storageKey, ct); throw; }
+        catch (DbUpdateException exception)
+        {
+            db.Entry(item).State = EntityState.Detached;
+            await DeleteAfterPersistenceFailureAsync(storage, storageKey, loggerFactory, ct);
+            loggerFactory.CreateLogger(typeof(TechnicalSheetEndpoints)).LogError(exception, "Could not persist a new technical sheet.");
+            return PersistenceFailure();
+        }
         return Results.Created($"/api/technical-sheets/{item.Id}", ToResponse(item));
     }
 
@@ -62,18 +68,36 @@ public static class TechnicalSheetEndpoints
         return Results.Ok(ToResponse(item));
     }
 
-    private static async Task<IResult> ReplaceFileAsync(int id, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, CancellationToken ct)
+    private static async Task<IResult> ReplaceFileAsync(int id, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var error = ValidateFile(file);
         if (error is not null) return Results.BadRequest(new { detail = error });
         var item = await db.TechnicalSheets.FindAsync([id], ct);
         if (item is null) return Results.NotFound();
-        var oldKey = item.StorageKey;
+        var oldValues = new
+        {
+            item.OriginalFileName,
+            item.StorageKey,
+            item.ContentType,
+            item.SizeBytes,
+            item.UpdatedAt
+        };
         var newKey = await storage.SaveAsync(file!.OpenReadStream(), ct);
         item.StorageKey = newKey; item.OriginalFileName = Path.GetFileName(file.FileName); item.ContentType = file.ContentType; item.SizeBytes = file.Length;
         try { await db.SaveChangesAsync(ct); }
-        catch { await storage.DeleteAsync(newKey, ct); throw; }
-        await storage.DeleteAsync(oldKey, ct);
+        catch (DbUpdateException exception)
+        {
+            item.OriginalFileName = oldValues.OriginalFileName;
+            item.StorageKey = oldValues.StorageKey;
+            item.ContentType = oldValues.ContentType;
+            item.SizeBytes = oldValues.SizeBytes;
+            item.UpdatedAt = oldValues.UpdatedAt;
+            db.Entry(item).State = EntityState.Unchanged;
+            await DeleteAfterPersistenceFailureAsync(storage, newKey, loggerFactory, ct);
+            loggerFactory.CreateLogger(typeof(TechnicalSheetEndpoints)).LogError(exception, "Could not persist a technical sheet file replacement.");
+            return PersistenceFailure();
+        }
+        await storage.DeleteAsync(oldValues.StorageKey, ct);
         return Results.Ok(ToResponse(item));
     }
 
@@ -97,6 +121,15 @@ public static class TechnicalSheetEndpoints
     }
 
     private static string? Validate(string? name, IFormFile? file) => ValidateName(name) ?? ValidateFile(file);
+    private static IResult PersistenceFailure() => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar la ficha técnica.");
+    private static async Task DeleteAfterPersistenceFailureAsync(ITechnicalSheetStorage storage, string storageKey, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        try { await storage.DeleteAsync(storageKey, ct); }
+        catch (Exception exception)
+        {
+            loggerFactory.CreateLogger(typeof(TechnicalSheetEndpoints)).LogWarning(exception, "Could not clean up a technical sheet file after a persistence failure.");
+        }
+    }
     private static string? ValidateName(string? name) => string.IsNullOrWhiteSpace(name) ? "El nombre es obligatorio." : name.Trim().Length > MaxNameLength ? $"El nombre no puede superar {MaxNameLength} caracteres." : null;
     private static string? ValidateFile(IFormFile? file)
     {

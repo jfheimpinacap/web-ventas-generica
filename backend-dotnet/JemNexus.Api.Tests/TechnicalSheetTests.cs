@@ -39,7 +39,13 @@ public sealed class TechnicalSheetTests : IDisposable
     {
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PATCH") request.Content = new StringContent("{}");
+        request.Content = (method, path) switch
+        {
+            ("PATCH", _) => JsonContent.Create(new { name = "Ficha" }),
+            ("POST", "/api/technical-sheets/") => PdfForm("Ficha", "valid.pdf", "%PDF"u8.ToArray()),
+            ("POST", _) => PdfOnlyForm("valid.pdf", "%PDF"u8.ToArray()),
+            _ => null
+        };
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(request)).StatusCode);
     }
 
@@ -186,21 +192,30 @@ public sealed class TechnicalSheetTests : IDisposable
         using var client = await CreateAuthorizedClientAsync();
         var created = await CreateAsync(client, "Ficha", "old.pdf", "%PDF-old"u8.ToArray());
         var before = await GetEntityAsync(created.GetProperty("id").GetInt32());
-        _factory.PersistenceFailure.Enabled = true;
+        _factory.PersistenceFailure.FailNextSave();
 
         var replacement = await client.PostAsync($"/api/technical-sheets/{before.Id}/file/", PdfOnlyForm("new.pdf", "%PDF-new"u8.ToArray()));
         Assert.Equal(HttpStatusCode.InternalServerError, replacement.StatusCode);
-        _factory.PersistenceFailure.Enabled = false;
+        await AssertSafePersistenceFailureAsync(replacement);
         var after = await GetEntityAsync(before.Id);
+        Assert.Equal(before.Id, after.Id);
         Assert.Equal(before.StorageKey, after.StorageKey);
         Assert.Equal(before.OriginalFileName, after.OriginalFileName);
+        Assert.Equal(before.ContentType, after.ContentType);
+        Assert.Equal(before.SizeBytes, after.SizeBytes);
+        Assert.Equal(before.UpdatedAt, after.UpdatedAt);
         Assert.Single(_factory.Storage.Keys);
         Assert.True(_factory.Storage.Exists(before.StorageKey));
 
-        _factory.PersistenceFailure.Enabled = true;
+        _factory.PersistenceFailure.FailNextSave();
         var creation = await client.PostAsync("/api/technical-sheets/", PdfForm("Otra", "other.pdf", "%PDF-other"u8.ToArray()));
         Assert.Equal(HttpStatusCode.InternalServerError, creation.StatusCode);
+        await AssertSafePersistenceFailureAsync(creation);
         Assert.Single(_factory.Storage.Keys);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.Single(await db.TechnicalSheets.AsNoTracking().ToListAsync());
+        Assert.False(db.ChangeTracker.HasChanges());
     }
 
     [Fact]
@@ -296,6 +311,13 @@ public sealed class TechnicalSheetTests : IDisposable
         Assert.DoesNotContain("uploads", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ContentRootPath", json, StringComparison.OrdinalIgnoreCase);
     }
+    private static async Task AssertSafePersistenceFailureAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Simulated technical sheet persistence failure", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("storage", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("uploads", body, StringComparison.OrdinalIgnoreCase);
+    }
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
     {
         var body = await response.Content.ReadAsStringAsync();
@@ -329,10 +351,12 @@ public sealed class TechnicalSheetTests : IDisposable
 
     public sealed class TechnicalSheetPersistenceFailureInterceptor : SaveChangesInterceptor
     {
-        public bool Enabled { get; set; }
+        private int _failuresRemaining;
+        public void FailNextSave() => Interlocked.Exchange(ref _failuresRemaining, 1);
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            if (Enabled && eventData.Context?.ChangeTracker.Entries<TechnicalSheet>().Any(entry => entry.State is EntityState.Added or EntityState.Modified) == true)
+            if (eventData.Context?.ChangeTracker.Entries<TechnicalSheet>().Any(entry => entry.State is EntityState.Added or EntityState.Modified) == true
+                && Interlocked.CompareExchange(ref _failuresRemaining, 0, 1) == 1)
                 throw new DbUpdateException("Simulated technical sheet persistence failure.");
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
