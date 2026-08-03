@@ -1,5 +1,5 @@
 import type { AuthUser } from '../types/catalog'
-import { apiRequest, ApiError } from './api'
+import { apiRequest, ApiError, buildApiUrl } from './api'
 
 export const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
@@ -202,6 +202,39 @@ export async function authFetch<T>(
       })
     }
 
+    throw error
+  }
+}
+
+async function requestAuthenticatedBlob(path: string, token: string, params?: Record<string, string | number | boolean | undefined>) {
+  const response = await fetch(buildApiUrl(path, params), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new ApiError(`API error (${response.status})`, response.status)
+  return response.blob()
+}
+
+export async function authBlobFetch(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined>,
+) {
+  const token = getAccessToken()
+  if (!token) {
+    clearSession()
+    throw new ApiError('Unauthorized', 401)
+  }
+
+  try {
+    return await requestAuthenticatedBlob(path, token, params)
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      const nextAccess = await refreshToken()
+      if (!nextAccess) {
+        clearSession()
+        throw error
+      }
+      return requestAuthenticatedBlob(path, nextAccess, params)
+    }
     throw error
   }
 }

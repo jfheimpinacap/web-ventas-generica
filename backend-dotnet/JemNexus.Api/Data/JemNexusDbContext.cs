@@ -17,6 +17,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<Promotion> Promotions => Set<Promotion>();
     public DbSet<HomeSectionItem> HomeSectionItems => Set<HomeSectionItem>();
     public DbSet<QuoteRequest> QuoteRequests => Set<QuoteRequest>();
+    public DbSet<TechnicalSheet> TechnicalSheets => Set<TechnicalSheet>();
 
     public override int SaveChanges()
     {
@@ -66,7 +67,8 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             or ProductSpec
             or Promotion
             or HomeSectionItem
-            or QuoteRequest;
+            or QuoteRequest
+            or TechnicalSheet;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -84,6 +86,22 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         ConfigurePromotion(modelBuilder);
         ConfigureHomeSectionItem(modelBuilder);
         ConfigureQuoteRequest(modelBuilder);
+        ConfigureTechnicalSheet(modelBuilder);
+    }
+
+    private static void ConfigureTechnicalSheet(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<TechnicalSheet>(entity =>
+        {
+            entity.ToTable("TechnicalSheets");
+            entity.HasKey(sheet => sheet.Id);
+            entity.Property(sheet => sheet.Name).HasMaxLength(220).IsRequired();
+            entity.Property(sheet => sheet.OriginalFileName).HasMaxLength(255).IsRequired();
+            entity.Property(sheet => sheet.StorageKey).HasMaxLength(80).IsRequired();
+            entity.Property(sheet => sheet.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(sheet => sheet.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(sheet => sheet.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        });
     }
 
 
