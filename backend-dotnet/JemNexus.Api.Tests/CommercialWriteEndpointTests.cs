@@ -372,12 +372,14 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     [Fact]
     public async Task ProductImageUploadCleansStoredFileWhenSaveChangesFails()
     {
+        var saveChangesInterceptor = new ThrowingProductImageSaveChangesInterceptor();
         var factory = new CommercialWriteApiFactory(
             configureTestServices: null,
-            configureDbContext: options => options.AddInterceptors(new ThrowingProductImageSaveChangesInterceptor()));
+            configureDbContext: options => options.AddInterceptors(saveChangesInterceptor));
         using var disposableFactory = factory;
         await factory.SeedCommercialDataAsync();
         using var client = await CreateAuthorizedClientAsync(factory);
+        saveChangesInterceptor.FailProductImageAdds = true;
 
         var response = await client.PostAsync("/api/product-images/", ImageForm(1, "cleanup.jpg", "image/jpeg", JpegBytes(), ThrowingProductImageSaveChangesInterceptor.TriggerAltText));
 
@@ -627,6 +629,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     private sealed class ThrowingProductImageSaveChangesInterceptor : SaveChangesInterceptor
     {
         public const string TriggerAltText = "trigger-product-image-save-failure";
+        public bool FailProductImageAdds { get; set; }
 
         public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
         {
@@ -643,10 +646,10 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
 
-        private static void ThrowIfTriggered(DbContext? context)
+        private void ThrowIfTriggered(DbContext? context)
         {
-            if (context?.ChangeTracker.Entries<ProductImage>().Any(entry =>
-                    entry.State == EntityState.Added && entry.Entity.AltText == TriggerAltText) == true)
+            if (FailProductImageAdds && context?.ChangeTracker.Entries<ProductImage>().Any(entry =>
+                    entry.State == EntityState.Added) == true)
             {
                 throw new InvalidOperationException("Simulated product image SaveChanges failure.");
             }
