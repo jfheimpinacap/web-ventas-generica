@@ -9,7 +9,6 @@ using JemNexus.Api.Services.ProductImages;
 using JemNexus.Api.Utils;
 using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
@@ -569,10 +568,10 @@ public static class CommercialWriteEndpoints
     public sealed class ProductImageFormDto
     {
         public int? Product { get; set; }
-        [ModelBinder(Name = "product_id")] public int? ProductId { get; set; }
+        [FromForm(Name = "product_id")] public int? ProductId { get; set; }
         public IFormFile? Image { get; set; }
-        [ModelBinder(Name = "alt_text")] public string? AltText { get; set; }
-        [ModelBinder(Name = "is_main")] public bool? IsMain { get; set; }
+        [FromForm(Name = "alt_text")] public string? AltText { get; set; }
+        [FromForm(Name = "is_main")] public bool? IsMain { get; set; }
         public int? Order { get; set; }
     }
 
