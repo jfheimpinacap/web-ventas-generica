@@ -438,7 +438,7 @@ public static class CommercialWriteEndpoints
 
         var now = DateTimeOffset.UtcNow;
         var existingImages = await dbContext.ProductImages.Where(image => image.ProductId == productId.Value).ToListAsync(cancellationToken);
-        var isMain = existingImages.Count == 0 || request.IsMain == true;
+        var isMain = existingImages.Count == 0 || (request.IsMain ?? request.is_main) == true;
         if (isMain)
         {
             foreach (var image in existingImages) image.IsMain = false;
@@ -572,6 +572,7 @@ public static class CommercialWriteEndpoints
         public IFormFile? Image { get; set; }
         [FromForm(Name = "alt_text")] public string? AltText { get; set; }
         [FromForm(Name = "is_main")] public bool? IsMain { get; set; }
+        public bool? is_main { get; set; }
         public int? Order { get; set; }
     }
 

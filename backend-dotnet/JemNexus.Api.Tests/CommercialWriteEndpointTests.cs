@@ -534,10 +534,15 @@ public sealed class CommercialWriteEndpointTests : IDisposable
 
         public string PhysicalUploadPath(string publicPath)
         {
-            var relativePath = publicPath.StartsWith("/media/", StringComparison.OrdinalIgnoreCase)
-                ? publicPath["/media/".Length..]
-                : publicPath.TrimStart('/');
-            return Path.Combine(_uploadRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            var path = Uri.TryCreate(publicPath, UriKind.Absolute, out var absoluteUri)
+                ? absoluteUri.AbsolutePath
+                : publicPath;
+            var queryStart = path.IndexOf('?', StringComparison.Ordinal);
+            if (queryStart >= 0) path = path[..queryStart];
+            var relativePath = path.StartsWith("/media/product-images/", StringComparison.OrdinalIgnoreCase)
+                ? path["/media/".Length..]
+                : path.TrimStart('/');
+            return Path.GetFullPath(Path.Combine(_uploadRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
