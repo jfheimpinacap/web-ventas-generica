@@ -258,8 +258,10 @@ public sealed class CommercialWriteEndpointTests : IDisposable
 
         var first = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "uno.jpg", "image/jpeg", JpegBytes(), "Principal", isMain: false, order: 2)));
         Assert.True(first.GetProperty("is_main").GetBoolean());
-        Assert.StartsWith("/media/product-images/1/", first.GetProperty("image").GetString());
-        Assert.DoesNotContain("/workspace", first.GetProperty("image").GetString());
+        var firstImageUrl = first.GetProperty("image").GetString();
+        Assert.StartsWith("/media/product-images/1/", firstImageUrl);
+        Assert.DoesNotContain("/workspace", firstImageUrl);
+        Assert.True(File.Exists(_factory.PhysicalUploadPath(firstImageUrl!)));
 
         var third = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "tres.jpeg", "image/jpeg", JpegBytes(), "Tres", isMain: false, order: 3)));
         Assert.False(third.GetProperty("is_main").GetBoolean());
@@ -528,6 +530,14 @@ public sealed class CommercialWriteEndpointTests : IDisposable
 
         public string UploadRoot => _uploadRoot;
 
+        public string PhysicalUploadPath(string publicPath)
+        {
+            var relativePath = publicPath.StartsWith("/media/", StringComparison.OrdinalIgnoreCase)
+                ? publicPath["/media/".Length..]
+                : publicPath.TrimStart('/');
+            return Path.Combine(_uploadRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        }
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Test");
@@ -543,6 +553,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             });
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<JemNexusDbContext>();
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                 {
