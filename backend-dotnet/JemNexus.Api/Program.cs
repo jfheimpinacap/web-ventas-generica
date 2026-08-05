@@ -152,6 +152,11 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QA"))
     app.UseSwaggerUI();
 }
 
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler(_ => { });
+}
+
 if (!app.Environment.IsEnvironment("Test"))
 {
     app.UseHttpsRedirection();
