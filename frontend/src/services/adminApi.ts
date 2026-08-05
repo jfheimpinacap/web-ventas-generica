@@ -541,8 +541,6 @@ export async function getProductImages(productId: number) {
 }
 
 export async function createProductImage(payload: ProductImageWritePayload) {
-  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
-
   const formData = new FormData()
   formData.append('product', String(payload.product))
   if (payload.image) {
@@ -568,8 +566,6 @@ export async function updateProductImage(
   id: number,
   payload: Partial<ProductImageWritePayload>,
 ) {
-  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
-
   return authFetch<ProductImage>(`/product-images/${id}/`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
@@ -577,8 +573,6 @@ export async function updateProductImage(
 }
 
 export async function deleteProductImage(id: number) {
-  if (API_PROVIDER === 'dotnet') dotnetUploadPending()
-
   return authFetch<void>(`/product-images/${id}/`, {
     method: 'DELETE',
   })

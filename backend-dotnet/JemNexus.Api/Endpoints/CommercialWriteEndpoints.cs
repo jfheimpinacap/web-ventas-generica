@@ -1,12 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
+using JemNexus.Api.Options;
+using JemNexus.Api.Services.ProductImages;
 using JemNexus.Api.Utils;
 using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace JemNexus.Api.Endpoints;
 
@@ -53,6 +58,10 @@ public static class CommercialWriteEndpoints
         group.MapPost("/products", CreateProductAsync).WithName("CommercialProductsCreate").WithOpenApi();
         group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).WithName("CommercialProductsUpdate");
         group.MapDelete("/products/{idOrSlug}", DeleteProductAsync).WithName("CommercialProductsDelete").WithOpenApi();
+
+        group.MapPost("/product-images", CreateProductImageAsync).DisableAntiforgery().WithName("CommercialProductImagesCreate").WithOpenApi();
+        group.MapMethods("/product-images/{id:int}", ["PUT", "PATCH"], UpdateProductImageAsync).WithName("CommercialProductImagesUpdate");
+        group.MapDelete("/product-images/{id:int}", DeleteProductImageAsync).WithName("CommercialProductImagesDelete").WithOpenApi();
 
         group.MapPost("/product-specs", CreateProductSpecAsync).WithName("CommercialProductSpecsCreate").WithOpenApi();
         group.MapMethods("/product-specs/{id:int}", ["PUT", "PATCH"], UpdateProductSpecAsync).WithName("CommercialProductSpecsUpdate");
@@ -401,6 +410,177 @@ public static class CommercialWriteEndpoints
         if (request.IsPublished.HasValue) product.IsPublished = request.IsPublished.Value;
         SetAudit(product, user, isCreate);
     }
+
+
+    private static async Task<IResult> CreateProductImageAsync(
+        [FromForm] ProductImageFormDto request,
+        JemNexusDbContext dbContext,
+        IProductImageStorage storage,
+        IOptions<UploadOptions> uploadOptions,
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
+    {
+        var productId = request.Product ?? request.ProductId;
+        if (!productId.HasValue) return Results.BadRequest(new { detail = "product is required." });
+        if (!await dbContext.Products.AnyAsync(product => product.Id == productId.Value, cancellationToken)) return Results.NotFound(new { detail = "product not found." });
+        var fileValidation = await ValidateProductImageFileAsync(request.Image, uploadOptions.Value, cancellationToken);
+        if (fileValidation is not null) return fileValidation;
+
+        StoredProductImage stored;
+        try
+        {
+            stored = await storage.SaveAsync(productId.Value, request.Image!, cancellationToken);
+        }
+        catch (IOException)
+        {
+            return Results.Problem("No se pudo guardar la imagen.", statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var existingImages = await dbContext.ProductImages.Where(image => image.ProductId == productId.Value).ToListAsync(cancellationToken);
+        var isMain = existingImages.Count == 0 || request.IsMain == true;
+        if (isMain)
+        {
+            foreach (var image in existingImages) image.IsMain = false;
+        }
+
+        var order = request.Order ?? (existingImages.Count == 0 ? 0 : existingImages.Max(image => image.Order) + 1);
+        if (order < 0)
+        {
+            await storage.DeleteIfManagedAsync(stored.PublicPath, cancellationToken);
+            return Results.BadRequest(new { detail = "order must be non-negative." });
+        }
+
+        var productImage = new ProductImage
+        {
+            ProductId = productId.Value,
+            Image = stored.PublicPath,
+            AltText = (request.AltText ?? string.Empty).Trim(),
+            IsMain = isMain,
+            Order = order,
+            CreatedAt = now,
+            UpdatedAt = now,
+            CreatedById = CurrentUserId(user),
+            UpdatedById = CurrentUserId(user)
+        };
+
+        if (productImage.AltText.Length > 220)
+        {
+            await storage.DeleteIfManagedAsync(stored.PublicPath, cancellationToken);
+            return Results.BadRequest(new { detail = "alt_text must be at most 220 characters." });
+        }
+
+        dbContext.ProductImages.Add(productImage);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            await storage.DeleteIfManagedAsync(stored.PublicPath, cancellationToken);
+            throw;
+        }
+
+        return Results.Created($"/api/product-images/{productImage.Id}", ProductImageReadDto.FromImage(productImage));
+    }
+
+    private static async Task<IResult> UpdateProductImageAsync(int id, ProductImageUpdateDto request, JemNexusDbContext dbContext, ClaimsPrincipal user, CancellationToken cancellationToken)
+    {
+        var image = await dbContext.ProductImages.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (image is null) return Results.NotFound(new { detail = "product image not found." });
+        var requestedProduct = request.Product ?? request.ProductId;
+        if (requestedProduct.HasValue && requestedProduct.Value != image.ProductId) return Results.NotFound(new { detail = "product image not found for product." });
+        if (request.Order.HasValue && request.Order.Value < 0) return Results.BadRequest(new { detail = "order must be non-negative." });
+        if (request.AltText is { Length: > 220 }) return Results.BadRequest(new { detail = "alt_text must be at most 220 characters." });
+
+        if (request.AltText is not null) image.AltText = request.AltText.Trim();
+        if (request.Order.HasValue) image.Order = request.Order.Value;
+        if (request.IsMain == true)
+        {
+            var siblings = await dbContext.ProductImages.Where(candidate => candidate.ProductId == image.ProductId).ToListAsync(cancellationToken);
+            foreach (var sibling in siblings) sibling.IsMain = sibling.Id == image.Id;
+        }
+        image.UpdatedAt = DateTimeOffset.UtcNow;
+        image.UpdatedById = CurrentUserId(user);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ProductImageReadDto.FromImage(image));
+    }
+
+    private static async Task<IResult> DeleteProductImageAsync(int id, JemNexusDbContext dbContext, IProductImageStorage storage, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
+    {
+        var image = await dbContext.ProductImages.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (image is null) return Results.NotFound(new { detail = "product image not found." });
+        var productId = image.ProductId;
+        var wasMain = image.IsMain;
+        var imagePath = image.Image;
+        dbContext.ProductImages.Remove(image);
+        if (wasMain)
+        {
+            var replacement = await dbContext.ProductImages
+                .Where(candidate => candidate.ProductId == productId && candidate.Id != id)
+                .OrderBy(candidate => candidate.Order).ThenBy(candidate => candidate.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (replacement is not null) replacement.IsMain = true;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await storage.DeleteIfManagedAsync(imagePath, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            loggerFactory.CreateLogger("ProductImages").LogWarning(ex, "Product image file could not be deleted after database deletion for image {ProductImageId}.", id);
+        }
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult?> ValidateProductImageFileAsync(IFormFile? file, UploadOptions options, CancellationToken cancellationToken)
+    {
+        if (file is null) return Results.BadRequest(new { detail = "image is required." });
+        if (file.Length <= 0) return Results.BadRequest(new { detail = "image must not be empty." });
+        var maxBytes = (long)Math.Max(1, options.MaxFileSizeMb) * 1024 * 1024;
+        if (file.Length > maxBytes) return Results.BadRequest(new { detail = $"image must be at most {options.MaxFileSizeMb} MB." });
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new HashSet<string>(options.AllowedExtensions.Length == 0 ? [".jpg", ".jpeg", ".png", ".webp"] : options.AllowedExtensions, StringComparer.OrdinalIgnoreCase);
+        if (!allowed.Contains(extension)) return Results.BadRequest(new { detail = "image extension is not allowed." });
+        var contentType = file.ContentType.ToLowerInvariant();
+        var expectedTypes = extension switch
+        {
+            ".jpg" or ".jpeg" => new[] { "image/jpeg" },
+            ".png" => new[] { "image/png" },
+            ".webp" => new[] { "image/webp" },
+            _ => []
+        };
+        if (!expectedTypes.Contains(contentType)) return Results.BadRequest(new { detail = "image MIME type is not allowed." });
+        await using var stream = file.OpenReadStream();
+        var header = new byte[Math.Min(12, file.Length)];
+        var read = await stream.ReadAsync(header, cancellationToken);
+        var validSignature = extension switch
+        {
+            ".jpg" or ".jpeg" => read >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF,
+            ".png" => read >= 8 && header.AsSpan(0, 8).SequenceEqual([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]),
+            ".webp" => read >= 12 && header.AsSpan(0, 4).SequenceEqual("RIFF"u8) && header.AsSpan(8, 4).SequenceEqual("WEBP"u8),
+            _ => false
+        };
+        return validSignature ? null : Results.BadRequest(new { detail = "image signature is invalid." });
+    }
+
+    public sealed class ProductImageFormDto
+    {
+        public int? Product { get; set; }
+        [FromForm(Name = "product_id")] public int? ProductId { get; set; }
+        public IFormFile? Image { get; set; }
+        [FromForm(Name = "alt_text")] public string? AltText { get; set; }
+        [FromForm(Name = "is_main")] public bool? IsMain { get; set; }
+        public int? Order { get; set; }
+    }
+
+    public sealed record ProductImageUpdateDto(
+        int? Product,
+        [property: JsonPropertyName("product_id")] int? ProductId,
+        [property: JsonPropertyName("alt_text")] string? AltText,
+        [property: JsonPropertyName("is_main")] bool? IsMain,
+        int? Order);
 
     private static async Task<IResult> CreateProductSpecAsync(ProductSpecWriteDto request, JemNexusDbContext dbContext, ClaimsPrincipal user, CancellationToken cancellationToken)
     {

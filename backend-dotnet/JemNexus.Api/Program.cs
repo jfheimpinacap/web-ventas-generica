@@ -8,7 +8,9 @@ using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
 using JemNexus.Api.Services.Notifications;
+using JemNexus.Api.Services.ProductImages;
 using JemNexus.Api.Services.TechnicalSheets;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Json;
@@ -120,6 +122,7 @@ builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQuoteNotificationService, SmtpQuoteNotificationService>();
 builder.Services.AddSingleton<ITechnicalSheetStorage, LocalTechnicalSheetStorage>();
+builder.Services.AddSingleton<IProductImageStorage, LocalProductImageStorage>();
 
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var defaultConnection = string.IsNullOrWhiteSpace(configuredConnection)
@@ -155,6 +158,17 @@ if (!app.Environment.IsEnvironment("Test"))
 }
 
 app.Use(NormalizeKnownTrailingSlashPaths);
+var uploadOptions = app.Configuration.GetSection(UploadOptions.SectionName).Get<UploadOptions>() ?? new UploadOptions();
+var uploadsRoot = string.IsNullOrWhiteSpace(uploadOptions.RootPath)
+    ? Path.Combine(app.Environment.ContentRootPath, "uploads")
+    : uploadOptions.RootPath;
+Directory.CreateDirectory(uploadsRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.GetFullPath(uploadsRoot)),
+    RequestPath = uploadOptions.PublicBasePath
+});
+
 app.UseRouting();
 app.UseCors(CorsPolicyName);
 app.UseAuthentication();

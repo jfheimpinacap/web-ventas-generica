@@ -7,5 +7,5 @@ public sealed class UploadOptions
     public string RootPath { get; set; } = string.Empty;
     public string PublicBasePath { get; set; } = "/media";
     public string[] AllowedExtensions { get; set; } = [".jpg", ".jpeg", ".png", ".webp"];
-    public int MaxFileSizeMb { get; set; } = 5;
+    public int MaxFileSizeMb { get; set; } = 10;
 }
