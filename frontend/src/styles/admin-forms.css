@@ -191,6 +191,11 @@
 
 
 
+.admin-form-panel--media h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+}
+
 .admin-image-upload-field {
   display: grid;
   gap: 0.25rem;
