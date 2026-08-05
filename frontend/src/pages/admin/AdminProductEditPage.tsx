@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
@@ -18,7 +18,6 @@ import {
   updateProductSpec,
 } from "../../services/adminApi";
 import {
-  API_PROVIDER,
   getSafeApiErrorMessage,
   resolveMediaUrl,
 } from "../../services/api";
@@ -80,6 +79,7 @@ const PLACEHOLDER_IMAGE =
   "https://placehold.co/600x400/111827/F3F4F6?text=Producto";
 
 export function AdminProductEditPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const [productId, setProductId] = useState<number | null>(null);
@@ -104,7 +104,12 @@ export function AdminProductEditPage() {
   const [imageAltText, setImageAltText] = useState("");
   const [imageSaving, setImageSaving] = useState(false);
   const [imageStatus, setImageStatus] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(() => {
+    const state = location.state;
+    return typeof state === "object" && state && "imageError" in state
+      ? String(state.imageError)
+      : null;
+  });
 
   const [specForm, setSpecForm] = useState(initialSpecForm);
   const [specSaving, setSpecSaving] = useState(false);
@@ -190,8 +195,7 @@ export function AdminProductEditPage() {
     }
   };
 
-  const handleCreateImage = async (event: FormEvent) => {
-    event.preventDefault();
+  const handleCreateImage = async () => {
     if (!productId || !imageFile) {
       setImageError("Debes seleccionar un archivo de imagen.");
       return;
@@ -383,38 +387,26 @@ export function AdminProductEditPage() {
               isSubmitting={isSubmitting}
               error={error}
               onValuesChange={setFormValues}
-            />
-          }
-          sidebar={
-            <>
-              <section className="admin-block admin-block--compact">
-                <h2>Imagen principal</h2>
-                {imageError ? (
-                  <p className="ui-note ui-note--error">{imageError}</p>
-                ) : null}
-                {imageStatus ? (
-                  <p className="ui-note ui-note--success">{imageStatus}</p>
-                ) : null}
-                {API_PROVIDER === "dotnet" ? (
-                  <p className="ui-note">
-                    La API .NET aún no implementa carga real de imágenes.
-                    Gestiona solo datos base y especificaciones por ahora.
-                  </p>
-                ) : null}
+              beforeActions={
+                <section className="admin-form-panel admin-form-panel--media" aria-busy={imageSaving}>
+                  <h3>Imágenes</h3>
+                  <div className="admin-form-panel__full">
+                    <h4>Agregar imagen</h4>
+                    {imageError ? (
+                      <p className="ui-note ui-note--error">{imageError}</p>
+                    ) : null}
+                    {imageStatus ? (
+                      <p className="ui-note ui-note--success">{imageStatus}</p>
+                    ) : null}
+                  </div>
 
-                <form
-                  className="admin-image-upload-form"
-                  onSubmit={handleCreateImage}
-                >
                   <label className="admin-image-upload-field">
                     Archivo
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) =>
-                        setImageFile(e.target.files?.[0] ?? null)
-                      }
-                      required
+                      onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                      disabled={imageSaving}
                     />
                   </label>
                   <label className="admin-image-upload-field">
@@ -423,19 +415,86 @@ export function AdminProductEditPage() {
                       value={imageAltText}
                       onChange={(e) => setImageAltText(e.target.value)}
                       placeholder={previewValues?.name || "Imagen de producto"}
+                      disabled={imageSaving}
                     />
                   </label>
-                  <button
-                    type="submit"
-                    className="btn btn--accent"
-                    disabled={imageSaving || API_PROVIDER === "dotnet"}
-                  >
-                    {imageSaving ? "Guardando..." : "Subir imagen"}
-                  </button>
-                </form>
-              </section>
+                  {imageFile ? (
+                    <p className="ui-note admin-form-panel__full">Archivo seleccionado: {imageFile.name}</p>
+                  ) : null}
+                  <div className="admin-form-panel__full">
+                    <button
+                      type="button"
+                      className="btn btn--accent"
+                      onClick={handleCreateImage}
+                      disabled={imageSaving || !imageFile}
+                    >
+                      {imageSaving ? "Guardando..." : "Subir imagen"}
+                    </button>
+                  </div>
 
-              <section className="admin-block admin-block--compact">
+                  <div className="admin-form-panel__full">
+                    <h4>Imágenes existentes</h4>
+                    {sortedImages.length === 0 ? (
+                      <p className="ui-note">Aún no hay imágenes para este producto.</p>
+                    ) : (
+                      <div className="admin-image-mini-list">
+                        {sortedImages.map((image) => (
+                          <article key={image.id} className="admin-image-mini-item">
+                            <img src={resolveMediaUrl(image.image)} alt={image.alt_text || "Imagen de producto"} />
+                            <div className="admin-image-mini-item__content">
+                              <label>
+                                Texto alternativo
+                                <input
+                                  value={image.alt_text}
+                                  onChange={(e) =>
+                                    setImages((prev) =>
+                                      prev.map((item) =>
+                                        item.id === image.id ? { ...item, alt_text: e.target.value } : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Orden
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={image.order}
+                                  onChange={(e) =>
+                                    setImages((prev) =>
+                                      prev.map((item) =>
+                                        item.id === image.id
+                                          ? { ...item, order: Number(e.target.value) || 0 }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <div className="admin-media-item__actions">
+                                <button type="button" className="btn btn--ghost" onClick={() => handleSetMainImage(image.id)} disabled={imageSaving || image.is_main}>
+                                  {image.is_main ? "Principal" : "Marcar principal"}
+                                </button>
+                                <button type="button" className="btn btn--ghost" onClick={() => handleUpdateImage(image.id, { alt_text: image.alt_text, order: image.order })} disabled={imageSaving}>
+                                  Guardar
+                                </button>
+                                <button type="button" className="btn btn--ghost" onClick={() => handleDeleteImage(image.id)} disabled={imageSaving}>
+                                  Eliminar
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              }
+            />
+          }
+          sidebar={
+            <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
                   <img
@@ -497,97 +556,8 @@ export function AdminProductEditPage() {
                   </div>
                 </article>
               </section>
-            </>
           }
         />
-      ) : null}
-
-      {!loading && productId ? (
-        <section className="admin-block admin-block--compact">
-          <h2>Galería de imágenes</h2>
-          {sortedImages.length === 0 ? (
-            <p className="ui-note">Aún no hay imágenes para este producto.</p>
-          ) : (
-            <div className="admin-image-mini-list">
-              {sortedImages.map((image) => (
-                <article key={image.id} className="admin-image-mini-item">
-                  <img
-                    src={resolveMediaUrl(image.image)}
-                    alt={image.alt_text || "Imagen de producto"}
-                  />
-                  <div className="admin-image-mini-item__content">
-                    <label>
-                      Texto alternativo
-                      <input
-                        value={image.alt_text}
-                        onChange={(e) =>
-                          setImages((prev) =>
-                            prev.map((item) =>
-                              item.id === image.id
-                                ? { ...item, alt_text: e.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                      />
-                    </label>
-                    <label>
-                      Orden
-                      <input
-                        type="number"
-                        min={0}
-                        value={image.order}
-                        onChange={(e) =>
-                          setImages((prev) =>
-                            prev.map((item) =>
-                              item.id === image.id
-                                ? {
-                                    ...item,
-                                    order: Number(e.target.value) || 0,
-                                  }
-                                : item,
-                            ),
-                          )
-                        }
-                      />
-                    </label>
-                    <div className="admin-media-item__actions">
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => handleSetMainImage(image.id)}
-                        disabled={imageSaving || image.is_main}
-                      >
-                        {image.is_main ? "Principal" : "Marcar principal"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() =>
-                          handleUpdateImage(image.id, {
-                            alt_text: image.alt_text,
-                            order: image.order,
-                          })
-                        }
-                        disabled={imageSaving}
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => handleDeleteImage(image.id)}
-                        disabled={imageSaving}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
       ) : null}
 
       {!loading && initialValues ? (

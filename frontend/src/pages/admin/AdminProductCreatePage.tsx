@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
-import { createProduct } from '../../services/adminApi'
+import { createProduct, createProductImage } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import type { Brand, Category, ProductFormValues, SupplierSummary } from '../../types/catalog'
 import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
@@ -81,7 +81,25 @@ export function AdminProductCreatePage() {
     try {
       setIsSubmitting(true)
       setError(null)
-      await createProduct(values)
+      const createdProduct = await createProduct(values)
+      if (imageFile) {
+        try {
+          await createProductImage({
+            product: createdProduct.id,
+            image: imageFile,
+            alt_text: values.name,
+            order: 0,
+            is_main: true,
+          })
+        } catch {
+          navigate(`/admin/productos/${createdProduct.slug}/editar`, {
+            state: {
+              imageError: 'El producto fue creado, pero la imagen no pudo cargarse. Puedes reintentar la carga desde esta sección.',
+            },
+          })
+          return
+        }
+      }
       navigate('/admin/productos?status=created')
     } catch {
       setError('No se pudo crear el producto.')
@@ -111,24 +129,30 @@ export function AdminProductCreatePage() {
               isSubmitting={isSubmitting}
               error={error}
               onValuesChange={setFormValues}
+              beforeActions={
+                <section className="admin-form-panel admin-form-panel--media" aria-busy={isSubmitting}>
+                  <h3>Imágenes</h3>
+                  <p className="ui-note admin-form-panel__full">Selecciona una imagen principal opcional. Se cargará automáticamente después de crear el producto.</p>
+                  <label className="admin-image-upload-field admin-form-panel__full">
+                    Archivo
+                    <input key={imageFile?.name ?? "empty"} type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} disabled={isSubmitting} />
+                  </label>
+                  {imageFile ? (
+                    <div className="admin-mini-preview admin-form-panel__full">
+                      <span>Archivo seleccionado: {imageFile.name}</span>
+                      <img src={localImagePreview || PLACEHOLDER_IMAGE} alt={formValues.name || imageFile.name} />
+                      <button type="button" className="btn btn--ghost" onClick={() => setImageFile(null)} disabled={isSubmitting}>
+                        Quitar selección
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+              }
             />
           }
           sidebar={
-            <>
-              <section className="admin-block admin-block--compact">
-                <h2>Imagen principal</h2>
-                <label className="admin-image-upload-field">
-                  Archivo
-                  <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
-                </label>
-                <button type="button" className="btn btn--accent" disabled>
-                  Subir imagen
-                </button>
-                <p className="ui-note">Guarda el producto para habilitar la subida definitiva de imagen.</p>
-              </section>
-
-              <section className="admin-block admin-block--compact">
-                <h2>Vista previa pública</h2>
+            <section className="admin-block admin-block--compact admin-product-preview">
+              <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
                   <img src={localImagePreview || PLACEHOLDER_IMAGE} alt={formValues.name || 'Producto'} />
                   <div className="product-card__content">
@@ -157,8 +181,7 @@ export function AdminProductCreatePage() {
                     </button>
                   </div>
                 </article>
-              </section>
-            </>
+            </section>
           }
         />
       ) : null}

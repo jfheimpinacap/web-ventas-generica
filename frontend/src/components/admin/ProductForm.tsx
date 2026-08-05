@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 
 import type { Brand, Category, ProductCondition, ProductFormValues, ProductPriceCurrency, ProductPriceTaxMode, StockStatus, SupplierSummary } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
@@ -13,6 +13,7 @@ interface ProductFormProps {
   isSubmitting: boolean
   error: string | null
   onValuesChange?: (values: ProductFormValues) => void
+  beforeActions?: ReactNode
 }
 
 const PRODUCT_CONDITIONS: Array<{ value: ProductCondition; label: string }> = [
@@ -45,6 +46,7 @@ export function ProductForm({
   isSubmitting,
   error,
   onValuesChange,
+  beforeActions,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -280,6 +282,8 @@ export function ProductForm({
           </label>
         </div>
       </section>
+
+      {beforeActions}
 
       <div className="admin-product-form__actions">
         <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
