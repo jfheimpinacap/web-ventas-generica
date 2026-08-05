@@ -154,7 +154,14 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QA"))
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler(_ => { });
+    app.UseExceptionHandler(exceptionApp =>
+    {
+        exceptionApp.Run(context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return Task.CompletedTask;
+        });
+    });
 }
 
 if (!app.Environment.IsEnvironment("Test"))
