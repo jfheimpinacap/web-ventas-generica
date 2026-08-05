@@ -6,9 +6,11 @@ using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services;
+using JemNexus.Api.Services.ProductImages;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -242,6 +244,192 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, invalidStatus.StatusCode);
     }
 
+
+    [Fact]
+    public async Task SellerCanUploadUpdatePromoteOrderAndDeleteProductImages()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var initialEmpty = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=2"));
+        Assert.Empty(initialEmpty.EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/product-images/?product=999")).StatusCode);
+
+        var first = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "uno.jpg", "image/jpeg", JpegBytes(), "Principal", isMain: false, order: 2)));
+        Assert.True(first.GetProperty("is_main").GetBoolean());
+        Assert.StartsWith("/media/product-images/1/", first.GetProperty("image").GetString());
+        Assert.DoesNotContain("/workspace", first.GetProperty("image").GetString());
+
+        var third = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "tres.jpeg", "image/jpeg", JpegBytes(), "Tres", isMain: false, order: 3)));
+        Assert.False(third.GetProperty("is_main").GetBoolean());
+
+        var second = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "../dos.png", "image/png", PngBytes(), "Dos", isMain: true, order: 1)));
+        var firstId = first.GetProperty("id").GetInt32();
+        var secondId = second.GetProperty("id").GetInt32();
+        var thirdId = third.GetProperty("id").GetInt32();
+        Assert.True(second.GetProperty("is_main").GetBoolean());
+
+        var list = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
+        Assert.Equal(secondId, list[0].GetProperty("id").GetInt32());
+        Assert.Equal(firstId, list[1].GetProperty("id").GetInt32());
+        Assert.Equal(thirdId, list[2].GetProperty("id").GetInt32());
+        Assert.Single(list.EnumerateArray().Where(image => image.GetProperty("is_main").GetBoolean()));
+
+        var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/product-images/{firstId}/", new { alt_text = "Nueva", is_main = true, order = 0, product = 1 }));
+        Assert.Equal("Nueva", updated.GetProperty("alt_text").GetString());
+        Assert.True(updated.GetProperty("is_main").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/product-images/{thirdId}/")).StatusCode);
+        var afterNonMainDelete = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
+        Assert.Equal(2, afterNonMainDelete.GetArrayLength());
+        Assert.Single(afterNonMainDelete.EnumerateArray().Where(image => image.GetProperty("is_main").GetBoolean()));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/product-images/{firstId}/")).StatusCode);
+        var afterDelete = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
+        Assert.Single(afterDelete.EnumerateArray());
+        Assert.Equal(secondId, afterDelete[0].GetProperty("id").GetInt32());
+        Assert.True(afterDelete[0].GetProperty("is_main").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/product-images/{secondId}/")).StatusCode);
+        var empty = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
+        Assert.Empty(empty.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ProductImageWriteValidatesAuthRelationsAndFiles()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var anonymous = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/product-images/", ImageForm(1, "uno.jpg", "image/jpeg", JpegBytes()))).StatusCode);
+
+        await _factory.SeedUnauthorizedUserAsync();
+        using var viewer = await CreateAuthorizedClientAsync("viewer");
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync("/api/product-images/", ImageForm(1, "uno.jpg", "image/jpeg", JpegBytes()))).StatusCode);
+
+        using var client = await CreateAuthorizedClientAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/product-images/", ImageForm(999, "uno.jpg", "image/jpeg", JpegBytes()))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/product-images/", ImageForm(1, "empty.jpg", "image/jpeg", []))).StatusCode);
+        var tooLarge = new byte[1024 * 1024 + 1];
+        tooLarge[0] = 0xFF; tooLarge[1] = 0xD8; tooLarge[2] = 0xFF;
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/product-images/", ImageForm(1, "large.jpg", "image/jpeg", tooLarge))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/product-images/", ImageForm(1, "bad.gif", "image/gif", [0x47, 0x49, 0x46]))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/product-images/", ImageForm(1, "bad.jpg", "text/plain", JpegBytes()))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/product-images/", ImageForm(1, "bad.jpg", "image/jpeg", [1, 2, 3, 4]))).StatusCode);
+
+        var created = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "ok.webp", "image/webp", WebpBytes())));
+        var imageId = created.GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PatchAsJsonAsync($"/api/product-images/{imageId}/", new { product = 2, order = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/product-images/999/")).StatusCode);
+    }
+
+    [Fact]
+    public async Task ProductImagePublicUrlIsServedByStaticFiles()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var created = await ReadJsonAsync<JsonElement>(await client.PostAsync("/api/product-images/", ImageForm(1, "public.png", "image/png", PngBytes())));
+        var imageUrl = created.GetProperty("image").GetString();
+
+        Assert.False(string.IsNullOrWhiteSpace(imageUrl));
+        Assert.DoesNotContain(_factory.UploadRoot, imageUrl, StringComparison.OrdinalIgnoreCase);
+
+        var staticResponse = await client.GetAsync(imageUrl);
+        var content = await staticResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(HttpStatusCode.OK, staticResponse.StatusCode);
+        Assert.Equal(PngBytes(), content);
+    }
+
+    [Fact]
+    public async Task ProductImageDeleteHandlesMissingFilesAndPreservesHistoricalExternalUrls()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            dbContext.ProductImages.AddRange(
+                new ProductImage { Id = 100, ProductId = 1, Image = "/media/product-images/1/missing.jpg", AltText = "Missing", IsMain = true, Order = 0 },
+                new ProductImage { Id = 101, ProductId = 1, Image = "https://cdn.example.test/legacy.jpg", AltText = "Legacy", IsMain = false, Order = 1 });
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthorizedClientAsync();
+        var list = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
+        Assert.Contains(list.EnumerateArray(), image => image.GetProperty("image").GetString() == "https://cdn.example.test/legacy.jpg");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/product-images/100/")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/product-images/101/")).StatusCode);
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await assertContext.ProductImages.AnyAsync(image => image.Id == 100 || image.Id == 101));
+    }
+
+    [Fact]
+    public async Task ProductImageUploadCleansStoredFileWhenSaveChangesFails()
+    {
+        var factory = new CommercialWriteApiFactory(
+            configureTestServices: null,
+            configureDbContext: options => options.AddInterceptors(new ThrowingProductImageSaveChangesInterceptor()));
+        using var disposableFactory = factory;
+        await factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync(factory);
+
+        var response = await client.PostAsync("/api/product-images/", ImageForm(1, "cleanup.jpg", "image/jpeg", JpegBytes(), ThrowingProductImageSaveChangesInterceptor.TriggerAltText));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.True(Directory.Exists(factory.UploadRoot));
+        Assert.False(Directory.EnumerateFiles(factory.UploadRoot, "*", SearchOption.AllDirectories).Any());
+
+        using var assertScope = factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await assertContext.ProductImages.AnyAsync(image => image.AltText == ThrowingProductImageSaveChangesInterceptor.TriggerAltText));
+    }
+
+    [Fact]
+    public async Task ProductImageDeleteKeepsDatabaseDeletionWhenManagedFileRemovalFails()
+    {
+        var factory = new CommercialWriteApiFactory(services =>
+        {
+            services.RemoveAll<IProductImageStorage>();
+            services.AddSingleton<IProductImageStorage, ThrowingDeleteProductImageStorage>();
+        });
+        using var disposableFactory = factory;
+        await factory.SeedCommercialDataAsync();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            dbContext.ProductImages.Add(new ProductImage { Id = 120, ProductId = 1, Image = "/media/product-images/1/fail-delete.jpg", AltText = "Delete failure", IsMain = true, Order = 0 });
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthorizedClientAsync(factory);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/product-images/120/")).StatusCode);
+
+        using var assertScope = factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await assertContext.ProductImages.AnyAsync(image => image.Id == 120));
+    }
+
+    private static MultipartFormDataContent ImageForm(int productId, string fileName, string contentType, byte[] bytes, string? altText = null, bool? isMain = null, int? order = null)
+    {
+        var form = new MultipartFormDataContent();
+        form.Add(new StringContent(productId.ToString(System.Globalization.CultureInfo.InvariantCulture)), "product");
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "image", fileName);
+        if (altText is not null) form.Add(new StringContent(altText), "alt_text");
+        if (isMain.HasValue) form.Add(new StringContent(isMain.Value ? "true" : "false"), "is_main");
+        if (order.HasValue) form.Add(new StringContent(order.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), "order");
+        return form;
+    }
+
+    private static byte[] JpegBytes() => [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01];
+    private static byte[] PngBytes() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+    private static byte[] WebpBytes() => [0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50];
+
     [Fact]
     public async Task SellerCanManageProductSpecs()
     {
@@ -301,9 +489,11 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.DoesNotContain("token_hash", productsBody, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<HttpClient> CreateAuthorizedClientAsync(string username = "demo")
+    private Task<HttpClient> CreateAuthorizedClientAsync(string username = "demo") => CreateAuthorizedClientAsync(_factory, username);
+
+    private async Task<HttpClient> CreateAuthorizedClientAsync(CommercialWriteApiFactory factory, string username = "demo")
     {
-        var client = _factory.CreateClient();
+        var client = factory.CreateClient();
         var loginResponse = await client.PostAsJsonAsync("/api/auth/login/", new { username, password = TestPassword });
         var login = await ReadJsonAsync<LoginPayload>(loginResponse);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
@@ -321,18 +511,51 @@ public sealed class CommercialWriteEndpointTests : IDisposable
 
     public sealed class CommercialWriteApiFactory : WebApplicationFactory<Program>
     {
+        private readonly Action<IServiceCollection>? _configureTestServices;
+        private readonly Action<DbContextOptionsBuilder>? _configureDbContext;
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("CommercialWriteEndpointTests");
         private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly string _uploadRoot = Path.Combine(Path.GetTempPath(), "jemnexus-product-images-" + Guid.NewGuid().ToString("N"));
+
+        public CommercialWriteApiFactory(
+            Action<IServiceCollection>? configureTestServices = null,
+            Action<DbContextOptionsBuilder>? configureDbContext = null)
+        {
+            _configureTestServices = configureTestServices;
+            _configureDbContext = configureDbContext;
+        }
+
+        public string UploadRoot => _uploadRoot;
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Test");
-            builder.ConfigureAppConfiguration((_, configurationBuilder) => configurationBuilder.AddInMemoryCollection(TestConfiguration));
+            builder.ConfigureAppConfiguration((_, configurationBuilder) =>
+            {
+                var configuration = new Dictionary<string, string?>(TestConfiguration)
+                {
+                    ["Uploads:RootPath"] = _uploadRoot,
+                    ["Uploads:PublicBasePath"] = "/media",
+                    ["Uploads:MaxFileSizeMb"] = "1"
+                };
+                configurationBuilder.AddInMemoryCollection(configuration);
+            });
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
-                services.AddDbContext<JemNexusDbContext>(options => InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
+                services.AddDbContext<JemNexusDbContext>(options =>
+                {
+                    InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot);
+                    _configureDbContext?.Invoke(options);
+                });
+                _configureTestServices?.Invoke(services);
             });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (Directory.Exists(_uploadRoot)) Directory.Delete(_uploadRoot, recursive: true);
         }
 
         public async Task SeedUnauthorizedUserAsync()
@@ -388,6 +611,44 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         ["SeedUsers:SupportPassword"] = TestPassword,
         ["SeedUsers:SupportEmail"] = "support@example.test"
     };
+
+    private sealed class ThrowingProductImageSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        public const string TriggerAltText = "trigger-product-image-save-failure";
+
+        public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+        {
+            ThrowIfTriggered(eventData.Context);
+            return base.SavingChanges(eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfTriggered(eventData.Context);
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+
+        private static void ThrowIfTriggered(DbContext? context)
+        {
+            if (context?.ChangeTracker.Entries<ProductImage>().Any(entry =>
+                    entry.State == EntityState.Added && entry.Entity.AltText == TriggerAltText) == true)
+            {
+                throw new InvalidOperationException("Simulated product image SaveChanges failure.");
+            }
+        }
+    }
+
+    private sealed class ThrowingDeleteProductImageStorage : IProductImageStorage
+    {
+        public Task<StoredProductImage> SaveAsync(int productId, IFormFile file, CancellationToken cancellationToken) =>
+            Task.FromResult(new StoredProductImage($"/media/product-images/{productId}/fake.jpg", $"product-images/{productId}/fake.jpg"));
+
+        public Task DeleteIfManagedAsync(string publicPath, CancellationToken cancellationToken) =>
+            throw new IOException("Simulated delete failure.");
+    }
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
     private sealed record UserPayload(int Id, string Username, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);

@@ -256,6 +256,8 @@ public static class CommercialPublicReadEndpoints
 
         if (product.HasValue)
         {
+            if (!await dbContext.Products.AsNoTracking().AnyAsync(candidate => candidate.Id == product.Value && candidate.IsPublished, cancellationToken))
+                return Results.NotFound(new { detail = "product not found." });
             query = query.Where(image => image.ProductId == product.Value);
         }
 

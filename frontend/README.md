@@ -133,9 +133,8 @@ Ingresar por `/login` con un usuario vendedor válido y probar las acciones admi
 
 Limitaciones de esta fase:
 
-- No subir imágenes reales con `VITE_API_PROVIDER=dotnet`.
 - Marcas/promociones envían JSON sin `logo`/`image` binario en .NET.
-- Las acciones sobre imágenes de producto muestran pendiente/501 seguro con .NET.
+- Las acciones sobre imágenes de producto consumen la API .NET real cuando `VITE_API_PROVIDER=dotnet`.
 - Con `VITE_API_PROVIDER=django` se mantiene el flujo histórico compatible con `FormData`.
 
 ## Lectura pública con API .NET
