@@ -346,8 +346,9 @@
 
 
 .admin-product-preview-card {
-  max-width: 340px;
+  max-width: none;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-product-preview-card > img {
