@@ -724,3 +724,194 @@
   color: #7f1d1d;
   font-weight: 700;
 }
+
+/* Compact multi-image manager (Prompt 085). */
+.admin-image-manager {
+  display: block;
+  min-width: 0;
+}
+
+.admin-image-manager > h3 {
+  margin-bottom: 0.65rem;
+}
+
+.admin-image-manager__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.admin-image-manager__body {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.28fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.admin-image-dropzone {
+  display: grid;
+  gap: 0.25rem;
+  align-content: center;
+  min-height: 132px;
+  padding: 0.75rem;
+  border: 1px dashed #94a3b8;
+  border-radius: var(--admin-radius, 4px);
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  text-align: center;
+}
+
+.admin-image-dropzone.is-drag-active {
+  border-style: solid;
+  border-color: var(--admin-primary, #0f4c81);
+  background: #eaf3f9;
+}
+
+.admin-image-dropzone:focus-visible,
+.admin-image-add-card:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.admin-image-dropzone span {
+  font-size: 0.78rem;
+}
+
+.admin-image-gallery {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.admin-image-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.admin-image-card {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--admin-radius, 4px);
+  background: #fff;
+}
+
+.admin-image-card--main {
+  border: 2px solid var(--admin-primary, #0f4c81);
+}
+
+.admin-image-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.admin-image-card__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.admin-image-card__filename,
+.admin-image-card__state,
+.admin-image-card__error {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.admin-image-card__filename {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-image-card__state { color: #475569; }
+.admin-image-card__error { color: #b42318; overflow-wrap: anywhere; }
+
+.admin-image-card label {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  color: #475569;
+  font-size: 0.69rem;
+}
+
+.admin-image-card label input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem;
+}
+
+.admin-image-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.admin-image-card__actions .btn {
+  min-width: 0;
+  padding-inline: 0.25rem;
+  font-size: 0.72rem;
+}
+
+.admin-image-add-card,
+.admin-image-placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--admin-radius, 4px);
+}
+
+.admin-image-add-card {
+  display: grid;
+  place-content: center;
+  gap: 0.2rem;
+  border: 1px dashed #64748b;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  font: 600 0.75rem var(--admin-font, sans-serif);
+}
+
+.admin-image-add-card span { font-size: 1.65rem; line-height: 1; }
+.admin-image-placeholder { border: 1px solid #e2e8f0; background: #f8fafc; }
+.admin-image-gallery__upload { justify-self: start; }
+.admin-image-manager__status:empty { display: none; }
+
+@media (max-width: 1280px) {
+  .admin-image-gallery__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1080px) {
+  .admin-image-gallery__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .admin-image-manager__body { grid-template-columns: minmax(0, 1fr); }
+  .admin-image-gallery__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-image-placeholder { display: none; }
+}
+
+@media (max-width: 540px) {
+  .admin-image-gallery__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-image-gallery__upload { width: 100%; }
+}
+
+@media (max-width: 340px) {
+  .admin-image-gallery__grid { grid-template-columns: minmax(0, 1fr); }
+}

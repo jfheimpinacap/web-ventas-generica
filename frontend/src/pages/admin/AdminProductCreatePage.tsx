@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
+import { ProductImageManager } from '../../components/admin/ProductImageManager'
+import { usePendingProductImages } from '../../hooks/usePendingProductImages'
 import { createProduct, createProductImage } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
+import { getSafeApiErrorMessage } from '../../services/api'
 import type { Brand, Category, ProductFormValues, SupplierSummary } from '../../types/catalog'
 import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
 
@@ -43,7 +46,9 @@ export function AdminProductCreatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<ProductFormValues>(INITIAL_VALUES)
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const pending = usePendingProductImages()
+  const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null)
+  const [imageStatus, setImageStatus] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -67,40 +72,44 @@ export function AdminProductCreatePage() {
     void load()
   }, [])
 
-  const localImagePreview = useMemo(() => {
-    if (!imageFile) return null
-    return URL.createObjectURL(imageFile)
-  }, [imageFile])
-
   useEffect(() => {
-    return () => {
-      if (localImagePreview) URL.revokeObjectURL(localImagePreview)
+    if (pending.images.length > 0 && !pending.images.some((image) => image.id === selectedPendingId)) {
+      setSelectedPendingId(pending.images[0].id)
+    } else if (pending.images.length === 0 && selectedPendingId) {
+      setSelectedPendingId(null)
     }
-  }, [localImagePreview])
+  }, [pending.images, selectedPendingId])
 
   const handleSubmit = async (values: ProductFormValues) => {
     try {
       setIsSubmitting(true)
       setError(null)
       const createdProduct = await createProduct(values)
-      if (imageFile) {
+      const queuedImages = pending.images
+      let uploaded = 0
+      for (let index = 0; index < queuedImages.length; index += 1) {
+        const image = queuedImages[index]
+        pending.updateImage(image.id, { status: 'uploading', error: null })
+        setImageStatus(`Subiendo ${index + 1} de ${queuedImages.length} imágenes…`)
         try {
           await createProductImage({
             product: createdProduct.id,
-            image: imageFile,
-            alt_text: values.name,
-            order: 0,
-            is_main: true,
+            image: image.file,
+            alt_text: image.altText.trim() || values.name.trim(),
+            is_main: image.id === selectedPendingId,
           })
-        } catch {
-          navigate(`/admin/productos/${createdProduct.slug}/editar`, {
-            state: {
-              imageError: 'El producto fue creado, pero la imagen no pudo cargarse. Puedes reintentar la carga desde esta sección.',
-            },
-          })
-          return
+          uploaded += 1
+          pending.updateImage(image.id, { status: 'pending', error: null })
+        } catch (uploadError) {
+          pending.updateImage(image.id, { status: 'error', error: getSafeApiErrorMessage(uploadError, 'No se pudo cargar esta imagen.') })
         }
       }
+      if (uploaded < queuedImages.length) {
+        const failed = queuedImages.length - uploaded
+        navigate(`/admin/productos/${createdProduct.slug}/editar`, { state: { imageError: `El producto fue creado. Se cargaron ${uploaded} de ${queuedImages.length} imágenes; ${failed} no ${failed === 1 ? 'pudo' : 'pudieron'} cargarse. Puedes volver a seleccionarlas y reintentar desde esta sección.` } })
+        return
+      }
+      pending.clearImages()
       navigate('/admin/productos?status=created')
     } catch {
       setError('No se pudo crear el producto.')
@@ -111,6 +120,7 @@ export function AdminProductCreatePage() {
 
   const previewCategoryName = categories.find((item) => item.id === formValues.category)?.name ?? 'Sin categoría'
   const previewBrandName = brands.find((item) => item.id === formValues.brand)?.name ?? 'Sin marca'
+  const selectedPending = pending.images.find((image) => image.id === selectedPendingId) ?? pending.images[0] ?? null
 
   return (
     <AdminLayout>
@@ -136,23 +146,7 @@ export function AdminProductCreatePage() {
               error={error}
               onValuesChange={setFormValues}
               beforeActions={
-                <section className="admin-form-panel admin-form-panel--media" aria-busy={isSubmitting}>
-                  <h3>Imágenes</h3>
-                  <p className="ui-note admin-form-panel__full">Selecciona una imagen principal opcional. Se cargará automáticamente después de crear el producto.</p>
-                  <label className="admin-image-upload-field admin-form-panel__full">
-                    Archivo
-                    <input key={imageFile?.name ?? "empty"} type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} disabled={isSubmitting} />
-                  </label>
-                  {imageFile ? (
-                    <div className="admin-mini-preview admin-form-panel__full">
-                      <span>Archivo seleccionado: {imageFile.name}</span>
-                      <img src={localImagePreview || PLACEHOLDER_IMAGE} alt={formValues.name || imageFile.name} />
-                      <button type="button" className="btn btn--ghost" onClick={() => setImageFile(null)} disabled={isSubmitting}>
-                        Quitar selección
-                      </button>
-                    </div>
-                  ) : null}
-                </section>
+                <ProductImageManager pendingImages={pending.images} selectedPendingId={selectedPendingId} disabled={isSubmitting} status={imageStatus} error={pending.selectionError} onAddFiles={pending.addFiles} onAltTextChange={(id, altText) => pending.updateImage(id, { altText })} onSelectPending={setSelectedPendingId} onRemovePending={pending.removeImage} />
               }
             />
           }
@@ -160,7 +154,7 @@ export function AdminProductCreatePage() {
             <section className="admin-block admin-block--compact admin-product-preview">
               <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
-                  <img src={localImagePreview || PLACEHOLDER_IMAGE} alt={formValues.name || 'Producto'} />
+                  <img src={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} alt={selectedPending?.altText.trim() || formValues.name || 'Producto'} />
                   <div className="product-card__content">
                     <div className="product-card__badges">
                       <span className="badge badge--condition">{formatCondition(formValues.condition)}</span>
