@@ -44,7 +44,7 @@
 }
 
 .admin-products-list .admin-products-filter-panel {
-  width: 100%;
+  width: 50%;
   gap: 10px;
   margin: 0;
   padding: 12px;
@@ -62,8 +62,12 @@
 }
 
 .admin-products-list .admin-filter-strip--products {
-  grid-template-columns: minmax(240px, 1.6fr) repeat(3, minmax(145px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.admin-products-filter-field--search {
+  grid-column: span 2;
 }
 
 .admin-products-filter-field {
@@ -178,6 +182,10 @@
 }
 
 @media (max-width: 1180px) {
+  .admin-products-list .admin-products-filter-panel {
+    width: 100%;
+  }
+
   .admin-products-list .admin-filter-strip--products {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
