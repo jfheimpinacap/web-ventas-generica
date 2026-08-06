@@ -4,6 +4,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
 import { ProductForm } from "../../components/admin/ProductForm";
+import { ProductImageManager } from "../../components/admin/ProductImageManager";
+import { usePendingProductImages } from "../../hooks/usePendingProductImages";
 import {
   createProductImage,
   createProductSpec,
@@ -100,8 +102,8 @@ export function AdminProductEditPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageAltText, setImageAltText] = useState("");
+  const pending = usePendingProductImages();
+  const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
   const [imageSaving, setImageSaving] = useState(false);
   const [imageStatus, setImageStatus] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(() => {
@@ -110,16 +112,11 @@ export function AdminProductEditPage() {
       ? String(state.imageError)
       : null;
   });
-  const pendingImagePreview = useMemo(
-    () => (imageFile ? URL.createObjectURL(imageFile) : null),
-    [imageFile],
-  );
-
   useEffect(() => {
-    return () => {
-      if (pendingImagePreview) URL.revokeObjectURL(pendingImagePreview);
-    };
-  }, [pendingImagePreview]);
+    if (selectedPendingId && !pending.images.some((image) => image.id === selectedPendingId)) {
+      setSelectedPendingId(null);
+    }
+  }, [pending.images, selectedPendingId]);
 
   const [specForm, setSpecForm] = useState(initialSpecForm);
   const [specSaving, setSpecSaving] = useState(false);
@@ -191,6 +188,11 @@ export function AdminProductEditPage() {
     setSpecs(specsData);
   };
 
+  const refreshImages = async (nextProductId: number) => {
+    const imagesData = await getProductImages(nextProductId);
+    setImages(imagesData);
+  };
+
   const handleSubmit = async (values: ProductFormValues) => {
     if (!slug) return;
 
@@ -205,29 +207,41 @@ export function AdminProductEditPage() {
     }
   };
 
-  const handleCreateImage = async () => {
-    if (!productId || !imageFile) {
-      setImageError("Debes seleccionar un archivo de imagen.");
-      return;
+  const handleCreateImages = async () => {
+    if (!productId || imageSaving || pending.images.length === 0) return;
+    const queue = pending.images.filter((image) => image.status === "pending" || image.status === "error");
+    const successfulIds = new Set<string>();
+    let uploaded = 0;
+    setImageSaving(true);
+    setImageError(null);
+    setImageStatus(null);
+    for (let index = 0; index < queue.length; index += 1) {
+      const image = queue[index];
+      pending.updateImage(image.id, { status: "uploading", error: null });
+      setImageStatus(`Subiendo ${index + 1} de ${queue.length} imágenes…`);
+      try {
+        await createProductImage({
+          product: productId,
+          image: image.file,
+          alt_text: image.altText.trim() || previewValues?.name?.trim() || "",
+          is_main: image.id === selectedPendingId,
+        });
+        successfulIds.add(image.id);
+        uploaded += 1;
+      } catch (uploadError) {
+        pending.updateImage(image.id, { status: "error", error: getSafeApiErrorMessage(uploadError, image.id === selectedPendingId ? "No se pudo cargar esta imagen ni actualizar la imagen principal." : "No se pudo cargar esta imagen.") });
+      }
     }
 
+    pending.removeSuccessfulImages(successfulIds);
+    if (successfulIds.has(selectedPendingId ?? "")) setSelectedPendingId(null);
     try {
-      setImageSaving(true);
-      setImageError(null);
-      setImageStatus(null);
-      await createProductImage({
-        product: productId,
-        image: imageFile,
-        alt_text: imageAltText.trim(),
-        order: sortedImages.length,
-        is_main: sortedImages.length === 0,
-      });
-      await refreshMediaData(productId);
-      setImageFile(null);
-      setImageAltText("");
-      setImageStatus("Imagen agregada correctamente.");
+      await refreshImages(productId);
+      if (uploaded === queue.length) setImageStatus(queue.length === 1 ? "La imagen se cargó correctamente." : "Todas las imágenes se cargaron.");
+      else if (uploaded === 0) setImageError("Ninguna imagen pudo cargarse. Revisa cada resultado y vuelve a intentarlo.");
+      else setImageError(`Algunas imágenes no pudieron cargarse. Se cargaron ${uploaded} de ${queue.length}.`);
     } catch {
-      setImageError("No se pudo guardar la imagen.");
+      setImageError("Las imágenes se cargaron, pero la galería no pudo actualizarse. Recarga la página para consultarlas sin volver a subirlas.");
     } finally {
       setImageSaving(false);
     }
@@ -239,8 +253,9 @@ export function AdminProductEditPage() {
       setImageSaving(true);
       setImageError(null);
       setImageStatus(null);
+      setSelectedPendingId(null);
       await updateProductImage(imageId, { is_main: true });
-      await refreshMediaData(productId);
+      await refreshImages(productId);
       setImageStatus("Imagen principal actualizada.");
     } catch {
       setImageError("No se pudo actualizar la imagen principal.");
@@ -258,7 +273,7 @@ export function AdminProductEditPage() {
       setImageError(null);
       setImageStatus(null);
       await deleteProductImage(imageId);
-      await refreshMediaData(productId);
+      await refreshImages(productId);
       setImageStatus("Imagen eliminada.");
     } catch {
       setImageError("No se pudo eliminar la imagen.");
@@ -357,6 +372,7 @@ export function AdminProductEditPage() {
   const previewBrandName =
     brands.find((item) => item.id === previewValues?.brand)?.name ??
     "Sin marca";
+  const selectedPending = pending.images.find((image) => image.id === selectedPendingId) ?? null;
 
   return (
     <AdminLayout>
@@ -383,90 +399,22 @@ export function AdminProductEditPage() {
               error={error}
               onValuesChange={setFormValues}
               beforeActions={
-                <section className="admin-form-panel admin-form-panel--media" aria-busy={imageSaving}>
-                  <h3>Imágenes</h3>
-                  <div className="admin-form-panel__full">
-                    <h4>Agregar imagen</h4>
-                    {imageError ? (
-                      <p className="ui-note ui-note--error">{imageError}</p>
-                    ) : null}
-                    {imageStatus ? (
-                      <p className="ui-note ui-note--success">{imageStatus}</p>
-                    ) : null}
-                  </div>
-
-                  <label className="admin-image-upload-field">
-                    Archivo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                      disabled={imageSaving}
-                    />
-                  </label>
-                  <label className="admin-image-upload-field">
-                    Texto alternativo
-                    <input
-                      value={imageAltText}
-                      onChange={(e) => setImageAltText(e.target.value)}
-                      placeholder={previewValues?.name || "Imagen de producto"}
-                      disabled={imageSaving}
-                    />
-                  </label>
-                  {imageFile ? (
-                    <div className="admin-mini-preview admin-form-panel__full">
-                      <span>Archivo seleccionado: {imageFile.name}</span>
-                      <img
-                        src={pendingImagePreview || PLACEHOLDER_IMAGE}
-                        alt={imageAltText.trim() || previewValues?.name || imageFile.name}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="admin-form-panel__full">
-                    <button
-                      type="button"
-                      className="btn btn--accent"
-                      onClick={handleCreateImage}
-                      disabled={imageSaving || !imageFile}
-                    >
-                      {imageSaving ? "Guardando..." : "Subir imagen"}
-                    </button>
-                  </div>
-
-                  <div className="admin-form-panel__full">
-                    <h4>Imágenes existentes</h4>
-                    {sortedImages.length === 0 ? (
-                      <p className="ui-note">Aún no hay imágenes para este producto.</p>
-                    ) : (
-                      <div className="admin-image-mini-list">
-                        {sortedImages.map((image) => (
-                          <article key={image.id} className={`admin-image-mini-item${image.is_main ? " admin-image-mini-item--main" : ""}`}>
-                            <div className="admin-image-mini-item__media">
-                              <img src={resolveMediaUrl(image.image)} alt={image.alt_text || previewValues?.name || "Imagen de producto"} />
-                              {image.is_main ? <span className="admin-image-main-badge">Principal</span> : null}
-                            </div>
-                            <div className="admin-image-mini-item__content">
-                              <div className="admin-media-item__actions">
-                                <button
-                                  type="button"
-                                  className={`btn btn--ghost${image.is_main ? " is-selected" : ""}`}
-                                  onClick={() => handleSetMainImage(image.id)}
-                                  disabled={imageSaving || image.is_main}
-                                  aria-pressed={image.is_main}
-                                >
-                                  Principal
-                                </button>
-                                <button type="button" className="btn btn--ghost" onClick={() => handleDeleteImage(image.id)} disabled={imageSaving}>
-                                  Eliminar
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <ProductImageManager
+                  existingImages={sortedImages}
+                  pendingImages={pending.images}
+                  selectedPendingId={selectedPendingId}
+                  disabled={imageSaving}
+                  status={imageStatus}
+                  error={pending.selectionError || imageError}
+                  uploadLabel={imageSaving ? "Subiendo imágenes…" : `Subir ${pending.images.length} ${pending.images.length === 1 ? "imagen" : "imágenes"}`}
+                  onAddFiles={pending.addFiles}
+                  onAltTextChange={(id, altText) => pending.updateImage(id, { altText })}
+                  onSelectPending={setSelectedPendingId}
+                  onRemovePending={pending.removeImage}
+                  onSelectExisting={handleSetMainImage}
+                  onDeleteExisting={handleDeleteImage}
+                  onUpload={handleCreateImages}
+                />
               }
             />
           }
@@ -476,9 +424,9 @@ export function AdminProductEditPage() {
                 <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
                   <img
-                    src={resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE}
+                    src={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE}
                     alt={
-                      mainImage?.alt_text || previewValues?.name || "Producto"
+                      selectedPending?.altText.trim() || mainImage?.alt_text || previewValues?.name || "Producto"
                     }
                   />
                   <div className="product-card__content">
