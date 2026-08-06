@@ -32,6 +32,7 @@ const INITIAL_VALUES: ProductFormValues = {
 }
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
+const PRODUCT_CREATE_FORM_ID = 'admin-product-create-form'
 
 export function AdminProductCreatePage() {
   const navigate = useNavigate()
@@ -118,8 +119,13 @@ export function AdminProductCreatePage() {
         <ProductEditorLayout
           title="Nuevo producto"
           onBack={() => navigate('/admin/productos')}
+          formId={PRODUCT_CREATE_FORM_ID}
+          submitLabel="Crear producto"
+          isSubmitting={isSubmitting}
           form={
             <ProductForm
+              formId={PRODUCT_CREATE_FORM_ID}
+              onCancel={() => navigate('/admin/productos')}
               initialValues={INITIAL_VALUES}
               categories={categories}
               brands={brands}

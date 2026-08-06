@@ -14,6 +14,8 @@ interface ProductFormProps {
   error: string | null
   onValuesChange?: (values: ProductFormValues) => void
   beforeActions?: ReactNode
+  formId: string
+  onCancel: () => void
 }
 
 const PRODUCT_CONDITIONS: Array<{ value: ProductCondition; label: string }> = [
@@ -47,6 +49,8 @@ export function ProductForm({
   error,
   onValuesChange,
   beforeActions,
+  formId,
+  onCancel,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -106,13 +110,13 @@ export function ProductForm({
   }
 
   return (
-    <form className="admin-product-form" onSubmit={handleSubmit}>
+    <form id={formId} className="admin-product-form admin-product-editor-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
       <section className="admin-form-panel admin-form-panel--columns-2">
         <h3>Información general</h3>
 
-        <label>
+        <label className="admin-form-panel__full">
           Nombre
           <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
         </label>
@@ -225,7 +229,7 @@ export function ProductForm({
         </div>
       </section>
 
-      <section className="admin-form-panel admin-form-panel--columns-2">
+      <section className="admin-form-panel admin-product-technical-grid">
         <h3>Información técnica / comercial</h3>
 
         <label>
@@ -286,6 +290,9 @@ export function ProductForm({
       {beforeActions}
 
       <div className="admin-product-form__actions">
+        <button type="button" className="btn btn--ghost" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </button>
         <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
           {isSubmitting ? 'Guardando...' : submitLabel}
         </button>
