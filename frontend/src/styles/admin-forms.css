@@ -597,6 +597,37 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.admin-product-editor-form {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.admin-product-editor-form .admin-form-panel {
+  width: 100%;
+}
+
+.admin-product-technical-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(120px, 0.7fr);
+}
+
+.admin-product-editor-form .admin-form-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+}
+
+.admin-product-editor-form .admin-form-switches .admin-checkbox {
+  min-height: 34px;
+}
+
+.admin-product-delete-panel {
+  align-content: start;
+}
+
+.admin-product-delete-panel .btn--danger {
+  justify-self: start;
+}
+
 .admin-form-panel h3,
 .admin-form-panel__full,
 .admin-form-switches {
@@ -655,6 +686,26 @@
 
   .quote-detail-row {
     grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+  .admin-product-technical-grid,
+  .admin-product-editor-form .admin-price-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-product-editor-form .admin-form-panel--columns-2,
+  .admin-product-editor-form .admin-price-row,
+  .admin-product-technical-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-editor-header__actions,
+  .admin-editor-header__actions .btn {
+    width: 100%;
   }
 }
 

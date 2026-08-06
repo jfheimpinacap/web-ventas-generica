@@ -5,16 +5,20 @@ interface AdminEditorLayoutProps {
   onBack: () => void
   form: ReactNode
   sidebar?: ReactNode
+  headerActions?: ReactNode
 }
 
-export function AdminEditorLayout({ title, onBack, form, sidebar }: AdminEditorLayoutProps) {
+export function AdminEditorLayout({ title, onBack, form, sidebar, headerActions }: AdminEditorLayoutProps) {
   return (
     <>
       <div className="admin-products-header">
         <h1>{title}</h1>
-        <button type="button" className="btn btn--ghost" onClick={onBack}>
-          Volver al listado
-        </button>
+        <div className="admin-editor-header__actions">
+          <button type="button" className="btn btn--ghost" onClick={onBack}>
+            Volver al listado
+          </button>
+          {headerActions}
+        </div>
       </div>
 
       <section className={`admin-edit-layout ${sidebar ? '' : 'admin-edit-layout--single'}`.trim()}>

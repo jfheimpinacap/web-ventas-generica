@@ -76,6 +76,7 @@ const initialSpecForm = {
 
 const PLACEHOLDER_IMAGE =
   "https://placehold.co/600x400/111827/F3F4F6?text=Producto";
+const PRODUCT_EDIT_FORM_ID = "admin-product-edit-form";
 
 export function AdminProductEditPage() {
   const location = useLocation();
@@ -365,8 +366,13 @@ export function AdminProductEditPage() {
         <ProductEditorLayout
           title="Editar producto"
           onBack={() => navigate("/admin/productos")}
+          formId={PRODUCT_EDIT_FORM_ID}
+          submitLabel="Guardar cambios"
+          isSubmitting={isSubmitting}
           form={
             <ProductForm
+              formId={PRODUCT_EDIT_FORM_ID}
+              onCancel={() => navigate("/admin/productos")}
               initialValues={initialValues}
               categories={categories}
               brands={brands}
@@ -465,7 +471,8 @@ export function AdminProductEditPage() {
             />
           }
           sidebar={
-            <section className="admin-block admin-block--compact admin-product-preview">
+            <div className="admin-product-editor-sidebar">
+              <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
                   <img
@@ -527,59 +534,33 @@ export function AdminProductEditPage() {
                   </div>
                 </article>
               </section>
+              <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
+                <h2>Eliminar producto</h2>
+                <p className="ui-note">
+                  Esta acción es irreversible y solo puede realizarse si el producto no tiene cotizaciones asociadas.
+                </p>
+                {deleteError ? <p className="ui-note ui-note--error">{deleteError}</p> : null}
+                {!deleteConfirmOpen ? (
+                  <button type="button" className="btn btn--ghost btn--danger" onClick={() => setDeleteConfirmOpen(true)} disabled={isDeleting}>
+                    Eliminar producto
+                  </button>
+                ) : (
+                  <div className="admin-delete-confirmation" role="alert">
+                    <p>¿Seguro que deseas eliminar este producto? Esta acción no se puede deshacer.</p>
+                    <div className="admin-media-item__actions">
+                      <button type="button" className="btn btn--ghost btn--danger" onClick={handleDeleteProduct} disabled={isDeleting}>
+                        {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                      </button>
+                      <button type="button" className="btn btn--ghost" onClick={() => { setDeleteConfirmOpen(false); setDeleteError(null); }} disabled={isDeleting}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </div>
           }
         />
-      ) : null}
-
-      {!loading && initialValues ? (
-        <section className="admin-block admin-block--compact admin-danger-zone">
-          <h2>Zona de peligro</h2>
-          <p className="ui-note">
-            Eliminar producto lo despublica de forma segura y lo quita del
-            listado publicado por defecto.
-          </p>
-          {deleteError ? (
-            <p className="ui-note ui-note--error">{deleteError}</p>
-          ) : null}
-          {!deleteConfirmOpen ? (
-            <button
-              type="button"
-              className="btn btn--ghost btn--danger"
-              onClick={() => setDeleteConfirmOpen(true)}
-              disabled={isDeleting}
-            >
-              Eliminar producto
-            </button>
-          ) : (
-            <div className="admin-delete-confirmation" role="alert">
-              <p>
-                ¿Seguro que deseas eliminar este producto? Esta acción no se
-                puede deshacer.
-              </p>
-              <div className="admin-media-item__actions">
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--danger"
-                  onClick={handleDeleteProduct}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => {
-                    setDeleteConfirmOpen(false);
-                    setDeleteError(null);
-                  }}
-                  disabled={isDeleting}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
       ) : null}
 
       {false && !loading && productId ? (
