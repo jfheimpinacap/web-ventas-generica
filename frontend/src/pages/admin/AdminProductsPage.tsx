@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { AdminLayout } from "../../components/admin/AdminLayout";
+import { AdminIcon } from "../../components/admin/AdminIcon";
 import { getSafeApiErrorMessage } from "../../services/api";
 import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
 import type { Category, ProductListItem } from "../../types/catalog";
@@ -287,10 +288,17 @@ export function AdminProductsPage() {
 
   return (
     <AdminLayout>
-      <div className="admin-products-header">
+      <main className="admin-products-list">
+      <nav className="admin-products-list__breadcrumb" aria-label="Breadcrumb">
+        <span>Panel vendedor</span>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Productos</span>
+      </nav>
+      <div className="admin-products-list__header">
         <h1>Productos</h1>
-        <div className="admin-list-toolbar">
+        <div className="admin-products-list__header-action">
           <Link className="btn btn--accent" to="/admin/productos/nuevo">
+            <AdminIcon name="plus" />
             Nuevo producto
           </Link>
         </div>
@@ -299,14 +307,20 @@ export function AdminProductsPage() {
         className="admin-products-filter-panel"
         aria-label="Filtros de productos"
       >
-        <input
-          className="admin-search admin-products-filter-panel__search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por nombre, marca, categoría o SKU"
-        />
+        <h2>Filtros</h2>
         <div className="admin-filter-strip admin-filter-strip--products">
-          <select
+          <label className="admin-products-filter-field admin-products-filter-field--search">
+            <span>Buscar producto</span>
+            <input
+              className="admin-search admin-products-filter-panel__search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Nombre, marca, categoría o SKU"
+            />
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Categoría</span>
+            <select
             value={rootCategoryFilter}
             onChange={(event) => setRootCategoryFilter(event.target.value)}
           >
@@ -316,8 +330,11 @@ export function AdminProductsPage() {
                 {option.name}
               </option>
             ))}
-          </select>
-          <select
+            </select>
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Subcategoría</span>
+            <select
             value={subcategoryFilter}
             onChange={(event) => setSubcategoryFilter(event.target.value)}
             disabled={!rootCategoryFilter}
@@ -332,8 +349,11 @@ export function AdminProductsPage() {
                 {option.name}
               </option>
             ))}
-          </select>
-          <select
+            </select>
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Marca</span>
+            <select
             value={brandFilter}
             onChange={(event) => setBrandFilter(event.target.value)}
           >
@@ -343,8 +363,11 @@ export function AdminProductsPage() {
                 {option}
               </option>
             ))}
-          </select>
-          <select
+            </select>
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Condición</span>
+            <select
             value={conditionFilter}
             onChange={(event) => setConditionFilter(event.target.value)}
           >
@@ -353,8 +376,11 @@ export function AdminProductsPage() {
             <option value="used">Usado</option>
             <option value="refurbished">Reacondicionado</option>
             <option value="not_applicable">No aplica</option>
-          </select>
-          <select
+            </select>
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Stock</span>
+            <select
             value={stockFilter}
             onChange={(event) => setStockFilter(event.target.value)}
           >
@@ -363,20 +389,26 @@ export function AdminProductsPage() {
             <option value="on_request">A pedido</option>
             <option value="reserved">Reservado</option>
             <option value="sold">Vendido</option>
-          </select>
-          <select
+            </select>
+          </label>
+          <label className="admin-products-filter-field">
+            <span>Publicación</span>
+            <select
             value={publishedFilter}
             onChange={(event) => setPublishedFilter(event.target.value)}
           >
             <option value="published">Solo publicados</option>
             <option value="unpublished">Solo no publicados</option>
             <option value="">Todos</option>
-          </select>
+            </select>
+          </label>
+          <div className="admin-products-filter-actions">
           <button
             type="button"
             className="btn btn--accent"
             onClick={handleSearch}
           >
+            <AdminIcon name="search" />
             Buscar
           </button>
           <button
@@ -384,36 +416,40 @@ export function AdminProductsPage() {
             className="btn btn--ghost"
             onClick={clearFilters}
           >
+            <AdminIcon name="reset" />
             Limpiar filtros
           </button>
+          </div>
         </div>
       </section>
 
-      {loading ? <p className="ui-note">Cargando productos...</p> : null}
-      {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-      {success ? <p className="ui-note ui-note--success">{success}</p> : null}
+      <div className="admin-products-list__messages" aria-live="polite">
+        {loading ? <p className="ui-note">Cargando productos...</p> : null}
+        {error ? <p className="ui-note ui-note--error" role="alert">{error}</p> : null}
+        {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
       {!loading && !error && filteredProducts.length === 0 ? (
         <p className="ui-note">
           No hay productos para los criterios seleccionados.
         </p>
       ) : null}
+      </div>
 
       {!loading && !error && filteredProducts.length > 0 ? (
-        <div className="admin-table-wrapper">
-          <table className="admin-table">
+        <div className="admin-table-wrapper admin-products-table-wrapper" tabIndex={0} aria-label="Tabla de productos con desplazamiento horizontal">
+          <table className="admin-table admin-products-table">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Categoría</th>
-                <th>Marca</th>
-                <th>Subcategoría</th>
-                <th>Condición</th>
-                <th>Stock</th>
-                <th>Destacado</th>
-                <th>Publicado</th>
-                <th>Actualizado</th>
-                <th>Acciones</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Categoría</th>
+                <th scope="col">Marca</th>
+                <th scope="col">Subcategoría</th>
+                <th scope="col">Condición</th>
+                <th scope="col">Stock</th>
+                <th scope="col">Destacado</th>
+                <th scope="col">Publicado</th>
+                <th scope="col">Actualizado</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -456,6 +492,7 @@ export function AdminProductsPage() {
                       className="table-action"
                       to={`/admin/productos/${product.slug}/editar`}
                     >
+                      <AdminIcon name="edit" />
                       Editar
                     </Link>
                   </td>
@@ -466,6 +503,7 @@ export function AdminProductsPage() {
           </table>
         </div>
       ) : null}
+      </main>
     </AdminLayout>
   );
 }

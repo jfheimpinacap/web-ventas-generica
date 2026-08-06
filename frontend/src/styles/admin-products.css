@@ -1,0 +1,217 @@
+.admin-products-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-products-list__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.admin-products-list__breadcrumb [aria-current="page"] {
+  color: var(--admin-text);
+  font-weight: 600;
+}
+
+.admin-products-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-products-list__header h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.admin-products-list .admin-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.admin-products-list .btn,
+.admin-products-list .table-action {
+  gap: 6px;
+}
+
+.admin-products-list .admin-products-filter-panel {
+  width: 100%;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border-color: var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: none;
+}
+
+.admin-products-filter-panel h2 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.admin-products-list .admin-filter-strip--products {
+  grid-template-columns: minmax(240px, 1.6fr) repeat(3, minmax(145px, 1fr));
+  gap: 10px;
+}
+
+.admin-products-filter-field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  color: var(--admin-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-products-filter-field input,
+.admin-products-filter-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 6px 8px;
+  background: #fff;
+  color: var(--admin-text);
+  font: 400 13px var(--admin-font);
+}
+
+.admin-products-filter-field input:focus-visible,
+.admin-products-filter-field select:focus-visible,
+.admin-products-table-wrapper:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
+.admin-products-filter-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  grid-column: span 2;
+}
+
+.admin-products-filter-actions .btn {
+  width: auto;
+  min-height: 34px;
+}
+
+.admin-products-list__messages:empty {
+  display: none;
+}
+
+.admin-products-list__messages .ui-note {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+}
+
+.admin-products-table-wrapper {
+  border-color: var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: none;
+}
+
+.admin-products-table {
+  min-width: 1040px;
+  font-size: 13px;
+}
+
+.admin-products-table th,
+.admin-products-table td {
+  padding: 6px 8px;
+}
+
+.admin-products-table th {
+  background: #f2f6fa;
+  color: var(--admin-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-products-table td:first-child {
+  min-width: 180px;
+  max-width: 280px;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.admin-products-table .badge {
+  min-height: 22px;
+  border-radius: var(--admin-radius);
+  font-size: 12px;
+}
+
+.admin-products-table .table-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+  color: var(--admin-primary);
+}
+
+.admin-products-table .table-action:hover {
+  border-color: var(--admin-primary);
+  background: #eef5fb;
+}
+
+.admin-products-table .table-action:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1180px) {
+  .admin-products-list .admin-filter-strip--products {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .admin-products-filter-field--search {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-products-list__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-products-list__header-action .btn {
+    width: 100%;
+  }
+
+  .admin-products-list .admin-filter-strip--products {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-products-filter-field--search,
+  .admin-products-filter-actions {
+    grid-column: auto;
+  }
+
+  .admin-products-filter-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .admin-products-filter-actions .btn {
+    flex: 1 1 145px;
+  }
+}
