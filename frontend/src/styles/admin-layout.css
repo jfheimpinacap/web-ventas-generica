@@ -46,7 +46,7 @@
   flex-direction: column;
   gap: 0.55rem;
   align-content: flex-start;
-  overflow-x: clip;
+  overflow-x: visible;
 }
 
 .admin-content h1 { margin: 0; font-size: 1.28rem; line-height: 1.2; }
@@ -57,8 +57,8 @@
 .admin-list-toolbar { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 
 .admin-edit-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 0.75rem; align-items: start; }
-.admin-edit-layout__side { align-self: stretch; min-width: 0; }
-.admin-product-preview { position: sticky; top: 1rem; align-self: start; height: fit-content; max-width: 100%; }
+.admin-edit-layout__side { position: sticky; top: 1rem; align-self: start; min-width: 0; }
+.admin-product-preview { position: static; width: 100%; max-width: none; box-sizing: border-box; }
 .admin-edit-layout--single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
 
 .admin-promotion-editor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 1rem; align-items: stretch; }
@@ -128,7 +128,7 @@
   .admin-edit-layout,
   .admin-promotion-editor { grid-template-columns: 1fr; }
 
-  .admin-product-preview {
+  .admin-edit-layout__side {
     position: static;
   }
 }
