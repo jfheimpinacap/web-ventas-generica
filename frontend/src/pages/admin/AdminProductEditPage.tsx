@@ -31,7 +31,6 @@ import type {
   Category,
   ProductFormValues,
   ProductImage,
-  ProductImageWritePayload,
   ProductSpec,
   ProductSpecWritePayload,
   SupplierSummary,
@@ -110,6 +109,16 @@ export function AdminProductEditPage() {
       ? String(state.imageError)
       : null;
   });
+  const pendingImagePreview = useMemo(
+    () => (imageFile ? URL.createObjectURL(imageFile) : null),
+    [imageFile],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pendingImagePreview) URL.revokeObjectURL(pendingImagePreview);
+    };
+  }, [pendingImagePreview]);
 
   const [specForm, setSpecForm] = useState(initialSpecForm);
   const [specSaving, setSpecSaving] = useState(false);
@@ -234,26 +243,6 @@ export function AdminProductEditPage() {
       setImageStatus("Imagen principal actualizada.");
     } catch {
       setImageError("No se pudo actualizar la imagen principal.");
-    } finally {
-      setImageSaving(false);
-    }
-  };
-
-  const handleUpdateImage = async (
-    imageId: number,
-    payload: Partial<ProductImageWritePayload>,
-  ) => {
-    if (!productId) return;
-
-    try {
-      setImageSaving(true);
-      setImageError(null);
-      setImageStatus(null);
-      await updateProductImage(imageId, payload);
-      await refreshMediaData(productId);
-      setImageStatus("Imagen actualizada.");
-    } catch {
-      setImageError("No se pudo actualizar la imagen.");
     } finally {
       setImageSaving(false);
     }
@@ -419,7 +408,13 @@ export function AdminProductEditPage() {
                     />
                   </label>
                   {imageFile ? (
-                    <p className="ui-note admin-form-panel__full">Archivo seleccionado: {imageFile.name}</p>
+                    <div className="admin-mini-preview admin-form-panel__full">
+                      <span>Archivo seleccionado: {imageFile.name}</span>
+                      <img
+                        src={pendingImagePreview || PLACEHOLDER_IMAGE}
+                        alt={imageAltText.trim() || previewValues?.name || imageFile.name}
+                      />
+                    </div>
                   ) : null}
                   <div className="admin-form-panel__full">
                     <button
@@ -439,45 +434,21 @@ export function AdminProductEditPage() {
                     ) : (
                       <div className="admin-image-mini-list">
                         {sortedImages.map((image) => (
-                          <article key={image.id} className="admin-image-mini-item">
-                            <img src={resolveMediaUrl(image.image)} alt={image.alt_text || "Imagen de producto"} />
+                          <article key={image.id} className={`admin-image-mini-item${image.is_main ? " admin-image-mini-item--main" : ""}`}>
+                            <div className="admin-image-mini-item__media">
+                              <img src={resolveMediaUrl(image.image)} alt={image.alt_text || previewValues?.name || "Imagen de producto"} />
+                              {image.is_main ? <span className="admin-image-main-badge">Principal</span> : null}
+                            </div>
                             <div className="admin-image-mini-item__content">
-                              <label>
-                                Texto alternativo
-                                <input
-                                  value={image.alt_text}
-                                  onChange={(e) =>
-                                    setImages((prev) =>
-                                      prev.map((item) =>
-                                        item.id === image.id ? { ...item, alt_text: e.target.value } : item,
-                                      ),
-                                    )
-                                  }
-                                />
-                              </label>
-                              <label>
-                                Orden
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={image.order}
-                                  onChange={(e) =>
-                                    setImages((prev) =>
-                                      prev.map((item) =>
-                                        item.id === image.id
-                                          ? { ...item, order: Number(e.target.value) || 0 }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                />
-                              </label>
                               <div className="admin-media-item__actions">
-                                <button type="button" className="btn btn--ghost" onClick={() => handleSetMainImage(image.id)} disabled={imageSaving || image.is_main}>
-                                  {image.is_main ? "Principal" : "Marcar principal"}
-                                </button>
-                                <button type="button" className="btn btn--ghost" onClick={() => handleUpdateImage(image.id, { alt_text: image.alt_text, order: image.order })} disabled={imageSaving}>
-                                  Guardar
+                                <button
+                                  type="button"
+                                  className={`btn btn--ghost${image.is_main ? " is-selected" : ""}`}
+                                  onClick={() => handleSetMainImage(image.id)}
+                                  disabled={imageSaving || image.is_main}
+                                  aria-pressed={image.is_main}
+                                >
+                                  Principal
                                 </button>
                                 <button type="button" className="btn btn--ghost" onClick={() => handleDeleteImage(image.id)} disabled={imageSaving}>
                                   Eliminar

@@ -46,7 +46,7 @@
   flex-direction: column;
   gap: 0.55rem;
   align-content: flex-start;
-  overflow-x: auto;
+  overflow-x: clip;
 }
 
 .admin-content h1 { margin: 0; font-size: 1.28rem; line-height: 1.2; }
@@ -58,7 +58,7 @@
 
 .admin-edit-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 0.75rem; align-items: start; }
 .admin-edit-layout__side { align-self: start; }
-.admin-product-preview { position: sticky; top: 1rem; align-self: start; }
+.admin-product-preview { position: sticky; top: 1rem; align-self: start; max-width: 100%; }
 .admin-edit-layout--single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
 
 .admin-promotion-editor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 1rem; align-items: stretch; }
