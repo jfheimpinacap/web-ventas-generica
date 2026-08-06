@@ -47,8 +47,12 @@ function readStoredFilters(): ProductFiltersState {
       subcategoryFilter:
         parsed.subcategoryFilter ?? parsed.categoryFilter ?? "",
       brandFilter: parsed.brandFilter ?? "",
-      conditionFilter: parsed.conditionFilter ?? "",
-      stockFilter: parsed.stockFilter ?? "",
+      conditionFilter:
+        parsed.conditionFilter === "not_applicable"
+          ? ""
+          : (parsed.conditionFilter ?? ""),
+      stockFilter:
+        parsed.stockFilter === "sold" ? "" : (parsed.stockFilter ?? ""),
       publishedFilter: parsed.publishedFilter ?? defaultFilters.publishedFilter,
     };
   } catch {
@@ -286,6 +290,22 @@ export function AdminProductsPage() {
     void loadProducts(defaultFilters);
   };
 
+  const showAll = () => {
+    const emptyFilters: ProductFiltersState = {
+      ...defaultFilters,
+      publishedFilter: "",
+    };
+
+    setSearch(emptyFilters.search);
+    setRootCategoryFilter(emptyFilters.rootCategoryFilter);
+    setSubcategoryFilter(emptyFilters.subcategoryFilter);
+    setBrandFilter(emptyFilters.brandFilter);
+    setConditionFilter(emptyFilters.conditionFilter);
+    setStockFilter(emptyFilters.stockFilter);
+    setPublishedFilter(emptyFilters.publishedFilter);
+    void loadProducts(emptyFilters);
+  };
+
   return (
     <AdminLayout>
       <main className="admin-products-list">
@@ -371,11 +391,10 @@ export function AdminProductsPage() {
             value={conditionFilter}
             onChange={(event) => setConditionFilter(event.target.value)}
           >
-            <option value="">Condición</option>
+            <option value="">Todos</option>
             <option value="new">Nuevo</option>
             <option value="used">Usado</option>
             <option value="refurbished">Reacondicionado</option>
-            <option value="not_applicable">No aplica</option>
             </select>
           </label>
           <label className="admin-products-filter-field">
@@ -388,7 +407,6 @@ export function AdminProductsPage() {
             <option value="available">Disponible</option>
             <option value="on_request">A pedido</option>
             <option value="reserved">Reservado</option>
-            <option value="sold">Vendido</option>
             </select>
           </label>
           <label className="admin-products-filter-field">
@@ -418,6 +436,9 @@ export function AdminProductsPage() {
           >
             <AdminIcon name="reset" />
             Limpiar filtros
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={showAll}>
+            Ver todo
           </button>
           </div>
         </div>
