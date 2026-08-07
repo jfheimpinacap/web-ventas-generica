@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 
 import type { Brand, Category, ProductCondition, ProductFormValues, ProductPriceCurrency, ProductPriceTaxMode, StockStatus, SupplierSummary } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
+import { ProductEditorActions } from './ProductEditorActions'
 
 interface ProductFormProps {
   initialValues: ProductFormValues
@@ -9,7 +10,6 @@ interface ProductFormProps {
   brands: Brand[]
   suppliers: SupplierSummary[]
   onSubmit: (values: ProductFormValues) => Promise<void>
-  submitLabel: string
   isSubmitting: boolean
   error: string | null
   onValuesChange?: (values: ProductFormValues) => void
@@ -44,7 +44,6 @@ export function ProductForm({
   brands,
   suppliers,
   onSubmit,
-  submitLabel,
   isSubmitting,
   error,
   onValuesChange,
@@ -113,10 +112,10 @@ export function ProductForm({
     <form id={formId} className="admin-product-form admin-product-editor-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
-      <section className="admin-form-panel admin-form-panel--columns-2">
+      <section className="admin-form-panel admin-form-panel--product-grid">
         <h3>Información general</h3>
 
-        <label className="admin-form-panel__full">
+        <label className="admin-form-panel__span-2 admin-product-name-field">
           Nombre
           <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
         </label>
@@ -289,14 +288,7 @@ export function ProductForm({
 
       {beforeActions}
 
-      <div className="admin-product-form__actions">
-        <button type="button" className="btn btn--ghost" onClick={onCancel} disabled={isSubmitting}>
-          Cancelar
-        </button>
-        <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
-          {isSubmitting ? 'Guardando...' : submitLabel}
-        </button>
-      </div>
+      <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onCancel} />
     </form>
   )
 }

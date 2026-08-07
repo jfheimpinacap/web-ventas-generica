@@ -6,17 +6,20 @@ interface AdminEditorLayoutProps {
   form: ReactNode
   sidebar?: ReactNode
   headerActions?: ReactNode
+  hideDefaultBackAction?: boolean
 }
 
-export function AdminEditorLayout({ title, onBack, form, sidebar, headerActions }: AdminEditorLayoutProps) {
+export function AdminEditorLayout({ title, onBack, form, sidebar, headerActions, hideDefaultBackAction = false }: AdminEditorLayoutProps) {
   return (
     <>
       <div className="admin-products-header">
         <h1>{title}</h1>
         <div className="admin-editor-header__actions">
-          <button type="button" className="btn btn--ghost" onClick={onBack}>
-            Volver al listado
-          </button>
+          {!hideDefaultBackAction ? (
+            <button type="button" className="btn btn--ghost" onClick={onBack}>
+              Volver al listado
+            </button>
+          ) : null}
           {headerActions}
         </div>
       </div>
