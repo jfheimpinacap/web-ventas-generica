@@ -130,7 +130,6 @@ export function AdminProductCreatePage() {
           title="Nuevo producto"
           onBack={() => navigate('/admin/productos')}
           formId={PRODUCT_CREATE_FORM_ID}
-          submitLabel="Crear producto"
           isSubmitting={isSubmitting}
           form={
             <ProductForm
@@ -141,7 +140,6 @@ export function AdminProductCreatePage() {
               brands={brands}
               suppliers={suppliers}
               onSubmit={handleSubmit}
-              submitLabel="Crear producto"
               isSubmitting={isSubmitting}
               error={error}
               onValuesChange={setFormValues}

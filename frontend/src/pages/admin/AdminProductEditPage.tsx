@@ -383,7 +383,6 @@ export function AdminProductEditPage() {
           title="Editar producto"
           onBack={() => navigate("/admin/productos")}
           formId={PRODUCT_EDIT_FORM_ID}
-          submitLabel="Guardar cambios"
           isSubmitting={isSubmitting}
           form={
             <ProductForm
@@ -394,7 +393,6 @@ export function AdminProductEditPage() {
               brands={brands}
               suppliers={suppliers}
               onSubmit={handleSubmit}
-              submitLabel="Guardar cambios"
               isSubmitting={isSubmitting}
               error={error}
               onValuesChange={setFormValues}

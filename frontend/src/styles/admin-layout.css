@@ -57,10 +57,10 @@
 .admin-editor-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
 .admin-list-toolbar { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 
-.admin-edit-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 0.75rem; align-items: start; }
-.admin-edit-layout__side { position: sticky; top: 1rem; align-self: start; min-width: 0; }
+.admin-edit-layout { --admin-product-card-inline-size: 280px; display: grid; grid-template-columns: minmax(0, 1fr) var(--admin-product-card-inline-size); gap: 0.75rem; align-items: start; }
+.admin-edit-layout__side { position: sticky; top: 1rem; align-self: start; inline-size: min(100%, var(--admin-product-card-inline-size)); min-width: 0; }
 .admin-product-preview { position: static; width: 100%; max-width: none; box-sizing: border-box; }
-.admin-product-editor-sidebar { display: grid; gap: 0.75rem; min-width: 0; }
+.admin-product-editor-sidebar { display: grid; gap: 0.75rem; inline-size: 100%; min-width: 0; }
 .admin-edit-layout--single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
 
 .admin-promotion-editor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 1rem; align-items: stretch; }

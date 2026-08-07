@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { AdminEditorLayout } from './AdminEditorLayout'
+import { ProductEditorActions } from './ProductEditorActions'
 
 interface ProductEditorLayoutProps {
   title: string
@@ -8,21 +9,19 @@ interface ProductEditorLayoutProps {
   form: ReactNode
   sidebar: ReactNode
   formId: string
-  submitLabel: string
   isSubmitting: boolean
 }
 
-export function ProductEditorLayout({ title, onBack, form, sidebar, formId, submitLabel, isSubmitting }: ProductEditorLayoutProps) {
+export function ProductEditorLayout({ title, onBack, form, sidebar, formId, isSubmitting }: ProductEditorLayoutProps) {
   return (
     <AdminEditorLayout
       title={title}
       onBack={onBack}
       form={form}
       sidebar={sidebar}
+      hideDefaultBackAction
       headerActions={
-        <button type="submit" form={formId} className="btn btn--accent" disabled={isSubmitting}>
-          {isSubmitting ? 'Guardando...' : submitLabel}
-        </button>
+        <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onBack} submitControl />
       }
     />
   )

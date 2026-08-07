@@ -84,6 +84,7 @@ export function ProductImageManager({
         >
           <strong>{dragActive ? 'Suelta las imágenes para agregarlas' : 'Arrastra imágenes aquí'}</strong>
           <span>o selecciónalas desde tu equipo</span>
+          <span className="admin-image-dropzone__picker">Seleccionar archivo</span>
           <span id="product-images-help" className="ui-note">Formatos permitidos: JPG, PNG y WebP.</span>
         </div>
 
