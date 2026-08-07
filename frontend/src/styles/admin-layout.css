@@ -55,6 +55,7 @@
 
 .admin-products-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.7rem; margin-bottom: 0.1rem; }
 .admin-editor-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.admin-products-header:has(+ .admin-edit-layout .admin-product-editor-form) .admin-editor-header__actions { justify-content: flex-start; }
 .admin-list-toolbar { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 
 .admin-edit-layout { --admin-product-card-inline-size: 280px; display: grid; grid-template-columns: minmax(0, 1fr) var(--admin-product-card-inline-size); gap: 0.75rem; align-items: start; }
@@ -157,7 +158,7 @@
 .admin-nav-link:hover { background: #1e293b; }
 .admin-nav-link:focus-visible, .admin-logout-button:focus-visible, .admin-mobile-menu-trigger:focus-visible, .admin-sidebar__mobile-close:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 .admin-nav-divider { height: 1px; margin: 7px 8px; background: #334155; }
-.admin-logout-button { width: 100%; margin: 0; border-color: #7f1d1d; border-radius: var(--admin-radius); background: #7f1d1d; font-weight: 600; }
+.admin-logout-button { width: 100%; margin: 0; border-color: #7f1d1d; border-radius: var(--admin-radius); background: #7f1d1d; }
 .admin-content { padding: 16px 18px 20px; gap: 8px; }
 .admin-content h1 { font-size: 21px; font-weight: 600; }
 .admin-content h2 { font-size: 16px; font-weight: 600; }

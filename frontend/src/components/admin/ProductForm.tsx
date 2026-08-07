@@ -112,7 +112,8 @@ export function ProductForm({
     <form id={formId} className="admin-product-form admin-product-editor-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
 
-      <section className="admin-form-panel admin-form-panel--product-grid">
+      <div className="admin-product-information-grid">
+        <section className="admin-form-panel admin-form-panel--product-grid">
         <h3>Información general</h3>
 
         <label className="admin-form-panel__span-2 admin-product-name-field">
@@ -171,28 +172,29 @@ export function ProductForm({
           </select>
         </label>
 
+        <div className="admin-form-panel__full admin-product-condition-row">
+          <label>
+            Condición
+            <select value={values.condition} onChange={(e) => setField('condition', e.target.value as ProductCondition)} required>
+              {PRODUCT_CONDITIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label>
-          Condición
-          <select value={values.condition} onChange={(e) => setField('condition', e.target.value as ProductCondition)} required>
-            {PRODUCT_CONDITIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Stock
-          <select value={values.stock_status} onChange={(e) => setField('stock_status', e.target.value as StockStatus)} required>
-            {STOCK_STATUSES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label>
+            Stock
+            <select value={values.stock_status} onChange={(e) => setField('stock_status', e.target.value as StockStatus)} required>
+              {STOCK_STATUSES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <div className="admin-form-panel__full admin-price-row">
           <label>
@@ -226,43 +228,6 @@ export function ProductForm({
             </select>
           </label>
         </div>
-      </section>
-
-      <section className="admin-form-panel admin-product-technical-grid">
-        <h3>Información técnica / comercial</h3>
-
-        <label>
-          Modelo
-          <input value={values.model} onChange={(e) => setField('model', e.target.value)} />
-        </label>
-
-        <label>
-          SKU
-          <input value={values.sku} onChange={(e) => setField('sku', e.target.value)} />
-        </label>
-
-        <label>
-          Año
-          <input
-            type="number"
-            value={values.year ?? ''}
-            onChange={(e) => setField('year', toNullableNumber(e.target.value))}
-          />
-        </label>
-
-        <label>
-          Horómetro
-          <input
-            type="number"
-            value={values.hours_meter ?? ''}
-            onChange={(e) => setField('hours_meter', toNullableNumber(e.target.value))}
-          />
-        </label>
-
-        <label className="admin-form-panel__full">
-          Descripción
-          <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
-        </label>
 
         <div className="admin-form-switches">
           <label className="admin-checkbox">
@@ -284,7 +249,46 @@ export function ProductForm({
             Destacado
           </label>
         </div>
-      </section>
+        </section>
+
+        <section className="admin-form-panel admin-product-technical-grid">
+        <h3>Información técnica / comercial</h3>
+
+        <label>
+          Modelo
+          <input value={values.model} onChange={(e) => setField('model', e.target.value)} />
+        </label>
+
+        <label>
+          Año
+          <input
+            type="number"
+            value={values.year ?? ''}
+            onChange={(e) => setField('year', toNullableNumber(e.target.value))}
+          />
+        </label>
+
+        <label>
+          Horómetro
+          <input
+            type="number"
+            value={values.hours_meter ?? ''}
+            onChange={(e) => setField('hours_meter', toNullableNumber(e.target.value))}
+          />
+        </label>
+
+        <label>
+          SKU
+          <input value={values.sku} onChange={(e) => setField('sku', e.target.value)} />
+        </label>
+
+        <label className="admin-form-panel__full">
+          Descripción
+          <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
+        </label>
+
+        </section>
+      </div>
 
       {beforeActions}
 
