@@ -654,6 +654,26 @@
   height: 32px;
 }
 
+.admin-product-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.admin-product-benefits legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.admin-product-benefits .admin-checkbox {
+  min-width: 0;
+  min-height: 34px;
+}
+
 .admin-product-delete-panel {
   align-content: start;
 }
@@ -742,6 +762,10 @@
   .admin-product-technical-grid,
   .admin-product-condition-row,
   .admin-product-editor-form .admin-form-switches {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-product-benefits {
     grid-template-columns: minmax(0, 1fr);
   }
 

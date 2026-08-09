@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 
-import type { Brand, Category, ProductCondition, ProductFormValues, ProductPriceCurrency, ProductPriceTaxMode, StockStatus, SupplierSummary } from '../../types/catalog'
+import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus, SupplierSummary } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 import { ProductEditorActions } from './ProductEditorActions'
 
@@ -35,7 +35,19 @@ const STOCK_STATUSES: Array<{ value: StockStatus; label: string }> = [
 function toNullableNumber(value: string) {
   if (!value.trim()) return null
   const parsed = Number(value)
-  return Number.isNaN(parsed) ? null : parsed
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function withBenefitsForProductType(values: ProductFormValues, productType: ProductType) {
+  if (productType === values.product_type) return values
+  const includesBenefits = productType === 'machinery'
+  return {
+    ...values,
+    product_type: productType,
+    includes_technical_review: includesBenefits,
+    includes_commercial_technical_advice: includesBenefits,
+    includes_coordinated_delivery: includesBenefits,
+  }
 }
 
 export function ProductForm({
@@ -82,10 +94,10 @@ export function ProductForm({
         const root = getRootCategory(selected, categories) ?? selected
         if (selected?.parent === null) {
           setPrimaryCategoryId(selected.id)
-          return { ...prev, category: 0, product_type: inferProductTypeFromRootCategory(selected) }
+          return { ...withBenefitsForProductType(prev, inferProductTypeFromRootCategory(selected)), category: 0 }
         }
         setPrimaryCategoryId(root?.id ?? null)
-        return { ...prev, category: Number(nextValue), product_type: inferProductTypeFromRootCategory(root) }
+        return { ...withBenefitsForProductType(prev, inferProductTypeFromRootCategory(root)), category: Number(nextValue) }
       }
       return { ...prev, [field]: nextValue }
     })
@@ -107,6 +119,8 @@ export function ProductForm({
       price: normalizeChileanPriceInput(values.price),
     })
   }
+
+  const maximumYear = new Date().getFullYear() + 1
 
   return (
     <form id={formId} className="admin-product-form admin-product-editor-form" onSubmit={handleSubmit}>
@@ -263,6 +277,9 @@ export function ProductForm({
           Año
           <input
             type="number"
+            min={1900}
+            max={maximumYear}
+            step={1}
             value={values.year ?? ''}
             onChange={(e) => setField('year', toNullableNumber(e.target.value))}
           />
@@ -272,6 +289,8 @@ export function ProductForm({
           Horómetro
           <input
             type="number"
+            min={0}
+            step={1}
             value={values.hours_meter ?? ''}
             onChange={(e) => setField('hours_meter', toNullableNumber(e.target.value))}
           />
@@ -282,10 +301,51 @@ export function ProductForm({
           <input value={values.sku} onChange={(e) => setField('sku', e.target.value)} />
         </label>
 
+        <label>
+          Capacidad máxima de carga (kg)
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0.01}
+            step="0.01"
+            value={values.maximum_load_capacity_kg ?? ''}
+            onChange={(e) => setField('maximum_load_capacity_kg', toNullableNumber(e.target.value))}
+          />
+        </label>
+
+        <label>
+          Fuente de energía
+          <select
+            value={values.power_source ?? ''}
+            onChange={(e) => setField('power_source', (e.target.value || null) as ProductPowerSource | null)}
+          >
+            <option value="">Sin especificar</option>
+            <option value="diesel">Diésel</option>
+            <option value="electric_24v">Eléctrica 24 V</option>
+            <option value="electric_lithium">Eléctrica de litio</option>
+          </select>
+        </label>
+
         <label className="admin-form-panel__full">
           Descripción
           <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
         </label>
+
+        <fieldset className="admin-product-benefits admin-form-panel__full">
+          <legend>Incluye</legend>
+          <label className="admin-checkbox">
+            <input type="checkbox" checked={values.includes_technical_review} onChange={(e) => setField('includes_technical_review', e.target.checked)} />
+            Incluye revisión técnica
+          </label>
+          <label className="admin-checkbox">
+            <input type="checkbox" checked={values.includes_commercial_technical_advice} onChange={(e) => setField('includes_commercial_technical_advice', e.target.checked)} />
+            Incluye asesoría técnico-comercial
+          </label>
+          <label className="admin-checkbox">
+            <input type="checkbox" checked={values.includes_coordinated_delivery} onChange={(e) => setField('includes_coordinated_delivery', e.target.checked)} />
+            Incluye entrega coordinada
+          </label>
+        </fieldset>
 
         </section>
       </div>
