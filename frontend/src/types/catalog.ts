@@ -84,6 +84,7 @@ export interface ProductSpecWritePayload {
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
 export type ProductType = 'machinery' | 'spare_part' | 'service'
+export type ProductPowerSource = 'diesel' | 'electric_24v' | 'electric_lithium'
 export type ProductPriceCurrency = 'CLP' | 'USD'
 export type ProductPriceTaxMode = 'plus_vat' | 'vat_included'
 
@@ -114,6 +115,11 @@ export interface ProductDetail extends ProductListItem {
   sku: string
   year: number | null
   hours_meter: number | null
+  maximum_load_capacity_kg: number | null
+  power_source: ProductPowerSource | null
+  includes_technical_review: boolean
+  includes_commercial_technical_advice: boolean
+  includes_coordinated_delivery: boolean
   is_published?: boolean
   images: ProductImage[]
   specs: ProductSpec[]
@@ -291,6 +297,11 @@ export interface ProductFormValues {
   sku: string
   year: number | null
   hours_meter: number | null
+  maximum_load_capacity_kg: number | null
+  power_source: ProductPowerSource | null
+  includes_technical_review: boolean
+  includes_commercial_technical_advice: boolean
+  includes_coordinated_delivery: boolean
   price: string | null
   price_currency: ProductPriceCurrency
   price_tax_mode: ProductPriceTaxMode

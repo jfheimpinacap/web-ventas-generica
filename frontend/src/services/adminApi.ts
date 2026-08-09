@@ -12,6 +12,7 @@ import type {
   ProductImage,
   ProductImageWritePayload,
   ProductListItem,
+  ProductPowerSource,
   ProductSpec,
   ProductSpecWritePayload,
   ProductType,
@@ -73,6 +74,19 @@ function toBoolean(value: unknown, fallback = false) {
 function toNullableString(value: unknown) {
   if (value === null || value === undefined || value === '') return null
   return toStringValue(value)
+}
+
+function toNullableFiniteNumber(value: unknown) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' && value.trim() === '') return null
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function toProductPowerSource(value: unknown): ProductPowerSource | null {
+  return value === 'diesel' || value === 'electric_24v' || value === 'electric_lithium'
+    ? value
+    : null
 }
 
 function normalizeListResponse<T, R>(
@@ -270,6 +284,19 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
       pick(record, 'hours_meter', 'hoursMeter') === null
         ? null
         : toNumber(pick(record, 'hours_meter', 'hoursMeter')) || null,
+    maximum_load_capacity_kg: toNullableFiniteNumber(
+      pick(record, 'maximum_load_capacity_kg', 'maximumLoadCapacityKg'),
+    ),
+    power_source: toProductPowerSource(pick(record, 'power_source', 'powerSource')),
+    includes_technical_review: toBoolean(
+      pick(record, 'includes_technical_review', 'includesTechnicalReview'),
+    ),
+    includes_commercial_technical_advice: toBoolean(
+      pick(record, 'includes_commercial_technical_advice', 'includesCommercialTechnicalAdvice'),
+    ),
+    includes_coordinated_delivery: toBoolean(
+      pick(record, 'includes_coordinated_delivery', 'includesCoordinatedDelivery'),
+    ),
     images: Array.isArray(rawImages)
       ? rawImages
           .map((image) => normalizeProductImage(image))
