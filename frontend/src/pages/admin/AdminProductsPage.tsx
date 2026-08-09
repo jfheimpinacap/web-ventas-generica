@@ -342,7 +342,6 @@ export function AdminProductsPage() {
   return (
     <AdminLayout>
       <main className="admin-products-list">
-        <nav className="admin-products-list__breadcrumb" aria-label="Breadcrumb"><span>Panel vendedor</span><span aria-hidden="true">/</span><span aria-current="page">Productos</span></nav>
         <div className="admin-products-list__header">
           <h1>Productos</h1>
           <Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link>
@@ -356,10 +355,9 @@ export function AdminProductsPage() {
           {filtersOpen ? "Ocultar filtros" : "Mostrar filtros"}
         </button>
         <div className="admin-products-workspace">
-          <aside id="admin-product-explorer" className={`admin-product-explorer${filtersOpen ? " admin-product-explorer--open" : ""}`} aria-label="Explorar productos">
-            <h2>Explorar productos</h2>
+          <aside id="admin-product-explorer" className={`admin-product-explorer${filtersOpen ? " admin-product-explorer--open" : ""}`} aria-label="Filtros de productos">
             <form className="admin-product-explorer__controls" onSubmit={(event) => { event.preventDefault(); applySearch(); }}>
-              <label className="admin-products-filter-field"><span>Buscar producto</span><input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Nombre, marca, categoría o SKU" /></label>
+              <label className="admin-products-filter-field"><span>Buscar productos</span><input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Nombre, marca, categoría o SKU" /></label>
               <label className="admin-products-filter-field"><span>Publicación</span><select value={publishedFilter} onChange={(event) => changePublication(event.target.value)}><option value="published">Solo publicados</option><option value="unpublished">Solo no publicados</option><option value="">Todos</option></select></label>
               <div className="admin-products-filter-actions"><button type="submit" className="btn btn--accent"><AdminIcon name="search" />Buscar</button><button type="button" className="btn btn--ghost" onClick={clearFilters}><AdminIcon name="reset" />Limpiar filtros</button><button type="button" className="btn btn--ghost" onClick={showAll}>Ver todo</button></div>
             </form>
