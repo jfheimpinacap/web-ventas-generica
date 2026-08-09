@@ -111,6 +111,19 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
     }
 
     [Fact]
+    public async Task SellerCanListSoldProductsWithAdministrativeFilter()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+        var response = await client.GetAsync($"/api/products/?stock_status={StockStatuses.Sold}&include_unpublished=true");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(response.IsSuccessStatusCode, $"Status: {response.StatusCode}, Body: {body}");
+        using var document = JsonDocument.Parse(body);
+        Assert.Contains(document.RootElement.EnumerateArray(), product => product.GetProperty("slug").GetString() == "producto-vendido-admin");
+    }
+
+    [Fact]
     public async Task QuoteRequestFiltersWorkForSeller()
     {
         await _factory.SeedCommercialDataAsync();
@@ -265,11 +278,22 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                     StockStatus = StockStatuses.OnRequest,
                     IsPublished = false
                 };
+                var soldProduct = new Product
+                {
+                    Id = 3,
+                    Name = "Producto Vendido Admin",
+                    Slug = "producto-vendido-admin",
+                    Category = category,
+                    ProductType = ProductTypes.Machinery,
+                    Condition = ProductConditions.Used,
+                    StockStatus = StockStatuses.Sold,
+                    IsPublished = true
+                };
 
                 dbContext.Categories.AddRange(category, inactiveCategory);
                 dbContext.Brands.Add(brand);
                 dbContext.Suppliers.Add(supplier);
-                dbContext.Products.AddRange(product, draftProduct);
+                dbContext.Products.AddRange(product, draftProduct, soldProduct);
                 dbContext.ProductImages.Add(new ProductImage
                 {
                     Id = 1,

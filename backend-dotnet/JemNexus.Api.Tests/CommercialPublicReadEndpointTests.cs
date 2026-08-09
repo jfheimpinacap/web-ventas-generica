@@ -94,6 +94,28 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task SoldProductIsExcludedFromPublicListsSearchAndDetail()
+    {
+        await SeedPublicCatalogDataAsync();
+        using var client = _factory.CreateClient();
+
+        var products = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/"));
+        var search = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/?search=vendida"));
+        var soldFilter = await ReadJsonAsync<JsonElement>(await client.GetAsync($"/api/public/products/?stock_status={StockStatuses.Sold}"));
+        var bySlug = await client.GetAsync("/api/public/products/excavadora-vendida/");
+        var byId = await client.GetAsync("/api/public/products/6/");
+
+        Assert.Single(products.EnumerateArray());
+        Assert.Equal("excavadora", products[0].GetProperty("slug").GetString());
+        Assert.Empty(search.EnumerateArray());
+        Assert.Empty(soldFilter.EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, bySlug.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, byId.StatusCode);
+        Assert.Empty(await bySlug.Content.ReadAsByteArrayAsync());
+        Assert.Empty(await byId.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task PublicPromotionHomeSpecsAndImagesOnlyExposePublishedActiveData()
     {
         await SeedPublicCatalogDataAsync();
@@ -105,14 +127,20 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var hiddenSpecs = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/product-specs/?product=3"));
         var images = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/product-images/?product=1"));
         var hiddenImages = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/product-images/?product=3"));
+        var soldSpecs = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/product-specs/?product=6"));
+        var soldImages = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/product-images/?product=6"));
 
-        Assert.Single(promotions.EnumerateArray());
+        Assert.Equal(2, promotions.GetArrayLength());
         Assert.Equal("Promo vigente", promotions[0].GetProperty("title").GetString());
         Assert.Single(homeItems.EnumerateArray());
         Assert.Single(specs.EnumerateArray());
         Assert.Empty(hiddenSpecs.EnumerateArray());
         Assert.Single(images.EnumerateArray());
         Assert.Empty(hiddenImages.EnumerateArray());
+        Assert.Empty(soldSpecs.EnumerateArray());
+        Assert.Empty(soldImages.EnumerateArray());
+        Assert.DoesNotContain(promotions.EnumerateArray(), promotion => promotion.GetProperty("title").GetString() == "Promo vendida");
+        Assert.DoesNotContain(homeItems.EnumerateArray(), item => item.GetProperty("product").GetProperty("slug").GetString() == "excavadora-vendida");
     }
 
     [Theory]
@@ -151,19 +179,27 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var draftProduct = new Product { Id = 3, Name = "Borrador", Slug = "borrador", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = false };
         var inactiveCategoryProduct = new Product { Id = 4, Name = "Producto Inactivo", Slug = "producto-inactivo", Category = inactiveCategory, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
         var inactiveBrandProduct = new Product { Id = 5, Name = "Marca Oculta", Slug = "marca-oculta", CategoryId = 1, Brand = inactiveBrand, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
+        var soldProduct = new Product { Id = 6, Name = "Excavadora Vendida", Slug = "excavadora-vendida", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Sold, IsPublished = true };
 
         dbContext.Categories.Add(inactiveCategory);
         dbContext.Brands.Add(inactiveBrand);
-        dbContext.Products.AddRange(draftProduct, inactiveCategoryProduct, inactiveBrandProduct);
+        dbContext.Products.AddRange(draftProduct, inactiveCategoryProduct, inactiveBrandProduct, soldProduct);
         dbContext.ProductImages.AddRange(
             new ProductImage { Id = 1, ProductId = 1, Image = "/media/excavadora.jpg", AltText = "Excavadora", IsMain = true },
-            new ProductImage { Id = 2, Product = draftProduct, Image = "/media/borrador.jpg", AltText = "Borrador", IsMain = true });
-        dbContext.ProductSpecs.Add(new ProductSpec { Id = 2, Product = draftProduct, Key = "Oculta", Value = "No", Unit = string.Empty });
+            new ProductImage { Id = 2, Product = draftProduct, Image = "/media/borrador.jpg", AltText = "Borrador", IsMain = true },
+            new ProductImage { Id = 3, Product = soldProduct, Image = "/media/vendida.jpg", AltText = "Vendida", IsMain = true });
+        dbContext.ProductSpecs.AddRange(
+            new ProductSpec { Id = 2, Product = draftProduct, Key = "Oculta", Value = "No", Unit = string.Empty },
+            new ProductSpec { Id = 3, Product = soldProduct, Key = "Estado", Value = "Vendida", Unit = string.Empty });
         dbContext.Promotions.AddRange(
             new Promotion { Id = 1, Title = "Promo vigente", ProductId = 1, IsActive = true, StartsAt = DateTimeOffset.UtcNow.AddDays(-1), EndsAt = DateTimeOffset.UtcNow.AddDays(1), Order = 1 },
             new Promotion { Id = 2, Title = "Promo inactiva", ProductId = 1, IsActive = false, Order = 2 },
-            new Promotion { Id = 3, Title = "Promo borrador", Product = draftProduct, IsActive = true, Order = 3 });
-        dbContext.HomeSectionItems.Add(new HomeSectionItem { Id = 2, Section = HomeSections.MachineryPromotions, Product = draftProduct, Position = 2, IsActive = true });
+            new Promotion { Id = 3, Title = "Promo borrador", Product = draftProduct, IsActive = true, Order = 3 },
+            new Promotion { Id = 4, Title = "Promo vendida", Product = soldProduct, IsActive = true, Order = 4 },
+            new Promotion { Id = 5, Title = "Promo general", Product = null, IsActive = true, Order = 5 });
+        dbContext.HomeSectionItems.AddRange(
+            new HomeSectionItem { Id = 2, Section = HomeSections.MachineryPromotions, Product = draftProduct, Position = 2, IsActive = true },
+            new HomeSectionItem { Id = 3, Section = HomeSections.SparePartsOffers, Product = soldProduct, Position = 3, IsActive = true });
         await dbContext.SaveChangesAsync();
     }
 

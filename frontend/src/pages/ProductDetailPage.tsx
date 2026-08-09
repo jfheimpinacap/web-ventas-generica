@@ -140,7 +140,7 @@ export function ProductDetailPage() {
       : `Cotiza ${product.name} para operaciones industriales. Revisa precio, disponibilidad y especificaciones técnicas.`
     : 'Cotiza maquinaria, repuestos y servicios industriales.'
   const canonicalUrl = buildPublicUrl(`/producto/${slug}`)
-  const robots = product && product.is_published === false ? 'noindex,nofollow' : 'index,follow'
+  const robots = !loading && (!product || error) ? 'noindex,nofollow' : 'index,follow'
   const ogImage = selectedImage?.url
 
   const breadcrumbJsonLd = useMemo(
