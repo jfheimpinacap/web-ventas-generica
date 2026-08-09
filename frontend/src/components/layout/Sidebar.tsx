@@ -34,7 +34,6 @@ const STOCK_OPTIONS = [
   { value: 'available', label: 'Disponible' },
   { value: 'on_request', label: 'A pedido' },
   { value: 'reserved', label: 'Reservado' },
-  { value: 'sold', label: 'Vendido' },
 ]
 
 export function Sidebar() {

@@ -63,6 +63,28 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task PublicQuoteRequestRejectsSoldProductWithoutSavingOrNotifying()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/public/quote-requests/", new
+        {
+            product = 2,
+            customer_name = "Cliente Vendido",
+            customer_phone = "+56900000000",
+            message = "Quiero cotizar este producto"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("product does not exist", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, _notificationService.AttemptCount);
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await dbContext.QuoteRequests.AnyAsync(quote => quote.CustomerName == "Cliente Vendido"));
+    }
+
+    [Fact]
     public async Task PublicQuoteRequestIsStillSavedWhenSellerNotificationFails()
     {
         await _factory.SeedCommercialDataAsync();
@@ -195,9 +217,20 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
                 StockStatus = StockStatuses.Available,
                 IsPublished = true
             };
+            var soldProduct = new Product
+            {
+                Id = 2,
+                Name = "Excavadora Vendida",
+                Slug = "excavadora-vendida",
+                Category = category,
+                ProductType = ProductTypes.Machinery,
+                Condition = ProductConditions.Used,
+                StockStatus = StockStatuses.Sold,
+                IsPublished = true
+            };
 
             dbContext.Categories.Add(category);
-            dbContext.Products.Add(product);
+            dbContext.Products.AddRange(product, soldProduct);
             dbContext.QuoteRequests.Add(new QuoteRequest { Id = 1, Product = product, CustomerName = "Cliente", CustomerPhone = "+569", Message = "Cotizar", Status = QuoteStatuses.New });
             await dbContext.SaveChangesAsync();
         }

@@ -107,7 +107,7 @@ export function QuotePage() {
       city: form.city.trim(),
       preferred_contact_method: form.preferred_contact_method,
       message: form.message.trim(),
-      ...(productFromQuery ? { product: productFromQuery } : {}),
+      ...(selectedProduct ? { product: selectedProduct.id } : {}),
     }
 
     try {

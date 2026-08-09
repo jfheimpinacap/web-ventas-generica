@@ -29,7 +29,6 @@ public static class CommercialPublicReadEndpoints
     {
         StockStatuses.Available,
         StockStatuses.OnRequest,
-        StockStatuses.Sold,
         StockStatuses.Reserved
     };
 
@@ -64,8 +63,8 @@ public static class CommercialPublicReadEndpoints
         Product? product = null;
         if (productId.HasValue)
         {
-            product = await dbContext.Products
-                .FirstOrDefaultAsync(candidate => candidate.Id == productId.Value && candidate.IsPublished, cancellationToken);
+            product = await ApplyPublicProductFilters(dbContext.Products)
+                .FirstOrDefaultAsync(candidate => candidate.Id == productId.Value, cancellationToken);
             if (product is null) return Results.BadRequest(new { detail = "product does not exist." });
         }
 
@@ -204,7 +203,8 @@ public static class CommercialPublicReadEndpoints
             .Where(promotion => promotion.Product == null
                 || (promotion.Product.IsPublished
                     && promotion.Product.Category.IsActive
-                    && (promotion.Product.Brand == null || promotion.Product.Brand.IsActive)));
+                    && (promotion.Product.Brand == null || promotion.Product.Brand.IsActive)
+                    && promotion.Product.StockStatus != StockStatuses.Sold));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -229,7 +229,8 @@ public static class CommercialPublicReadEndpoints
             .Where(item => item.IsActive)
             .Where(item => item.Product.IsPublished)
             .Where(item => item.Product.Category.IsActive)
-            .Where(item => item.Product.Brand == null || item.Product.Brand.IsActive);
+            .Where(item => item.Product.Brand == null || item.Product.Brand.IsActive)
+            .Where(item => item.Product.StockStatus != StockStatuses.Sold);
 
         if (!string.IsNullOrWhiteSpace(section))
         {
@@ -252,7 +253,8 @@ public static class CommercialPublicReadEndpoints
             .Include(image => image.Product).ThenInclude(product => product.Brand)
             .Where(image => image.Product.IsPublished)
             .Where(image => image.Product.Category.IsActive)
-            .Where(image => image.Product.Brand == null || image.Product.Brand.IsActive);
+            .Where(image => image.Product.Brand == null || image.Product.Brand.IsActive)
+            .Where(image => image.Product.StockStatus != StockStatuses.Sold);
 
         if (product.HasValue)
         {
@@ -276,7 +278,8 @@ public static class CommercialPublicReadEndpoints
             .Include(spec => spec.Product).ThenInclude(product => product.Brand)
             .Where(spec => spec.Product.IsPublished)
             .Where(spec => spec.Product.Category.IsActive)
-            .Where(spec => spec.Product.Brand == null || spec.Product.Brand.IsActive);
+            .Where(spec => spec.Product.Brand == null || spec.Product.Brand.IsActive)
+            .Where(spec => spec.Product.StockStatus != StockStatuses.Sold);
 
         if (product.HasValue)
         {
@@ -375,7 +378,8 @@ public static class CommercialPublicReadEndpoints
     private static IQueryable<Product> ApplyPublicProductFilters(IQueryable<Product> query) => query
         .Where(product => product.IsPublished)
         .Where(product => product.Category.IsActive)
-        .Where(product => product.Brand == null || product.Brand.IsActive);
+        .Where(product => product.Brand == null || product.Brand.IsActive)
+        .Where(product => product.StockStatus != StockStatuses.Sold);
 
     private static IQueryable<Product> PublicProductReadQuery(IQueryable<Product> products) => products
         .AsNoTracking()

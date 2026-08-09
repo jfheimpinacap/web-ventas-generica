@@ -35,7 +35,6 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
     available: 'Stock disponible',
     on_request: 'Stock a pedido',
     reserved: 'Stock reservado',
-    sold: 'Stock vendido',
   },
 }
 
@@ -153,7 +152,8 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     ;(['product_type', 'condition', 'stock_status'] as const).forEach((key) => {
       const value = query[key]
       if (value) {
-        trail.push(FILTER_LABELS[key][value] ?? value)
+        const label = FILTER_LABELS[key][value]
+        if (label) trail.push(label)
       }
     })
 
