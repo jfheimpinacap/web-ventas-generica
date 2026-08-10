@@ -41,6 +41,14 @@ export function trackProductView(params?: AnalyticsParams) {
   trackEvent('product_view', params)
 }
 
+export function trackTechnicalSheetView(params?: AnalyticsParams) {
+  trackEvent('technical_sheet_view', params)
+}
+
+export function trackTechnicalSheetDownload(params?: AnalyticsParams) {
+  trackEvent('technical_sheet_download', params)
+}
+
 export function trackProductDetailClick(params?: AnalyticsParams) {
   trackEvent('product_detail_click', params)
 }

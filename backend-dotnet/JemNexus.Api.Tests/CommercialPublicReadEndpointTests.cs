@@ -1,9 +1,12 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
+using JemNexus.Api.Services.TechnicalSheets;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -11,7 +14,17 @@ namespace JemNexus.Api.Tests;
 
 public sealed class CommercialPublicReadEndpointTests : IDisposable
 {
-    private readonly CommercialWriteEndpointTests.CommercialWriteApiFactory _factory = new();
+    private readonly MemoryTechnicalSheetStorage _storage = new();
+    private readonly CommercialWriteEndpointTests.CommercialWriteApiFactory _factory;
+
+    public CommercialPublicReadEndpointTests()
+    {
+        _factory = new(services =>
+        {
+            services.RemoveAll<ITechnicalSheetStorage>();
+            services.AddSingleton<ITechnicalSheetStorage>(_storage);
+        });
+    }
 
     public void Dispose() => _factory.Dispose();
 
@@ -72,6 +85,219 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, inactiveBrand.StatusCode);
         Assert.DoesNotContain("created_at", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("supplier", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PublicTechnicalSheetMetadataAndFileAreSafeAndProductBound()
+    {
+        await SeedPublicCatalogDataAsync();
+        var bytes = new byte[] { 0x25, 0x50, 0x44, 0x46, 1, 2, 3, 4 };
+        _storage.Files["sheet.pdf"] = bytes;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await db.Products.SingleAsync(candidate => candidate.Id == 1);
+            product.TechnicalSheet = new TechnicalSheet
+            {
+                Id = 1, Name = "Manual", OriginalFileName = "manual.pdf", StorageKey = "sheet.pdf",
+                ContentType = "application/pdf", SizeBytes = bytes.Length,
+                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1), UpdatedAt = DateTimeOffset.UtcNow
+            };
+            await db.SaveChangesAsync();
+        }
+        using var client = _factory.CreateClient();
+
+        var detailResponse = await client.GetAsync("/api/public/products/excavadora/");
+        var detail = await ReadJsonAsync<JsonElement>(detailResponse);
+        var sheet = detail.GetProperty("technical_sheet");
+        Assert.Equal("/public/products/excavadora/technical-sheet/file", sheet.GetProperty("file_url").GetString());
+        Assert.Equal("manual.pdf", sheet.GetProperty("original_file_name").GetString());
+        Assert.DoesNotContain("storage", detail.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        var inline = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
+        Assert.Equal("application/pdf", inline.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(bytes, await inline.Content.ReadAsByteArrayAsync());
+        Assert.False(inline.Content.Headers.ContentDisposition?.DispositionType == "attachment");
+        Assert.Equal("nosniff", inline.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("noindex, nofollow, noarchive", inline.Headers.GetValues("X-Robots-Tag").Single());
+        Assert.Equal("no-store", inline.Headers.CacheControl?.ToString());
+
+        var download = await client.GetAsync("/api/public/products/1/technical-sheet/file?download=true");
+        Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("manual.pdf", download.Content.Headers.ContentDisposition?.FileNameStar);
+    }
+
+    [Fact]
+    public async Task ProductWithoutTechnicalSheetReturnsNullMetadataAndNotFoundFile()
+    {
+        await SeedPublicCatalogDataAsync();
+        using var client = _factory.CreateClient();
+        var detail = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/excavadora/"));
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("technical_sheet").ValueKind);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/public/products/excavadora/technical-sheet/file")).StatusCode);
+    }
+
+    [Fact]
+    public async Task PublicTechnicalSheetMetadataContainsOnlyTheSafeContract()
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync("sheet.pdf", "manual.pdf", "application/pdf", [1, 2, 3, 4]);
+        using var client = _factory.CreateClient();
+
+        var detail = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/excavadora/"));
+        var sheet = detail.GetProperty("technical_sheet");
+        var propertyNames = sheet.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray();
+        Assert.Equal(new[] { "content_type", "created_at", "file_url", "id", "name", "original_file_name", "size_bytes", "updated_at" }, propertyNames);
+        Assert.Equal("Manual público", sheet.GetProperty("name").GetString());
+        Assert.Equal("application/pdf", sheet.GetProperty("content_type").GetString());
+        Assert.Equal(4, sheet.GetProperty("size_bytes").GetInt64());
+        Assert.Equal(JsonValueKind.String, sheet.GetProperty("created_at").ValueKind);
+        Assert.Equal(JsonValueKind.String, sheet.GetProperty("updated_at").ValueKind);
+        AssertSafePublicPayload(detail.ToString());
+    }
+
+    [Fact]
+    public async Task PublicListsHomeAndPromotionsDoNotExposeTechnicalSheet()
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync("sheet.pdf", "manual.pdf", "application/pdf", [1]);
+        using var client = _factory.CreateClient();
+
+        foreach (var path in new[] { "/api/public/products/", "/api/public/home-section-items/", "/api/public/promotions/" })
+        {
+            using var response = await client.GetAsync(path);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.DoesNotContain("technical_sheet", body, StringComparison.OrdinalIgnoreCase);
+            AssertSafePublicPayload(body);
+        }
+    }
+
+    [Theory]
+    [InlineData("sheet.pdf", "manual.pdf", "application/pdf")]
+    [InlineData("sheet.jpg", "manual.jpg", "image/jpeg")]
+    [InlineData("sheet.png", "manual.png", "image/png")]
+    [InlineData("sheet.webp", "manual.webp", "image/webp")]
+    public async Task PublicTechnicalSheetServesEveryAllowedFormatWithExactBytes(string storageKey, string originalFileName, string contentType)
+    {
+        await SeedPublicCatalogDataAsync();
+        var bytes = new byte[] { 0, 1, 2, 3, 4, 255 };
+        await AttachTechnicalSheetAsync(storageKey, originalFileName, contentType, bytes);
+        using var client = _factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(contentType, response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task PublicTechnicalSheetSupportsSeekableRangeRequests()
+    {
+        await SeedPublicCatalogDataAsync();
+        var bytes = new byte[] { 10, 20, 30, 40, 50, 60 };
+        await AttachTechnicalSheetAsync("sheet.pdf", "manual.pdf", "application/pdf", bytes);
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/public/products/excavadora/technical-sheet/file");
+        request.Headers.Range = new RangeHeaderValue(1, 3);
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
+        Assert.Equal("bytes 1-3/6", response.Content.Headers.ContentRange?.ToString());
+        Assert.Equal(new byte[] { 20, 30, 40 }, await response.Content.ReadAsByteArrayAsync());
+        Assert.True(_storage.LastOpenedStreamWasSeekable);
+    }
+
+    [Fact]
+    public async Task MissingTechnicalSheetFileReturnsSafeNotFound()
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync("missing.pdf", "manual.pdf", "application/pdf", [1]);
+        using var client = _factory.CreateClient();
+
+        await AssertSafeNotFoundAsync(client, "/api/public/products/excavadora/technical-sheet/file");
+    }
+
+    [Theory]
+    [InlineData("../secret.pdf", "manual.pdf", "application/pdf")]
+    [InlineData("folder/secret.pdf", "manual.pdf", "application/pdf")]
+    [InlineData("folder\\secret.pdf", "manual.pdf", "application/pdf")]
+    [InlineData("invalid.pdf", "manual.pdf", "application/pdf")]
+    public async Task InvalidOrTraversalStorageKeyReturnsSafeNotFound(string storageKey, string originalFileName, string contentType)
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync(storageKey, originalFileName, contentType, [1]);
+        _storage.InvalidKeys.Add(storageKey);
+        using var client = _factory.CreateClient();
+
+        await AssertSafeNotFoundAsync(client, "/api/public/products/excavadora/technical-sheet/file");
+    }
+
+    [Theory]
+    [InlineData("manual.svg", "image/svg+xml")]
+    [InlineData("manual.gif", "image/gif")]
+    [InlineData("manual.pdf", "application/octet-stream")]
+    [InlineData("manual.pdf", "image/png")]
+    [InlineData("manual.png", "application/pdf")]
+    public async Task UnsupportedOrMismatchedTechnicalSheetFormatReturnsSafeNotFound(string originalFileName, string contentType)
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync("sheet.bin", originalFileName, contentType, [1]);
+        using var client = _factory.CreateClient();
+
+        await AssertSafeNotFoundAsync(client, "/api/public/products/excavadora/technical-sheet/file");
+    }
+
+    [Theory]
+    [InlineData("no-existe")]
+    [InlineData("borrador")]
+    [InlineData("excavadora-vendida")]
+    [InlineData("producto-inactivo")]
+    [InlineData("marca-oculta")]
+    public async Task NonPublicProductsReturnIndistinguishableSafeNotFoundForTechnicalSheet(string slug)
+    {
+        await SeedPublicCatalogDataAsync();
+        await AttachTechnicalSheetAsync("sheet.pdf", "manual.pdf", "application/pdf", [1], 3, 4, 5, 6);
+        using var client = _factory.CreateClient();
+
+        await AssertSafeNotFoundAsync(client, $"/api/public/products/{slug}/technical-sheet/file");
+    }
+
+    [Fact]
+    public async Task SharedTechnicalSheetIsServedThroughEachPublicProduct()
+    {
+        await SeedPublicCatalogDataAsync();
+        var bytes = new byte[] { 7, 8, 9 };
+        _storage.Files["shared.pdf"] = bytes;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var first = await db.Products.SingleAsync(product => product.Id == 1);
+            var second = new Product { Id = 7, Name = "Segunda pública", Slug = "segunda-publica", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
+            var sheet = CreateTechnicalSheet("shared.pdf", "shared.pdf", "application/pdf", bytes.Length);
+            first.TechnicalSheet = sheet;
+            second.TechnicalSheet = sheet;
+            db.Products.Add(second);
+            await db.SaveChangesAsync();
+        }
+        using var client = _factory.CreateClient();
+
+        using var firstResponse = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
+        using var secondResponse = await client.GetAsync("/api/public/products/segunda-publica/technical-sheet/file");
+        Assert.Equal(bytes, await firstResponse.Content.ReadAsByteArrayAsync());
+        Assert.Equal(bytes, await secondResponse.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("/api/technical-sheets/")]
+    [InlineData("/api/technical-sheets/1/file")]
+    public async Task AdministrativeTechnicalSheetEndpointsStillRequireAuthentication(string path)
+    {
+        using var client = _factory.CreateClient();
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -203,6 +429,59 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         await dbContext.SaveChangesAsync();
     }
 
+    private async Task AttachTechnicalSheetAsync(
+        string storageKey,
+        string originalFileName,
+        string contentType,
+        byte[] bytes,
+        params int[] productIds)
+    {
+        if (!storageKey.Contains("missing", StringComparison.Ordinal)) _storage.Files[storageKey] = bytes;
+        if (productIds.Length == 0) productIds = [1];
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        var products = await db.Products.Where(product => productIds.Contains(product.Id)).ToListAsync();
+        var sheet = CreateTechnicalSheet(storageKey, originalFileName, contentType, bytes.Length);
+        foreach (var product in products) product.TechnicalSheet = sheet;
+        await db.SaveChangesAsync();
+    }
+
+    private static TechnicalSheet CreateTechnicalSheet(string storageKey, string originalFileName, string contentType, long sizeBytes) => new()
+    {
+        Name = "Manual público",
+        OriginalFileName = originalFileName,
+        StorageKey = storageKey,
+        ContentType = contentType,
+        SizeBytes = sizeBytes,
+        CreatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+        UpdatedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z")
+    };
+
+    private static async Task AssertSafeNotFoundAsync(HttpClient client, string path)
+    {
+        using var response = await client.GetAsync(path);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertSafePublicPayload(body);
+        Assert.DoesNotContain("exception", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("invalid", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("technical sheet", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertSafePublicPayload(string body)
+    {
+        Assert.DoesNotContain("StorageKey", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("storage_key", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("uploads", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/api/technical-sheets", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ContentRootPath", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/tmp/", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/var/", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C:\\", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("credential", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("token", body, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
     {
         var body = await response.Content.ReadAsStringAsync();
@@ -210,5 +489,21 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var payload = await response.Content.ReadFromJsonAsync<T>();
         Assert.True(payload is not null, $"Expected JSON response for {typeof(T).Name}. Body: {body}");
         return payload!;
+    }
+
+    private sealed class MemoryTechnicalSheetStorage : ITechnicalSheetStorage
+    {
+        public Dictionary<string, byte[]> Files { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> InvalidKeys { get; } = new(StringComparer.Ordinal);
+        public bool LastOpenedStreamWasSeekable { get; private set; }
+        public Task<string> SaveAsync(Stream content, string extension, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task DeleteAsync(string storageKey, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream?> OpenReadAsync(string storageKey, CancellationToken cancellationToken)
+        {
+            if (InvalidKeys.Contains(storageKey)) throw new ArgumentException("Invalid storage key.", nameof(storageKey));
+            Stream? stream = Files.TryGetValue(storageKey, out var bytes) ? new MemoryStream(bytes, writable: false) : null;
+            LastOpenedStreamWasSeekable = stream?.CanSeek == true;
+            return Task.FromResult(stream);
+        }
     }
 }

@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
+import { ProductTechnicalSheetModal } from '../components/catalog/ProductTechnicalSheetModal'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
 import { Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
-import { getProductBySlug, getProducts } from '../services/catalogApi'
+import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
 import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductType, formatStockStatus } from '../utils/formatters'
-import { trackProductView, trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
+import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView, trackWhatsAppClick } from '../utils/analytics'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
 
@@ -28,9 +29,12 @@ export function ProductDetailPage() {
   const [selectedImageId, setSelectedImageId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [technicalSheetOpen, setTechnicalSheetOpen] = useState(false)
+  const technicalSheetButtonRef = useRef<HTMLButtonElement>(null)
   const { categories } = useCategories()
 
   useEffect(() => {
+    setTechnicalSheetOpen(false)
     if (!slug) {
       setError('Slug inválido de producto.')
       setLoading(false)
@@ -64,6 +68,11 @@ export function ProductDetailPage() {
 
     void run()
   }, [slug])
+
+  const technicalSheet = product?.technical_sheet
+  const hasTechnicalSheet = Boolean(technicalSheet?.file_url.trim() && ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(technicalSheet.content_type))
+  const inlineTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url) : ''
+  const downloadTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url, true) : ''
 
   const categoryPath = useMemo(() => {
     if (!product?.category) return [] as Category[]
@@ -306,6 +315,10 @@ export function ProductDetailPage() {
                 ) : null}
 
                 <div className="product-detail__contact-actions">
+                  {hasTechnicalSheet ? <button ref={technicalSheetButtonRef} type="button" className="btn btn--ghost" onClick={() => {
+                    setTechnicalSheetOpen(true)
+                    trackTechnicalSheetView({ location: 'product_detail', product_id: product.id, product_name: product.name, technical_sheet_id: technicalSheet!.id, content_type: technicalSheet!.content_type })
+                  }}>Ver ficha técnica</button> : null}
                   <Link
                     className="btn btn--accent"
                     to={`/cotizar?product=${product.id}`}
@@ -377,6 +390,12 @@ export function ProductDetailPage() {
             ) : null}
           </div>
         ) : null}
+        {product && hasTechnicalSheet ? <ProductTechnicalSheetModal
+          open={technicalSheetOpen} productName={product.name} sheet={technicalSheet!}
+          inlineUrl={inlineTechnicalSheetUrl} downloadUrl={downloadTechnicalSheetUrl}
+          onClose={() => setTechnicalSheetOpen(false)} returnFocusRef={technicalSheetButtonRef}
+          onDownload={() => trackTechnicalSheetDownload({ location: 'product_detail', product_id: product.id, product_name: product.name, technical_sheet_id: technicalSheet!.id, content_type: technicalSheet!.content_type })}
+        /> : null}
       </section>
     </Layout>
   )
