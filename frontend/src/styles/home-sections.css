@@ -390,16 +390,6 @@
   text-transform: uppercase;
 }
 
-.product-detail__lead {
-  margin: 0;
-  color: #475569;
-  line-height: 1.55;
-}
-
-.product-detail__badges {
-  gap: 0.45rem;
-}
-
 .badge {
   font-size: 0.84rem;
   font-family: "Ubuntu", system-ui, sans-serif;
@@ -441,15 +431,19 @@
 .product-detail__facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
+  gap: 0.5rem;
   margin: 0;
 }
 
 .product-detail__facts div {
+  display: grid;
+  grid-template-columns: minmax(min-content, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.2rem 0.55rem;
   min-width: 0;
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-card);
-  padding: 0.7rem;
+  padding: 0.5rem 0.6rem;
   background: #f8fafc;
 }
 
@@ -458,8 +452,8 @@
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  margin-bottom: 0.25rem;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .product-detail__facts dd {
