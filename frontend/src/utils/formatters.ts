@@ -1,4 +1,4 @@
-import type { Category, ProductCondition, ProductListItem, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus } from '../types/catalog'
+import type { Category, ProductCondition, ProductListItem, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus } from '../types/catalog'
 
 export function normalizeChileanPriceInput(value: string | null | undefined) {
   if (value === null || value === undefined) return null
@@ -79,6 +79,24 @@ const productTypeMap: Record<ProductType, string> = {
 
 export function formatProductType(type: ProductType) {
   return productTypeMap[type] ?? type
+}
+
+const productPowerSourceMap: Record<ProductPowerSource, string> = {
+  diesel: 'Diésel',
+  electric_24v: 'Eléctrica 24 V',
+  electric_lithium: 'Eléctrica de litio',
+}
+
+export function formatMaximumLoadCapacityKg(capacity: number | null | undefined) {
+  if (capacity === null || capacity === undefined || !Number.isFinite(capacity) || capacity <= 0) return null
+
+  const formattedCapacity = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(capacity)
+  return `${formattedCapacity} kg`
+}
+
+export function formatProductPowerSource(powerSource: ProductPowerSource | null | undefined) {
+  if (!powerSource) return null
+  return productPowerSourceMap[powerSource] ?? null
 }
 
 

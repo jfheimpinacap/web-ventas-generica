@@ -292,6 +292,7 @@
 
 .product-detail__gallery,
 .product-detail__commercial,
+.product-detail__included-services,
 .product-detail__description-card,
 .product-detail__spec-section {
   min-width: 0;
@@ -491,6 +492,7 @@
   align-items: center;
 }
 
+.product-detail__included-services,
 .product-detail__description-card,
 .product-detail__spec-section {
   border: 1px solid #e5e7eb;
@@ -499,10 +501,47 @@
   padding: clamp(1rem, 2.5vw, 1.35rem);
 }
 
+.product-detail__included-services h2,
 .product-detail__description-card h2,
 .product-detail__spec-section h2 {
   margin: 0 0 0.75rem;
   color: var(--color-primary-text);
+}
+
+.product-detail__included-services-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.product-detail__included-service {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  border: 1px solid var(--color-accent-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-soft);
+  color: var(--color-primary-text);
+  font-weight: 700;
+  padding: 0.8rem 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.product-detail__included-service-icon {
+  display: inline-grid;
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
 }
 
 .product-detail__description-card p,
@@ -564,6 +603,10 @@
 
   .product-detail__facts,
   .product-detail__spec-row {
+    grid-template-columns: 1fr;
+  }
+
+  .product-detail__included-services-list {
     grid-template-columns: 1fr;
   }
 
