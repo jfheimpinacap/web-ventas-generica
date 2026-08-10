@@ -97,12 +97,7 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
             var product = await db.Products.SingleAsync(candidate => candidate.Id == 1);
-            product.TechnicalSheet = new TechnicalSheet
-            {
-                Id = 1, Name = "Manual", OriginalFileName = "manual.pdf", StorageKey = "sheet.pdf",
-                ContentType = "application/pdf", SizeBytes = bytes.Length,
-                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1), UpdatedAt = DateTimeOffset.UtcNow
-            };
+            product.TechnicalSheet = CreateTechnicalSheet("sheet.pdf", "manual.pdf", "application/pdf", bytes.Length);
             await db.SaveChangesAsync();
         }
         using var client = _factory.CreateClient();
@@ -115,6 +110,7 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.DoesNotContain("storage", detail.ToString(), StringComparison.OrdinalIgnoreCase);
 
         var inline = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
+        Assert.Equal(HttpStatusCode.OK, inline.StatusCode);
         Assert.Equal("application/pdf", inline.Content.Headers.ContentType?.MediaType);
         Assert.Equal(bytes, await inline.Content.ReadAsByteArrayAsync());
         Assert.False(inline.Content.Headers.ContentDisposition?.DispositionType == "attachment");
@@ -122,7 +118,12 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.Equal("noindex, nofollow, noarchive", inline.Headers.GetValues("X-Robots-Tag").Single());
         Assert.Equal("no-store", inline.Headers.CacheControl?.ToString());
 
+        var explicitInline = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file?download=false");
+        Assert.Equal(HttpStatusCode.OK, explicitInline.StatusCode);
+        Assert.False(explicitInline.Content.Headers.ContentDisposition?.DispositionType == "attachment");
+
         var download = await client.GetAsync("/api/public/products/1/technical-sheet/file?download=true");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
         Assert.Equal("manual.pdf", download.Content.Headers.ContentDisposition?.FileNameStar);
     }
@@ -286,6 +287,10 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
 
         using var firstResponse = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
         using var secondResponse = await client.GetAsync("/api/public/products/segunda-publica/technical-sheet/file");
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.Equal("application/pdf", firstResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/pdf", secondResponse.Content.Headers.ContentType?.MediaType);
         Assert.Equal(bytes, await firstResponse.Content.ReadAsByteArrayAsync());
         Assert.Equal(bytes, await secondResponse.Content.ReadAsByteArrayAsync());
     }

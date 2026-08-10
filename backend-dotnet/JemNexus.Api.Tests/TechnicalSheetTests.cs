@@ -166,7 +166,7 @@ public sealed class TechnicalSheetTests : IDisposable
     {
         using var client = await CreateAuthorizedClientAsync();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        request.Content = method == "PATCH" ? JsonContent.Create(new { name = "Nueva" }) : method == "POST" ? PdfOnlyForm("valid.pdf", "%PDF"u8.ToArray()) : null;
+        request.Content = method == "PATCH" ? JsonContent.Create(new { name = "Nueva" }) : method == "POST" ? PdfOnlyForm("valid.pdf", "%PDF-valid"u8.ToArray()) : null;
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(request)).StatusCode);
     }
 
