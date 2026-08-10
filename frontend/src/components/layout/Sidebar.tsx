@@ -7,12 +7,6 @@ import { sidebarMenu } from '../../data/sidebarMenu'
 import { buildSidebarMenuFromCategories } from '../../utils/formatters'
 import { SidebarMenu } from './SidebarMenu'
 
-const PRODUCT_TYPE_OPTIONS = [
-  { value: 'machinery', label: 'Maquinaria' },
-  { value: 'spare_part', label: 'Repuestos' },
-  { value: 'service', label: 'Servicios' },
-]
-
 const CONDITION_OPTIONS = [
   { value: 'new', label: 'Nuevo' },
   { value: 'used', label: 'Usado' },
@@ -28,12 +22,14 @@ type MobileFilterSection = {
   label: string
   value: string
   options: FilterOption[]
+  disabled?: boolean
 }
 
 const STOCK_OPTIONS = [
   { value: 'available', label: 'Disponible' },
   { value: 'on_request', label: 'A pedido' },
   { value: 'reserved', label: 'Reservado' },
+  { value: 'sold', label: 'Vendido' },
 ]
 
 export function Sidebar() {
@@ -51,8 +47,44 @@ export function Sidebar() {
     return buildSidebarMenuFromCategories(categories)
   }, [categories, error])
 
+  const activeCategories = useMemo(
+    () => categories
+      .filter((category) => category.is_active !== false)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+    [categories],
+  )
+  const rootCategoryOptions = useMemo(
+    () => activeCategories.filter((category) => category.parent === null),
+    [activeCategories],
+  )
+  const explicitSelectedCategory = useMemo(() => {
+    const categoryId = Number(searchParams.get('category'))
+    return categoryId ? activeCategories.find((category) => category.id === categoryId) ?? null : null
+  }, [activeCategories, searchParams])
+  const selectedRootCategory = useMemo(() => {
+    if (!explicitSelectedCategory) return null
+    if (explicitSelectedCategory.parent === null) return explicitSelectedCategory
+    return rootCategoryOptions.find((category) => category.id === explicitSelectedCategory.parent) ?? null
+  }, [explicitSelectedCategory, rootCategoryOptions])
+  const legacyRootCategory = useMemo(() => {
+    if (searchParams.has('category')) return null
+    const productType = searchParams.get('product_type')
+    if (!productType) return null
+    return rootCategoryOptions.find((category) => category.product_type === productType) ?? null
+  }, [rootCategoryOptions, searchParams])
+  const effectiveRootCategory = selectedRootCategory ?? legacyRootCategory
+  const selectedSubcategory = explicitSelectedCategory?.parent === effectiveRootCategory?.id ? explicitSelectedCategory : null
+  const subcategoryOptions = useMemo(
+    () => effectiveRootCategory
+      ? activeCategories.filter((category) => category.parent === effectiveRootCategory.id)
+      : [],
+    [activeCategories, effectiveRootCategory],
+  )
+  const activeBrands = useMemo(() => brands.filter((brand) => brand.is_active !== false), [brands])
+
   const updateFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams)
+    if (key === 'category') next.delete('product_type')
     if (!value) {
       next.delete(key)
     } else {
@@ -60,6 +92,10 @@ export function Sidebar() {
     }
     setSearchParams(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const updateSubcategory = (value: string) => {
+    updateFilter('category', value || (effectiveRootCategory ? String(effectiveRootCategory.id) : ''))
   }
 
   const clearFilters = () => {
@@ -72,20 +108,21 @@ export function Sidebar() {
     {
       key: 'category',
       label: 'Categoría',
-      value: searchParams.get('category') ?? '',
-      options: [{ value: '', label: 'Todas' }, ...categories.map((category) => ({ value: String(category.id), label: category.name }))],
+      value: effectiveRootCategory ? String(effectiveRootCategory.id) : '',
+      options: [{ value: '', label: 'Todas las categorías' }, ...rootCategoryOptions.map((category) => ({ value: String(category.id), label: category.name }))],
+    },
+    {
+      key: 'subcategory',
+      label: 'Subcategoría',
+      value: selectedSubcategory ? String(selectedSubcategory.id) : '',
+      options: [{ value: '', label: effectiveRootCategory ? 'Todas las subcategorías' : 'Selecciona una categoría' }, ...subcategoryOptions.map((category) => ({ value: String(category.id), label: category.name }))],
+      disabled: !effectiveRootCategory,
     },
     {
       key: 'brand',
       label: 'Marca',
       value: searchParams.get('brand') ?? '',
-      options: [{ value: '', label: 'Todas' }, ...brands.map((brand) => ({ value: String(brand.id), label: brand.name }))],
-    },
-    {
-      key: 'product_type',
-      label: 'Tipo',
-      value: searchParams.get('product_type') ?? '',
-      options: [{ value: '', label: 'Todos' }, ...PRODUCT_TYPE_OPTIONS],
+      options: [{ value: '', label: 'Todas' }, ...activeBrands.map((brand) => ({ value: String(brand.id), label: brand.name }))],
     },
     {
       key: 'condition',
@@ -99,7 +136,7 @@ export function Sidebar() {
       value: searchParams.get('stock_status') ?? '',
       options: [{ value: '', label: 'Todos' }, ...STOCK_OPTIONS],
     },
-  ], [brands, categories, searchParams])
+  ], [activeBrands, effectiveRootCategory, rootCategoryOptions, searchParams, selectedSubcategory, subcategoryOptions])
 
   return (
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
@@ -120,9 +157,18 @@ export function Sidebar() {
         {isCatalogPage ? (
           <>
             <div className="sidebar-filters sidebar-filters--desktop">
-              <select value={searchParams.get('category') ?? ''} onChange={(event) => updateFilter('category', event.target.value)}>
-                <option value="">Categoría / subcategoría</option>
-                {categories.map((category) => (
+              <select aria-label="Categoría" value={effectiveRootCategory?.id ?? ''} onChange={(event) => updateFilter('category', event.target.value)}>
+                <option value="">Todas las categorías</option>
+                {rootCategoryOptions.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+
+              <select aria-label="Subcategoría" value={selectedSubcategory?.id ?? ''} disabled={!effectiveRootCategory} onChange={(event) => updateSubcategory(event.target.value)}>
+                <option value="">{effectiveRootCategory ? 'Todas las subcategorías' : 'Selecciona una categoría'}</option>
+                {subcategoryOptions.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
@@ -131,18 +177,9 @@ export function Sidebar() {
 
               <select value={searchParams.get('brand') ?? ''} onChange={(event) => updateFilter('brand', event.target.value)}>
                 <option value="">Marca</option>
-                {brands.map((brand) => (
+                {activeBrands.map((brand) => (
                   <option key={brand.id} value={brand.id}>
                     {brand.name}
-                  </option>
-                ))}
-              </select>
-
-              <select value={searchParams.get('product_type') ?? ''} onChange={(event) => updateFilter('product_type', event.target.value)}>
-                <option value="">Tipo</option>
-                {PRODUCT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
                   </option>
                 ))}
               </select>
@@ -175,14 +212,14 @@ export function Sidebar() {
                 const isExpanded = openMobileFilterKey === section.key
                 return (
                   <section className="sidebar-filters-mobile__item" key={section.key}>
-                    <button type="button" className="sidebar-filters-mobile__trigger" aria-expanded={isExpanded} onClick={() => setOpenMobileFilterKey(isExpanded ? null : section.key)}>
+                    <button type="button" className="sidebar-filters-mobile__trigger" aria-expanded={isExpanded} disabled={section.disabled} onClick={() => setOpenMobileFilterKey(isExpanded ? null : section.key)}>
                       <span>{section.label}</span>
                       <span>{isExpanded ? '−' : '+'}</span>
                     </button>
                     {isExpanded ? (
                       <div className="sidebar-filters-mobile__options" role="list">
                         {section.options.map((option) => (
-                          <button key={`${section.key}-${option.value || 'all'}`} type="button" className={`sidebar-filters-mobile__option ${section.value === option.value ? 'is-active' : ''}`.trim()} onClick={() => updateFilter(section.key, option.value)}>
+                          <button key={`${section.key}-${option.value || 'all'}`} type="button" className={`sidebar-filters-mobile__option ${section.value === option.value ? 'is-active' : ''}`.trim()} onClick={() => section.key === 'subcategory' ? updateSubcategory(option.value) : updateFilter(section.key, option.value)}>
                             {option.label}
                           </button>
                         ))}
