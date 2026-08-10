@@ -239,12 +239,6 @@ export function ProductDetailPage() {
                 <div className="product-detail__title-block">
                   <p className="product-detail__eyebrow">{formatProductType(product.product_type)}</p>
                   <h1>{product.name}</h1>
-                  {product.short_description ? <p className="product-detail__lead">{product.short_description}</p> : null}
-                </div>
-
-                <div className="product-card__badges product-detail__badges">
-                  <span className="badge badge--condition">{formatProductCondition(product)}</span>
-                  <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
                 </div>
 
                 <div className="product-detail__price-box">
@@ -270,14 +264,18 @@ export function ProductDetailPage() {
                     <dt>Disponibilidad</dt>
                     <dd>{formatStockStatus(product.stock_status)}</dd>
                   </div>
-                  <div>
-                    <dt>Modelo</dt>
-                    <dd>{product.model || 'No informado'}</dd>
-                  </div>
-                  <div>
-                    <dt>SKU</dt>
-                    <dd>{product.sku || 'No informado'}</dd>
-                  </div>
+                  {product.model?.trim() ? (
+                    <div>
+                      <dt>Modelo</dt>
+                      <dd>{product.model.trim()}</dd>
+                    </div>
+                  ) : null}
+                  {product.sku?.trim() ? (
+                    <div>
+                      <dt>SKU</dt>
+                      <dd>{product.sku.trim()}</dd>
+                    </div>
+                  ) : null}
                   {maximumLoadCapacity ? (
                     <div>
                       <dt>Capacidad máxima de carga</dt>
