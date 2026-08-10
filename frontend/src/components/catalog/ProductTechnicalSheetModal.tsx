@@ -44,7 +44,7 @@ export function ProductTechnicalSheetModal({ open, productName, sheet, inlineUrl
 
   if (!open) return null
   const size = sheet.size_bytes > 0 ? `${(sheet.size_bytes / 1024 / 1024).toFixed(2)} MB` : null
-  const isPdf = sheet.content_type === 'application/pdf'
+  const isPdf = sheet.content_type.trim().toLowerCase() === 'application/pdf'
 
   return createPortal(
     <div className="product-technical-sheet-modal__backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>

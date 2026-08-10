@@ -155,7 +155,7 @@ public static class CommercialPublicReadEndpoints
 
     private static async Task<IResult> GetProductTechnicalSheetFileAsync(
         string idOrSlug,
-        [FromQuery] bool download,
+        [FromQuery] bool? download,
         JemNexusDbContext dbContext,
         ITechnicalSheetStorage storage,
         HttpContext httpContext,
@@ -185,7 +185,7 @@ public static class CommercialPublicReadEndpoints
         httpContext.Response.Headers.XContentTypeOptions = "nosniff";
         httpContext.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
         httpContext.Response.Headers.CacheControl = "no-store";
-        return Results.File(stream, sheet.ContentType, download ? sheet.OriginalFileName : null, enableRangeProcessing: true);
+        return Results.File(stream, sheet.ContentType, download == true ? sheet.OriginalFileName : null, enableRangeProcessing: true);
     }
 
     internal static PublicTechnicalSheetReadDto? ToPublicTechnicalSheet(Product product)

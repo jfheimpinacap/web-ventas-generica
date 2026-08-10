@@ -70,7 +70,7 @@ export function ProductDetailPage() {
   }, [slug])
 
   const technicalSheet = product?.technical_sheet
-  const hasTechnicalSheet = Boolean(technicalSheet?.file_url.trim() && ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(technicalSheet.content_type))
+  const hasTechnicalSheet = Boolean(technicalSheet?.file_url.trim() && ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(technicalSheet.content_type.trim().toLowerCase()))
   const inlineTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url) : ''
   const downloadTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url, true) : ''
 
