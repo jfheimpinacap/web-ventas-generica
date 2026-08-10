@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 #nullable disable
 
 namespace JemNexus.Api.Data.Migrations;
 
+[DbContext(typeof(JemNexusDbContext))]
+[Migration("20260810080000_AddProductTechnicalSheetAssociation")]
 public partial class AddProductTechnicalSheetAssociation : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

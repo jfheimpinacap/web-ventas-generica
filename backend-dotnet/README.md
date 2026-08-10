@@ -24,6 +24,26 @@ dotnet test backend-dotnet/JemNexus.sln
 dotnet run --project backend-dotnet/JemNexus.Api/JemNexus.Api.csproj
 ```
 
+### Arranque local canónico (Windows)
+
+En la primera ejecución después de integrar el Prompt 099, abrir PowerShell y ejecutar:
+
+```powershell
+cd "C:\Users\Franz\Desktop\web-ventas-generica\backend-dotnet"
+.\run-local.ps1 -UpdateDatabase
+```
+
+Este comando fuerza el entorno `Development`, usa `http://localhost:5000` y exclusivamente la base local `JemNexus_Local`, genera un JWT temporal para el proceso, aplica primero las migraciones pendientes de esa base local y luego inicia el backend.
+
+En ejecuciones posteriores normales, iniciar sin modificar el esquema:
+
+```powershell
+cd "C:\Users\Franz\Desktop\web-ventas-generica\backend-dotnet"
+.\run-local.ps1
+```
+
+La opción `-UpdateDatabase` solo puede actuar sobre `JemNexus_Local` y no debe utilizarse para producción. El script no inicia el frontend; este continúa levantándose en otra ventana mediante `npm run dev`. Tampoco crea ni cambia usuarios o contraseñas, ni publica nada. No se deben copiar secretos productivos para trabajar localmente: el JWT generado es temporal y no se guarda ni se muestra.
+
 Endpoints mínimos:
 
 - `GET /`
