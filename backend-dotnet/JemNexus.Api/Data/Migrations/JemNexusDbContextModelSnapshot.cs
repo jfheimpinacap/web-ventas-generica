@@ -485,6 +485,9 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("TechnicalSheetId")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetimeoffset")
@@ -520,6 +523,8 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasIndex("StockStatus");
 
                     b.HasIndex("SupplierId");
+
+                    b.HasIndex("TechnicalSheetId");
 
                     b.HasIndex("UpdatedById");
 
@@ -1041,6 +1046,11 @@ namespace JemNexus.Api.Data.Migrations
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("JemNexus.Api.Models.TechnicalSheet", "TechnicalSheet")
+                        .WithMany("Products")
+                        .HasForeignKey("TechnicalSheetId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
                         .HasForeignKey("UpdatedById")
@@ -1053,6 +1063,8 @@ namespace JemNexus.Api.Data.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Supplier");
+
+                    b.Navigation("TechnicalSheet");
 
                     b.Navigation("UpdatedBy");
                 });
@@ -1170,6 +1182,11 @@ namespace JemNexus.Api.Data.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("JemNexus.Api.Models.TechnicalSheet", b =>
+                {
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.AppUser", b =>

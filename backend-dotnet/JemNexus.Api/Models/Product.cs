@@ -11,6 +11,8 @@ public sealed class Product
     public Brand? Brand { get; set; }
     public int? SupplierId { get; set; }
     public Supplier? Supplier { get; set; }
+    public int? TechnicalSheetId { get; set; }
+    public TechnicalSheet? TechnicalSheet { get; set; }
     public string ProductType { get; set; } = ProductTypes.Machinery;
     public string Condition { get; set; } = ProductConditions.NotApplicable;
     public string ShortDescription { get; set; } = string.Empty;

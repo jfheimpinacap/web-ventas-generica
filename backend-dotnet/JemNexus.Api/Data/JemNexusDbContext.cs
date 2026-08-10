@@ -101,6 +101,10 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(sheet => sheet.ContentType).HasMaxLength(100).IsRequired();
             entity.Property(sheet => sheet.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(sheet => sheet.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.HasMany(sheet => sheet.Products)
+                .WithOne(product => product.TechnicalSheet)
+                .HasForeignKey(product => product.TechnicalSheetId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 

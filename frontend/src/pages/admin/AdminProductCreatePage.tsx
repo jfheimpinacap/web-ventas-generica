@@ -6,10 +6,10 @@ import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
 import { ProductImageManager } from '../../components/admin/ProductImageManager'
 import { usePendingProductImages } from '../../hooks/usePendingProductImages'
-import { createProduct, createProductImage } from '../../services/adminApi'
+import { createProduct, createProductImage, getTechnicalSheets } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import { getSafeApiErrorMessage } from '../../services/api'
-import type { Brand, Category, ProductFormValues, SupplierSummary } from '../../types/catalog'
+import type { Brand, Category, ProductFormValues, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
 
 const INITIAL_VALUES: ProductFormValues = {
@@ -17,6 +17,7 @@ const INITIAL_VALUES: ProductFormValues = {
   category: 0,
   brand: null,
   supplier: null,
+  technical_sheet: null,
   product_type: 'machinery',
   condition: 'new',
   short_description: '',
@@ -47,6 +48,7 @@ export function AdminProductCreatePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [suppliers, setSuppliers] = useState<SupplierSummary[]>([])
+  const [technicalSheets, setTechnicalSheets] = useState<TechnicalSheet[]>([])
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,14 +61,16 @@ export function AdminProductCreatePage() {
     const load = async () => {
       try {
         setError(null)
-        const [categoriesData, brandsData, suppliersData] = await Promise.all([
+        const [categoriesData, brandsData, suppliersData, technicalSheetsData] = await Promise.all([
           getAdminCategories(),
           getAdminBrands(),
           getAdminSuppliers(),
+          getTechnicalSheets(),
         ])
         setCategories(categoriesData)
         setBrands(brandsData)
         setSuppliers(suppliersData)
+        setTechnicalSheets(technicalSheetsData)
       } catch {
         setError('No fue posible cargar datos del formulario.')
       } finally {
@@ -144,6 +148,7 @@ export function AdminProductCreatePage() {
               categories={categories}
               brands={brands}
               suppliers={suppliers}
+              technicalSheets={technicalSheets}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
               error={error}

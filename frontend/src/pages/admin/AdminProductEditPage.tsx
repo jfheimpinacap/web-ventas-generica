@@ -15,6 +15,7 @@ import {
   getAdminProduct,
   getProductImages,
   getProductSpecs,
+  getTechnicalSheets,
   updateProduct,
   updateProductImage,
   updateProductSpec,
@@ -36,6 +37,7 @@ import type {
   ProductSpec,
   ProductSpecWritePayload,
   SupplierSummary,
+  TechnicalSheet,
 } from "../../types/catalog";
 import {
   formatCondition,
@@ -51,6 +53,7 @@ function mapProductToFormValues(
     category: product.category.id,
     brand: product.brand?.id ?? null,
     supplier: product.supplier?.id ?? null,
+    technical_sheet: product.technical_sheet?.id ?? null,
     product_type: product.product_type,
     condition: product.condition,
     short_description: product.short_description,
@@ -93,6 +96,7 @@ export function AdminProductEditPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
+  const [technicalSheets, setTechnicalSheets] = useState<TechnicalSheet[]>([]);
   const [initialValues, setInitialValues] = useState<ProductFormValues | null>(
     null,
   );
@@ -152,12 +156,13 @@ export function AdminProductEditPage() {
     const load = async () => {
       try {
         setError(null);
-        const [product, categoriesData, brandsData, suppliersData] =
+        const [product, categoriesData, brandsData, suppliersData, technicalSheetsData] =
           await Promise.all([
             getAdminProduct(slug),
             getAdminCategories(),
             getAdminBrands(),
             getAdminSuppliers(),
+            getTechnicalSheets(),
           ]);
 
         const [imagesData, specsData] = await Promise.all([
@@ -172,6 +177,7 @@ export function AdminProductEditPage() {
         setCategories(categoriesData);
         setBrands(brandsData);
         setSuppliers(suppliersData);
+        setTechnicalSheets(technicalSheetsData);
         setImages(imagesData);
         setSpecs(specsData);
       } catch {
@@ -397,6 +403,7 @@ export function AdminProductEditPage() {
               categories={categories}
               brands={brands}
               suppliers={suppliers}
+              technicalSheets={technicalSheets}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
               error={error}

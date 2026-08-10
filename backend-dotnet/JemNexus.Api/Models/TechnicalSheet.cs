@@ -10,4 +10,5 @@ public sealed class TechnicalSheet
     public long SizeBytes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public ICollection<Product> Products { get; set; } = new List<Product>();
 }

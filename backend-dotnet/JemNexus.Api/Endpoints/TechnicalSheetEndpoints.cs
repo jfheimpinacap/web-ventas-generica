@@ -30,20 +30,21 @@ public static class TechnicalSheetEndpoints
         var query = db.TechnicalSheets.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.Name.Contains(search.Trim()));
         var items = await query.OrderByDescending(x => x.UpdatedAt).ToListAsync(ct);
-        return Results.Ok(items.Select(ToResponse));
+        return Results.Ok(items.Select(TechnicalSheetDtoMapper.ToResponse));
     }
 
     private static async Task<IResult> GetAsync(int id, JemNexusDbContext db, CancellationToken ct)
     {
         var item = await db.TechnicalSheets.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        return item is null ? Results.NotFound() : Results.Ok(ToResponse(item));
+        return item is null ? Results.NotFound() : Results.Ok(TechnicalSheetDtoMapper.ToResponse(item));
     }
 
     private static async Task<IResult> CreateAsync([FromForm] string? name, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var error = Validate(name, file);
         if (error is not null) return Results.BadRequest(new { detail = error });
-        var storageKey = await storage.SaveAsync(file!.OpenReadStream(), ct);
+        var extension = Path.GetExtension(file!.FileName).ToLowerInvariant();
+        var storageKey = await storage.SaveAsync(file.OpenReadStream(), extension, ct);
         var item = new TechnicalSheet { Name = name!.Trim(), OriginalFileName = Path.GetFileName(file.FileName), StorageKey = storageKey, ContentType = file.ContentType, SizeBytes = file.Length };
         db.TechnicalSheets.Add(item);
         try { await db.SaveChangesAsync(ct); }
@@ -54,7 +55,7 @@ public static class TechnicalSheetEndpoints
             loggerFactory.CreateLogger(typeof(TechnicalSheetEndpoints)).LogError(exception, "Could not persist a new technical sheet.");
             return PersistenceFailure();
         }
-        return Results.Created($"/api/technical-sheets/{item.Id}", ToResponse(item));
+        return Results.Created($"/api/technical-sheets/{item.Id}", TechnicalSheetDtoMapper.ToResponse(item));
     }
 
     private static async Task<IResult> RenameAsync(int id, RenameTechnicalSheetRequest request, JemNexusDbContext db, CancellationToken ct)
@@ -65,7 +66,7 @@ public static class TechnicalSheetEndpoints
         if (item is null) return Results.NotFound();
         item.Name = request.Name!.Trim();
         await db.SaveChangesAsync(ct);
-        return Results.Ok(ToResponse(item));
+        return Results.Ok(TechnicalSheetDtoMapper.ToResponse(item));
     }
 
     private static async Task<IResult> ReplaceFileAsync(int id, [FromForm] IFormFile? file, JemNexusDbContext db, ITechnicalSheetStorage storage, ILoggerFactory loggerFactory, CancellationToken ct)
@@ -82,7 +83,8 @@ public static class TechnicalSheetEndpoints
             item.SizeBytes,
             item.UpdatedAt
         };
-        var newKey = await storage.SaveAsync(file!.OpenReadStream(), ct);
+        var extension = Path.GetExtension(file!.FileName).ToLowerInvariant();
+        var newKey = await storage.SaveAsync(file.OpenReadStream(), extension, ct);
         item.StorageKey = newKey; item.OriginalFileName = Path.GetFileName(file.FileName); item.ContentType = file.ContentType; item.SizeBytes = file.Length;
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException exception)
@@ -98,7 +100,7 @@ public static class TechnicalSheetEndpoints
             return PersistenceFailure();
         }
         await storage.DeleteAsync(oldValues.StorageKey, ct);
-        return Results.Ok(ToResponse(item));
+        return Results.Ok(TechnicalSheetDtoMapper.ToResponse(item));
     }
 
     private static async Task<IResult> DownloadAsync(int id, JemNexusDbContext db, ITechnicalSheetStorage storage, CancellationToken ct, bool download = false)
@@ -114,6 +116,11 @@ public static class TechnicalSheetEndpoints
     {
         var item = await db.TechnicalSheets.FindAsync([id], ct);
         if (item is null) return Results.NotFound();
+        if (string.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal))
+        {
+            var products = await db.Products.Where(product => product.TechnicalSheetId == id).ToListAsync(ct);
+            foreach (var product in products) product.TechnicalSheetId = null;
+        }
         db.TechnicalSheets.Remove(item);
         await db.SaveChangesAsync(ct);
         await storage.DeleteAsync(item.StorageKey, ct);
@@ -133,13 +140,25 @@ public static class TechnicalSheetEndpoints
     private static string? ValidateName(string? name) => string.IsNullOrWhiteSpace(name) ? "El nombre es obligatorio." : name.Trim().Length > MaxNameLength ? $"El nombre no puede superar {MaxNameLength} caracteres." : null;
     private static string? ValidateFile(IFormFile? file)
     {
-        if (file is null || file.Length == 0) return "Selecciona un archivo PDF con contenido.";
-        if (file.Length > MaxFileSize) return "El PDF no puede superar 10 MB.";
-        if (!string.Equals(Path.GetExtension(file.FileName), ".pdf", StringComparison.OrdinalIgnoreCase)) return "Solo se permiten archivos con extensión PDF.";
-        if (!string.Equals(file.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase)) return "El archivo debe tener el tipo PDF.";
+        if (file is null || file.Length == 0) return "Selecciona un archivo con contenido.";
+        if (file.Length > MaxFileSize) return "El archivo no puede superar 10 MB.";
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var expectedType = extension switch { ".pdf" => "application/pdf", ".jpg" or ".jpeg" => "image/jpeg", ".png" => "image/png", ".webp" => "image/webp", _ => null };
+        if (expectedType is null) return "Solo se permiten archivos PDF, JPG/JPEG, PNG o WebP.";
+        if (!string.Equals(file.ContentType, expectedType, StringComparison.OrdinalIgnoreCase)) return "La extensión y el tipo del archivo no coinciden.";
         if (Path.GetFileName(file.FileName).Length > 255) return "El nombre del archivo es demasiado largo.";
+        Span<byte> header = stackalloc byte[12];
+        using var stream = file.OpenReadStream();
+        var read = stream.Read(header);
+        var validSignature = extension switch
+        {
+            ".pdf" => read >= 5 && header[..5].SequenceEqual("%PDF-"u8),
+            ".jpg" or ".jpeg" => read >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff,
+            ".png" => read >= 8 && header[..8].SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+            ".webp" => read >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WEBP"u8),
+            _ => false
+        };
+        if (!validSignature) return "La firma del archivo no corresponde a su formato.";
         return null;
     }
-
-    private static TechnicalSheetResponse ToResponse(TechnicalSheet x) => new(x.Id, x.Name, x.OriginalFileName, x.ContentType, x.SizeBytes, x.CreatedAt, x.UpdatedAt, $"/technical-sheets/{x.Id}/file");
 }

@@ -29,8 +29,10 @@ export function AdminTechnicalSheetsPage() {
   const filtered = useMemo(() => items.filter(x => x.name.toLowerCase().includes(search.trim().toLowerCase())), [items, search])
 
   const validateFile = (selected: File | null) => {
-    if (!selected) return 'Selecciona un archivo PDF.'
-    if (!selected.name.toLowerCase().endsWith('.pdf') || selected.type !== 'application/pdf') return 'Selecciona un archivo PDF válido.'
+    if (!selected) return 'Selecciona un archivo.'
+    const extension = selected.name.toLowerCase().match(/\.[^.]+$/)?.[0]
+    const allowed: Record<string, string> = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' }
+    if (!extension || allowed[extension] !== selected.type) return 'Selecciona un archivo PDF, JPG/JPEG, PNG o WebP válido; la extensión y el tipo deben coincidir.'
     if (!selected.size) return 'El archivo está vacío.'
     if (selected.size > MAX_SIZE) return 'El archivo no puede superar 10 MB.'
     return null
@@ -61,8 +63,8 @@ export function AdminTechnicalSheetsPage() {
     const id = replacingId.current; const validation = validateFile(selected)
     if (!id || validation) { if (validation) setError(validation); return }
     setBusy(true)
-    try { const updated = await replaceTechnicalSheetFile(id, selected!); setItems(xs => xs.map(x => x.id === id ? updated : x)); setMessage('PDF reemplazado correctamente.') }
-    catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo reemplazar el PDF.')) }
+    try { const updated = await replaceTechnicalSheetFile(id, selected!); setItems(xs => xs.map(x => x.id === id ? updated : x)); setMessage('Archivo reemplazado correctamente.') }
+    catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo reemplazar el archivo.')) }
     finally { setBusy(false); if (replaceInput.current) replaceInput.current.value = '' }
   }
 
@@ -83,17 +85,17 @@ export function AdminTechnicalSheetsPage() {
       else window.open(objectUrl, '_blank', 'noopener,noreferrer')
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
     } catch (e) {
-      setError(getSafeApiErrorMessage(e, download ? 'No se pudo descargar el PDF.' : 'No se pudo abrir el PDF.'))
+      setError(getSafeApiErrorMessage(e, download ? 'No se pudo descargar el archivo.' : 'No se pudo abrir el archivo.'))
     }
   }
 
   return <AdminLayout>
-    <div className="admin-products-header"><div><h1>Fichas técnicas</h1><p className="ui-note">Administra documentos PDF que podrás usar en tus productos.</p></div><button className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button></div>
+    <div className="admin-products-header"><div><h1>Fichas técnicas</h1><p className="ui-note">Administra archivos PDF, JPG/JPEG, PNG o WebP (máximo 10 MB) que podrás usar en tus productos.</p></div><button className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button></div>
     <div className="admin-list-toolbar"><input className="admin-search" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /></div>
     {error ? <p className="ui-note ui-note--error">{error}</p> : null}{message ? <p className="ui-note">{message}</p> : null}
-    {showCreate ? <section className="technical-sheet-form"><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF (máximo 10 MB)<input type="file" accept="application/pdf,.pdf" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p>Archivo seleccionado: {file.name}</p> : null}<div><button className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando...' : 'Guardar'}</button> <button className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
-    {loading ? <p>Cargando fichas técnicas...</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Archivo</th><th>Tamaño</th><th>Actualizada</th><th>Acciones</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.original_file_name}</td><td>{formatBytes(item.size_bytes)}</td><td>{new Date(item.updated_at).toLocaleDateString('es-CL')}</td><td><button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, false)}>Ver PDF</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, true)}>Descargar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}>Editar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}>Reemplazar PDF</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void remove(item)}>Eliminar</button></td></tr>)}</tbody></table></div>}
-    <input ref={replaceInput} hidden type="file" accept="application/pdf,.pdf" onChange={e => void replace(e.target.files?.[0] ?? null)} />
+    {showCreate ? <section className="technical-sheet-form"><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF, JPG/JPEG, PNG o WebP (máximo 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p>Archivo seleccionado: {file.name}</p> : null}<div><button className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando...' : 'Guardar'}</button> <button className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
+    {loading ? <p>Cargando fichas técnicas...</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Archivo</th><th>Tamaño</th><th>Actualizada</th><th>Acciones</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.original_file_name}</td><td>{formatBytes(item.size_bytes)}</td><td>{new Date(item.updated_at).toLocaleDateString('es-CL')}</td><td><button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, false)}>Ver archivo</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, true)}>Descargar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}>Editar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}>Reemplazar archivo</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void remove(item)}>Eliminar</button></td></tr>)}</tbody></table></div>}
+    <input ref={replaceInput} hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => void replace(e.target.files?.[0] ?? null)} />
   </AdminLayout>
 }
 

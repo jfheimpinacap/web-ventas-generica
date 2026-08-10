@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 
-import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus, SupplierSummary } from '../../types/catalog'
+import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 import { ProductEditorActions } from './ProductEditorActions'
 
@@ -9,6 +9,7 @@ interface ProductFormProps {
   categories: Category[]
   brands: Brand[]
   suppliers: SupplierSummary[]
+  technicalSheets: TechnicalSheet[]
   onSubmit: (values: ProductFormValues) => Promise<void>
   isSubmitting: boolean
   error: string | null
@@ -55,6 +56,7 @@ export function ProductForm({
   categories,
   brands,
   suppliers,
+  technicalSheets,
   onSubmit,
   isSubmitting,
   error,
@@ -85,6 +87,7 @@ export function ProductForm({
   const subcategoryOptions = useMemo(() => selectedRootId ? categories.filter((item) => item.is_active && item.parent === selectedRootId).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) : [], [categories, selectedRootId])
   const brandsOptions = useMemo(() => brands.filter((item) => item.is_active), [brands])
   const suppliersOptions = useMemo(() => suppliers.filter((item) => item.is_active), [suppliers])
+  const technicalSheetOptions = useMemo(() => [...technicalSheets].sort((a, b) => a.name.localeCompare(b.name, 'es')), [technicalSheets])
 
   const setField = <K extends keyof ProductFormValues>(field: K, nextValue: ProductFormValues[K]) => {
     setValues((prev) => {
@@ -324,6 +327,15 @@ export function ProductForm({
             <option value="electric_24v">Eléctrica 24 V</option>
             <option value="electric_lithium">Eléctrica de litio</option>
           </select>
+        </label>
+
+        <label className="admin-form-panel__full">
+          Ficha técnica
+          <select value={values.technical_sheet ?? ''} onChange={(e) => setField('technical_sheet', toNullableNumber(e.target.value))}>
+            <option value="">Sin ficha técnica</option>
+            {technicalSheetOptions.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.original_file_name}</option>)}
+          </select>
+          {!technicalSheetOptions.length ? <span className="ui-note">Puedes crear fichas desde Fichas técnicas.</span> : null}
         </label>
 
         <label className="admin-form-panel__full">

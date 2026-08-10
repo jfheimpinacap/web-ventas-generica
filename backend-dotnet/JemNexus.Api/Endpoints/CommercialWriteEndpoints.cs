@@ -6,6 +6,7 @@ using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services.ProductImages;
+using System.Text.Json;
 using JemNexus.Api.Utils;
 using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
@@ -387,6 +388,8 @@ public static class CommercialWriteEndpoints
         }
         if (request.BrandId.HasValue || request.Brand.HasValue) product.BrandId = request.BrandId ?? request.Brand;
         if (request.SupplierId.HasValue || request.Supplier.HasValue) product.SupplierId = request.SupplierId ?? request.Supplier;
+        if (request.TechnicalSheet.ValueKind != JsonValueKind.Undefined)
+            product.TechnicalSheetId = ReadTechnicalSheetId(request.TechnicalSheet, out _);
         if (request.ProductType is not null) product.ProductType = request.ProductType.Trim();
         if (request.Condition is not null) product.Condition = request.Condition.Trim();
         if (request.ShortDescription is not null) product.ShortDescription = request.ShortDescription.Trim();
@@ -790,7 +793,22 @@ public static class CommercialWriteEndpoints
         if (brandId.HasValue && !await dbContext.Brands.AnyAsync(brand => brand.Id == brandId.Value, cancellationToken)) return Results.BadRequest(new { detail = "brand does not exist." });
         var supplierId = request.SupplierId ?? request.Supplier;
         if (supplierId.HasValue && !await dbContext.Suppliers.AnyAsync(supplier => supplier.Id == supplierId.Value, cancellationToken)) return Results.BadRequest(new { detail = "supplier does not exist." });
+        var technicalSheetId = ReadTechnicalSheetId(request.TechnicalSheet, out var technicalSheetError);
+        if (technicalSheetError is not null) return Results.BadRequest(new { detail = technicalSheetError });
+        if (technicalSheetId.HasValue && !await dbContext.TechnicalSheets.AnyAsync(sheet => sheet.Id == technicalSheetId.Value, cancellationToken)) return Results.BadRequest(new { detail = "technical_sheet does not exist." });
         return null;
+    }
+
+    private static int? ReadTechnicalSheetId(JsonElement value, out string? error)
+    {
+        error = null;
+        if (value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return null;
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var id) || id <= 0)
+        {
+            error = "technical_sheet must be a positive integer or null.";
+            return null;
+        }
+        return id;
     }
 
     private static async Task<IResult?> ValidateProductCategoryTypeAsync(int categoryId, string? productType, JemNexusDbContext dbContext, CancellationToken cancellationToken)
@@ -829,6 +847,7 @@ public static class CommercialWriteEndpoints
         .Include(product => product.Category)
         .Include(product => product.Brand)
         .Include(product => product.Supplier)
+        .Include(product => product.TechnicalSheet)
         .Include(product => product.Images)
         .Include(product => product.Specs);
 
