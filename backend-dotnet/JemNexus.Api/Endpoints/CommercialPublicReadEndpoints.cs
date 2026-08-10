@@ -2,6 +2,7 @@ using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services.Notifications;
+using JemNexus.Api.Services.TechnicalSheets;
 using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,8 @@ public static class CommercialPublicReadEndpoints
 
         group.MapGet("/products", GetProductsAsync).WithName("CommercialPublicProductsList").WithOpenApi();
         group.MapGet("/products/{idOrSlug}", GetProductAsync).WithName("CommercialPublicProductsDetail").WithOpenApi();
+        group.MapGet("/products/{idOrSlug}/technical-sheet/file", GetProductTechnicalSheetFileAsync)
+            .WithName("CommercialPublicProductTechnicalSheetFile").WithOpenApi();
 
         group.MapGet("/categories", GetCategoriesAsync).WithName("CommercialPublicCategoriesList").WithOpenApi();
         group.MapGet("/brands", GetBrandsAsync).WithName("CommercialPublicBrandsList").WithOpenApi();
@@ -141,13 +144,81 @@ public static class CommercialPublicReadEndpoints
 
     private static async Task<IResult> GetProductAsync(string idOrSlug, JemNexusDbContext dbContext, CancellationToken cancellationToken)
     {
-        var query = ApplyPublicProductFilters(PublicProductReadQuery(dbContext.Products));
+        var query = ApplyPublicProductFilters(PublicProductReadQuery(dbContext.Products)
+            .Include(product => product.TechnicalSheet));
         var product = int.TryParse(idOrSlug, out var id)
             ? await query.FirstOrDefaultAsync(product => product.Id == id, cancellationToken)
             : await query.FirstOrDefaultAsync(product => product.Slug == idOrSlug, cancellationToken);
 
         return product is null ? Results.NotFound() : Results.Ok(PublicProductDetailReadDto.FromProduct(product));
     }
+
+    private static async Task<IResult> GetProductTechnicalSheetFileAsync(
+        string idOrSlug,
+        [FromQuery] bool download,
+        JemNexusDbContext dbContext,
+        ITechnicalSheetStorage storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var query = ApplyPublicProductFilters(dbContext.Products.AsNoTracking()
+            .Include(product => product.Category)
+            .Include(product => product.Brand)
+            .Include(product => product.TechnicalSheet));
+        var product = int.TryParse(idOrSlug, out var id)
+            ? await query.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken)
+            : await query.FirstOrDefaultAsync(candidate => candidate.Slug == idOrSlug, cancellationToken);
+        var sheet = product is null ? null : GetEligibleTechnicalSheet(product.TechnicalSheet);
+        if (sheet is null) return Results.NotFound();
+
+        Stream? stream;
+        try
+        {
+            stream = await storage.OpenReadAsync(sheet.StorageKey, cancellationToken);
+        }
+        catch
+        {
+            return Results.NotFound();
+        }
+        if (stream is null) return Results.NotFound();
+
+        httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+        httpContext.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+        httpContext.Response.Headers.CacheControl = "no-store";
+        return Results.File(stream, sheet.ContentType, download ? sheet.OriginalFileName : null, enableRangeProcessing: true);
+    }
+
+    internal static PublicTechnicalSheetReadDto? ToPublicTechnicalSheet(Product product)
+    {
+        var sheet = GetEligibleTechnicalSheet(product.TechnicalSheet);
+        return sheet is null ? null : new(
+            sheet.Id, sheet.Name, sheet.OriginalFileName, sheet.ContentType, sheet.SizeBytes,
+            sheet.CreatedAt, sheet.UpdatedAt,
+            $"/public/products/{Uri.EscapeDataString(product.Slug)}/technical-sheet/file");
+    }
+
+    private static TechnicalSheet? GetEligibleTechnicalSheet(TechnicalSheet? sheet)
+    {
+        if (sheet is null || sheet.SizeBytes <= 0 || sheet.SizeBytes > TechnicalSheetEndpoints.MaxFileSize
+            || !IsSimpleFileName(sheet.StorageKey) || !IsSimpleFileName(sheet.OriginalFileName)) return null;
+
+        var extension = Path.GetExtension(sheet.OriginalFileName).ToLowerInvariant();
+        var expectedType = extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => null
+        };
+        return expectedType is not null && string.Equals(expectedType, sheet.ContentType, StringComparison.OrdinalIgnoreCase)
+            ? sheet : null;
+    }
+
+    private static bool IsSimpleFileName(string value) =>
+        !string.IsNullOrWhiteSpace(value) && value is not "." and not ".."
+        && string.Equals(value, Path.GetFileName(value), StringComparison.Ordinal)
+        && value.IndexOfAny(['/', '\\']) < 0;
 
     private static async Task<IResult> GetCategoriesAsync(
         JemNexusDbContext dbContext,

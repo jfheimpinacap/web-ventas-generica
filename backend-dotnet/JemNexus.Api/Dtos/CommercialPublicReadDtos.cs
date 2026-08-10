@@ -1,4 +1,5 @@
 using JemNexus.Api.Models;
+using JemNexus.Api.Endpoints;
 
 namespace JemNexus.Api.Dtos;
 
@@ -70,6 +71,16 @@ public sealed record PublicProductSpecReadDto(
         spec.Order);
 }
 
+public sealed record PublicTechnicalSheetReadDto(
+    int Id,
+    string Name,
+    string OriginalFileName,
+    string ContentType,
+    long SizeBytes,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string FileUrl);
+
 public sealed record PublicProductListReadDto(
     int Id,
     string Name,
@@ -137,7 +148,8 @@ public sealed record PublicProductDetailReadDto(
     bool IsFeatured,
     PublicProductImageReadDto? MainImage,
     IReadOnlyList<PublicProductImageReadDto> Images,
-    IReadOnlyList<PublicProductSpecReadDto> Specs)
+    IReadOnlyList<PublicProductSpecReadDto> Specs,
+    PublicTechnicalSheetReadDto? TechnicalSheet)
 {
     public static PublicProductDetailReadDto FromProduct(Product product)
     {
@@ -179,7 +191,8 @@ public sealed record PublicProductDetailReadDto(
                 .OrderBy(spec => spec.Order)
                 .ThenBy(spec => spec.Id)
                 .Select(PublicProductSpecReadDto.FromSpec)
-                .ToList());
+                .ToList(),
+            CommercialPublicReadEndpoints.ToPublicTechnicalSheet(product));
     }
 }
 

@@ -9,7 +9,7 @@ import type {
   QuoteRequestPublicPayload,
   SupplierSummary,
 } from '../types/catalog'
-import { API_PROVIDER, apiRequest } from './api'
+import { API_PROVIDER, apiRequest, buildApiUrl } from './api'
 import {
   normalizeBrandListResponse,
   normalizeCategoryListResponse,
@@ -27,6 +27,10 @@ function publicReadPath(path: string) {
 
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `/public${normalizedPath}`
+}
+
+export function buildPublicTechnicalSheetUrl(fileUrl: string, download = false) {
+  return buildApiUrl(fileUrl, download ? { download: true } : undefined).toString()
 }
 
 export async function getProducts(params?: ProductQueryParams) {
