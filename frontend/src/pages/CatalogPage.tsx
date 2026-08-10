@@ -11,6 +11,7 @@ import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
 import { trackCategoryView } from '../utils/analytics'
+import { getRootCategory } from '../utils/formatters'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPublicUrl } from '../utils/seo'
 
 const ORDER_OPTIONS = [
@@ -35,6 +36,7 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
     available: 'Stock disponible',
     on_request: 'Stock a pedido',
     reserved: 'Stock reservado',
+    sold: 'Stock vendido',
   },
 }
 
@@ -120,18 +122,32 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   useEffect(() => {
     setCurrentPage(1)
   }, [query.search, query.category, query.brand, query.product_type, query.condition, query.stock_status, query.ordering])
-  const selectedCategory = useMemo(() => {
+  const explicitSelectedCategory = useMemo(() => {
     const categoryId = Number(query.category)
     if (!categoryId) return null
-    return categories.find((category) => category.id === categoryId) ?? null
+    return categories.find((category) => category.id === categoryId && category.is_active !== false) ?? null
   }, [categories, query.category])
 
+  const selectedRootCategory = useMemo(() => {
+    const root = getRootCategory(explicitSelectedCategory, categories)
+    return root?.parent === null && root.is_active !== false ? root : null
+  }, [categories, explicitSelectedCategory])
+  const legacyRootCategory = useMemo(() => {
+    if (commercialConfig || query.category || !query.product_type) return null
+    return categories.find((category) => (
+      category.parent === null
+      && category.is_active !== false
+      && category.product_type === query.product_type
+    )) ?? null
+  }, [categories, commercialConfig, query.category, query.product_type])
+  const effectiveRootCategory = selectedRootCategory ?? legacyRootCategory
+
   const categoryPath = useMemo(() => {
-    if (!selectedCategory) return [] as Category[]
+    if (!explicitSelectedCategory || !selectedRootCategory) return effectiveRootCategory ? [effectiveRootCategory] : [] as Category[]
 
     const categoryById = new Map(categories.map((category) => [category.id, category]))
     const path: Category[] = []
-    let current: Category | null = selectedCategory
+    let current: Category | null = explicitSelectedCategory
 
     while (current) {
       path.unshift(current)
@@ -139,7 +155,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     }
 
     return path
-  }, [categories, selectedCategory])
+  }, [categories, effectiveRootCategory, explicitSelectedCategory, selectedRootCategory])
 
   const selectedBrand = useMemo(() => {
     const brandId = Number(query.brand)
@@ -149,7 +165,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
 
   const extraFilterTrail = useMemo(() => {
     const trail: string[] = []
-    ;(['product_type', 'condition', 'stock_status'] as const).forEach((key) => {
+    ;(['condition', 'stock_status'] as const).forEach((key) => {
       const value = query[key]
       if (value) {
         const label = FILTER_LABELS[key][value]
@@ -183,14 +199,16 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const hasSearch = Boolean((query.search ?? '').trim())
   const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
   const searchOnlyView = hasSearch && !query.category && !query.product_type && !hasSpecificFilters
-  const seoTitle = selectedCategory ? `${selectedCategory.name} | JEM Nexus` : 'Productos industriales | JEM Nexus'
+  const seoTitle = effectiveRootCategory ? `${effectiveRootCategory.name} | JEM Nexus` : 'Productos industriales | JEM Nexus'
   const seoDescription = mainCategorySeo
     ? mainCategorySeo.metaDescription
-    : selectedCategory
-      ? `Ver productos disponibles en ${selectedCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
+    : effectiveRootCategory
+      ? `Ver productos disponibles en ${effectiveRootCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
       : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
-  const canonicalPath = commercialConfig?.canonicalPath ?? (selectedCategory
-    ? `/catalogo?category=${selectedCategory.id}`
+  const canonicalPath = commercialConfig?.canonicalPath ?? (explicitSelectedCategory && selectedRootCategory
+    ? `/catalogo?category=${explicitSelectedCategory.id}`
+    : effectiveRootCategory
+      ? `/catalogo?category=${effectiveRootCategory.id}`
     : '/catalogo')
   const seoRobots = hasSearch ? 'noindex,follow' : 'index,follow'
   const canonicalUrl = buildPublicUrl(canonicalPath)
@@ -224,28 +242,22 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   }, [categoryPath, commercialConfig, selectedBrand, extraFilterTrail, searchParams])
 
   const pageTitle = useMemo(() => {
-    const categoryName = categoryPath[categoryPath.length - 1]?.name
-    const brandName = selectedBrand?.name
-
-    if (categoryName && brandName) return `${brandName} en ${categoryName}`
-    if (categoryName) return categoryName
-    if (brandName) return brandName
-
     if (commercialConfig) return commercialConfig.title
+    if (effectiveRootCategory) return effectiveRootCategory.name
     if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
-    if (query.search) return `Resultados para "${query.search}"`
+    if (query.search) return 'Resultados de búsqueda'
     return 'Productos'
-  }, [categoryPath, commercialConfig, selectedBrand, query.product_type, query.search])
+  }, [commercialConfig, effectiveRootCategory, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
 
   useEffect(() => {
-    const root = categoryPath[0]
+    const root = effectiveRootCategory
     if (!root || root.parent !== null) return
     const normalized = normalizeLabel(root.name)
     if (!['maquinaria', 'repuestos', 'servicios'].includes(normalized)) return
     trackCategoryView({ category_id: root.id, category_name: root.name })
-  }, [categoryPath])
+  }, [effectiveRootCategory])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
