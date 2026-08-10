@@ -10,7 +10,7 @@ import { getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
 import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
-import { formatProductCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
+import { formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
 import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
@@ -152,6 +152,19 @@ export function ProductDetailPage() {
     [canonicalUrl, product],
   )
 
+  const isMachinery = product?.product_type === 'machinery'
+  const maximumLoadCapacity = isMachinery
+    ? formatMaximumLoadCapacityKg(product.maximum_load_capacity_kg)
+    : null
+  const powerSource = isMachinery ? formatProductPowerSource(product.power_source) : null
+  const includedServices = isMachinery
+    ? [
+        { label: 'Revisión técnica', included: product.includes_technical_review === true },
+        { label: 'Asesoría técnico-comercial', included: product.includes_commercial_technical_advice === true },
+        { label: 'Entrega coordinada', included: product.includes_coordinated_delivery === true },
+      ].filter((service) => service.included)
+    : []
+
 
   return (
     <Layout>
@@ -265,6 +278,18 @@ export function ProductDetailPage() {
                     <dt>SKU</dt>
                     <dd>{product.sku || 'No informado'}</dd>
                   </div>
+                  {maximumLoadCapacity ? (
+                    <div>
+                      <dt>Capacidad máxima de carga</dt>
+                      <dd>{maximumLoadCapacity}</dd>
+                    </div>
+                  ) : null}
+                  {powerSource ? (
+                    <div>
+                      <dt>Fuente de energía</dt>
+                      <dd>{powerSource}</dd>
+                    </div>
+                  ) : null}
                 </dl>
 
                 <div className="product-detail__payment-box">
@@ -302,6 +327,20 @@ export function ProductDetailPage() {
                 </div>
               </section>
             </div>
+
+            {isMachinery && includedServices.length > 0 ? (
+              <section className="product-detail__included-services" aria-labelledby="included-services-title">
+                <h2 id="included-services-title">Servicios incluidos</h2>
+                <ul className="product-detail__included-services-list">
+                  {includedServices.map((service) => (
+                    <li className="product-detail__included-service" key={service.label}>
+                      <span className="product-detail__included-service-icon" aria-hidden="true">✓</span>
+                      <span>{service.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             <section className="product-detail__description-card">
               <h2>Descripción</h2>
