@@ -11,11 +11,13 @@
 
 
 
-.product-card img,
-.promo-product-card img {
+.product-card__image-link img,
+.promo-product-card__image-link img {
   width: 100%;
   height: 150px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
+  background: var(--color-surface-soft);
 }
 
 .product-card__image-link,
@@ -23,6 +25,7 @@
 .spare-offer-card__image-link,
 .repair-service-card__image-link {
   display: block;
+  background: var(--color-surface-soft);
 }
 
 
@@ -92,10 +95,11 @@
 
 
 
-.product-card img {
+.product-card__image-link img {
   width: 100%;
   height: 150px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 
@@ -218,7 +222,7 @@
 
 
 @media (max-width: 640px) {
-  .product-card img {
+  .product-card__image-link img {
     height: 124px;
   }
 
