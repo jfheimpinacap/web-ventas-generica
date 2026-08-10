@@ -110,6 +110,7 @@ export interface ProductListItem {
 
 export interface ProductDetail extends ProductListItem {
   supplier: SupplierSummary | null
+  technical_sheet: TechnicalSheet | null
   description: string
   model: string
   sku: string
@@ -289,6 +290,7 @@ export interface ProductFormValues {
   category: number
   brand: number | null
   supplier: number | null
+  technical_sheet: number | null
   product_type: ProductType
   condition: ProductCondition
   short_description: string

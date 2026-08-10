@@ -166,7 +166,7 @@ public static class CommercialReadEndpoints
 
     private static async Task<IResult> GetProductAsync(string idOrSlug, JemNexusDbContext dbContext, CancellationToken cancellationToken)
     {
-        var query = ProductReadQuery(dbContext.Products);
+        var query = ProductReadQuery(dbContext.Products).Include(product => product.TechnicalSheet);
         var product = int.TryParse(idOrSlug, out var id)
             ? await query.FirstOrDefaultAsync(product => product.Id == id, cancellationToken)
             : await query.FirstOrDefaultAsync(product => product.Slug == idOrSlug, cancellationToken);

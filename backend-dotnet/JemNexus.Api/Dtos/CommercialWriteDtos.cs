@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace JemNexus.Api.Dtos;
 
@@ -50,6 +51,7 @@ public sealed record ProductWriteDto(
     [property: JsonPropertyName("brand_id")] int? BrandId,
     int? Supplier,
     [property: JsonPropertyName("supplier_id")] int? SupplierId,
+    [property: JsonPropertyName("technical_sheet")] JsonElement TechnicalSheet,
     [property: JsonPropertyName("product_type"), StringLength(20)] string? ProductType,
     [property: StringLength(20)] string? Condition,
     [property: JsonPropertyName("short_description"), StringLength(280)] string? ShortDescription,

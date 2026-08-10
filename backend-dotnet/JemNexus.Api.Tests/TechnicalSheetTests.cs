@@ -73,6 +73,40 @@ public sealed class TechnicalSheetTests : IDisposable
         Assert.All((await ReadJsonAsync<JsonElement[]>(await client.GetAsync("/api/technical-sheets/"))), AssertContractHidesStorage);
     }
 
+    [Fact]
+    public async Task AcceptedFormatsRequireMatchingExtensionMimeAndSignature()
+    {
+        using var client = await CreateAuthorizedClientAsync();
+        var files = new[]
+        {
+            ("sheet.pdf", "application/pdf", "%PDF-document"u8.ToArray()),
+            ("sheet.jpg", "image/jpeg", new byte[] { 0xff, 0xd8, 0xff, 0xe0 }),
+            ("sheet.jpeg", "image/jpeg", new byte[] { 0xff, 0xd8, 0xff, 0xdb }),
+            ("sheet.png", "image/png", new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+            ("sheet.webp", "image/webp", "RIFF1234WEBP"u8.ToArray()),
+        };
+
+        foreach (var (fileName, contentType, bytes) in files)
+        {
+            var response = await client.PostAsync("/api/technical-sheets/", PdfForm(fileName, fileName, bytes, contentType));
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+    }
+
+    [Theory]
+    [InlineData("sheet.svg", "image/svg+xml")]
+    [InlineData("sheet.gif", "image/gif")]
+    [InlineData("sheet.html", "text/html")]
+    [InlineData("sheet.exe", "application/octet-stream")]
+    [InlineData("sheet.png", "image/jpeg")]
+    [InlineData("sheet.webp", "image/webp")]
+    public async Task UnsupportedMismatchOrInvalidSignatureIsRejected(string fileName, string contentType)
+    {
+        using var client = await CreateAuthorizedClientAsync();
+        var response = await client.PostAsync("/api/technical-sheets/", PdfForm("Ficha", fileName, "not-a-valid-signature"u8.ToArray(), contentType));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Theory]
     [InlineData("empty", "valid.pdf", "application/pdf", 0)]
     [InlineData("extension", "invalid.txt", "application/pdf", 4)]
@@ -259,8 +293,8 @@ public sealed class TechnicalSheetTests : IDisposable
             var storage = new LocalTechnicalSheetStorage(new TestEnvironment(root));
             await using var first = new MemoryStream("%PDF-first"u8.ToArray());
             await using var second = new MemoryStream("%PDF-second"u8.ToArray());
-            var firstKey = await storage.SaveAsync(first, default);
-            var secondKey = await storage.SaveAsync(second, default);
+            var firstKey = await storage.SaveAsync(first, ".pdf", default);
+            var secondKey = await storage.SaveAsync(second, ".pdf", default);
             Assert.Matches("^[a-f0-9]{32}\\.pdf$", firstKey);
             Assert.NotEqual(firstKey, secondKey);
             Assert.True(File.Exists(Path.Combine(root, "uploads", "technical-sheets", firstKey)));
@@ -368,9 +402,9 @@ public sealed class TechnicalSheetTests : IDisposable
         public IEnumerable<string> Keys => _files.Keys.Order();
         public bool Exists(string key) => _files.ContainsKey(key);
         public string AddUnrelated(string key, byte[] bytes) { _files[key] = bytes; return key; }
-        public async Task<string> SaveAsync(Stream content, CancellationToken cancellationToken)
+        public async Task<string> SaveAsync(Stream content, string extension, CancellationToken cancellationToken)
         {
-            var key = $"{Guid.NewGuid():N}.pdf"; using var memory = new MemoryStream(); await content.CopyToAsync(memory, cancellationToken); _files.Add(key, memory.ToArray()); return key;
+            var key = $"{Guid.NewGuid():N}{extension}"; using var memory = new MemoryStream(); await content.CopyToAsync(memory, cancellationToken); _files.Add(key, memory.ToArray()); return key;
         }
         public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<Stream?>(_files.TryGetValue(key, out var bytes) ? new MemoryStream(bytes) : null);
         public Task DeleteAsync(string key, CancellationToken cancellationToken) { _files.Remove(key); return Task.CompletedTask; }

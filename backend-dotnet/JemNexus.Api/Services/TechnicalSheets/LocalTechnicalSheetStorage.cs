@@ -4,10 +4,13 @@ public sealed class LocalTechnicalSheetStorage(IHostEnvironment environment) : I
 {
     private readonly string _root = Path.Combine(environment.ContentRootPath, "uploads", "technical-sheets");
 
-    public async Task<string> SaveAsync(Stream content, CancellationToken cancellationToken)
+    public async Task<string> SaveAsync(Stream content, string extension, CancellationToken cancellationToken)
     {
+        extension = extension.ToLowerInvariant();
+        if (extension is not (".pdf" or ".jpg" or ".jpeg" or ".png" or ".webp"))
+            throw new InvalidOperationException("Invalid technical sheet extension.");
         Directory.CreateDirectory(_root);
-        var storageKey = $"{Guid.NewGuid():N}.pdf";
+        var storageKey = $"{Guid.NewGuid():N}{extension}";
         await using var output = new FileStream(GetSafePath(storageKey), FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
         await content.CopyToAsync(output, cancellationToken);
         return storageKey;

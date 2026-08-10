@@ -267,12 +267,23 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
   const record = isRecord(value) ? value : {}
   const rawImages = pick<unknown[]>(record, 'images')
   const rawSpecs = pick<unknown[]>(record, 'specs')
+  const rawTechnicalSheet = pick(record, 'technical_sheet', 'technicalSheet')
 
   return {
     ...normalizeProductListItem(record),
     supplier: pick(record, 'supplier')
       ? normalizeSupplier(pick(record, 'supplier'))
       : null,
+    technical_sheet: isRecord(rawTechnicalSheet) ? {
+      id: toNumber(pick(rawTechnicalSheet, 'id')),
+      name: toStringValue(pick(rawTechnicalSheet, 'name')),
+      original_file_name: toStringValue(pick(rawTechnicalSheet, 'original_file_name', 'originalFileName')),
+      content_type: toStringValue(pick(rawTechnicalSheet, 'content_type', 'contentType')),
+      size_bytes: toNumber(pick(rawTechnicalSheet, 'size_bytes', 'sizeBytes')),
+      created_at: toStringValue(pick(rawTechnicalSheet, 'created_at', 'createdAt')),
+      updated_at: toStringValue(pick(rawTechnicalSheet, 'updated_at', 'updatedAt')),
+      file_url: toStringValue(pick(rawTechnicalSheet, 'file_url', 'fileUrl')),
+    } : null,
     description: toStringValue(pick(record, 'description')),
     model: toStringValue(pick(record, 'model')),
     sku: toStringValue(pick(record, 'sku')),
