@@ -1,8 +1,8 @@
 # JEM Nexus ASP.NET Core API
 
-Proyecto base de la migración del backend de JEM Nexus a ASP.NET Core Web API (.NET 8), preparado para Windows Server + IIS + Plesk.
+Backend único de JEM Nexus, implementado como ASP.NET Core Web API (.NET 8) y preparado para Windows Server + IIS + Plesk.
 
-> Este proyecto prepara la migración del backend a ASP.NET Core/SQL Server. La fase Backend .NET 3 ya agrega autenticación JWT base y auditoría hacia `AppUsers`; el schema corregido quedó aplicado en Plesk/SQL Server, pero la API .NET todavía no está publicada ni reemplaza el backend Django existente.
+> **Estado actual:** la API .NET reemplazó al backend Django, que fue retirado del código versionado en el Prompt 103. La API está publicada en Plesk/IIS conforme al estado documentado y el frontend está conectado exclusivamente a .NET. Las menciones posteriores a Django en secciones históricas registran fases anteriores de la migración.
 
 ## Estructura
 
