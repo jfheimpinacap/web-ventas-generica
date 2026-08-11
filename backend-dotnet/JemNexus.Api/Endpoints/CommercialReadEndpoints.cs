@@ -93,8 +93,8 @@ public static class CommercialReadEndpoints
             query = query.Where(product =>
                 product.Name.ToLower().Contains(term)
                 || product.Slug.ToLower().Contains(term)
-                || product.Sku.ToLower().Contains(term)
-                || product.Model.ToLower().Contains(term)
+                || (product.Sku != null && product.Sku.ToLower().Contains(term))
+                || (product.Model != null && product.Model.ToLower().Contains(term))
                 || product.ShortDescription.ToLower().Contains(term)
                 || product.Category.Name.ToLower().Contains(term)
                 || (product.Brand != null && product.Brand.Name.ToLower().Contains(term))

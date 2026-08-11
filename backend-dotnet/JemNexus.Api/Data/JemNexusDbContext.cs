@@ -241,8 +241,10 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.Condition).HasMaxLength(20).HasDefaultValue(ProductConditions.NotApplicable).IsRequired();
             entity.Property(product => product.ShortDescription).HasMaxLength(280).HasDefaultValue(string.Empty);
             entity.Property(product => product.Description).HasDefaultValue(string.Empty);
-            entity.Property(product => product.Model).HasMaxLength(120).HasDefaultValue(string.Empty);
-            entity.Property(product => product.Sku).HasMaxLength(120).HasDefaultValue(string.Empty);
+            entity.Property(product => product.Model).HasMaxLength(120);
+            entity.Property(product => product.Sku).HasMaxLength(120);
+            entity.Property(product => product.WorkingHeightM).HasColumnType("decimal(8,2)");
+            entity.Property(product => product.TerrainType).HasMaxLength(30);
             entity.Property(product => product.MaximumLoadCapacityKg).HasColumnType("decimal(12,2)");
             entity.Property(product => product.PowerSource).HasMaxLength(30);
             entity.Property(product => product.IncludesTechnicalReview).HasDefaultValue(false);
@@ -259,7 +261,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             ConfigureAuditUsers(entity);
             entity.HasIndex(product => product.Slug).IsUnique();
-            entity.HasIndex(product => product.Sku);
+            entity.HasIndex(product => product.Sku).IsUnique().HasFilter("[Sku] IS NOT NULL");
             entity.HasIndex(product => product.ProductType);
             entity.HasIndex(product => product.Condition);
             entity.HasIndex(product => product.StockStatus);

@@ -181,6 +181,56 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task StructuredMachineryDataAndOptionalSkuRoundTripAndValidate()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var created = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Plataforma 1930ES", category = 1, model = " 1930ES ", sku = "   ",
+            working_height_m = 7.79m, terrain_type = ProductTerrainTypes.IndoorSmooth
+        }));
+        Assert.Equal("1930ES", created.GetProperty("model").GetString());
+        Assert.Equal(7.79m, created.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(ProductTerrainTypes.IndoorSmooth, created.GetProperty("terrain_type").GetString());
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("sku").ValueKind);
+
+        var slug = created.GetProperty("slug").GetString();
+        var fetched = await ReadJsonAsync<JsonElement>(await client.GetAsync($"/api/products/{slug}/"));
+        Assert.Equal("1930ES", fetched.GetProperty("model").GetString());
+        Assert.Equal(7.79m, fetched.GetProperty("working_height_m").GetDecimal());
+
+        var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/products/{slug}/", new
+        {
+            model = "GS-1930", sku = "SKU-1930", working_height_m = 11.60m,
+            terrain_type = ProductTerrainTypes.OutdoorSlopesAndRamps
+        }));
+        Assert.Equal("GS-1930", updated.GetProperty("model").GetString());
+        Assert.Equal(11.60m, updated.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(ProductTerrainTypes.OutdoorSlopesAndRamps, updated.GetProperty("terrain_type").GetString());
+
+        var secondWithoutSku = await client.PostAsJsonAsync("/api/products/", new { name = "Equipo sin SKU", category = 1 });
+        Assert.Equal(HttpStatusCode.Created, secondWithoutSku.StatusCode);
+        var duplicateSku = await client.PostAsJsonAsync("/api/products/", new { name = "SKU repetido", category = 1, sku = "SKU-1930" });
+        Assert.Equal(HttpStatusCode.BadRequest, duplicateSku.StatusCode);
+        Assert.Contains("sku must be unique", await duplicateSku.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/products/", new { name = "Altura cero", category = 1, working_height_m = 0m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/products/", new { name = "Altura negativa", category = 1, working_height_m = -1m })).StatusCode);
+        var invalidTerrain = await client.PostAsJsonAsync("/api/products/", new { name = "Terreno inválido", category = 1, terrain_type = "interior" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidTerrain.StatusCode);
+        Assert.Contains("invalid terrain_type", await invalidTerrain.Content.ReadAsStringAsync());
+
+        var spare = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new { name = "Repuesto sin técnicos", category = 2 }));
+        Assert.Equal(JsonValueKind.Null, spare.GetProperty("working_height_m").ValueKind);
+        Assert.Equal(JsonValueKind.Null, spare.GetProperty("terrain_type").ValueKind);
+        var service = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/products/", new { name = "Servicio sin técnicos", category = 3 }));
+        Assert.Equal(JsonValueKind.Null, service.GetProperty("model").ValueKind);
+        Assert.Equal(JsonValueKind.Null, service.GetProperty("sku").ValueKind);
+    }
+
+    [Fact]
     public async Task DeleteProductWithoutQuotesPhysicallyRemovesProductAndTechnicalRelations()
     {
         await _factory.SeedCommercialDataAsync();
@@ -597,12 +647,13 @@ public sealed class CommercialWriteEndpointTests : IDisposable
 
             var category = new Category { Id = 1, Name = "Maquinaria", Slug = "maquinaria", ProductType = ProductTypes.Machinery, Description = "Categoría", IsActive = true, Order = 1 };
             var spareCategory = new Category { Id = 2, Name = "Repuestos", Slug = "repuestos", ProductType = ProductTypes.SparePart, Description = "Repuestos", IsActive = true, Order = 2 };
+            var serviceCategory = new Category { Id = 3, Name = "Servicios", Slug = "servicios", ProductType = ProductTypes.Service, Description = "Servicios", IsActive = true, Order = 3 };
             var brand = new Brand { Id = 1, Name = "ACME", Slug = "acme", Description = "Marca", IsActive = true };
             var supplier = new Supplier { Id = 1, Name = "Proveedor", ContactName = "Contacto", Phone = "+569", Email = "proveedor@example.test", IsActive = true };
             var product = new Product { Id = 1, Name = "Excavadora", Slug = "excavadora", Category = category, Brand = brand, Supplier = supplier, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
             var spareProduct = new Product { Id = 2, Name = "Filtro", Slug = "filtro", Category = spareCategory, ProductType = ProductTypes.SparePart, Condition = ProductConditions.New, StockStatus = StockStatuses.OnRequest, IsPublished = true };
 
-            dbContext.Categories.AddRange(category, spareCategory);
+            dbContext.Categories.AddRange(category, spareCategory, serviceCategory);
             dbContext.Brands.Add(brand);
             dbContext.Suppliers.Add(supplier);
             dbContext.Products.AddRange(product, spareProduct);

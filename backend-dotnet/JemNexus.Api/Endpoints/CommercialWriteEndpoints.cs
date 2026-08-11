@@ -290,6 +290,8 @@ public static class CommercialWriteEndpoints
         if (relation is not null) return relation;
         var valueValidation = ValidateProductValues(request);
         if (valueValidation is not null) return valueValidation;
+        var skuValidation = await ValidateUniqueSkuAsync(request.Sku, null, dbContext, cancellationToken);
+        if (skuValidation is not null) return skuValidation;
         var product = new Product();
         await ApplyProductAsync(product, request, dbContext, user, isCreate: true, cancellationToken);
         dbContext.Products.Add(product);
@@ -307,6 +309,8 @@ public static class CommercialWriteEndpoints
         if (relation is not null) return relation;
         var valueValidation = ValidateProductValues(request);
         if (valueValidation is not null) return valueValidation;
+        var skuValidation = await ValidateUniqueSkuAsync(request.Sku, product.Id, dbContext, cancellationToken);
+        if (skuValidation is not null) return skuValidation;
         var finalRelation = await ValidateProductCategoryTypeAsync(
             request.CategoryId ?? request.Category ?? product.CategoryId,
             request.ProductType ?? product.ProductType,
@@ -394,8 +398,10 @@ public static class CommercialWriteEndpoints
         if (request.Condition is not null) product.Condition = request.Condition.Trim();
         if (request.ShortDescription is not null) product.ShortDescription = request.ShortDescription.Trim();
         if (request.Description is not null) product.Description = request.Description.Trim();
-        if (request.Model is not null) product.Model = request.Model.Trim();
-        if (request.Sku is not null) product.Sku = request.Sku.Trim();
+        if (request.Model is not null) product.Model = Clean(request.Model);
+        if (request.Sku is not null) product.Sku = Clean(request.Sku);
+        if (request.WorkingHeightM.HasValue) product.WorkingHeightM = request.WorkingHeightM;
+        if (request.TerrainType is not null) product.TerrainType = Clean(request.TerrainType);
         if (request.Year.HasValue) product.Year = request.Year;
         if (request.HoursMeter.HasValue) product.HoursMeter = request.HoursMeter;
         if (request.MaximumLoadCapacityKg.HasValue) product.MaximumLoadCapacityKg = request.MaximumLoadCapacityKg;
@@ -757,9 +763,20 @@ public static class CommercialWriteEndpoints
         if (request.PriceCurrency is not null && !PriceCurrencyValues.Contains(request.PriceCurrency.Trim())) return Results.BadRequest(new { detail = "invalid price_currency. Use CLP or USD." });
         if (request.PriceTaxMode is not null && !PriceTaxModeValues.Contains(request.PriceTaxMode.Trim())) return Results.BadRequest(new { detail = "invalid price_tax_mode. Use plus_vat or vat_included." });
         if (request.MaximumLoadCapacityKg is <= 0) return Results.BadRequest(new { detail = "maximum_load_capacity_kg must be greater than zero." });
+        if (request.WorkingHeightM is <= 0) return Results.BadRequest(new { detail = "working_height_m must be greater than zero." });
+        if (request.TerrainType is not null && !CommercialValidation.IsAllowedProductTerrainType(request.TerrainType.Trim())) return Results.BadRequest(new { detail = "invalid terrain_type. Use indoor_smooth, outdoor or outdoor_slopes_and_ramps." });
         if (request.PowerSource is not null && !CommercialValidation.IsAllowedProductPowerSource(request.PowerSource.Trim())) return Results.BadRequest(new { detail = "invalid power_source." });
         var maxYear = DateTimeOffset.UtcNow.Year + CommercialValidation.MaxFutureYearOffset;
         if (request.Year is not null && (request.Year < CommercialValidation.MinReasonableYear || request.Year > maxYear)) return Results.BadRequest(new { detail = $"year must be between {CommercialValidation.MinReasonableYear} and {maxYear}." });
+        return null;
+    }
+
+    private static async Task<IResult?> ValidateUniqueSkuAsync(string? sku, int? currentProductId, JemNexusDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var normalizedSku = Clean(sku);
+        if (normalizedSku is null) return null;
+        if (await dbContext.Products.AnyAsync(product => product.Sku == normalizedSku && product.Id != currentProductId, cancellationToken))
+            return Results.BadRequest(new { detail = "sku must be unique." });
         return null;
     }
 
