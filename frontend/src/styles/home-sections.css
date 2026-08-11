@@ -121,9 +121,9 @@
 .spare-offer-card__image-link img {
   width: 100%;
   height: 130px;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  background: var(--color-surface-soft);
+  background: #fff;
 }
 
 
@@ -194,9 +194,9 @@
 .repair-service-card__image-link img {
   width: 100%;
   height: 130px;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  background: var(--color-surface-soft);
+  background: #fff;
 }
 
 
@@ -310,7 +310,7 @@
 .product-detail__main-image {
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-block);
-  background: #f8fafc;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -318,9 +318,9 @@
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  background: var(--color-surface-soft);
+  background: #fff;
 }
 
 .product-detail__thumbs {
@@ -354,9 +354,9 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  background: var(--color-surface-soft);
+  background: #fff;
 }
 
 .product-detail__commercial {
