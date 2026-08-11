@@ -9,7 +9,7 @@ export interface ApiHealthStatus {
 }
 
 export function getHealthEndpoint() {
-  return API_PROVIDER === 'dotnet' ? '/health' : '/health/'
+  return '/health'
 }
 
 export async function getConfiguredApiHealth(): Promise<ApiHealthStatus> {

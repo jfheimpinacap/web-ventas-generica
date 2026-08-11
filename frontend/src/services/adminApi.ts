@@ -25,7 +25,7 @@ import type {
   SupplierSummary,
   TechnicalSheet,
 } from '../types/catalog'
-import { API_PROVIDER, ApiError } from './api'
+import { ApiError } from './api'
 import { normalizeChileanPriceInput } from '../utils/formatters'
 import { authFetch } from './authApi'
 
@@ -752,22 +752,10 @@ export async function getAdminBrand(id: number) {
 }
 
 export async function createBrand(payload: BrandFormValues) {
-  if (API_PROVIDER === 'dotnet') {
-    const response = await authFetch<unknown>('/brands/', {
-      method: 'POST',
-      body: jsonBody(toDotnetBrandPayload(payload)),
-    })
-    return normalizeBrand(response)
-  }
-
-  const formData = new FormData()
-  formData.append('name', payload.name)
-  if (payload.slug) formData.append('slug', payload.slug)
-  if (payload.description) formData.append('description', payload.description)
-  formData.append('is_active', String(payload.is_active))
-  if (payload.logo) formData.append('logo', payload.logo)
-
-  const response = await authFetch<unknown>('/brands/', { method: 'POST', body: formData })
+  const response = await authFetch<unknown>('/brands/', {
+    method: 'POST',
+    body: jsonBody(toDotnetBrandPayload(payload)),
+  })
   return normalizeBrand(response)
 }
 
@@ -775,26 +763,9 @@ export async function updateBrand(
   id: number,
   payload: Partial<BrandFormValues>,
 ) {
-  if (API_PROVIDER === 'dotnet') {
-    const response = await authFetch<unknown>(`/brands/${id}/`, {
-      method: 'PATCH',
-      body: jsonBody(toDotnetBrandPayload(payload)),
-    })
-    return normalizeBrand(response)
-  }
-
-  const formData = new FormData()
-  if (payload.name !== undefined) formData.append('name', payload.name)
-  if (payload.slug !== undefined) formData.append('slug', payload.slug)
-  if (payload.description !== undefined)
-    formData.append('description', payload.description)
-  if (payload.is_active !== undefined)
-    formData.append('is_active', String(payload.is_active))
-  if (payload.logo instanceof File) formData.append('logo', payload.logo)
-
   const response = await authFetch<unknown>(`/brands/${id}/`, {
     method: 'PATCH',
-    body: formData,
+    body: jsonBody(toDotnetBrandPayload(payload)),
   })
   return normalizeBrand(response)
 }
@@ -854,40 +825,10 @@ export async function getAdminPromotion(id: number) {
   return normalizePromotion(response)
 }
 
-function toPromotionBody(
-  payload: PromotionFormValues | Partial<PromotionFormValues>,
-) {
-  const formData = new FormData()
-  if (payload.title !== undefined) formData.append('title', payload.title)
-  if (payload.subtitle !== undefined)
-    formData.append('subtitle', payload.subtitle)
-  if (payload.product !== undefined)
-    formData.append(
-      'product',
-      payload.product === null ? '' : String(payload.product),
-    )
-  if (payload.button_text !== undefined)
-    formData.append('button_text', payload.button_text)
-  if (payload.button_url !== undefined)
-    formData.append('button_url', payload.button_url)
-  if (payload.is_active !== undefined)
-    formData.append('is_active', String(payload.is_active))
-  if (payload.order !== undefined)
-    formData.append('order', String(payload.order))
-  if (payload.starts_at !== undefined)
-    formData.append('starts_at', payload.starts_at || '')
-  if (payload.ends_at !== undefined)
-    formData.append('ends_at', payload.ends_at || '')
-  if (payload.image) formData.append('image', payload.image)
-  return formData
-}
-
 export async function createPromotion(payload: PromotionFormValues) {
   const response = await authFetch<unknown>('/promotions/', {
     method: 'POST',
-    body: API_PROVIDER === 'dotnet'
-      ? jsonBody(toDotnetPromotionPayload(payload))
-      : toPromotionBody(payload),
+    body: jsonBody(toDotnetPromotionPayload(payload)),
   })
   return normalizePromotion(response)
 }
@@ -898,9 +839,7 @@ export async function updatePromotion(
 ) {
   const response = await authFetch<unknown>(`/promotions/${id}/`, {
     method: 'PATCH',
-    body: API_PROVIDER === 'dotnet'
-      ? jsonBody(toDotnetPromotionPayload(payload))
-      : toPromotionBody(payload),
+    body: jsonBody(toDotnetPromotionPayload(payload)),
   })
   return normalizePromotion(response)
 }

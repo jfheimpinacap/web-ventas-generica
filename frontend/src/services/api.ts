@@ -1,14 +1,9 @@
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8001/api'
-const DEFAULT_API_PROVIDER: ApiProvider = 'django'
-
-type ApiProvider = 'django' | 'dotnet'
+const DEFAULT_API_BASE_URL = 'http://localhost:5000'
 
 export const API_BASE_URL = normalizeBaseUrl(
   import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL,
 )
-export const API_PROVIDER = normalizeApiProvider(
-  import.meta.env.VITE_API_PROVIDER,
-)
+export const API_PROVIDER = 'dotnet' as const
 
 export class ApiError extends Error {
   status: number
@@ -22,10 +17,6 @@ export class ApiError extends Error {
   }
 }
 
-function normalizeApiProvider(provider?: string): ApiProvider {
-  return provider === 'dotnet' ? 'dotnet' : DEFAULT_API_PROVIDER
-}
-
 function normalizeBaseUrl(url: string) {
   return url.trim().replace(/\/+$/, '')
 }
@@ -33,7 +24,7 @@ function normalizeBaseUrl(url: string) {
 function normalizeEndpointPath(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
 
-  if (API_PROVIDER === 'dotnet' && normalizedPath.length > 1) {
+  if (normalizedPath.length > 1) {
     return normalizedPath.replace(/\/+$/, '')
   }
 
@@ -43,7 +34,7 @@ function normalizeEndpointPath(path: string) {
 function shouldPrefixApi(path: string) {
   const basePath = new URL(API_BASE_URL).pathname.replace(/\/+$/, '')
 
-  if (API_PROVIDER === 'dotnet' && path === '/health') {
+  if (path === '/health') {
     return false
   }
 
@@ -156,9 +147,7 @@ export function getSafeApiErrorMessage(error: unknown, fallback: string) {
   }
 
   if (error.status === 404) {
-    return API_PROVIDER === 'dotnet'
-      ? 'Endpoint pendiente en la API .NET para este listado. La lectura aún no está disponible con VITE_API_PROVIDER=dotnet.'
-      : 'El recurso solicitado no existe o no está disponible.'
+    return 'El recurso solicitado no existe o no está disponible en la API .NET.'
   }
 
   if (error.status === 501) {

@@ -9,7 +9,7 @@ import type {
   QuoteRequestPublicPayload,
   SupplierSummary,
 } from '../types/catalog'
-import { API_PROVIDER, apiRequest, buildApiUrl } from './api'
+import { apiRequest, buildApiUrl } from './api'
 import {
   normalizeBrandListResponse,
   normalizeCategoryListResponse,
@@ -23,8 +23,6 @@ import {
 type ApiListResponse<T> = T[] | { results: T[] }
 
 function publicReadPath(path: string) {
-  if (API_PROVIDER !== 'dotnet') return path
-
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `/public${normalizedPath}`
 }
