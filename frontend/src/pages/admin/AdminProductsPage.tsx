@@ -274,17 +274,6 @@ export function AdminProductsPage() {
     [products, selection, categories],
   );
 
-  const selectedPath = useMemo(() => {
-    const categoryById = new Map(categories.map((category) => [category.id.toString(), category.name]));
-    return [
-      categoryById.get(selection.rootCategoryFilter),
-      categoryById.get(selection.subcategoryFilter),
-      selection.brandFilter || undefined,
-      selection.conditionFilter ? formatCondition(selection.conditionFilter as ProductCondition) : undefined,
-      selection.stockFilter ? formatStockStatus(selection.stockFilter as StockStatus) : undefined,
-    ].filter(Boolean).join(" / ");
-  }, [categories, selection]);
-
   const applySearch = () => {
     const nextSearch = searchInput.trim();
     setAppliedSearch(nextSearch);
@@ -365,7 +354,6 @@ export function AdminProductsPage() {
             </nav>
           </aside>
           <section className="admin-products-results" aria-label="Resultados de productos">
-            <p className="admin-products-results__summary"><strong>{filteredProducts.length} {filteredProducts.length === 1 ? "producto" : "productos"}</strong>{selectedPath ? <span> · {selectedPath}</span> : null}</p>
             {!loading && !error && filteredProducts.length === 0 ? <p className="ui-note">{!hasLoadedProducts || (products.length === 0 && !appliedSearch && publishedFilter === "") ? "No existen productos" : "No hay productos para los criterios seleccionados"}</p> : null}
             {!loading && !error && filteredProducts.length > 0 ? (
               <div className="admin-table-wrapper admin-products-table-wrapper" tabIndex={0} aria-label="Tabla de productos con desplazamiento horizontal">

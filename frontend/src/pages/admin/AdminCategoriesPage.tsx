@@ -83,12 +83,12 @@ export function AdminCategoriesPage() {
       {success ? <p className="ui-note ui-note--success">{success}</p> : null}
 
       {!loading && !error ? (
-        <div className="admin-form-panel">
-          <section>
+        <div className="admin-categories-lists">
+          <section className="admin-compact-list admin-compact-list--categories">
             <h3>Categorías principales</h3>
             {rootCategories.length === 0 ? <p className="ui-note">Sin categorías principales.</p> : null}
-            <div className="admin-table-wrapper">
-              <table className="admin-table">
+            <div className="admin-table-wrapper admin-table-wrapper--compact">
+              <table className="admin-table admin-table--compact">
                 <thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody>{rootCategories.map((item) => (
                   <tr key={item.id} className={item.id === selectedRootId ? 'admin-table__row--selected' : ''}>
@@ -101,12 +101,12 @@ export function AdminCategoriesPage() {
             </div>
           </section>
 
-          <section>
+          <section className="admin-compact-list admin-compact-list--categories">
             <AdminPageHeader className="admin-page-header--section" title={<>Subcategorías{selectedRoot ? ` de ${selectedRoot.name}` : ''}</>} actions={selectedRoot ? <Link to={`/admin/categorias/nueva?parent=${selectedRoot.id}`} className="btn btn--accent">Crear subcategoría</Link> : undefined} />
             {!selectedRoot ? <p className="ui-note">Selecciona una categoría principal para administrar sus subcategorías.</p> : null}
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (
-              <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
+              <div className="admin-table-wrapper admin-table-wrapper--compact"><table className="admin-table admin-table--compact"><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
                 <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Borrar</button></td></tr>
               ))}</tbody></table></div>
             ) : null}
