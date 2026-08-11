@@ -405,7 +405,7 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
             return;
         }
 
-        var inactiveCategory = new Category { Id = 3, Name = "Categoría Inactiva", Slug = "categoria-inactiva", IsActive = false, Description = "No pública", Order = 3 };
+        var inactiveCategory = new Category { Id = 4, Name = "Categoría Inactiva", Slug = "categoria-inactiva", IsActive = false, Description = "No pública", Order = 3 };
         var inactiveBrand = new Brand { Id = 2, Name = "Marca Inactiva", Slug = "marca-inactiva", IsActive = false };
         var draftProduct = new Product { Id = 3, Name = "Borrador", Slug = "borrador", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = false };
         var inactiveCategoryProduct = new Product { Id = 4, Name = "Producto Inactivo", Slug = "producto-inactivo", Category = inactiveCategory, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
