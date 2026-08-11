@@ -12,6 +12,7 @@ export function LoginPage() {
   const [searchParams] = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const logoutReason = (location.state as { reason?: string } | null)?.reason ?? searchParams.get('reason')
@@ -47,7 +48,7 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <Seo
-        title="Acceso vendedor | JEM Nexus"
+        title="Panel de administración | JEM Nexus"
         description="Acceso al panel interno de gestión comercial y soporte."
         canonical={buildPublicUrl('/login')}
         ogType="website"
@@ -55,8 +56,7 @@ export function LoginPage() {
         robots="noindex,nofollow"
       />
       <section className="login-card">
-        <p className="login-card__eyebrow">Acceso vendedor</p>
-        <h1>Panel privado</h1>
+        <h1>Panel de administración</h1>
         <p>Ingresa con tu cuenta para administrar catálogo, cotizaciones y promociones.</p>
 
         {idleMessage ? <p className="ui-note ui-note--success">{idleMessage}</p> : null}
@@ -68,12 +68,17 @@ export function LoginPage() {
           </label>
           <label>
             Contraseña
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
+            <span className="login-password-field">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+              <button type="button" className="login-password-toggle" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.75"/></svg>
+              </button>
+            </span>
           </label>
 
           {error ? <p className="ui-note ui-note--error">{error}</p> : null}

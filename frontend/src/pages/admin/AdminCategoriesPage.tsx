@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteCategory, getAdminCategories } from '../../services/adminApi'
 import type { Category } from '../../types/catalog'
@@ -66,17 +67,16 @@ export function AdminCategoriesPage() {
 
   return (
     <AdminLayout>
-      <div className="admin-products-header">
-        <h1>Categorías</h1>
-        <div className="admin-list-toolbar">
+      <AdminPageHeader title="Categorías" actions={
+        <div className="admin-page-header__toolbar">
+          <Link to="/admin/categorias/nueva" className="btn btn--accent">Crear categoría principal</Link>
           <select className="admin-search" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as 'active' | 'inactive' | 'all')} aria-label="Filtrar por estado">
             <option value="active">Solo activas</option>
             <option value="inactive">Solo inactivas</option>
             <option value="all">Todas</option>
           </select>
-          <Link to="/admin/categorias/nueva" className="btn btn--accent">Crear categoría principal</Link>
         </div>
-      </div>
+      } />
 
       {loading ? <p className="ui-note">Cargando categorías...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
@@ -102,10 +102,7 @@ export function AdminCategoriesPage() {
           </section>
 
           <section>
-            <div className="admin-products-header">
-              <h3>Subcategorías{selectedRoot ? ` de ${selectedRoot.name}` : ''}</h3>
-              {selectedRoot ? <Link to={`/admin/categorias/nueva?parent=${selectedRoot.id}`} className="btn btn--accent">Crear subcategoría</Link> : null}
-            </div>
+            <AdminPageHeader className="admin-page-header--section" title={<>Subcategorías{selectedRoot ? ` de ${selectedRoot.name}` : ''}</>} actions={selectedRoot ? <Link to={`/admin/categorias/nueva?parent=${selectedRoot.id}`} className="btn btn--accent">Crear subcategoría</Link> : undefined} />
             {!selectedRoot ? <p className="ui-note">Selecciona una categoría principal para administrar sus subcategorías.</p> : null}
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (

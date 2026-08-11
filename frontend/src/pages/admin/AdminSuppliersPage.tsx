@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteSupplier, getAdminSuppliers } from '../../services/adminApi'
 import type { SupplierSummary } from '../../types/catalog'
@@ -59,9 +60,9 @@ export function AdminSuppliersPage() {
 
   return (
     <AdminLayout>
-      <div className="admin-products-header">
-        <h1>Proveedores</h1>
-        <div className="admin-list-toolbar">
+      <AdminPageHeader title="Proveedores" actions={
+        <div className="admin-page-header__toolbar">
+          <Link className="btn btn--accent" to="/admin/proveedores/nuevo">Nuevo proveedor</Link>
           <input
             className="admin-search"
             placeholder="Buscar proveedor"
@@ -78,11 +79,8 @@ export function AdminSuppliersPage() {
             <option value="inactive">Solo inactivos</option>
             <option value="all">Todos</option>
           </select>
-          <Link className="btn btn--accent" to="/admin/proveedores/nuevo">
-            Nuevo proveedor
-          </Link>
         </div>
-      </div>
+      } />
       {loading ? <p className="ui-note">Cargando proveedores...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
       {!loading && !error ? (

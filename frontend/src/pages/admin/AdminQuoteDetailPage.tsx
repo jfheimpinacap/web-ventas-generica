@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getAdminQuote, updateQuote } from '../../services/adminApi'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
@@ -65,12 +66,9 @@ export function AdminQuoteDetailPage() {
 
   return (
     <AdminLayout>
-      <div className="admin-products-header">
-        <h1>{item ? `Cotización ${formatQuoteFolio(item.id)}` : 'Detalle de cotización'}</h1>
-        <button className="btn btn--ghost" onClick={() => navigate('/admin/cotizaciones')} type="button">
+      <AdminPageHeader title={item ? `Cotización ${formatQuoteFolio(item.id)}` : 'Detalle de cotización'} actions={<button className="btn btn--ghost" onClick={() => navigate('/admin/cotizaciones')} type="button">
           Volver
-        </button>
-      </div>
+        </button>} />
 
       {loading ? <p className="ui-note">Cargando detalle...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}

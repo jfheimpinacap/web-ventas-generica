@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AdminPageHeader } from './AdminPageHeader'
 
 interface AdminEditorLayoutProps {
   title: string
@@ -12,17 +13,17 @@ interface AdminEditorLayoutProps {
 export function AdminEditorLayout({ title, onBack, form, sidebar, headerActions, hideDefaultBackAction = false }: AdminEditorLayoutProps) {
   return (
     <>
-      <div className="admin-products-header">
-        <h1>{title}</h1>
-        <div className="admin-editor-header__actions">
+      <AdminPageHeader
+        title={title}
+        actions={<div className="admin-editor-header__actions">
           {!hideDefaultBackAction ? (
             <button type="button" className="btn btn--ghost" onClick={onBack}>
               Volver al listado
             </button>
           ) : null}
           {headerActions}
-        </div>
-      </div>
+        </div>}
+      />
 
       <section className={`admin-edit-layout ${sidebar ? '' : 'admin-edit-layout--single'}`.trim()}>
         <div className="admin-edit-layout__form">{form}</div>

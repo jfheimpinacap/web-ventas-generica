@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { AdminIcon } from "../../components/admin/AdminIcon";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { getSafeApiErrorMessage } from "../../services/api";
 import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
 import type {
@@ -342,10 +343,7 @@ export function AdminProductsPage() {
   return (
     <AdminLayout>
       <main className="admin-products-list">
-        <div className="admin-products-list__header">
-          <h1>Productos</h1>
-          <Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link>
-        </div>
+        <AdminPageHeader title="Productos" actions={<Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link>} />
         <div className="admin-products-list__messages" aria-live="polite">
           {loading ? <p className="ui-note">Cargando productos...</p> : null}
           {error ? <p className="ui-note ui-note--error" role="alert">{error}</p> : null}
