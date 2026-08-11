@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
 import {
@@ -90,9 +91,7 @@ export function AdminQuotesPage() {
 
   return (
     <AdminLayout>
-      <h1>Cotizaciones</h1>
-
-      <div className="admin-inline-form">
+      <AdminPageHeader title="Cotizaciones" actions={<div className="admin-page-header__toolbar">
         <label>
           Estado
           <select
@@ -137,7 +136,7 @@ export function AdminQuotesPage() {
             <option value="status">Estado</option>
           </select>
         </label>
-      </div>
+      </div>} />
 
       <div className="quote-summary-cards" aria-label="Resumen de estados de cotización">
         <article className="quote-summary-card">

@@ -91,6 +91,9 @@
   white-space: nowrap;
 }
 
-.technical-sheet-form { background: #fff; border: 1px solid #e2e8f0; border-radius: var(--radius-card); display: grid; gap: 1rem; margin: 1rem 0; padding: 1rem; }
+.technical-sheet-form { box-sizing: border-box; width: min(100%, 440px); background: #fff; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); box-shadow: var(--admin-shadow); display: grid; gap: .65rem; margin: .35rem 0; padding: .8rem; }
+.technical-sheet-form h2 { margin: 0; font-size: 1rem; }
 .technical-sheet-form label { display: grid; font-weight: 600; gap: .35rem; }
-.technical-sheet-form input { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .65rem; }
+.technical-sheet-form input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: var(--admin-radius); padding: .55rem; }
+.technical-sheet-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
+.technical-sheet-form__filename { max-width: 100%; overflow-wrap: anywhere; }
