@@ -31,6 +31,13 @@ public static class CommercialValidation
         ProductPowerSources.ElectricLithium
     ];
 
+    public static readonly string[] AllowedProductTerrainTypes =
+    [
+        ProductTerrainTypes.IndoorSmooth,
+        ProductTerrainTypes.Outdoor,
+        ProductTerrainTypes.OutdoorSlopesAndRamps
+    ];
+
     public static readonly string[] AllowedStockStatuses =
     [
         StockStatuses.Available,
@@ -59,6 +66,7 @@ public static class CommercialValidation
     public static bool IsAllowedProductType(string? value) => IsAllowed(value, AllowedProductTypes);
     public static bool IsAllowedProductCondition(string? value) => IsAllowed(value, AllowedProductConditions);
     public static bool IsAllowedProductPowerSource(string? value) => value is null || IsAllowed(value, AllowedProductPowerSources);
+    public static bool IsAllowedProductTerrainType(string? value) => value is null || IsAllowed(value, AllowedProductTerrainTypes);
     public static bool IsAllowedStockStatus(string? value) => IsAllowed(value, AllowedStockStatuses);
     public static bool IsAllowedQuoteStatus(string? value) => IsAllowed(value, AllowedQuoteStatuses);
     public static bool IsAllowedPreferredContactMethod(string? value) => IsAllowed(value, AllowedPreferredContactMethods);
@@ -104,6 +112,16 @@ public static class CommercialValidation
         if (!IsAllowedProductPowerSource(product.PowerSource))
         {
             errors.Add("Product power source is not allowed.");
+        }
+
+        if (product.WorkingHeightM is <= 0)
+        {
+            errors.Add("Product working height must be greater than zero metres.");
+        }
+
+        if (!IsAllowedProductTerrainType(product.TerrainType))
+        {
+            errors.Add("Product terrain type is not allowed.");
         }
 
         var maxYear = DateTimeOffset.UtcNow.Year + MaxFutureYearOffset;

@@ -409,11 +409,8 @@ namespace JemNexus.Api.Data.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<string>("Model")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)")
-                        .HasDefaultValue("");
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<decimal?>("MaximumLoadCapacityKg")
                         .HasColumnType("decimal(12,2)");
@@ -464,11 +461,12 @@ namespace JemNexus.Api.Data.Migrations
                         .HasDefaultValue("");
 
                     b.Property<string>("Sku")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)")
-                        .HasDefaultValue("");
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("TerrainType")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -499,6 +497,9 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int?>("Year")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("WorkingHeightM")
+                        .HasColumnType("decimal(8,2)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BrandId");
@@ -515,7 +516,9 @@ namespace JemNexus.Api.Data.Migrations
 
                     b.HasIndex("ProductType");
 
-                    b.HasIndex("Sku");
+                    b.HasIndex("Sku")
+                        .IsUnique()
+                        .HasFilter("[Sku] IS NOT NULL");
 
                     b.HasIndex("Slug")
                         .IsUnique();

@@ -58,6 +58,8 @@ public sealed record ProductWriteDto(
     string? Description,
     [property: StringLength(120)] string? Model,
     [property: StringLength(120)] string? Sku,
+    [property: JsonPropertyName("working_height_m")] decimal? WorkingHeightM,
+    [property: JsonPropertyName("terrain_type"), StringLength(30)] string? TerrainType,
     int? Year,
     [property: JsonPropertyName("hours_meter")] int? HoursMeter,
     [property: JsonPropertyName("maximum_load_capacity_kg")] decimal? MaximumLoadCapacityKg,

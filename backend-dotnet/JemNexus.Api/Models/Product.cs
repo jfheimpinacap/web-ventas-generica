@@ -17,8 +17,10 @@ public sealed class Product
     public string Condition { get; set; } = ProductConditions.NotApplicable;
     public string ShortDescription { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Model { get; set; } = string.Empty;
-    public string Sku { get; set; } = string.Empty;
+    public string? Model { get; set; }
+    public string? Sku { get; set; }
+    public decimal? WorkingHeightM { get; set; }
+    public string? TerrainType { get; set; }
     public int? Year { get; set; }
     public int? HoursMeter { get; set; }
     public decimal? MaximumLoadCapacityKg { get; set; }
@@ -66,6 +68,13 @@ public static class ProductPowerSources
     public const string Diesel = "diesel";
     public const string Electric24V = "electric_24v";
     public const string ElectricLithium = "electric_lithium";
+}
+
+public static class ProductTerrainTypes
+{
+    public const string IndoorSmooth = "indoor_smooth";
+    public const string Outdoor = "outdoor";
+    public const string OutdoorSlopesAndRamps = "outdoor_slopes_and_ramps";
 }
 
 public static class StockStatuses
