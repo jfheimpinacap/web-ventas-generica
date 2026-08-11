@@ -82,8 +82,8 @@ export function AdminBrandsPage() {
       {loading ? <p className="ui-note">Cargando marcas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
       {!loading && !error ? (
-        <div className="admin-table-wrapper">
-          <table className="admin-table">
+        <div className="admin-table-wrapper admin-table-wrapper--compact admin-compact-list--brands">
+          <table className="admin-table admin-table--compact">
             <thead>
               <tr>
                 <th>Nombre</th>
