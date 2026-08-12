@@ -246,6 +246,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.WorkingHeightM).HasColumnType("decimal(8,2)");
             entity.Property(product => product.TerrainType).HasMaxLength(30);
             entity.Property(product => product.MaximumLoadCapacityKg).HasColumnType("decimal(12,2)");
+            entity.Property(product => product.MachineWeightKg).HasColumnType("decimal(12,2)");
             entity.Property(product => product.PowerSource).HasMaxLength(30);
             entity.Property(product => product.IncludesTechnicalReview).HasDefaultValue(false);
             entity.Property(product => product.IncludesCommercialTechnicalAdvice).HasDefaultValue(false);

@@ -312,6 +312,9 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
     maximum_load_capacity_kg: toNullableFiniteNumber(
       pick(record, 'maximum_load_capacity_kg', 'maximumLoadCapacityKg'),
     ),
+    machine_weight_kg: toNullableFiniteNumber(
+      pick(record, 'machine_weight_kg', 'machineWeightKg'),
+    ),
     power_source: toProductPowerSource(pick(record, 'power_source', 'powerSource')),
     includes_technical_review: toBoolean(
       pick(record, 'includes_technical_review', 'includesTechnicalReview'),
@@ -517,12 +520,14 @@ function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payl
   } as T
 
   if (payload.model !== undefined) Object.assign(nextPayload, { model: payload.model.trim() || null })
-  if (payload.sku !== undefined) Object.assign(nextPayload, { sku: payload.sku.trim() || null })
   if (Object.prototype.hasOwnProperty.call(payload, 'working_height_m')) {
     Object.assign(nextPayload, { working_height_m: payload.working_height_m ?? null })
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'terrain_type')) {
     Object.assign(nextPayload, { terrain_type: payload.terrain_type ?? null })
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'machine_weight_kg')) {
+    Object.assign(nextPayload, { machine_weight_kg: payload.machine_weight_kg ?? null })
   }
 
   if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return nextPayload

@@ -99,8 +99,8 @@ export function formatWorkingHeightM(height: number | null | undefined) {
 
 const productPowerSourceMap: Record<ProductPowerSource, string> = {
   diesel: 'Diésel',
-  electric_24v: 'Eléctrica 24 V',
-  electric_lithium: 'Eléctrica de litio',
+  electric_24v: 'Baterías 24 V',
+  electric_lithium: 'Batería de litio',
 }
 
 export function formatMaximumLoadCapacityKg(capacity: number | null | undefined) {

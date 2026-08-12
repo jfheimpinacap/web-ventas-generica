@@ -56,6 +56,20 @@ function parseWorkingHeight(value: string) {
   return { value: parsed, error: null }
 }
 
+function parseMachineWeight(value: string) {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return { value: null, error: null }
+  if (!/^-?\d+(?:[.,]\d+)?$/.test(value.trim()) || !Number.isFinite(Number(normalized))) {
+    return { value: null, error: 'Ingresa un peso válido con hasta dos decimales.' }
+  }
+  const parsed = Number(normalized)
+  if (parsed <= 0) return { value: null, error: 'El peso de la máquina debe ser mayor que cero.' }
+  if (Math.round(parsed * 100) / 100 !== parsed) {
+    return { value: null, error: 'El peso de la máquina admite hasta dos decimales.' }
+  }
+  return { value: parsed, error: null }
+}
+
 function toNullableNumber(value: string) {
   if (!value.trim()) return null
   const parsed = Number(value)
@@ -71,6 +85,7 @@ function withBenefitsForProductType(values: ProductFormValues, productType: Prod
     includes_technical_review: includesBenefits,
     includes_commercial_technical_advice: includesBenefits,
     includes_coordinated_delivery: includesBenefits,
+    machine_weight_kg: productType === 'machinery' ? values.machine_weight_kg : null,
   }
 }
 
@@ -92,6 +107,8 @@ export function ProductForm({
   const [priceError, setPriceError] = useState<string | null>(null)
   const [workingHeightInput, setWorkingHeightInput] = useState(() => formatDecimalInput(initialValues.working_height_m))
   const [workingHeightError, setWorkingHeightError] = useState<string | null>(null)
+  const [machineWeightInput, setMachineWeightInput] = useState(() => formatDecimalInput(initialValues.machine_weight_kg))
+  const [machineWeightError, setMachineWeightError] = useState<string | null>(null)
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
 
   useEffect(() => {
@@ -100,6 +117,8 @@ export function ProductForm({
     setPriceError(null)
     setWorkingHeightInput(formatDecimalInput(initialValues.working_height_m))
     setWorkingHeightError(null)
+    setMachineWeightInput(formatDecimalInput(initialValues.machine_weight_kg))
+    setMachineWeightError(null)
   }, [initialValues])
 
   useEffect(() => {
@@ -124,10 +143,20 @@ export function ProductForm({
         const root = getRootCategory(selected, categories) ?? selected
         if (selected?.parent === null) {
           setPrimaryCategoryId(selected.id)
-          return { ...withBenefitsForProductType(prev, inferProductTypeFromRootCategory(selected)), category: 0 }
+          const productType = inferProductTypeFromRootCategory(selected)
+          if (productType !== 'machinery') {
+            setMachineWeightInput('')
+            setMachineWeightError(null)
+          }
+          return { ...withBenefitsForProductType(prev, productType), category: 0 }
         }
         setPrimaryCategoryId(root?.id ?? null)
-        return { ...withBenefitsForProductType(prev, inferProductTypeFromRootCategory(root)), category: Number(nextValue) }
+        const productType = inferProductTypeFromRootCategory(root)
+        if (productType !== 'machinery') {
+          setMachineWeightInput('')
+          setMachineWeightError(null)
+        }
+        return { ...withBenefitsForProductType(prev, productType), category: Number(nextValue) }
       }
       return { ...prev, [field]: nextValue }
     })
@@ -146,11 +175,17 @@ export function ProductForm({
       setWorkingHeightError(workingHeight.error)
       return
     }
+    const machineWeight = parseMachineWeight(machineWeightInput)
+    if (values.product_type === 'machinery' && machineWeight.error) {
+      setMachineWeightError(machineWeight.error)
+      return
+    }
 
     setPriceError(null)
     await onSubmit({
       ...values,
       working_height_m: workingHeight.value,
+      machine_weight_kg: values.product_type === 'machinery' ? machineWeight.value : null,
       product_type: inferProductTypeFromRootCategory(selectedRoot),
       short_description: values.short_description || values.description.trim().slice(0, 280),
       price: normalizeChileanPriceInput(values.price),
@@ -366,6 +401,29 @@ export function ProductForm({
           />
         </label>
 
+        {values.product_type === 'machinery' ? (
+          <label>
+            Peso de la máquina (kg)
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step="0.01"
+              value={machineWeightInput}
+              onChange={(e) => {
+                const nextInput = e.target.value
+                const parsed = parseMachineWeight(nextInput)
+                setMachineWeightInput(nextInput)
+                setMachineWeightError(parsed.error)
+                setField('machine_weight_kg', parsed.value)
+              }}
+              aria-invalid={Boolean(machineWeightError)}
+              aria-describedby={machineWeightError ? 'machine-weight-error' : undefined}
+            />
+            {machineWeightError ? <span id="machine-weight-error" className="ui-note ui-note--error">{machineWeightError}</span> : null}
+          </label>
+        ) : null}
+
         <label>
           Fuente de energía
           <select
@@ -374,8 +432,8 @@ export function ProductForm({
           >
             <option value="">Sin especificar</option>
             <option value="diesel">Diésel</option>
-            <option value="electric_24v">Eléctrica 24 V</option>
-            <option value="electric_lithium">Eléctrica de litio</option>
+            <option value="electric_24v">Baterías 24 V</option>
+            <option value="electric_lithium">Batería de litio</option>
           </select>
         </label>
 
