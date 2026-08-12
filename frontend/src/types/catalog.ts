@@ -100,6 +100,8 @@ export interface ProductListItem {
   short_description: string
   model: string | null
   working_height_m: number | null
+  maximum_load_capacity_kg?: number | null
+  power_source?: ProductPowerSource | null
   terrain_type: ProductTerrainType | null
   year: number | null
   price: string | null

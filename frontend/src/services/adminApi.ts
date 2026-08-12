@@ -251,6 +251,10 @@ export function normalizeProductListItem(value: unknown): ProductListItem {
     ),
     model: toNullableString(pick(record, 'model')),
     working_height_m: toNullableFiniteNumber(pick(record, 'working_height_m', 'workingHeightM')),
+    maximum_load_capacity_kg: toNullableFiniteNumber(
+      pick(record, 'maximum_load_capacity_kg', 'maximumLoadCapacityKg'),
+    ),
+    power_source: toProductPowerSource(pick(record, 'power_source', 'powerSource')),
     terrain_type: toProductTerrainType(pick(record, 'terrain_type', 'terrainType')),
     year:
       pick(record, 'year') === null || pick(record, 'year') === undefined

@@ -349,13 +349,6 @@
   box-sizing: border-box;
 }
 
-.admin-product-preview-card > img {
-  object-fit: contain;
-  background: #f1f5f9;
-}
-
-
-
 .admin-promo-preview {
   position: relative;
   border-radius: var(--radius-card);

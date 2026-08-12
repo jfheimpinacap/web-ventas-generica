@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { resolveMediaUrl } from '../../services/api'
 import type { ProductListItem } from '../../types/catalog'
 import { trackProductDetailClick } from '../../utils/analytics'
-import { formatProductCondition, formatPrice, formatProductTerrainType, formatStockStatus, formatWorkingHeightM } from '../../utils/formatters'
+import { formatProductCondition, formatPrice, formatStockStatus } from '../../utils/formatters'
+import { ProductTechnicalData } from './ProductTechnicalData'
 
 interface ProductCardProps {
   product: ProductListItem
@@ -15,11 +16,7 @@ const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Produ
 
 export function ProductCard({ product, promotionalLabel, trackingLocation = 'catalog' }: ProductCardProps) {
   const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
-  const isMachinery = product.product_type === 'machinery' && (product.condition === 'new' || product.condition === 'used')
   const model = product.model?.trim() || null
-  const workingHeight = formatWorkingHeightM(product.working_height_m)
-  const terrainType = formatProductTerrainType(product.terrain_type)
-  const hasTechnicalData = isMachinery && Boolean(model || workingHeight || terrainType)
   const hasUsedMachineryYear = product.product_type === 'machinery'
     && product.condition === 'used'
     && Number.isInteger(product.year)
@@ -45,20 +42,15 @@ export function ProductCard({ product, promotionalLabel, trackingLocation = 'cat
           <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
         </div>
         <h3>{product.name}</h3>
-        {hasTechnicalData ? (
-          <dl className="product-card__technical-data">
-            {model ? <div><dt>Modelo</dt><dd>{model}</dd></div> : null}
-            {workingHeight ? <div><dt>Altura de trabajo</dt><dd>{workingHeight}</dd></div> : null}
-            {terrainType ? <div><dt>Tipo de terreno</dt><dd>{terrainType}</dd></div> : null}
-          </dl>
-        ) : null}
-        <p className="product-card__meta">
-          <strong>Marca:</strong> {product.brand?.name ?? 'Sin marca'}
-        </p>
-        <p className="product-card__meta">
-          <strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}
-        </p>
-        <p className="product-card__description">{product.short_description || 'Sin descripción breve.'}</p>
+        {model ? <p className="product-card__model">{model}</p> : null}
+        <ProductTechnicalData
+          productType={product.product_type}
+          condition={product.condition}
+          workingHeightM={product.working_height_m}
+          maximumLoadCapacityKg={product.maximum_load_capacity_kg}
+          powerSource={product.power_source}
+          terrainType={product.terrain_type}
+        />
         <p className="product-card__price home-product-price">{formatPrice(product)}</p>
       </div>
       <div className="product-card__actions">
