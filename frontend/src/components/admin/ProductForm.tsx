@@ -393,7 +393,6 @@ export function ProductForm({
             <option value="">Sin ficha técnica</option>
             {technicalSheetOptions.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.original_file_name}</option>)}
           </select>
-          {!technicalSheetOptions.length ? <span className="ui-note">Puedes crear fichas desde Fichas técnicas.</span> : null}
         </label>
 
         <label className="admin-form-panel__full">

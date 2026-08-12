@@ -5,6 +5,7 @@ import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
 import { ProductForm } from "../../components/admin/ProductForm";
 import { ProductImageManager } from "../../components/admin/ProductImageManager";
+import { ProductTechnicalData } from "../../components/catalog/ProductTechnicalData";
 import { usePendingProductImages } from "../../hooks/usePendingProductImages";
 import {
   createProductImage,
@@ -379,12 +380,6 @@ export function AdminProductEditPage() {
   };
 
   const previewValues = formValues ?? initialValues;
-  const previewCategoryName =
-    categories.find((item) => item.id === previewValues?.category)?.name ??
-    "Sin categoría";
-  const previewBrandName =
-    brands.find((item) => item.id === previewValues?.brand)?.name ??
-    "Sin marca";
   const selectedPending = pending.images.find((image) => image.id === selectedPendingId) ?? null;
 
   return (
@@ -435,12 +430,12 @@ export function AdminProductEditPage() {
               <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
                 <article className="product-card admin-product-preview-card">
-                  <img
-                    src={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE}
-                    alt={
-                      selectedPending?.altText.trim() || mainImage?.alt_text || previewValues?.name || "Producto"
-                    }
-                  />
+                  <div className="product-card__image-area">
+                    <img
+                      src={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE}
+                      alt={selectedPending?.altText.trim() || mainImage?.alt_text || previewValues?.name || "Producto"}
+                    />
+                  </div>
                   <div className="product-card__content">
                     <div className="product-card__badges">
                       <span className="badge badge--condition">
@@ -456,25 +451,15 @@ export function AdminProductEditPage() {
                       </span>
                     </div>
                     <h3>{previewValues?.name || "Producto sin nombre"}</h3>
-                    <p className="product-card__meta">
-                      <strong>Marca:</strong> {previewBrandName}
-                    </p>
-                    <p className="product-card__meta">
-                      <strong>Categoría:</strong> {previewCategoryName}
-                    </p>
-                    <p className="product-card__meta">
-                      <strong>Condición:</strong>{" "}
-                      {formatCondition(
-                        previewValues?.condition ?? initialValues.condition,
-                      )}
-                    </p>
-                    <p className="product-card__meta">
-                      <strong>Stock:</strong>{" "}
-                      {formatStockStatus(
-                        previewValues?.stock_status ??
-                          initialValues.stock_status,
-                      )}
-                    </p>
+                    {previewValues?.model.trim() ? <p className="product-card__model">{previewValues.model.trim()}</p> : null}
+                    <ProductTechnicalData
+                      productType={previewValues?.product_type ?? initialValues.product_type}
+                      condition={previewValues?.condition ?? initialValues.condition}
+                      workingHeightM={previewValues?.working_height_m}
+                      maximumLoadCapacityKg={previewValues?.maximum_load_capacity_kg}
+                      powerSource={previewValues?.power_source}
+                      terrainType={previewValues?.terrain_type}
+                    />
                     <p className="product-card__price">
                       {formatPriceValue(
                         previewValues?.price ?? initialValues.price,
