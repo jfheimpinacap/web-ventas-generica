@@ -75,6 +75,8 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
             var product = await db.Products.SingleAsync(candidate => candidate.Slug == "excavadora");
             product.Model = "GS-1930";
             product.WorkingHeightM = 7.79m;
+            product.MaximumLoadCapacityKg = 227m;
+            product.PowerSource = ProductPowerSources.Electric24V;
             product.TerrainType = ProductTerrainTypes.IndoorSmooth;
             product.Year = 2021;
             product.Sku = "PRIVATE-SKU";
@@ -88,9 +90,24 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.Equal("excavadora", productPayload.GetProperty("slug").GetString());
         Assert.Equal("GS-1930", productPayload.GetProperty("model").GetString());
         Assert.Equal(7.79m, productPayload.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(227m, productPayload.GetProperty("maximum_load_capacity_kg").GetDecimal());
+        Assert.Equal(ProductPowerSources.Electric24V, productPayload.GetProperty("power_source").GetString());
         Assert.Equal(ProductTerrainTypes.IndoorSmooth, productPayload.GetProperty("terrain_type").GetString());
         Assert.Equal(2021, productPayload.GetProperty("year").GetInt32());
         Assert.False(productPayload.TryGetProperty("sku", out _));
+
+        var homeItems = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/home-section-items/"));
+        var homeProduct = homeItems.EnumerateArray()
+            .Select(item => item.GetProperty("product"))
+            .Single(product => product.GetProperty("slug").GetString() == "excavadora");
+        AssertTechnicalData(homeProduct);
+
+        var promotions = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/promotions/"));
+        var promotionProduct = promotions.EnumerateArray()
+            .Where(promotion => promotion.GetProperty("product").ValueKind == JsonValueKind.Object)
+            .Select(promotion => promotion.GetProperty("product"))
+            .Single(product => product.GetProperty("slug").GetString() == "excavadora");
+        AssertTechnicalData(promotionProduct);
 
         var detail = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/excavadora/"));
         Assert.Equal("GS-1930", detail.GetProperty("model").GetString());
@@ -110,6 +127,8 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
 
         Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("model").ValueKind);
         Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("working_height_m").ValueKind);
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("maximum_load_capacity_kg").ValueKind);
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("power_source").ValueKind);
         Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("terrain_type").ValueKind);
         Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("year").ValueKind);
     }
@@ -135,6 +154,8 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
             var productPayload = Assert.Single(products.EnumerateArray());
             Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("model").ValueKind);
             Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("working_height_m").ValueKind);
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("maximum_load_capacity_kg").ValueKind);
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("power_source").ValueKind);
             Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("terrain_type").ValueKind);
             Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("year").ValueKind);
         }
@@ -560,6 +581,14 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.DoesNotContain("C:\\", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("credential", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("token", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertTechnicalData(JsonElement product)
+    {
+        Assert.Equal(7.79m, product.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(227m, product.GetProperty("maximum_load_capacity_kg").GetDecimal());
+        Assert.Equal(ProductPowerSources.Electric24V, product.GetProperty("power_source").GetString());
+        Assert.Equal(ProductTerrainTypes.IndoorSmooth, product.GetProperty("terrain_type").GetString());
     }
 
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)

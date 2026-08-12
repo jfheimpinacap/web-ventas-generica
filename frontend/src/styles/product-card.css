@@ -206,7 +206,6 @@
   font-size: 1rem;
   font-family: "Ubuntu", system-ui, sans-serif;
   line-height: 1.35;
-  min-height: 2.7em;
 }
 
 
@@ -315,7 +314,6 @@
 
   .product-card__content h3 {
     font-size: 0.88rem;
-    min-height: 2.3em;
   }
 
   .product-card__content p:not(.product-card__price),
