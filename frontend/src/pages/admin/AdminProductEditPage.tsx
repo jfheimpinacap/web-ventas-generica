@@ -60,6 +60,8 @@ function mapProductToFormValues(
     description: product.description,
     model: product.model,
     sku: product.sku,
+    working_height_m: product.working_height_m,
+    terrain_type: product.terrain_type,
     year: product.year,
     hours_meter: product.hours_meter,
     maximum_load_capacity_kg: product.maximum_load_capacity_kg,

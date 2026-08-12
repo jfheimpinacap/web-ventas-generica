@@ -85,6 +85,7 @@ export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
 export type ProductType = 'machinery' | 'spare_part' | 'service'
 export type ProductPowerSource = 'diesel' | 'electric_24v' | 'electric_lithium'
+export type ProductTerrainType = 'indoor_smooth' | 'outdoor' | 'outdoor_slopes_and_ramps'
 export type ProductPriceCurrency = 'CLP' | 'USD'
 export type ProductPriceTaxMode = 'plus_vat' | 'vat_included'
 
@@ -114,6 +115,8 @@ export interface ProductDetail extends ProductListItem {
   description: string
   model: string
   sku: string
+  working_height_m: number | null
+  terrain_type: ProductTerrainType | null
   year: number | null
   hours_meter: number | null
   maximum_load_capacity_kg: number | null
@@ -297,6 +300,8 @@ export interface ProductFormValues {
   description: string
   model: string
   sku: string
+  working_height_m: number | null
+  terrain_type: ProductTerrainType | null
   year: number | null
   hours_meter: number | null
   maximum_load_capacity_kg: number | null

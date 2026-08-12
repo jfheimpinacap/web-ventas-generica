@@ -24,6 +24,8 @@ const INITIAL_VALUES: ProductFormValues = {
   description: '',
   model: '',
   sku: '',
+  working_height_m: null,
+  terrain_type: null,
   year: null,
   hours_meter: null,
   maximum_load_capacity_kg: null,

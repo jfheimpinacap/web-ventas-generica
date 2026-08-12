@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 
-import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus, SupplierSummary, TechnicalSheet } from '../../types/catalog'
+import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, StockStatus, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 import { ProductEditorActions } from './ProductEditorActions'
 
@@ -32,6 +32,29 @@ const STOCK_STATUSES: Array<{ value: StockStatus; label: string }> = [
   { value: 'reserved', label: 'Reservado' },
   { value: 'sold', label: 'Vendido' },
 ]
+
+export const TERRAIN_TYPE_OPTIONS: Array<{ value: ProductTerrainType; label: string }> = [
+  { value: 'indoor_smooth', label: 'Interior liso' },
+  { value: 'outdoor', label: 'Exterior' },
+  { value: 'outdoor_slopes_and_ramps', label: 'Exterior con pendientes y rampas' },
+]
+
+function formatDecimalInput(value: number | null) {
+  return value === null ? '' : String(value).replace('.', ',')
+}
+
+function parseWorkingHeight(value: string) {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return { value: null, error: null }
+  if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(value.trim())) {
+    return { value: null, error: 'Ingresa una altura válida con hasta dos decimales.' }
+  }
+  const parsed = Number(normalized)
+  if (parsed <= 0) {
+    return { value: null, error: 'La altura de trabajo debe ser mayor que cero.' }
+  }
+  return { value: parsed, error: null }
+}
 
 function toNullableNumber(value: string) {
   if (!value.trim()) return null
@@ -67,12 +90,16 @@ export function ProductForm({
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
   const [priceError, setPriceError] = useState<string | null>(null)
+  const [workingHeightInput, setWorkingHeightInput] = useState(() => formatDecimalInput(initialValues.working_height_m))
+  const [workingHeightError, setWorkingHeightError] = useState<string | null>(null)
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
 
   useEffect(() => {
     setValues(initialValues)
     setPrimaryCategoryId(null)
     setPriceError(null)
+    setWorkingHeightInput(formatDecimalInput(initialValues.working_height_m))
+    setWorkingHeightError(null)
   }, [initialValues])
 
   useEffect(() => {
@@ -114,9 +141,16 @@ export function ProductForm({
       return
     }
 
+    const workingHeight = parseWorkingHeight(workingHeightInput)
+    if (workingHeight.error) {
+      setWorkingHeightError(workingHeight.error)
+      return
+    }
+
     setPriceError(null)
     await onSubmit({
       ...values,
+      working_height_m: workingHeight.value,
       product_type: inferProductTypeFromRootCategory(selectedRoot),
       short_description: values.short_description || values.description.trim().slice(0, 280),
       price: normalizeChileanPriceInput(values.price),
@@ -277,6 +311,27 @@ export function ProductForm({
         </label>
 
         <label>
+          Altura de trabajo
+          <span className="admin-product-unit-input">
+            <input
+              inputMode="decimal"
+              value={workingHeightInput}
+              onChange={(e) => {
+                const nextInput = e.target.value
+                const parsed = parseWorkingHeight(nextInput)
+                setWorkingHeightInput(nextInput)
+                setWorkingHeightError(parsed.error)
+                setField('working_height_m', parsed.value)
+              }}
+              aria-invalid={Boolean(workingHeightError)}
+              aria-describedby={workingHeightError ? 'working-height-error' : undefined}
+            />
+            <span aria-hidden="true">m</span>
+          </span>
+          {workingHeightError ? <span id="working-height-error" className="ui-note ui-note--error">{workingHeightError}</span> : null}
+        </label>
+
+        <label>
           Año
           <input
             type="number"
@@ -297,11 +352,6 @@ export function ProductForm({
             value={values.hours_meter ?? ''}
             onChange={(e) => setField('hours_meter', toNullableNumber(e.target.value))}
           />
-        </label>
-
-        <label>
-          SKU
-          <input value={values.sku} onChange={(e) => setField('sku', e.target.value)} />
         </label>
 
         <label>
@@ -329,7 +379,15 @@ export function ProductForm({
           </select>
         </label>
 
-        <label className="admin-form-panel__full">
+        <label>
+          Tipo de terreno
+          <select value={values.terrain_type ?? ''} onChange={(e) => setField('terrain_type', (e.target.value || null) as ProductTerrainType | null)}>
+            <option value="">Seleccione una opción</option>
+            {TERRAIN_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+
+        <label>
           Ficha técnica
           <select value={values.technical_sheet ?? ''} onChange={(e) => setField('technical_sheet', toNullableNumber(e.target.value))}>
             <option value="">Sin ficha técnica</option>
