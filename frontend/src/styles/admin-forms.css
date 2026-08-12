@@ -603,6 +603,18 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.admin-product-unit-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-product-unit-input > span {
+  color: #475569;
+  font-weight: 600;
+}
+
 .admin-form-panel__span-2 {
   grid-column: span 2;
 }

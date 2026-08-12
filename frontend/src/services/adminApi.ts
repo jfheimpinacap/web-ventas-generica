@@ -13,6 +13,7 @@ import type {
   ProductImageWritePayload,
   ProductListItem,
   ProductPowerSource,
+  ProductTerrainType,
   ProductSpec,
   ProductSpecWritePayload,
   ProductType,
@@ -85,6 +86,12 @@ function toNullableFiniteNumber(value: unknown) {
 
 function toProductPowerSource(value: unknown): ProductPowerSource | null {
   return value === 'diesel' || value === 'electric_24v' || value === 'electric_lithium'
+    ? value
+    : null
+}
+
+function toProductTerrainType(value: unknown): ProductTerrainType | null {
+  return value === 'indoor_smooth' || value === 'outdoor' || value === 'outdoor_slopes_and_ramps'
     ? value
     : null
 }
@@ -287,6 +294,8 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
     description: toStringValue(pick(record, 'description')),
     model: toStringValue(pick(record, 'model')),
     sku: toStringValue(pick(record, 'sku')),
+    working_height_m: toNullableFiniteNumber(pick(record, 'working_height_m', 'workingHeightM')),
+    terrain_type: toProductTerrainType(pick(record, 'terrain_type', 'terrainType')),
     year:
       pick(record, 'year') === null
         ? null
@@ -500,6 +509,15 @@ function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payl
       payload.short_description !== undefined
         ? payload.short_description
         : payload.description?.trim().slice(0, 280) ?? '',
+  } as T
+
+  if (payload.model !== undefined) Object.assign(nextPayload, { model: payload.model.trim() || null })
+  if (payload.sku !== undefined) Object.assign(nextPayload, { sku: payload.sku.trim() || null })
+  if (Object.prototype.hasOwnProperty.call(payload, 'working_height_m')) {
+    Object.assign(nextPayload, { working_height_m: payload.working_height_m ?? null })
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'terrain_type')) {
+    Object.assign(nextPayload, { terrain_type: payload.terrain_type ?? null })
   }
 
   if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return nextPayload
