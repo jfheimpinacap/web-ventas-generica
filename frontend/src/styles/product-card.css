@@ -20,7 +20,47 @@
   background: #fff;
 }
 
-.product-card__image-link,
+.product-card__image-link {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  padding: 0.65rem;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.product-card__image-link img,
+.product-card__image-link img:not([src=""]) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.product-card__image-badge {
+  position: absolute;
+  top: 0.65rem;
+  z-index: 1;
+  max-width: calc(50% - 0.85rem);
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  font: 700 0.75rem/1.2 "Ubuntu", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.product-card__image-badge--promotion {
+  left: 0.65rem;
+  background: var(--color-accent);
+  color: #111827;
+}
+
+.product-card__image-badge--year {
+  right: 0.65rem;
+  background: rgba(15, 23, 42, 0.92);
+  color: #ffffff;
+}
+
 .promo-product-card__image-link,
 .spare-offer-card__image-link,
 .repair-service-card__image-link {
@@ -95,21 +135,44 @@
 
 
 
-.product-card__image-link img {
-  width: 100%;
-  height: 150px;
-  object-fit: cover;
-  object-position: center;
-}
-
-
-
 .product-card__content {
   padding: 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   flex: 1;
+}
+
+.product-card__technical-data {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.15rem 0 0;
+  padding: 0.55rem 0;
+  border-block: 1px solid #e2e8f0;
+  color: var(--color-secondary-text);
+  font-size: 0.82rem;
+}
+
+.product-card__technical-data div {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.3rem;
+  align-items: baseline;
+}
+
+.product-card__technical-data dt {
+  font-weight: 700;
+  color: var(--color-primary-text);
+}
+
+.product-card__technical-data dt::after {
+  content: ":";
+}
+
+.product-card__technical-data dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 
@@ -222,10 +285,6 @@
 
 
 @media (max-width: 640px) {
-  .product-card__image-link img {
-    height: 124px;
-  }
-
   .product-card__content {
     padding: 0.65rem;
     gap: 0.24rem;

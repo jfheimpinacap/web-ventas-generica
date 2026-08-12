@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { ProductCard } from './ProductCard'
 import { mockProducts } from '../../data/mockProducts'
 import { useProducts } from '../../hooks/useProducts'
 import { getHomeSectionItems } from '../../services/catalogApi'
@@ -161,35 +162,14 @@ export function FeaturedProducts() {
             <div className="machinery-carousel__track" style={{ transform: `translateX(-${carouselIndex * 100}%)` }}>
               {machineryGroups.map((group, groupIndex) => (
                 <div className="machinery-carousel__slide" key={`machinery-group-${groupIndex}`}>
-                  {group.map((product) => {
-                    const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
-                    return (
-                      <article className="promo-product-card" key={product.id}>
-                        <Link
-                          className="promo-product-card__image-link"
-                          to={`/producto/${product.slug}`}
-                          onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'machinery_promotions' })}
-                          aria-label={`Ver detalle de ${product.name}`}
-                        >
-                          <img src={imageUrl} alt={product.main_image?.alt_text || product.name} loading="lazy" />
-                        </Link>
-                        <div className="promo-product-card__content">
-                          <p className="promo-product-card__tag">Maquinaria destacada</p>
-                          <h3>{product.name}</h3>
-                          <p className="promo-product-card__price home-product-price">{formatPrice(product)}</p>
-                          {product.slug ? (
-                            <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'machinery_promotions' })}>
-                              Ver detalle
-                            </Link>
-                          ) : (
-                            <span className="btn btn--accent btn--disabled" aria-disabled="true">
-                              Ver detalle
-                            </span>
-                          )}
-                        </div>
-                      </article>
-                    )
-                  })}
+                  {group.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      promotionalLabel="Destacada"
+                      trackingLocation="machinery_promotions"
+                    />
+                  ))}
                 </div>
               ))}
             </div>
