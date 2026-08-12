@@ -98,6 +98,10 @@ export interface ProductListItem {
   product_type: ProductType
   condition: ProductCondition
   short_description: string
+  model: string | null
+  working_height_m: number | null
+  terrain_type: ProductTerrainType | null
+  year: number | null
   price: string | null
   price_currency?: ProductPriceCurrency
   price_tax_mode?: ProductPriceTaxMode
@@ -115,9 +119,6 @@ export interface ProductDetail extends ProductListItem {
   description: string
   model: string
   sku: string
-  working_height_m: number | null
-  terrain_type: ProductTerrainType | null
-  year: number | null
   hours_meter: number | null
   maximum_load_capacity_kg: number | null
   power_source: ProductPowerSource | null

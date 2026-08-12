@@ -66,6 +66,81 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task PublicProductListExposesNullableTechnicalDataWithoutSku()
+    {
+        await SeedPublicCatalogDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await db.Products.SingleAsync(candidate => candidate.Slug == "excavadora");
+            product.Model = "GS-1930";
+            product.WorkingHeightM = 7.79m;
+            product.TerrainType = ProductTerrainTypes.IndoorSmooth;
+            product.Year = 2021;
+            product.Sku = "PRIVATE-SKU";
+            await db.SaveChangesAsync();
+        }
+        using var client = _factory.CreateClient();
+
+        var products = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/?search=excavadora"));
+        var productPayload = Assert.Single(products.EnumerateArray());
+
+        Assert.Equal("excavadora", productPayload.GetProperty("slug").GetString());
+        Assert.Equal("GS-1930", productPayload.GetProperty("model").GetString());
+        Assert.Equal(7.79m, productPayload.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(ProductTerrainTypes.IndoorSmooth, productPayload.GetProperty("terrain_type").GetString());
+        Assert.Equal(2021, productPayload.GetProperty("year").GetInt32());
+        Assert.False(productPayload.TryGetProperty("sku", out _));
+
+        var detail = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/excavadora/"));
+        Assert.Equal("GS-1930", detail.GetProperty("model").GetString());
+        Assert.Equal(7.79m, detail.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(ProductTerrainTypes.IndoorSmooth, detail.GetProperty("terrain_type").GetString());
+        Assert.Equal(2021, detail.GetProperty("year").GetInt32());
+    }
+
+    [Fact]
+    public async Task PublicProductListSerializesMissingTechnicalDataAsNull()
+    {
+        await SeedPublicCatalogDataAsync();
+        using var client = _factory.CreateClient();
+
+        var products = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/public/products/"));
+        var productPayload = Assert.Single(products.EnumerateArray());
+
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("model").ValueKind);
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("working_height_m").ValueKind);
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("terrain_type").ValueKind);
+        Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("year").ValueKind);
+    }
+
+    [Fact]
+    public async Task PublicProductListSerializesEveryProductTypeWithoutTechnicalData()
+    {
+        await SeedPublicCatalogDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            db.Products.AddRange(
+                new Product { Id = 20, Name = "Maquinaria nueva", Slug = "technical-new", CategoryId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.New, StockStatus = StockStatuses.Available, IsPublished = true },
+                new Product { Id = 21, Name = "Repuesto", Slug = "technical-spare", CategoryId = 1, ProductType = ProductTypes.SparePart, Condition = ProductConditions.NotApplicable, StockStatus = StockStatuses.Available, IsPublished = true },
+                new Product { Id = 22, Name = "Servicio", Slug = "technical-service", CategoryId = 1, ProductType = ProductTypes.Service, Condition = ProductConditions.NotApplicable, StockStatus = StockStatuses.Available, IsPublished = true });
+            await db.SaveChangesAsync();
+        }
+        using var client = _factory.CreateClient();
+
+        foreach (var slug in new[] { "excavadora", "technical-new", "technical-spare", "technical-service" })
+        {
+            var products = await ReadJsonAsync<JsonElement>(await client.GetAsync($"/api/public/products/?search={slug}"));
+            var productPayload = Assert.Single(products.EnumerateArray());
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("model").ValueKind);
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("working_height_m").ValueKind);
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("terrain_type").ValueKind);
+            Assert.Equal(JsonValueKind.Null, productPayload.GetProperty("year").ValueKind);
+        }
+    }
+
+    [Fact]
     public async Task PublicProductDetailReturnsPublishedProductAndHidesUnpublishedProduct()
     {
         await SeedPublicCatalogDataAsync();

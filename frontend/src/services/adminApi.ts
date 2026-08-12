@@ -249,6 +249,13 @@ export function normalizeProductListItem(value: unknown): ProductListItem {
     short_description: toStringValue(
       pick(record, 'short_description', 'shortDescription'),
     ),
+    model: toNullableString(pick(record, 'model')),
+    working_height_m: toNullableFiniteNumber(pick(record, 'working_height_m', 'workingHeightM')),
+    terrain_type: toProductTerrainType(pick(record, 'terrain_type', 'terrainType')),
+    year:
+      pick(record, 'year') === null || pick(record, 'year') === undefined
+        ? null
+        : toNumber(pick(record, 'year')) || null,
     price: toNullableString(pick(record, 'price')),
     price_currency: toStringValue(pick(record, 'price_currency', 'priceCurrency'), 'CLP') as ProductListItem['price_currency'],
     price_tax_mode: toStringValue(pick(record, 'price_tax_mode', 'priceTaxMode'), 'plus_vat') as ProductListItem['price_tax_mode'],
@@ -294,12 +301,6 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
     description: toStringValue(pick(record, 'description')),
     model: toStringValue(pick(record, 'model')),
     sku: toStringValue(pick(record, 'sku')),
-    working_height_m: toNullableFiniteNumber(pick(record, 'working_height_m', 'workingHeightM')),
-    terrain_type: toProductTerrainType(pick(record, 'terrain_type', 'terrainType')),
-    year:
-      pick(record, 'year') === null
-        ? null
-        : toNumber(pick(record, 'year')) || null,
     hours_meter:
       pick(record, 'hours_meter', 'hoursMeter') === null
         ? null
