@@ -45,6 +45,18 @@ public sealed class CommercialModelTests
         Assert.Equal(nameof(Category.Products), categoryForeignKey.PrincipalToDependent?.Name);
     }
 
+    [Fact]
+    public void ProductMachineWeightIsNullableDecimalTwelveTwo()
+    {
+        using var context = CreateContext();
+        var property = context.Model.FindEntityType(typeof(Product))?.FindProperty(nameof(Product.MachineWeightKg));
+
+        Assert.NotNull(property);
+        Assert.True(property.IsNullable);
+        Assert.Equal("decimal(12,2)", property.GetColumnType());
+        Assert.Equal(typeof(decimal?), typeof(Product).GetProperty(nameof(Product.MachineWeightKg))?.PropertyType);
+    }
+
 
     [Theory]
     [InlineData(typeof(Product), typeof(Category), nameof(Product.CategoryId), nameof(Product.Category), nameof(Category.Products), true)]

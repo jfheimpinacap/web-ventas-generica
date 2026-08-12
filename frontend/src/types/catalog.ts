@@ -123,6 +123,7 @@ export interface ProductDetail extends ProductListItem {
   sku: string
   hours_meter: number | null
   maximum_load_capacity_kg: number | null
+  machine_weight_kg: number | null
   power_source: ProductPowerSource | null
   includes_technical_review: boolean
   includes_commercial_technical_advice: boolean
@@ -302,12 +303,12 @@ export interface ProductFormValues {
   short_description: string
   description: string
   model: string
-  sku: string
   working_height_m: number | null
   terrain_type: ProductTerrainType | null
   year: number | null
   hours_meter: number | null
   maximum_load_capacity_kg: number | null
+  machine_weight_kg: number | null
   power_source: ProductPowerSource | null
   includes_technical_review: boolean
   includes_commercial_technical_advice: boolean

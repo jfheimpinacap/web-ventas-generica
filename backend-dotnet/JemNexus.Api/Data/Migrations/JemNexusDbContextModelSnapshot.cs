@@ -415,6 +415,9 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<decimal?>("MaximumLoadCapacityKg")
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<decimal?>("MachineWeightKg")
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(220)

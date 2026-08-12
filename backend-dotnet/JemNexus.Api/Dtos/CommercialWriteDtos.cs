@@ -63,6 +63,7 @@ public sealed record ProductWriteDto(
     int? Year,
     [property: JsonPropertyName("hours_meter")] int? HoursMeter,
     [property: JsonPropertyName("maximum_load_capacity_kg")] decimal? MaximumLoadCapacityKg,
+    [property: JsonPropertyName("machine_weight_kg")] JsonElement MachineWeightKg,
     [property: JsonPropertyName("power_source"), StringLength(30)] string? PowerSource,
     [property: JsonPropertyName("includes_technical_review")] bool? IncludesTechnicalReview,
     [property: JsonPropertyName("includes_commercial_technical_advice")] bool? IncludesCommercialTechnicalAdvice,

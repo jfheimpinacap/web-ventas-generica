@@ -24,6 +24,7 @@ public sealed class Product
     public int? Year { get; set; }
     public int? HoursMeter { get; set; }
     public decimal? MaximumLoadCapacityKg { get; set; }
+    public decimal? MachineWeightKg { get; set; }
     public string? PowerSource { get; set; }
     public bool IncludesTechnicalReview { get; set; }
     public bool IncludesCommercialTechnicalAdvice { get; set; }
