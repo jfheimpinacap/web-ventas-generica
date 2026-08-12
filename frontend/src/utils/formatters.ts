@@ -1,4 +1,4 @@
-import type { Category, ProductCondition, ProductListItem, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductType, StockStatus } from '../types/catalog'
+import type { Category, ProductCondition, ProductListItem, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, StockStatus } from '../types/catalog'
 
 export function normalizeChileanPriceInput(value: string | null | undefined) {
   if (value === null || value === undefined) return null
@@ -79,6 +79,22 @@ const productTypeMap: Record<ProductType, string> = {
 
 export function formatProductType(type: ProductType) {
   return productTypeMap[type] ?? type
+}
+
+const productTerrainTypeMap: Record<ProductTerrainType, string> = {
+  indoor_smooth: 'Interior liso',
+  outdoor: 'Exterior',
+  outdoor_slopes_and_ramps: 'Exterior con pendientes y rampas',
+}
+
+export function formatProductTerrainType(terrainType: ProductTerrainType | null | undefined) {
+  if (!terrainType) return null
+  return productTerrainTypeMap[terrainType] ?? null
+}
+
+export function formatWorkingHeightM(height: number | null | undefined) {
+  if (height === null || height === undefined || !Number.isFinite(height)) return null
+  return `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(height)}\u00a0m`
 }
 
 const productPowerSourceMap: Record<ProductPowerSource, string> = {
