@@ -1,5 +1,6 @@
 using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
+using JemNexus.Api.Models;
 using JemNexus.Api.Services.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
