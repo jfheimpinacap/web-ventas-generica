@@ -181,7 +181,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task StructuredMachineryDataAndOptionalSkuRoundTripAndValidate()
+    public async Task StructuredMachineryDataAndSkuRulesByProductTypeRoundTripAndValidate()
     {
         await _factory.SeedCommercialDataAsync();
         using var client = await CreateAuthorizedClientAsync();
@@ -209,12 +209,32 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal("GS-1930", updated.GetProperty("model").GetString());
         Assert.Equal(11.60m, updated.GetProperty("working_height_m").GetDecimal());
         Assert.Equal(ProductTerrainTypes.OutdoorSlopesAndRamps, updated.GetProperty("terrain_type").GetString());
+        Assert.Equal(JsonValueKind.Null, updated.GetProperty("sku").ValueKind);
 
         var secondWithoutSku = await client.PostAsJsonAsync("/api/products/", new { name = "Equipo sin SKU", category = 1 });
         Assert.Equal(HttpStatusCode.Created, secondWithoutSku.StatusCode);
-        var duplicateSku = await client.PostAsJsonAsync("/api/products/", new { name = "SKU repetido", category = 1, sku = "SKU-1930" });
-        Assert.Equal(HttpStatusCode.BadRequest, duplicateSku.StatusCode);
-        Assert.Contains("sku must be unique", await duplicateSku.Content.ReadAsStringAsync());
+        var secondMachineryResponse = await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Maquinaria con SKU descartado", category = 1, product_type = ProductTypes.Machinery, sku = "SKU-1930"
+        });
+        Assert.Equal(HttpStatusCode.Created, secondMachineryResponse.StatusCode);
+        var secondMachinery = await ReadJsonAsync<JsonElement>(secondMachineryResponse);
+        Assert.Equal(JsonValueKind.Null, secondMachinery.GetProperty("sku").ValueKind);
+
+        var spareWithSkuResponse = await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Repuesto con SKU", category = 2, product_type = ProductTypes.SparePart, sku = "  SKU-REPUESTO-1930  "
+        });
+        Assert.Equal(HttpStatusCode.Created, spareWithSkuResponse.StatusCode);
+        var spareWithSku = await ReadJsonAsync<JsonElement>(spareWithSkuResponse);
+        Assert.Equal("SKU-REPUESTO-1930", spareWithSku.GetProperty("sku").GetString());
+
+        var duplicateSpareSku = await client.PostAsJsonAsync("/api/products/", new
+        {
+            name = "Repuesto con SKU repetido", category = 2, product_type = ProductTypes.SparePart, sku = "SKU-REPUESTO-1930"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, duplicateSpareSku.StatusCode);
+        Assert.Contains("sku must be unique.", await duplicateSpareSku.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/products/", new { name = "Altura cero", category = 1, working_height_m = 0m })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/products/", new { name = "Altura negativa", category = 1, working_height_m = -1m })).StatusCode);

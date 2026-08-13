@@ -105,9 +105,22 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
 
         Assert.True(detail.IsSuccessStatusCode, $"Status: {detail.StatusCode}, Body: {detailBody}");
         using var detailDocument = JsonDocument.Parse(detailBody);
-        Assert.Equal("SKU-001", detailDocument.RootElement.GetProperty("sku").GetString());
+        Assert.Equal(JsonValueKind.Null, detailDocument.RootElement.GetProperty("sku").ValueKind);
         Assert.True(detailDocument.RootElement.GetProperty("images").GetArrayLength() > 0);
         Assert.True(detailDocument.RootElement.GetProperty("specs").GetArrayLength() > 0);
+
+        var machinerySkuSearch = await ReadSuccessfulJsonAsync<JsonElement>(
+            await client.GetAsync("/api/products/?search=SKU-001&include_unpublished=true"));
+        Assert.Empty(machinerySkuSearch.EnumerateArray());
+
+        var sparePartSkuSearch = await ReadSuccessfulJsonAsync<JsonElement>(
+            await client.GetAsync("/api/products/?search=SKU-002&include_unpublished=true"));
+        Assert.Single(sparePartSkuSearch.EnumerateArray());
+        Assert.Equal("repuesto-borrador", sparePartSkuSearch[0].GetProperty("slug").GetString());
+
+        var sparePartDetail = await ReadSuccessfulJsonAsync<JsonElement>(
+            await client.GetAsync("/api/products/repuesto-borrador/"));
+        Assert.Equal("SKU-002", sparePartDetail.GetProperty("sku").GetString());
     }
 
     [Fact]
