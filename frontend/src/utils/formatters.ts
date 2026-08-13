@@ -103,11 +103,19 @@ const productPowerSourceMap: Record<ProductPowerSource, string> = {
   electric_lithium: 'Batería de litio',
 }
 
-export function formatMaximumLoadCapacityKg(capacity: number | null | undefined) {
-  if (capacity === null || capacity === undefined || !Number.isFinite(capacity) || capacity <= 0) return null
+function formatKilograms(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return null
 
-  const formattedCapacity = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(capacity)
-  return `${formattedCapacity} kg`
+  const formattedValue = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(value)
+  return `${formattedValue} kg`
+}
+
+export function formatMaximumLoadCapacityKg(capacity: number | null | undefined) {
+  return formatKilograms(capacity)
+}
+
+export function formatMachineWeightKg(weight: number | null | undefined) {
+  return formatKilograms(weight)
 }
 
 export function formatProductPowerSource(powerSource: ProductPowerSource | null | undefined) {
