@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminIcon } from '../../components/admin/AdminIcon'
 import {
   createHomeSectionItem,
   deleteHomeSectionItem,
@@ -772,7 +773,7 @@ export function AdminHomeSectionsPage() {
                                   onClick={() => setPendingRemoval(null)}
                                   disabled={status.loading}
                                 >
-                                  Cancelar
+                                  <AdminIcon name="close" />Cancelar
                                 </button>
                                 <button
                                   type="button"
@@ -782,7 +783,7 @@ export function AdminHomeSectionsPage() {
                                   }
                                   disabled={status.loading}
                                 >
-                                  Quitar
+                                  <AdminIcon name="trash" />Quitar
                                 </button>
                               </div>
                             ) : (
@@ -797,7 +798,7 @@ export function AdminHomeSectionsPage() {
                                 }
                                 disabled={status.loading}
                               >
-                                Quitar
+                                <AdminIcon name="trash" />Quitar
                               </button>
                             )}
                           </div>

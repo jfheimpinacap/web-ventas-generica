@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteCategory, getAdminCategories } from '../../services/adminApi'
@@ -92,9 +93,9 @@ export function AdminCategoriesPage() {
                 <thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody>{rootCategories.map((item) => (
                   <tr key={item.id} className={item.id === selectedRootId ? 'admin-table__row--selected' : ''}>
-                    <td><button type="button" className="table-action table-action--button" onClick={() => setSelectedRootId(item.id)}>{item.name}</button></td>
+                    <td><button type="button" className="admin-category-selector" onClick={() => setSelectedRootId(item.id)}>{item.name}</button></td>
                     <td>{renderStatus(item)}</td>
-                    <td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Borrar</button></td>
+                    <td><div className="admin-table-actions"><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -107,7 +108,7 @@ export function AdminCategoriesPage() {
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (
               <div className="admin-table-wrapper admin-table-wrapper--compact"><table className="admin-table admin-table--compact"><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
-                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}>Editar</Link>{' '}<button type="button" className="table-action table-action--button" onClick={() => void handleDelete(item)}>Borrar</button></td></tr>
+                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><div className="admin-table-actions"><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button></div></td></tr>
               ))}</tbody></table></div>
             ) : null}
           </section>

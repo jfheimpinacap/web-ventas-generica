@@ -71,9 +71,6 @@
 .admin-products-table__secondary { display: block; margin-top: 2px; color: var(--admin-muted); font-size: 11px; font-weight: 400; }
 .admin-products-table__status { align-items: flex-start; flex-direction: column; gap: 3px; }
 .admin-products-table .badge { min-height: 20px; padding: 2px 5px; border-radius: var(--admin-radius); font-size: 11px; white-space: nowrap; }
-.admin-products-table .table-action { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 6px; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: #fff; color: var(--admin-primary); }
-.admin-products-table .table-action:hover { border-color: var(--admin-primary); background: #eef5fb; }
-.admin-products-table .table-action:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
 
 @media (max-width: 1240px) {
   .admin-products-filter-toggle { display: inline-flex; }

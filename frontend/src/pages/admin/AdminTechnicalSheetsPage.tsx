@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { authBlobFetch } from '../../services/authApi'
@@ -95,7 +96,23 @@ export function AdminTechnicalSheetsPage() {
     <div><input className="admin-search" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /></div>
     {error ? <p className="ui-note ui-note--error">{error}</p> : null}{message ? <p className="ui-note">{message}</p> : null}
     {showCreate ? <section className="technical-sheet-form"><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF, JPG/JPEG, PNG o WebP (máximo 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p className="technical-sheet-form__filename">Archivo seleccionado: {file.name}</p> : null}<div className="technical-sheet-form__actions"><button className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando...' : 'Guardar'}</button> <button className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
-    {loading ? <p>Cargando fichas técnicas...</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : <div className="admin-table-wrapper"><table className="admin-table"><thead><tr><th>Nombre</th><th>Archivo</th><th>Tamaño</th><th>Actualizada</th><th>Acciones</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.original_file_name}</td><td>{formatBytes(item.size_bytes)}</td><td>{new Date(item.updated_at).toLocaleDateString('es-CL')}</td><td><button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, false)}>Ver archivo</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, true)}>Descargar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}>Editar</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}>Reemplazar archivo</button>{' '}<button className="table-action table-action--button" disabled={busy} onClick={() => void remove(item)}>Eliminar</button></td></tr>)}</tbody></table></div>}
+    {loading ? <p>Cargando fichas técnicas...</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : (
+      <div className="admin-table-wrapper admin-technical-sheets-table-wrapper">
+        <table className="admin-table admin-technical-sheets-table">
+          <thead><tr><th>Nombre</th><th>Archivo</th><th>Tamaño</th><th>Actualizada</th><th>Acciones</th></tr></thead>
+          <tbody>{filtered.map(item => <tr key={item.id}>
+            <td>{item.name}</td><td>{item.original_file_name}</td><td>{formatBytes(item.size_bytes)}</td><td>{new Date(item.updated_at).toLocaleDateString('es-CL')}</td>
+            <td><div className="admin-table-actions">
+              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, false)}><AdminIcon name="external" />Ver PDF</button>
+              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, true)}><AdminIcon name="download" />Descargar</button>
+              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}><AdminIcon name="edit" />Editar</button>
+              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}><AdminIcon name="reset" />Reemplazar</button>
+              <button type="button" className="table-action table-action--button table-action--danger" disabled={busy} onClick={() => void remove(item)}><AdminIcon name="trash" />Eliminar</button>
+            </div></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+    )}
     <input ref={replaceInput} hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => void replace(e.target.files?.[0] ?? null)} />
   </AdminLayout>
 }
