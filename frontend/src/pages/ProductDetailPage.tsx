@@ -11,9 +11,8 @@ import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../
 import { useCategories } from '../hooks/useCategories'
 import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
-import { formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductType, formatStockStatus } from '../utils/formatters'
-import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView, trackWhatsAppClick } from '../utils/analytics'
-import { buildProductWhatsAppMessage, buildWhatsAppUrl } from '../utils/whatsapp'
+import { formatMachineWeightKg, formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductTerrainType, formatProductType, formatStockStatus } from '../utils/formatters'
+import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/900x700/111827/F3F4F6?text=Producto'
@@ -165,7 +164,9 @@ export function ProductDetailPage() {
   const maximumLoadCapacity = isMachinery
     ? formatMaximumLoadCapacityKg(product.maximum_load_capacity_kg)
     : null
+  const machineWeight = isMachinery ? formatMachineWeightKg(product.machine_weight_kg) : null
   const powerSource = isMachinery ? formatProductPowerSource(product.power_source) : null
+  const terrainType = isMachinery ? formatProductTerrainType(product.terrain_type) : null
   const includedServices = isMachinery
     ? [
         { label: 'Revisión técnica', included: product.includes_technical_review === true },
@@ -256,69 +257,42 @@ export function ProductDetailPage() {
                   {!product.price_visible || !product.price ? <small>Solicita una cotización para recibir precio actualizado.</small> : null}
                 </div>
 
-                <dl className="product-detail__facts">
-                  <div>
-                    <dt>Marca</dt>
-                    <dd>{product.brand?.name ?? 'Sin marca'}</dd>
-                  </div>
-                  <div>
-                    <dt>Categoría</dt>
-                    <dd>{product.category?.name ?? 'Sin categoría'}</dd>
-                  </div>
-                  <div>
-                    <dt>Condición</dt>
-                    <dd>{formatProductCondition(product)}</dd>
-                  </div>
-                  <div>
-                    <dt>Disponibilidad</dt>
-                    <dd>{formatStockStatus(product.stock_status)}</dd>
-                  </div>
-                  {product.model?.trim() ? (
-                    <div>
-                      <dt>Modelo</dt>
-                      <dd>{product.model.trim()}</dd>
-                    </div>
-                  ) : null}
-                  {product.sku?.trim() ? (
-                    <div>
-                      <dt>SKU</dt>
-                      <dd>{product.sku.trim()}</dd>
-                    </div>
-                  ) : null}
-                  {maximumLoadCapacity ? (
-                    <div>
-                      <dt>Capacidad máxima de carga</dt>
-                      <dd>{maximumLoadCapacity}</dd>
-                    </div>
-                  ) : null}
-                  {powerSource ? (
-                    <div>
-                      <dt>Fuente de energía</dt>
-                      <dd>{powerSource}</dd>
-                    </div>
-                  ) : null}
-                </dl>
-
-                <div className="product-detail__payment-box">
-                  <h2>Formas de pago</h2>
-                  <ul>
-                    <li>Transferencia / Débito.</li>
-                    <li>Otros medios de pago según cotización.</li>
-                    <li>Cotización directa con un ejecutivo.</li>
-                  </ul>
-                </div>
-
-                {product.supplier?.name ? (
-                  <p className="product-detail__supplier">
-                    <strong>Proveedor:</strong> {product.supplier.name}
-                  </p>
-                ) : null}
+                {isMachinery ? (
+                  <dl className="product-detail__facts">
+                    {product.brand?.name ? <div><dt>Marca</dt><dd>{product.brand.name}</dd></div> : null}
+                    {machineWeight ? <div><dt>Peso</dt><dd>{machineWeight}</dd></div> : null}
+                    {product.model?.trim() ? <div><dt>Modelo</dt><dd>{product.model.trim()}</dd></div> : null}
+                    {powerSource ? <div><dt>Fuente de energía</dt><dd>{powerSource}</dd></div> : null}
+                    {maximumLoadCapacity ? <div><dt>Capacidad máxima de carga</dt><dd>{maximumLoadCapacity}</dd></div> : null}
+                    <div><dt>Condición</dt><dd>{formatProductCondition(product)}</dd></div>
+                    {terrainType ? <div><dt>Tipo de terreno</dt><dd>{terrainType}</dd></div> : null}
+                    <div><dt>Stock</dt><dd>{formatStockStatus(product.stock_status)}</dd></div>
+                  </dl>
+                ) : (
+                  <dl className="product-detail__facts">
+                    {product.brand?.name ? <div><dt>Marca</dt><dd>{product.brand.name}</dd></div> : null}
+                    {product.category?.name ? <div><dt>Categoría</dt><dd>{product.category.name}</dd></div> : null}
+                    <div><dt>Condición</dt><dd>{formatProductCondition(product)}</dd></div>
+                    <div><dt>Stock</dt><dd>{formatStockStatus(product.stock_status)}</dd></div>
+                    {product.model?.trim() ? <div><dt>Modelo</dt><dd>{product.model.trim()}</dd></div> : null}
+                    {product.product_type === 'spare_part' && product.sku?.trim() ? <div><dt>SKU</dt><dd>{product.sku.trim()}</dd></div> : null}
+                  </dl>
+                )}
 
                 <div className="product-detail__contact-actions">
-                  {hasTechnicalSheet ? <button ref={technicalSheetButtonRef} type="button" className="btn btn--ghost" onClick={() => {
-                    setTechnicalSheetOpen(true)
-                    trackTechnicalSheetView({ location: 'product_detail', product_id: product.id, product_name: product.name, technical_sheet_id: technicalSheet!.id, content_type: technicalSheet!.content_type })
-                  }}>Ver ficha técnica</button> : null}
+                  <button
+                    ref={technicalSheetButtonRef}
+                    type="button"
+                    className="btn btn--ghost product-detail__technical-sheet-button"
+                    disabled={!hasTechnicalSheet}
+                    onClick={hasTechnicalSheet ? () => {
+                      setTechnicalSheetOpen(true)
+                      trackTechnicalSheetView({ location: 'product_detail', product_id: product.id, product_name: product.name, technical_sheet_id: technicalSheet!.id, content_type: technicalSheet!.content_type })
+                    } : undefined}
+                  >
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+                    Ver ficha técnica
+                  </button>
                   <Link
                     className="btn btn--accent"
                     to={`/cotizar?product=${product.id}`}
@@ -326,16 +300,13 @@ export function ProductDetailPage() {
                   >
                     Cotizar
                   </Link>
-                  <a
-                    className="btn btn--whatsapp"
-                    href={buildWhatsAppUrl(buildProductWhatsAppMessage(product.name))}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => trackWhatsAppClick({ location: 'product_detail', product_id: product.id, product_name: product.name })}
-                  >
-                    WhatsApp
-                  </a>
                 </div>
+
+                {product.supplier?.name ? (
+                  <p className="product-detail__supplier">
+                    <strong>Proveedor:</strong> {product.supplier.name}
+                  </p>
+                ) : null}
               </section>
             </div>
 
