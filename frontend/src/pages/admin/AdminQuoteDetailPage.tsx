@@ -96,7 +96,7 @@ export function AdminQuoteDetailPage() {
                 <strong>Producto:</strong>
                 <span>
                   {item.product_name ? (
-                    <Link className="table-action" to={`/catalogo?search=${encodeURIComponent(item.product_name)}`}>
+                    <Link className="quote-product-link" to={`/catalogo?search=${encodeURIComponent(item.product_name)}`}>
                       {item.product_name}
                     </Link>
                   ) : (

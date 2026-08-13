@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
+import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteBrand, getAdminBrands } from '../../services/adminApi'
@@ -103,19 +104,19 @@ export function AdminBrandsPage() {
                     </span>
                   </td>
                   <td>
-                    <Link
+                    <div className="admin-table-actions"><Link
                       className="table-action"
                       to={`/admin/marcas/${item.id}/editar`}
                     >
-                      Editar
-                    </Link>{' '}
+                      <AdminIcon name="edit" />Editar
+                    </Link>
                     <button
                       type="button"
-                      className="table-action table-action--button"
+                      className="table-action table-action--button table-action--danger"
                       onClick={() => void handleDelete(item)}
                     >
-                      Eliminar
-                    </button>
+                      <AdminIcon name="trash" />Eliminar
+                    </button></div>
                   </td>
                 </tr>
               ))}

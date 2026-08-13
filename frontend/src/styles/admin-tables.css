@@ -38,10 +38,48 @@
 }
 
 .table-action {
-  color: #ea580c;
-  font-weight: 600;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 28px;
+  padding: 0.2rem 0.42rem;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+  color: var(--admin-primary);
+  font: 600 0.8rem/1.2 var(--admin-font);
+  text-decoration: none;
   white-space: nowrap;
 }
+
+.table-action:hover:not(:disabled) { border-color: var(--admin-primary); background: #eef5fb; }
+.table-action:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
+.table-action:disabled { opacity: 0.55; cursor: not-allowed; }
+.table-action .admin-icon { width: 15px; height: 15px; flex: 0 0 15px; }
+.table-action--danger { border-color: var(--admin-danger); color: var(--admin-danger); }
+.table-action--danger:hover:not(:disabled) { border-color: var(--admin-danger); background: #fff1f0; }
+
+.admin-table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-category-selector {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--admin-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-category-selector:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
 
 .quote-folio {
   color: #0f172a;
@@ -63,6 +101,9 @@
 .quote-customer-link:focus-visible {
   color: #ea580c;
 }
+
+.quote-product-link { color: #ea580c; font-weight: 600; }
+.quote-product-link:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
 
 @media (max-width: 768px) {
   .admin-table-wrapper {
@@ -151,3 +192,11 @@
 .technical-sheet-form input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: var(--admin-radius); padding: .55rem; }
 .technical-sheet-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
 .technical-sheet-form__filename { max-width: 100%; overflow-wrap: anywhere; }
+
+.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: fit-content; max-width: 100%; align-self: flex-start; }
+.admin-technical-sheets-table { width: auto; min-width: 760px; table-layout: fixed; }
+.admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 10rem; max-width: 14rem; overflow-wrap: anywhere; }
+.admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 11rem; max-width: 16rem; overflow-wrap: anywhere; }
+.admin-technical-sheets-table th:nth-child(3), .admin-technical-sheets-table td:nth-child(3) { width: 5rem; white-space: nowrap; }
+.admin-technical-sheets-table th:nth-child(4), .admin-technical-sheets-table td:nth-child(4) { width: 6.5rem; white-space: nowrap; }
+.admin-technical-sheets-table th:nth-child(5), .admin-technical-sheets-table td:nth-child(5) { width: 22rem; }

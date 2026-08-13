@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type AdminIconName = 'box' | 'file' | 'folder' | 'tag' | 'truck' | 'clipboard' | 'megaphone' | 'star' | 'external' | 'logout' | 'menu' | 'close' | 'plus' | 'search' | 'reset' | 'edit'
+export type AdminIconName = 'box' | 'file' | 'folder' | 'tag' | 'truck' | 'clipboard' | 'megaphone' | 'star' | 'external' | 'logout' | 'menu' | 'close' | 'plus' | 'search' | 'reset' | 'edit' | 'download' | 'trash'
 
 const paths: Record<AdminIconName, ReactNode> = {
   box: <><path d="m4 7.5 8-4 8 4-8 4-8-4Z" /><path d="M4 7.5v9l8 4 8-4v-9M12 11.5v9" /></>,
@@ -19,6 +19,8 @@ const paths: Record<AdminIconName, ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m16 16 5 5" /></>,
   reset: <><path d="M4 7v5h5" /><path d="M5.5 16a8 8 0 1 0 .5-9l-2 5" /></>,
   edit: <><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10z" /><path d="m13.5 7 3.5 3.5" /></>,
+  download: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 20h14" /></>,
+  trash: <><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" /></>,
 }
 
 export function AdminIcon({ name }: { name: AdminIconName }) {
