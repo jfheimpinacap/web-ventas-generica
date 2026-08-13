@@ -43,20 +43,18 @@ export function ProductTechnicalSheetModal({ open, productName, sheet, inlineUrl
   }, [onClose, open, returnFocusRef])
 
   if (!open) return null
-  const size = sheet.size_bytes > 0 ? `${(sheet.size_bytes / 1024 / 1024).toFixed(2)} MB` : null
   const isPdf = sheet.content_type.trim().toLowerCase() === 'application/pdf'
 
   return createPortal(
     <div className="product-technical-sheet-modal__backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div ref={dialogRef} className="product-technical-sheet-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="technical-sheet-title" aria-describedby="technical-sheet-help">
+      <div ref={dialogRef} className="product-technical-sheet-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="technical-sheet-title">
         <header className="product-technical-sheet-modal__header">
-          <div><h2 id="technical-sheet-title">Ficha técnica</h2><p>{productName}</p><strong>{sheet.name}</strong><span>{sheet.original_file_name}{size ? ` · ${size}` : ''}</span></div>
-          <button ref={closeRef} type="button" className="btn btn--ghost" onClick={onClose} aria-label="Cerrar ficha técnica">×</button>
+          <h2 id="technical-sheet-title" className="product-technical-sheet-modal__accessible-title">Ficha técnica de {productName}</h2>
+          <button ref={closeRef} type="button" className="btn btn--ghost product-technical-sheet-modal__close" onClick={onClose} aria-label="Cerrar ficha técnica">×</button>
         </header>
         <div className={`product-technical-sheet-modal__viewer${isPdf ? '' : ' product-technical-sheet-modal__viewer--image'}`}>
           {isPdf ? <iframe src={inlineUrl} title={`Ficha técnica de ${productName}`} /> : <img src={inlineUrl} alt={`Ficha técnica ${sheet.name} de ${productName}`} />}
         </div>
-        <p id="technical-sheet-help" className="product-technical-sheet-modal__help">Si el visor no carga correctamente, abre el archivo en una nueva pestaña o descárgalo.</p>
         <footer className="product-technical-sheet-modal__actions">
           <a className="btn btn--ghost" href={inlineUrl} target="_blank" rel="noopener noreferrer">Abrir en nueva pestaña</a>
           <a className="btn btn--accent" href={downloadUrl} onClick={onDownload}>Descargar</a>
