@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type AdminIconName = 'box' | 'file' | 'folder' | 'tag' | 'truck' | 'clipboard' | 'megaphone' | 'star' | 'external' | 'logout' | 'menu' | 'close' | 'plus' | 'search' | 'reset' | 'edit' | 'download' | 'trash'
+export type AdminIconName = 'box' | 'file' | 'folder' | 'tag' | 'truck' | 'clipboard' | 'megaphone' | 'star' | 'users' | 'external' | 'logout' | 'menu' | 'close' | 'plus' | 'search' | 'reset' | 'edit' | 'download' | 'trash'
 
 const paths: Record<AdminIconName, ReactNode> = {
   box: <><path d="m4 7.5 8-4 8 4-8 4-8-4Z" /><path d="M4 7.5v9l8 4 8-4v-9M12 11.5v9" /></>,
@@ -11,6 +11,7 @@ const paths: Record<AdminIconName, ReactNode> = {
   clipboard: <><path d="M7 5H4v17h16V5h-3" /><rect x="8" y="2" width="8" height="5" rx="1" /><path d="M8 12h8M8 16h8" /></>,
   megaphone: <><path d="m3 10 14-6v14L3 12zM7 13l2 7h4l-2-8M20 9v4" /></>,
   star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" />,
+  users: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.5V20" /></>,
   external: <><path d="M13 4h7v7M20 4 10 14" /><path d="M18 14v6H4V6h6" /></>,
   logout: <><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10" /></>,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
