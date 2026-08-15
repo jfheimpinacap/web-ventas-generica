@@ -36,6 +36,6 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260810080000_AddProductTechnicalSheetAssociation", discoveredMigrationIds);
         Assert.Contains("20260811000000_AddStructuredMachineryTechnicalData", discoveredMigrationIds);
         Assert.Contains("20260812000000_AddProductMachineWeight", discoveredMigrationIds);
-        Assert.Empty(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal).Where(group => group.Count() > 1));
+        Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
     }
 }

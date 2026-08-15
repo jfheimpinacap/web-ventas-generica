@@ -346,7 +346,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(secondId, list[0].GetProperty("id").GetInt32());
         Assert.Equal(firstId, list[1].GetProperty("id").GetInt32());
         Assert.Equal(thirdId, list[2].GetProperty("id").GetInt32());
-        Assert.Single(list.EnumerateArray().Where(image => image.GetProperty("is_main").GetBoolean()));
+        Assert.Single(list.EnumerateArray(), image => image.GetProperty("is_main").GetBoolean());
 
         var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/product-images/{firstId}/", new { alt_text = "Nueva", is_main = true, order = 0, product = 1 }));
         Assert.Equal("Nueva", updated.GetProperty("alt_text").GetString());
@@ -355,7 +355,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/product-images/{thirdId}/")).StatusCode);
         var afterNonMainDelete = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
         Assert.Equal(2, afterNonMainDelete.GetArrayLength());
-        Assert.Single(afterNonMainDelete.EnumerateArray().Where(image => image.GetProperty("is_main").GetBoolean()));
+        Assert.Single(afterNonMainDelete.EnumerateArray(), image => image.GetProperty("is_main").GetBoolean());
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/product-images/{firstId}/")).StatusCode);
         var afterDelete = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/product-images/?product=1"));
