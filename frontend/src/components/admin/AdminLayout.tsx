@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom'
 
 import { logout } from '../../services/authApi'
 import { AdminIcon, type AdminIconName } from './AdminIcon'
+import { useAdminUser } from './ProtectedRoute'
+import { isSupportAdmin } from '../../services/authApi'
 
 const adminMenu: { to: string; label: string; icon: AdminIconName }[] = [
   { to: '/admin/productos', label: 'Productos', icon: 'box' },
@@ -16,6 +18,7 @@ const adminMenu: { to: string; label: string; icon: AdminIconName }[] = [
 ]
 
 export function AdminLayout({ children }: PropsWithChildren) {
+  const currentUser = useAdminUser()
   const navigate = useNavigate()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
@@ -56,6 +59,11 @@ export function AdminLayout({ children }: PropsWithChildren) {
               <AdminIcon name={item.icon} /><span>{item.label}</span>
             </NavLink>
           ))}
+          {isSupportAdmin(currentUser ?? undefined) ? (
+            <NavLink to="/admin/usuarios" className="admin-nav-link" onClick={closeMobileMenu}>
+              <AdminIcon name="users" /><span>Usuarios</span>
+            </NavLink>
+          ) : null}
           <div className="admin-nav-divider" aria-hidden="true" />
           <NavLink to="/" className="admin-nav-link" onClick={closeMobileMenu}>
             <AdminIcon name="external" /><span>Volver al sitio</span>

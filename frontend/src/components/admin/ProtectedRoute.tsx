@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { AdminIdleSessionTimeout } from './AdminIdleSessionTimeout'
 import { Seo } from '../common/Seo'
-import { canAccessSellerPanel, clearSession, getMe, isAuthenticated } from '../../services/authApi'
+import { canAccessSellerPanel, clearSession, getMe, isAuthenticated, isSupportAdmin } from '../../services/authApi'
+import type { AuthUser } from '../../types/catalog'
 import { buildPublicUrl } from '../../utils/seo'
 
 type AuthGuardStatus = 'checking' | 'authorized' | 'anonymous' | 'forbidden'
 
-export function ProtectedRoute() {
+const AdminUserContext = createContext<AuthUser | null>(null)
+
+export function useAdminUser() {
+  return useContext(AdminUserContext)
+}
+
+export function ProtectedRoute({ supportAdminOnly = false }: { supportAdminOnly?: boolean }) {
   const location = useLocation()
   const [status, setStatus] = useState<AuthGuardStatus>(() => (isAuthenticated() ? 'checking' : 'anonymous'))
+  const [user, setUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -26,7 +34,8 @@ export function ProtectedRoute() {
     getMe()
       .then((user) => {
         if (!isMounted) return
-        setStatus(canAccessSellerPanel(user) ? 'authorized' : 'forbidden')
+        setUser(user)
+        setStatus(canAccessSellerPanel(user) && (!supportAdminOnly || isSupportAdmin(user)) ? 'authorized' : 'forbidden')
       })
       .catch(() => {
         if (!isMounted) return
@@ -37,7 +46,7 @@ export function ProtectedRoute() {
     return () => {
       isMounted = false
     }
-  }, [location.pathname])
+  }, [location.pathname, supportAdminOnly])
 
   if (status === 'anonymous') {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
@@ -62,7 +71,7 @@ export function ProtectedRoute() {
         ogUrl={buildPublicUrl(location.pathname)}
         robots="noindex,nofollow"
       />
-      <Outlet />
+      <AdminUserContext.Provider value={user}><Outlet /></AdminUserContext.Provider>
     </>
   )
 }
