@@ -17,6 +17,7 @@ public interface IJwtTokenService
     TokenPair GenerateTokenPair(AppUser user);
     string GenerateRefreshToken();
     string HashRefreshToken(string refreshToken);
+    string GetPasswordVersion(AppUser user);
 }
 
 public sealed class JwtTokenService(IOptions<JwtOptions> jwtOptions) : IJwtTokenService
@@ -41,7 +42,8 @@ public sealed class JwtTokenService(IOptions<JwtOptions> jwtOptions) : IJwtToken
             new(ClaimTypes.Role, user.Role),
             new("role", user.Role),
             new("is_staff", user.IsStaff.ToString().ToLowerInvariant()),
-            new("is_superuser", user.IsSuperuser.ToString().ToLowerInvariant())
+            new("is_superuser", user.IsSuperuser.ToString().ToLowerInvariant()),
+            new("pwd_ver", GetPasswordVersion(user))
         };
 
         if (!string.IsNullOrWhiteSpace(user.Email))
@@ -87,6 +89,13 @@ public sealed class JwtTokenService(IOptions<JwtOptions> jwtOptions) : IJwtToken
 
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    public string GetPasswordVersion(AppUser user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(GetRequiredSecret()));
+        return Base64UrlEncoder.Encode(hmac.ComputeHash(Encoding.UTF8.GetBytes(user.PasswordHash)));
     }
 
     private string GetRequiredSecret()

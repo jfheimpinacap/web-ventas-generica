@@ -20,7 +20,8 @@ public sealed class JwtTokenServiceTests
             Email = "demo@example.test",
             Role = AppRoles.Seller,
             IsStaff = true,
-            IsSuperuser = false
+            IsSuperuser = false,
+            PasswordHash = "identity-password-hash-value"
         };
 
         var token = service.GenerateAccessToken(user);
@@ -30,6 +31,9 @@ public sealed class JwtTokenServiceTests
         Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "7");
         Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.UniqueName && claim.Value == "demo");
         Assert.Contains(jwt.Claims, claim => claim.Type == "role" && claim.Value == AppRoles.Seller);
+        Assert.Contains(jwt.Claims, claim => claim.Type == "pwd_ver" && !string.IsNullOrWhiteSpace(claim.Value));
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Value.Contains(user.PasswordHash, StringComparison.Ordinal));
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("password", StringComparison.OrdinalIgnoreCase));
         Assert.True(jwt.ValidTo > DateTime.UtcNow);
     }
 

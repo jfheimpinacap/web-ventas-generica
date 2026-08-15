@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using JemNexus.Api.Contracts.Auth;
@@ -80,6 +81,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromMinutes(1),
             NameClaimType = ClaimTypes.Name,
             RoleClaimType = ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var idValue = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? context.Principal?.FindFirstValue("sub");
+                var tokenRole = context.Principal?.FindFirstValue(ClaimTypes.Role)
+                    ?? context.Principal?.FindFirstValue("role");
+                var passwordVersion = context.Principal?.FindFirstValue("pwd_ver");
+                if (!int.TryParse(idValue, out var userId) || string.IsNullOrEmpty(tokenRole) || string.IsNullOrEmpty(passwordVersion))
+                {
+                    context.Fail("Token invalidado.");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<JemNexusDbContext>();
+                var tokenService = context.HttpContext.RequestServices.GetRequiredService<IJwtTokenService>();
+                var user = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == userId, context.HttpContext.RequestAborted);
+                if (user is null || !user.IsActive || !string.Equals(user.Role, tokenRole, StringComparison.Ordinal)
+                    || !CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(tokenService.GetPasswordVersion(user)),
+                        Encoding.UTF8.GetBytes(passwordVersion)))
+                {
+                    context.Fail("Token invalidado.");
+                }
+            }
         };
     });
 
@@ -214,6 +242,7 @@ app.MapCommercialPublicReadEndpoints();
 app.MapCommercialReadEndpoints();
 app.MapCommercialWriteEndpoints();
 app.MapTechnicalSheetEndpoints();
+app.MapAdminUserEndpoints();
 
 await SeedData.SeedUsersAsync(app.Services, app.Environment);
 
