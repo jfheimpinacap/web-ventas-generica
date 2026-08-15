@@ -81,6 +81,9 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(login.Access);
         Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && !string.IsNullOrWhiteSpace(claim.Value));
         Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.UniqueName && claim.Value == "demo");
+        Assert.Contains(jwt.Claims, claim => claim.Type == "pwd_ver" && !string.IsNullOrWhiteSpace(claim.Value));
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("password", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Value.Contains(TestPassword, StringComparison.Ordinal));
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
         var response = await client.GetAsync(mePath);
