@@ -80,22 +80,56 @@ public sealed class AdminUserEndpointTests
         var response = await client.PostAsJsonAsync("/api/admin/users", new
         {
             username = " new.seller ", email = " new@example.test ", full_name = " New Seller ", password = NewPassword,
-            role = AppRoles.SupportAdmin, is_staff = false, is_superuser = true
+            role = AppRoles.SupportAdmin, is_staff = false, is_superuser = true, seller_code = "VEN-9999"
         });
         var body = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Contains("\"role\":\"seller\"", body);
         Assert.Contains("\"is_staff\":true", body);
         Assert.Contains("\"is_superuser\":false", body);
+        Assert.Contains("\"seller_code\":\"VEN-", body);
+        Assert.DoesNotContain("VEN-9999", body);
         Assert.DoesNotContain(NewPassword, body);
 
         using var scope = factory.Services.CreateScope();
         var stored = await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.SingleAsync(user => user.Username == "new.seller");
         Assert.NotEqual(NewPassword, stored.PasswordHash);
         Assert.StartsWith("AQAAAA", stored.PasswordHash);
+        Assert.NotNull(stored.SellerCode);
+        Assert.Contains($"\"seller_code\":\"{stored.SellerCode}\"", body);
 
         using var loginClient = factory.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(loginClient, "new.seller", NewPassword)).StatusCode);
+    }
+
+    [Fact]
+    public async Task SellerCodesAreUniqueSearchableAndStableAcrossUpdates()
+    {
+        await using var factory = new AdminApiFactory();
+        using var admin = factory.CreateClient();
+        await AuthenticateAsync(admin, "support", Password);
+
+        var first = await admin.PostAsJsonAsync("/api/admin/users", new { username = "code.one", password = NewPassword });
+        var second = await admin.PostAsJsonAsync("/api/admin/users", new { username = "code.two", password = NewPassword });
+        var firstPayload = JsonDocument.Parse(await first.Content.ReadAsStringAsync()).RootElement;
+        var secondPayload = JsonDocument.Parse(await second.Content.ReadAsStringAsync()).RootElement;
+        var id = firstPayload.GetProperty("id").GetInt32();
+        var code = firstPayload.GetProperty("seller_code").GetString()!;
+        Assert.Matches("^VEN-[0-9]{4,}$", code);
+        Assert.NotEqual(code, secondPayload.GetProperty("seller_code").GetString());
+
+        foreach (var search in new[] { code, code.ToLowerInvariant(), code[4..] })
+            Assert.Contains("code.one", await admin.GetStringAsync($"/api/admin/users?search={search}"));
+
+        var update = await admin.PatchAsJsonAsync($"/api/admin/users/{id}", new
+        {
+            username = "code.edited", email = "code@example.test", full_name = "Code Edited",
+            is_active = false, password = NewPassword, seller_code = "VEN-7777"
+        });
+        var updated = JsonDocument.Parse(await update.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(code, updated.GetProperty("seller_code").GetString());
+        var detail = JsonDocument.Parse(await admin.GetStringAsync($"/api/admin/users/{id}")).RootElement;
+        Assert.Equal(code, detail.GetProperty("seller_code").GetString());
     }
 
     [Fact]
@@ -235,7 +269,8 @@ public sealed class AdminUserEndpointTests
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-        var user = new AppUser { Username = username, Email = email, FullName = fullName, IsActive = active, Role = AppRoles.Seller, IsStaff = true };
+        var generator = scope.ServiceProvider.GetRequiredService<ISellerCodeGenerator>();
+        var user = new AppUser { Username = username, SellerCode = await generator.GenerateAsync(), Email = email, FullName = fullName, IsActive = active, Role = AppRoles.Seller, IsStaff = true };
         user.PasswordHash = hasher.HashPassword(user, Password);
         db.AppUsers.Add(user);
         await db.SaveChangesAsync();
@@ -262,6 +297,8 @@ public sealed class AdminUserEndpointTests
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
+                services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.AddDbContext<JemNexusDbContext>(options => InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
             });
         }

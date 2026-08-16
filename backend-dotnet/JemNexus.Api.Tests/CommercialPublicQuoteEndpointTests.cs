@@ -193,6 +193,8 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
+                services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.RemoveAll<IQuoteNotificationService>();
                 services.AddDbContext<JemNexusDbContext>(options => InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
                 services.AddSingleton<IQuoteNotificationService>(_notificationService);

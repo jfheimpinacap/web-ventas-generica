@@ -10,6 +10,7 @@ public sealed record RefreshRequest(string Refresh);
 public sealed record AuthUserResponse(
     int Id,
     string Username,
+    string? SellerCode,
     string? Email,
     string Role,
     [property: JsonPropertyName("is_staff")] bool IsStaff,
@@ -17,7 +18,7 @@ public sealed record AuthUserResponse(
 {
     public static AuthUserResponse FromUser(AppUser user)
     {
-        return new AuthUserResponse(user.Id, user.Username, user.Email, user.Role, user.IsStaff, user.IsSuperuser);
+        return new AuthUserResponse(user.Id, user.Username, user.SellerCode, user.Email, user.Role, user.IsStaff, user.IsSuperuser);
     }
 }
 

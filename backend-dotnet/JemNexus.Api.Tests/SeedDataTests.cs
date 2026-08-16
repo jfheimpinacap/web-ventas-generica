@@ -36,6 +36,7 @@ public sealed class SeedDataTests
         Assert.True(seller.IsActive);
         Assert.True(seller.IsStaff);
         Assert.False(seller.IsSuperuser);
+        Assert.Matches("^VEN-[0-9]{4,}$", seller.SellerCode!);
     }
 
     [Fact]
@@ -60,6 +61,7 @@ public sealed class SeedDataTests
         Assert.True(support.IsActive);
         Assert.True(support.IsStaff);
         Assert.False(support.IsSuperuser);
+        Assert.Null(support.SellerCode);
     }
 
     [Fact]
@@ -87,6 +89,11 @@ public sealed class SeedDataTests
 
         await SeedData.SeedUsersAsync(services, environment);
         await AssertSeededUsersCountAsync(services, expectedCount: 2);
+
+        using var scope = services.CreateScope();
+        var users = await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.ToListAsync();
+        Assert.NotNull(users.Single(user => user.Role == AppRoles.Seller).SellerCode);
+        Assert.Null(users.Single(user => user.Role == AppRoles.SupportAdmin).SellerCode);
 
         await SeedData.SeedUsersAsync(services, environment);
         await AssertSeededUsersCountAsync(services, expectedCount: 2);
@@ -264,6 +271,7 @@ public sealed class SeedDataTests
             InMemoryTestDatabase.Configure(options, databaseName, databaseRoot));
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IPasswordHasherService, PasswordHasherService>();
+        services.AddSingleton<ISellerCodeGenerator, TestSellerCodeGenerator>();
         services.AddOptions<SeedUserOptions>()
             .Configure(options =>
             {

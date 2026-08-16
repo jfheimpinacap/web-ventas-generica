@@ -148,6 +148,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<ISellerCodeGenerator, SellerCodeGenerator>();
 builder.Services.AddScoped<IQuoteNotificationService, SmtpQuoteNotificationService>();
 builder.Services.AddSingleton<ITechnicalSheetStorage, LocalTechnicalSheetStorage>();
 builder.Services.AddSingleton<IProductImageStorage, LocalProductImageStorage>();

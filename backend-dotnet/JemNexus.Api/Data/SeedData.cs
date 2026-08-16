@@ -20,11 +20,13 @@ public static class SeedData
             .CreateLogger("JemNexus.Api.Data.SeedData");
         var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
+        var sellerCodeGenerator = scope.ServiceProvider.GetRequiredService<ISellerCodeGenerator>();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<SeedUserOptions>>().Value;
 
         var sellerCreated = await SeedUserAsync(
             dbContext,
             passwordHasher,
+            sellerCodeGenerator,
             logger,
             seedName: "seller",
             username: options.SellerUsername,
@@ -40,6 +42,7 @@ public static class SeedData
         var supportCreated = await SeedUserAsync(
             dbContext,
             passwordHasher,
+            sellerCodeGenerator,
             logger,
             seedName: "support",
             username: options.SupportUsername,
@@ -61,6 +64,7 @@ public static class SeedData
     private static async Task<bool> SeedUserAsync(
         JemNexusDbContext dbContext,
         IPasswordHasherService passwordHasher,
+        ISellerCodeGenerator sellerCodeGenerator,
         ILogger logger,
         string seedName,
         string username,
@@ -87,10 +91,22 @@ public static class SeedData
 
         if (existingUser is not null)
         {
+            var changed = false;
+            if (role == AppRoles.Seller && existingUser.SellerCode is null)
+            {
+                existingUser.SellerCode = await sellerCodeGenerator.GenerateAsync(cancellationToken);
+                changed = true;
+            }
+            else if (role != AppRoles.Seller && existingUser.SellerCode is not null)
+            {
+                existingUser.SellerCode = null;
+                changed = true;
+            }
+
             if (!updateExistingPassword)
             {
                 logger.LogInformation("SeedUsers {SeedName} already exists.", seedName);
-                return false;
+                return changed;
             }
 
             existingUser.PasswordHash = passwordHasher.HashPassword(existingUser, password);
@@ -103,6 +119,9 @@ public static class SeedData
             Username = normalizedUsername,
             Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
             Role = role,
+            SellerCode = role == AppRoles.Seller
+                ? await sellerCodeGenerator.GenerateAsync(cancellationToken)
+                : null,
             FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim(),
             IsActive = true,
             IsStaff = isStaff,

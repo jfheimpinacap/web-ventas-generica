@@ -22,6 +22,10 @@ namespace JemNexus.Api.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence<long>("SellerCodeSequence")
+                .StartsAt(1L)
+                .IncrementsBy(1);
+
             modelBuilder.Entity("JemNexus.Api.Models.AppRefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -113,6 +117,10 @@ namespace JemNexus.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<string>("SellerCode")
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetimeoffset")
@@ -133,10 +141,17 @@ namespace JemNexus.Api.Data.Migrations
 
                     b.HasIndex("Role");
 
+                    b.HasIndex("SellerCode")
+                        .IsUnique()
+                        .HasFilter("[SellerCode] IS NOT NULL");
+
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("AppUsers", (string)null);
+                    b.ToTable("AppUsers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AppUsers_Role_SellerCode", "([Role] = 'seller' AND [SellerCode] IS NOT NULL) OR ([Role] <> 'seller' AND [SellerCode] IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.Brand", b =>

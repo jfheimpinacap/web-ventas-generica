@@ -19,6 +19,7 @@ public sealed record AdminUserUpdateRequest(
 public sealed record AdminUserResponse(
     int Id,
     string Username,
+    string? SellerCode,
     string? Email,
     string? FullName,
     string Role,
@@ -32,6 +33,7 @@ public sealed record AdminUserResponse(
     public static AdminUserResponse FromUser(AppUser user) => new(
         user.Id,
         user.Username,
+        user.SellerCode,
         user.Email,
         user.FullName,
         user.Role,

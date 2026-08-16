@@ -42,6 +42,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.Equal("demo", payload.User.Username);
         Assert.Equal(AppRoles.Seller, payload.User.Role);
         Assert.True(payload.User.IsStaff);
+        Assert.Matches("^VEN-[0-9]{4,}$", payload.User.SellerCode!);
     }
 
     [Theory]
@@ -92,6 +93,8 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.NotNull(user);
         Assert.Equal("demo", user.Username);
         Assert.Equal(AppRoles.Seller, user.Role);
+        Assert.Equal(login.User.SellerCode, user.SellerCode);
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("seller_code", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -120,6 +123,18 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
 
         Assert.Equal("demo", payload.User.Username);
         Assert.Equal(AppRoles.Seller, payload.User.Role);
+    }
+
+    [Fact]
+    public async Task SupportLoginAndMeReturnNullSellerCode()
+    {
+        using var client = _factory.CreateClient();
+        var login = await ReadSuccessfulJsonAsync<LoginPayload>(
+            await client.PostAsJsonAsync("/api/auth/login", new { username = "support", password = TestPassword }));
+        Assert.Null(login.User.SellerCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
+        var me = await ReadSuccessfulJsonAsync<UserPayload>(await client.GetAsync("/api/auth/me"));
+        Assert.Null(me.SellerCode);
     }
 
     private static readonly IReadOnlyDictionary<string, string?> TestConfiguration = new Dictionary<string, string?>
@@ -166,6 +181,8 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
+                services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                     InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
             });
@@ -174,5 +191,5 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
     private sealed record RefreshPayload(string Access);
-    private sealed record UserPayload(int Id, string Username, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
+    private sealed record UserPayload(int Id, string Username, string? SellerCode, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
 }
