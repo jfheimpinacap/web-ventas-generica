@@ -201,6 +201,8 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
+                services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                     InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
             });

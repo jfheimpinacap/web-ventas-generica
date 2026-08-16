@@ -67,6 +67,20 @@ Los tests que usan EF Core InMemory mantienen bases aisladas por test/factory co
 
 ## Entity Framework Core
 
+### Código comercial de vendedores
+
+Cada `AppUser` con rol `seller` recibe automáticamente un código estable con formato
+`VEN-0001` (mínimo cuatro dígitos, sin truncar valores mayores). El backend obtiene el
+correlativo desde la secuencia SQL Server `SellerCodeSequence`; el cliente no puede
+proporcionarlo ni modificarlo. Las cuentas `support_admin` mantienen este campo en
+`null`. Este identificador comercial no es una credencial ni el futuro folio de una
+cotización.
+
+La migración `AddSellerCodes` crea la secuencia, realiza el backfill de vendedores y
+agrega el índice único y la restricción de rol. Las migraciones deben revisarse y
+aplicarse mediante el procedimiento controlado del entorno; la aplicación no debe
+ejecutarlas automáticamente en producción.
+
 El DbContext `JemNexusDbContext` queda registrado para SQL Server y toma la cadena desde `ConnectionStrings:DefaultConnection`, que en IIS/Plesk debe configurarse como variable de entorno:
 
 ```text

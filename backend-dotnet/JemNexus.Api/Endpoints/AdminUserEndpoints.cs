@@ -34,7 +34,8 @@ public static partial class AdminUserEndpoints
         {
             query = query.Where(user => user.Username.ToLower().Contains(term)
                 || (user.Email != null && user.Email.ToLower().Contains(term))
-                || (user.FullName != null && user.FullName.ToLower().Contains(term)));
+                || (user.FullName != null && user.FullName.ToLower().Contains(term))
+                || (user.SellerCode != null && user.SellerCode.ToLower().Contains(term)));
         }
 
         if (isActive.HasValue)
@@ -42,7 +43,7 @@ public static partial class AdminUserEndpoints
             query = query.Where(user => user.IsActive == isActive.Value);
         }
 
-        var users = await query.OrderBy(user => user.Username).ThenBy(user => user.Id).ToListAsync(ct);
+        var users = await query.OrderBy(user => user.SellerCode).ThenBy(user => user.Username).ThenBy(user => user.Id).ToListAsync(ct);
         return Results.Ok(users.Select(AdminUserResponse.FromUser));
     }
 
@@ -56,6 +57,7 @@ public static partial class AdminUserEndpoints
         AdminUserCreateRequest request,
         JemNexusDbContext db,
         IPasswordHasherService hasher,
+        ISellerCodeGenerator sellerCodeGenerator,
         CancellationToken ct)
     {
         var username = request.Username?.Trim() ?? string.Empty;
@@ -71,6 +73,7 @@ public static partial class AdminUserEndpoints
         var user = new AppUser
         {
             Username = username,
+            SellerCode = await sellerCodeGenerator.GenerateAsync(ct),
             Email = email,
             FullName = fullName,
             IsActive = request.IsActive,

@@ -34,8 +34,17 @@ public sealed class JwtTokenServiceTests
         Assert.Contains(jwt.Claims, claim => claim.Type == "pwd_ver" && !string.IsNullOrWhiteSpace(claim.Value));
         Assert.DoesNotContain(jwt.Claims, claim => claim.Value.Contains(user.PasswordHash, StringComparison.Ordinal));
         Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("password", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("seller_code", StringComparison.OrdinalIgnoreCase));
         Assert.True(jwt.ValidTo > DateTime.UtcNow);
     }
+
+    [Theory]
+    [InlineData(1, "VEN-0001")]
+    [InlineData(25, "VEN-0025")]
+    [InlineData(9999, "VEN-9999")]
+    [InlineData(10000, "VEN-10000")]
+    public void SellerCodeFormattingNeverTruncates(long value, string expected) =>
+        Assert.Equal(expected, SellerCodeGenerator.Format(value));
 
     private static JwtTokenService CreateService()
     {

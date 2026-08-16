@@ -372,6 +372,8 @@ public sealed class TechnicalSheetTests : IDisposable
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
+                services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.RemoveAll<ITechnicalSheetStorage>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                 {

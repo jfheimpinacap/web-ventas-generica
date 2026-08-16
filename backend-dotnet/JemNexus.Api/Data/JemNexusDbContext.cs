@@ -75,6 +75,10 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.HasSequence<long>("SellerCodeSequence")
+            .StartsAt(1)
+            .IncrementsBy(1);
+
         ConfigureAppUser(modelBuilder);
         ConfigureAppRefreshToken(modelBuilder);
         ConfigureCategory(modelBuilder);
@@ -116,6 +120,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.ToTable("AppUsers");
             entity.HasKey(user => user.Id);
             entity.Property(user => user.Username).HasMaxLength(150).IsRequired();
+            entity.Property(user => user.SellerCode).HasMaxLength(24);
             entity.Property(user => user.Email).HasMaxLength(254);
             entity.Property(user => user.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(user => user.Role).HasMaxLength(40).IsRequired();
@@ -126,9 +131,13 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(user => user.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(user => user.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasIndex(user => user.Username).IsUnique();
+            entity.HasIndex(user => user.SellerCode).IsUnique().HasFilter("[SellerCode] IS NOT NULL");
             entity.HasIndex(user => user.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
             entity.HasIndex(user => user.Role);
             entity.HasIndex(user => user.IsActive);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_AppUsers_Role_SellerCode",
+                "([Role] = 'seller' AND [SellerCode] IS NOT NULL) OR ([Role] <> 'seller' AND [SellerCode] IS NULL)"));
         });
     }
 
