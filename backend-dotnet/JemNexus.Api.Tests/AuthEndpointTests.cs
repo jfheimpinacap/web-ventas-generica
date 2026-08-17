@@ -191,5 +191,5 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
     private sealed record RefreshPayload(string Access);
-    private sealed record UserPayload(int Id, string Username, string? SellerCode, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
+    private sealed record UserPayload(int Id, string Username, [property: JsonPropertyName("seller_code")] string? SellerCode, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
 }
