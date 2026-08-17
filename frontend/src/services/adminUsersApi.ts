@@ -3,6 +3,7 @@ import { authFetch } from './authApi'
 export interface SellerUser {
   id: number
   username: string
+  seller_code: string | null
   email: string | null
   full_name: string | null
   is_active: boolean
@@ -23,21 +24,18 @@ export function listSellerUsers(params: { search?: string; is_active?: boolean }
   return authFetch<SellerUser[]>('/admin/users', { params, signal })
 }
 
-export function createSellerUser(payload: SellerUserWrite) {
-  return authFetch<SellerUser>('/admin/users', { method: 'POST', body: JSON.stringify(payload) })
+export function getSellerUser(id: number, signal?: AbortSignal) {
+  return authFetch<SellerUser>(`/admin/users/${id}`, { signal })
 }
 
-export function updateSellerUser(id: number, payload: SellerUserWrite) {
-  return authFetch<SellerUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+export function createSellerUser(payload: SellerUserWrite, signal?: AbortSignal) {
+  return authFetch<SellerUser>('/admin/users', { method: 'POST', body: JSON.stringify(payload), signal })
+}
+
+export function updateSellerUser(id: number, payload: SellerUserWrite, signal?: AbortSignal) {
+  return authFetch<SellerUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload), signal })
 }
 
 export function deactivateSellerUser(id: number) {
   return authFetch<void>(`/admin/users/${id}`, { method: 'DELETE' })
-}
-
-export function reactivateSellerUser(id: number, password: string) {
-  return authFetch<SellerUser>(`/admin/users/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ is_active: true, password }),
-  })
 }
