@@ -299,6 +299,32 @@ namespace JemNexus.Api.Data.Migrations
                     b.ToTable("Categories", (string)null);
                 });
 
+            modelBuilder.Entity("JemNexus.Api.Models.CustomerProfile", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("Address").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string>("BusinessActivity").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("BusinessName").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("CityOrCommune").IsRequired().HasMaxLength(120).HasColumnType("nvarchar(120)");
+                    b.Property<string>("ContactName").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
+                    b.Property<int?>("CreatedById").HasColumnType("int");
+                    b.Property<string>("Email").HasMaxLength(254).HasColumnType("nvarchar(254)");
+                    b.Property<string>("NormalizedBusinessName").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("NormalizedRut").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.Property<string>("Phone").IsRequired().HasMaxLength(30).HasColumnType("nvarchar(30)");
+                    b.Property<string>("Rut").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.Property<DateTimeOffset>("UpdatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
+                    b.Property<int?>("UpdatedById").HasColumnType("int");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("NormalizedBusinessName");
+                    b.HasIndex("NormalizedRut").IsUnique();
+                    b.HasIndex("UpdatedById");
+                    b.ToTable("CustomerProfiles", (string)null);
+                });
+
             modelBuilder.Entity("JemNexus.Api.Models.HomeSectionItem", b =>
                 {
                     b.Property<int>("Id")
@@ -1185,6 +1211,14 @@ namespace JemNexus.Api.Data.Migrations
 
                     b.Navigation("Product");
 
+                    b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("JemNexus.Api.Models.CustomerProfile", b =>
+                {
+                    b.HasOne("JemNexus.Api.Models.AppUser", "CreatedBy").WithMany().HasForeignKey("CreatedById").OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy").WithMany().HasForeignKey("UpdatedById").OnDelete(DeleteBehavior.NoAction);
+                    b.Navigation("CreatedBy");
                     b.Navigation("UpdatedBy");
                 });
 
