@@ -26,6 +26,8 @@ import { AdminSupplierFormPage } from '../pages/admin/AdminSupplierFormPage'
 import { AdminSuppliersPage } from '../pages/admin/AdminSuppliersPage'
 import { AdminTechnicalSheetsPage } from '../pages/admin/AdminTechnicalSheetsPage'
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage'
+import { AdminUserCreatePage } from '../pages/admin/AdminUserCreatePage'
+import { AdminUserEditPage } from '../pages/admin/AdminUserEditPage'
 
 const newMachineryConfig: CommercialCatalogConfig = {
   title: 'Venta de maquinaria nueva',
@@ -83,6 +85,8 @@ export function AppRouter() {
       </Route>
       <Route element={<ProtectedRoute supportAdminOnly />}>
         <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+        <Route path="/admin/usuarios/nuevo" element={<AdminUserCreatePage />} />
+        <Route path="/admin/usuarios/:userId/editar" element={<AdminUserEditPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

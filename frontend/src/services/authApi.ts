@@ -45,6 +45,7 @@ export function normalizeAuthUser(user?: RawAuthUser | null): AuthUser | undefin
     id: typeof user.id === 'number' ? user.id : Number(user.id ?? 0),
     username: typeof user.username === 'string' ? user.username : '',
     email: typeof user.email === 'string' ? user.email : '',
+    seller_code: typeof user.seller_code === 'string' ? user.seller_code : null,
     first_name: typeof user.first_name === 'string' ? user.first_name : typeof user.firstName === 'string' ? user.firstName : '',
     last_name: typeof user.last_name === 'string' ? user.last_name : typeof user.lastName === 'string' ? user.lastName : '',
     is_staff: normalizeBoolean(user.is_staff ?? user.isStaff),
