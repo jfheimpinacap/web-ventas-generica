@@ -64,7 +64,7 @@ export function ProtectedRoute({ supportAdminOnly = false }: { supportAdminOnly?
     <>
       <AdminIdleSessionTimeout />
       <Seo
-        title="Panel vendedor | JEM Nexus"
+        title="Panel de administración | JEM Nexus"
         description="Panel interno de gestión comercial."
         canonical={buildPublicUrl(location.pathname)}
         ogType="website"
