@@ -18,6 +18,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<HomeSectionItem> HomeSectionItems => Set<HomeSectionItem>();
     public DbSet<QuoteRequest> QuoteRequests => Set<QuoteRequest>();
     public DbSet<TechnicalSheet> TechnicalSheets => Set<TechnicalSheet>();
+    public DbSet<CustomerProfile> CustomerProfiles => Set<CustomerProfile>();
 
     public override int SaveChanges()
     {
@@ -68,6 +69,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             or Promotion
             or HomeSectionItem
             or QuoteRequest
+            or CustomerProfile
             or TechnicalSheet;
     }
 
@@ -91,6 +93,31 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         ConfigureHomeSectionItem(modelBuilder);
         ConfigureQuoteRequest(modelBuilder);
         ConfigureTechnicalSheet(modelBuilder);
+        ConfigureCustomerProfile(modelBuilder);
+    }
+
+    private static void ConfigureCustomerProfile(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CustomerProfile>(entity =>
+        {
+            entity.ToTable("CustomerProfiles");
+            entity.HasKey(customer => customer.Id);
+            entity.Property(customer => customer.BusinessName).HasMaxLength(200).IsRequired();
+            entity.Property(customer => customer.Rut).HasMaxLength(12).IsRequired();
+            entity.Property(customer => customer.NormalizedRut).HasMaxLength(12).IsRequired();
+            entity.Property(customer => customer.BusinessActivity).HasMaxLength(200).IsRequired();
+            entity.Property(customer => customer.Address).HasMaxLength(300).IsRequired();
+            entity.Property(customer => customer.Phone).HasMaxLength(30).IsRequired();
+            entity.Property(customer => customer.CityOrCommune).HasMaxLength(120).IsRequired();
+            entity.Property(customer => customer.ContactName).HasMaxLength(200).IsRequired();
+            entity.Property(customer => customer.Email).HasMaxLength(254);
+            entity.Property(customer => customer.NormalizedBusinessName).HasMaxLength(200).IsRequired();
+            entity.Property(customer => customer.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(customer => customer.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            ConfigureAuditUsers(entity);
+            entity.HasIndex(customer => customer.NormalizedRut).IsUnique();
+            entity.HasIndex(customer => customer.NormalizedBusinessName);
+        });
     }
 
     private static void ConfigureTechnicalSheet(ModelBuilder modelBuilder)
