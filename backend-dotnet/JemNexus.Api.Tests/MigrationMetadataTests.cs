@@ -1,6 +1,7 @@
 using JemNexus.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
@@ -47,7 +48,7 @@ public sealed class MigrationMetadataTests
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_SellerCodeMetadataTests;Trusted_Connection=True;TrustServerCertificate=True")
             .Options;
         using var context = new JemNexusDbContext(options);
-        var model = context.Model;
+        var model = context.GetService<IDesignTimeModel>().Model;
         var sequence = model.GetSequences().Single(sequence => sequence.Name == "SellerCodeSequence");
         Assert.Equal(1, sequence.StartValue);
         Assert.Equal(1, sequence.IncrementBy);
