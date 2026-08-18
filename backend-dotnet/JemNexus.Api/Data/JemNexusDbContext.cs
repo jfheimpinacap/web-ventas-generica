@@ -21,6 +21,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<CustomerProfile> CustomerProfiles => Set<CustomerProfile>();
     public DbSet<CommercialQuote> CommercialQuotes => Set<CommercialQuote>();
     public DbSet<CommercialQuoteItem> CommercialQuoteItems => Set<CommercialQuoteItem>();
+    public DbSet<CommercialQuoteFolioCounter> CommercialQuoteFolioCounters => Set<CommercialQuoteFolioCounter>();
 
     public override int SaveChanges()
     {
@@ -107,6 +108,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.ToTable("CommercialQuotes");
             entity.HasKey(quote => quote.Id);
             entity.Property(quote => quote.Status).HasMaxLength(20).HasDefaultValue(CommercialQuoteStatuses.Draft).IsRequired();
+            entity.Property(quote => quote.Folio).HasMaxLength(40);
             entity.Property(quote => quote.Currency).HasMaxLength(3).IsRequired();
             entity.Property(quote => quote.SaleCondition).HasMaxLength(20).IsRequired();
             entity.Property(quote => quote.ValidityDays).HasDefaultValue(CommercialQuoteRules.DefaultValidityDays);
@@ -128,11 +130,20 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(quote => quote.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(quote => quote.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasIndex(quote => quote.Status);
+            entity.HasIndex(quote => quote.Folio).HasDatabaseName("UX_CommercialQuotes_Folio").IsUnique().HasFilter("[Folio] IS NOT NULL");
+            entity.HasIndex(quote => new { quote.FolioYear, quote.FolioSequenceNumber }).HasDatabaseName("UX_CommercialQuotes_FolioYear_Sequence").IsUnique().HasFilter("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL");
             entity.HasIndex(quote => quote.ResponsibleSellerId);
             entity.HasIndex(quote => quote.CustomerProfileId);
             entity.HasIndex(quote => quote.CreatedAt);
             entity.HasOne(quote => quote.CustomerProfile).WithMany().HasForeignKey(quote => quote.CustomerProfileId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(quote => quote.ResponsibleSeller).WithMany().HasForeignKey(quote => quote.ResponsibleSellerId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<CommercialQuoteFolioCounter>(entity =>
+        {
+            entity.ToTable("CommercialQuoteFolioCounters");
+            entity.HasKey(counter => counter.Year);
+            entity.Property(counter => counter.Year).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<CommercialQuoteItem>(entity =>

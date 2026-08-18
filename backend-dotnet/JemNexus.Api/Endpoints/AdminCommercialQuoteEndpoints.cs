@@ -20,15 +20,17 @@ public static class AdminCommercialQuoteEndpoints
         group.MapGet("/{id:int}", GetAsync);
         group.MapPost("", CreateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
         group.MapPut("/{id:int}", UpdateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        group.MapPost("/{id:int}/issue", IssueAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
         return endpoints;
     }
 
-    private static async Task<IResult> ListAsync(ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct, string? search, string? currency, [FromQuery(Name = "sale_condition")] string? saleCondition, int page = 1, [FromQuery(Name = "page_size")] int pageSize = 20)
+    private static async Task<IResult> ListAsync(ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct, string? search, string? currency, string? status, [FromQuery(Name = "sale_condition")] string? saleCondition, int page = 1, [FromQuery(Name = "page_size")] int pageSize = 20)
     {
         var errors = new Dictionary<string, string[]>();
         if (page < 1 || pageSize is < 1 or > MaximumPageSize) errors["pagination"] = [$"page debe ser positivo y page_size debe estar entre 1 y {MaximumPageSize}."];
         if (currency is not null && currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) errors["currency"] = ["Moneda no válida."];
         if (saleCondition is not null && saleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) errors["sale_condition"] = ["Condición de venta no válida."];
+        if (status is not null && status is not (CommercialQuoteStatuses.Draft or CommercialQuoteStatuses.Issued)) errors["status"] = ["Estado no válido."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
         var support = principal.IsInRole(AppRoles.SupportAdmin);
@@ -37,6 +39,7 @@ public static class AdminCommercialQuoteEndpoints
         if (!support) query = query.Where(quote => quote.ResponsibleSellerId == userId);
         if (currency is not null) query = query.Where(quote => quote.Currency == currency);
         if (saleCondition is not null) query = query.Where(quote => quote.SaleCondition == saleCondition);
+        if (status is not null) query = query.Where(quote => quote.Status == status);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = CustomerTextNormalizer.Search(search);
@@ -44,13 +47,14 @@ public static class AdminCommercialQuoteEndpoints
             query = query.Where(quote => quote.CustomerBusinessName.ToUpper().Contains(term)
                 || quote.CustomerRut.Replace("-", "").Replace(".", "").ToUpper().Contains(rut)
                 || quote.CustomerContactName.ToUpper().Contains(term)
+                || (quote.Folio != null && quote.Folio.ToUpper().Contains(term))
                 || (support && quote.ResponsibleSellerCode.ToUpper().Contains(term)));
         }
 
         var count = await query.CountAsync(ct);
         var results = await query.OrderByDescending(quote => quote.UpdatedAt).ThenByDescending(quote => quote.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
+            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
         return Results.Ok(new CommercialQuotePageResponse(results, page, pageSize, count));
     }
 
@@ -107,6 +111,46 @@ public static class AdminCommercialQuoteEndpoints
         CommercialQuoteCalculator.Calculate(existing);
         await db.SaveChangesAsync(ct);
         return Results.Ok(ToDetail(existing));
+    }
+
+    private static async Task<IResult> IssueAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider, CancellationToken ct)
+    {
+        var seller = await ActiveSellerAsync(principal, db, ct);
+        if (seller is null) return Results.Forbid();
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(CommercialQuoteFolioAllocator.SqlServerIsolationLevel, ct) : null;
+        var query = db.CommercialQuotes.Include(quote => quote.Items).Where(quote => quote.Id == id && quote.ResponsibleSellerId == seller.Id);
+        if (db.Database.IsSqlServer())
+            query = db.CommercialQuotes.FromSqlInterpolated($"SELECT * FROM [CommercialQuotes] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {id} AND [ResponsibleSellerId] = {seller.Id}").Include(quote => quote.Items);
+        var quote = await query.SingleOrDefaultAsync(ct);
+        if (quote is null) return Results.NotFound();
+        if (quote.Status != CommercialQuoteStatuses.Draft) return Results.Conflict(new { Detail = "La cotización ya fue emitida." });
+        var errors = await ValidateForIssueAsync(quote, db, ct);
+        if (errors.Count > 0) return Results.ValidationProblem(errors);
+        CommercialQuoteCalculator.Calculate(quote);
+        var (utc, localDate) = ChileTime.Current(timeProvider);
+        var sequence = await CommercialQuoteFolioAllocator.NextAsync(db, localDate.Year, ct);
+        quote.Issue(localDate.Year, sequence, utc, localDate);
+        await db.SaveChangesAsync(ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
+        return Results.Ok(ToDetail(quote));
+    }
+
+    private static async Task<Dictionary<string, string[]>> ValidateForIssueAsync(CommercialQuote quote, JemNexusDbContext db, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (quote.Items.Count == 0) errors["items"] = ["La cotización debe contener al menos un ítem."];
+        if (!quote.Items.OrderBy(item => item.Position).Select(item => item.Position).SequenceEqual(Enumerable.Range(1, quote.Items.Count))) errors["items"] = ["Las posiciones de los ítems no son coherentes."];
+        if (quote.Items.Any(item => decimal.Round(item.DiscountPercent, 2) != item.DiscountPercent)) errors["items"] = ["Los descuentos deben usar hasta dos decimales."];
+        try { CommercialQuoteCalculator.Calculate(quote); }
+        catch (ArgumentException exception) { errors["quote"] = [exception.Message]; }
+        var catalogIds = quote.Items.Where(item => item.Origin == CommercialQuoteItemOrigins.Catalog && item.ProductId.HasValue).Select(item => item.ProductId!.Value).Distinct().ToList();
+        if (catalogIds.Count > 0)
+        {
+            var available = await db.Products.AsNoTracking().Where(product => catalogIds.Contains(product.Id) && product.IsPublished && product.StockStatus != StockStatuses.Sold).Select(product => product.Id).ToListAsync(ct);
+            if (catalogIds.Except(available).Any()) errors["items"] = ["Uno o más productos de catálogo ya no están disponibles."];
+        }
+        return errors;
     }
 
     private static async Task<PreparedQuote> PrepareAsync(CommercialQuoteDraftInput request, JemNexusDbContext db, CancellationToken ct)
@@ -170,6 +214,6 @@ public static class AdminCommercialQuoteEndpoints
         await db.AppUsers.SingleOrDefaultAsync(user => user.Id == UserId(principal) && user.IsActive && user.Role == AppRoles.Seller && user.SellerCode != null, ct);
     private static int UserId(ClaimsPrincipal principal) => int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub"), out var id) ? id : 0;
     private static void ValidateText(Dictionary<string, string[]> errors, string key, string value, int min, int max) { if (value.Length < min || value.Length > max) errors[key] = [$"El campo debe tener entre {min} y {max} caracteres."]; }
-    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
+    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
     private sealed record PreparedQuote(CommercialQuote? Quote, Dictionary<string, string[]> Errors);
 }
