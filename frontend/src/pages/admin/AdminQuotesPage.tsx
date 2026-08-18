@@ -238,38 +238,76 @@ function QuoteRequestsView() {
 
 function GeneratedQuotesView() {
   const [items, setItems] = useState<CommercialQuoteSummary[]>([])
+  const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    getCommercialQuotes()
-      .then((response) => setItems(response.results))
-      .catch(() => setError('No se pudieron cargar las cotizaciones generadas.'))
-      .finally(() => setLoading(false))
-  }, [])
+    const timer = window.setTimeout(() => {
+      setSearch(query.trim())
+      setPage(1)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
 
-  if (loading) return <p className="ui-note">Cargando cotizaciones generadas...</p>
-  if (error) return <p className="ui-note ui-note--error">{error}</p>
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setError('')
+    getCommercialQuotes({ search: search || undefined, page, signal: controller.signal })
+      .then((response) => {
+        if (controller.signal.aborted) return
+        setItems(response.results)
+        setCount(response.count)
+        setPage(response.page)
+        setPageSize(response.page_size)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError('No se pudieron cargar las cotizaciones generadas.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [page, search])
 
+  const totalPages = Math.max(1, Math.ceil(count / pageSize))
   return (
-    <div className="admin-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
-      <table className="admin-table commercial-quotes-table">
-        <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
-        <tbody>
-          {items.length === 0 ? <tr><td colSpan={6}><p className="ui-note">Aún no hay cotizaciones generadas.</p></td></tr> : null}
-          {items.map((quote) => (
-            <tr key={quote.id}>
-              <td>{quote.folio ?? 'Pendiente'}</td>
-              <td>{quote.customer_business_name}</td>
-              <td>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</td>
-              <td>{quote.seller_code}</td>
-              <td>{money(quote.total_amount, quote.currency)}</td>
-              <td><Link to={`/admin/cotizaciones/${quote.id}/editar`}>{quote.status === 'Issued' ? 'Ver' : 'Editar'}</Link></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="generated-quotes-toolbar">
+        <label htmlFor="generated-quote-search">Búsqueda</label>
+        <input id="generated-quote-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por razón social, RUT, folio o código de vendedor" />
+      </div>
+      {loading ? <p className="ui-note">Cargando cotizaciones generadas...</p> : null}
+      {error ? <p className="ui-note ui-note--error">{error}</p> : null}
+      {!loading && !error ? <div className="admin-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
+        <table className="admin-table commercial-quotes-table">
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
+          <tbody>
+            {items.length === 0 ? <tr><td colSpan={6}><p className="ui-note">{search ? 'No se encontraron cotizaciones para la búsqueda ingresada.' : 'Aún no hay cotizaciones generadas.'}</p></td></tr> : null}
+            {items.map((quote) => (
+              <tr key={quote.id}>
+                <td><strong>{quote.folio ?? 'Pendiente'}</strong></td>
+                <td><strong>{quote.customer_business_name}</strong><span className="admin-table__muted">{quote.customer_rut}</span></td>
+                <td><span className={`badge commercial-status commercial-status--${quote.status.toLowerCase()}`}>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</span></td>
+                <td><strong>{quote.seller_name || 'Sin nombre'}</strong><span className="admin-table__muted">{quote.seller_code}</span></td>
+                <td>{money(quote.total_amount, quote.currency)}</td>
+                <td><Link className="btn btn--secondary quote-table-action" to={`/admin/cotizaciones/${quote.id}/editar`}>{quote.status === 'Issued' ? 'Ver' : 'Editar'}</Link></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div> : null}
+      {!error ? <nav className="commercial-pagination" aria-label="Paginación de cotizaciones generadas">
+        <button className="btn btn--secondary" type="button" disabled={loading || page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Anterior</button>
+        <span>Página {page} de {totalPages} · {count} resultados</span>
+        <button className="btn btn--secondary" type="button" disabled={loading || page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button>
+      </nav> : null}
+    </>
   )
 }
 
@@ -287,7 +325,7 @@ export function AdminQuotesPage() {
     <AdminLayout>
       <AdminPageHeader
         title="Cotizaciones"
-        actions={isSeller(currentUser ?? undefined) ? <Link className="button" to="/admin/cotizaciones/nueva">Crear cotización</Link> : undefined}
+        actions={isSeller(currentUser ?? undefined) ? <Link className="btn btn--accent" to="/admin/cotizaciones/nueva">Crear cotización</Link> : undefined}
       />
       <nav className="quote-view-tabs" aria-label="Vistas de cotizaciones" role="tablist">
         <Link className={activeView === 'solicitudes' ? 'quote-view-tab quote-view-tab--active' : 'quote-view-tab'} to="/admin/cotizaciones" role="tab" aria-selected={activeView === 'solicitudes'}>Solicitudes recibidas</Link>
