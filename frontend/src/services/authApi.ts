@@ -78,6 +78,10 @@ export function isSupportAdmin(user?: AuthUser) {
   return getUserRoles(user).includes('support_admin')
 }
 
+export function isSeller(user?: AuthUser) {
+  return getUserRoles(user).includes('seller')
+}
+
 function requireAuthUser(user?: AuthUser) {
   if (!user) {
     throw new ApiError('La respuesta no incluyó un usuario válido.', 500)
