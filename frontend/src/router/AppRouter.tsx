@@ -22,6 +22,8 @@ import { AdminPromotionFormPage } from '../pages/admin/AdminPromotionFormPage'
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage'
 import { AdminQuoteDetailPage } from '../pages/admin/AdminQuoteDetailPage'
 import { AdminQuotesPage } from '../pages/admin/AdminQuotesPage'
+import { CommercialQuotesPage } from '../pages/admin/CommercialQuotesPage'
+import { CommercialQuoteEditorPage } from '../pages/admin/CommercialQuoteEditorPage'
 import { AdminSupplierFormPage } from '../pages/admin/AdminSupplierFormPage'
 import { AdminSuppliersPage } from '../pages/admin/AdminSuppliersPage'
 import { AdminTechnicalSheetsPage } from '../pages/admin/AdminTechnicalSheetsPage'
@@ -76,6 +78,9 @@ export function AppRouter() {
         <Route path="/admin/proveedores/nuevo" element={<AdminSupplierFormPage />} />
         <Route path="/admin/proveedores/:id/editar" element={<AdminSupplierFormPage />} />
         <Route path="/admin/cotizaciones" element={<AdminQuotesPage />} />
+        <Route path="/admin/cotizaciones-comerciales" element={<CommercialQuotesPage />} />
+        <Route path="/admin/cotizaciones/nueva" element={<CommercialQuoteEditorPage />} />
+        <Route path="/admin/cotizaciones/:id/editar" element={<CommercialQuoteEditorPage />} />
         <Route path="/admin/cotizaciones/:id" element={<AdminQuoteDetailPage />} />
         <Route path="/admin/promociones" element={<AdminHomeSectionsPage />} />
         <Route path="/admin/home-secciones" element={<Navigate to="/admin/promociones" replace />} />

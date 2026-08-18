@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
+import { isSeller } from '../../services/authApi'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
 import {
@@ -23,6 +25,7 @@ const STATUS_OPTIONS: Array<{ value: QuoteStatus; label: string }> = [
 ]
 
 export function AdminQuotesPage() {
+  const currentUser = useAdminUser()
   const [items, setItems] = useState<QuoteRequestAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -137,6 +140,7 @@ export function AdminQuotesPage() {
           </select>
         </label>
       </div>} />
+      {isSeller(currentUser ?? undefined) ? <div className="quote-create-action"><Link className="button" to="/admin/cotizaciones/nueva">Crear cotización</Link></div> : null}
 
       <div className="quote-summary-cards" aria-label="Resumen de estados de cotización">
         <article className="quote-summary-card">
