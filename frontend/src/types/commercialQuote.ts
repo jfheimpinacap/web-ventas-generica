@@ -37,8 +37,14 @@ export interface CommercialQuoteDetail extends CustomerSnapshot {
 }
 
 export interface CommercialQuoteSummary {
-  id: number; status: 'Draft' | 'Issued'; folio: string | null; currency: QuoteCurrency
-  customer_business_name: string; seller_code: string; total_amount: number; created_at: string
+  id: number; status: 'Draft' | 'Issued'; folio: string | null; issued_at: string | null; issued_on: string | null
+  currency: QuoteCurrency; customer_business_name: string; customer_rut: string; customer_contact_name: string
+  seller_name: string; seller_code: string; net_amount: number; tax_amount: number; total_amount: number
+  item_count: number; created_at: string; updated_at: string
+}
+
+export interface CommercialQuotePage {
+  results: CommercialQuoteSummary[]; page: number; page_size: number; count: number
 }
 
 export interface QuoteEditorItem {
