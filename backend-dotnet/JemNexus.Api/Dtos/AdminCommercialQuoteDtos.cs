@@ -12,7 +12,7 @@ public sealed record CommercialQuoteItemInput(
     [property: JsonPropertyName("unit_net_amount")] decimal UnitNetAmount,
     [property: JsonPropertyName("discount_percent")] decimal? DiscountPercent);
 
-public abstract record CommercialQuoteDraftInput(
+public abstract record CommercialQuoteInput(
     [property: JsonPropertyName("customer_profile_id")] int? CustomerProfileId,
     [property: JsonPropertyName("customer_business_name")] string? CustomerBusinessName,
     [property: JsonPropertyName("customer_rut")] string? CustomerRut,
@@ -28,11 +28,8 @@ public abstract record CommercialQuoteDraftInput(
     [property: JsonPropertyName("detailed_description")] string? DetailedDescription,
     IReadOnlyList<CommercialQuoteItemInput>? Items);
 
-public sealed record CommercialQuoteCreateRequest(int? CustomerProfileId, string? CustomerBusinessName, string? CustomerRut, string? CustomerBusinessActivity, string? CustomerAddress, string? CustomerPhone, string? CustomerCityOrCommune, string? CustomerContactName, string? CustomerEmail, string? Currency, string? SaleCondition, int? ValidityDays, string? DetailedDescription, IReadOnlyList<CommercialQuoteItemInput>? Items)
-    : CommercialQuoteDraftInput(CustomerProfileId, CustomerBusinessName, CustomerRut, CustomerBusinessActivity, CustomerAddress, CustomerPhone, CustomerCityOrCommune, CustomerContactName, CustomerEmail, Currency, SaleCondition, ValidityDays, DetailedDescription, Items);
-
-public sealed record CommercialQuoteUpdateRequest(int? CustomerProfileId, string? CustomerBusinessName, string? CustomerRut, string? CustomerBusinessActivity, string? CustomerAddress, string? CustomerPhone, string? CustomerCityOrCommune, string? CustomerContactName, string? CustomerEmail, string? Currency, string? SaleCondition, int? ValidityDays, string? DetailedDescription, IReadOnlyList<CommercialQuoteItemInput>? Items)
-    : CommercialQuoteDraftInput(CustomerProfileId, CustomerBusinessName, CustomerRut, CustomerBusinessActivity, CustomerAddress, CustomerPhone, CustomerCityOrCommune, CustomerContactName, CustomerEmail, Currency, SaleCondition, ValidityDays, DetailedDescription, Items);
+public sealed record CommercialQuoteIssueRequest(int? CustomerProfileId, string? CustomerBusinessName, string? CustomerRut, string? CustomerBusinessActivity, string? CustomerAddress, string? CustomerPhone, string? CustomerCityOrCommune, string? CustomerContactName, string? CustomerEmail, string? Currency, string? SaleCondition, int? ValidityDays, string? DetailedDescription, IReadOnlyList<CommercialQuoteItemInput>? Items)
+    : CommercialQuoteInput(CustomerProfileId, CustomerBusinessName, CustomerRut, CustomerBusinessActivity, CustomerAddress, CustomerPhone, CustomerCityOrCommune, CustomerContactName, CustomerEmail, Currency, SaleCondition, ValidityDays, DetailedDescription, Items);
 
 public sealed record CommercialQuoteItemResponse(int Id, int Position, string Source, int? ProductId, string ProductName, string? BrandName, string? ModelName, int Quantity, decimal UnitNetAmount, decimal DiscountPercent, decimal FinalUnitNetAmount, decimal LineNetAmount);
 public sealed record CommercialQuoteSummaryResponse(int Id, string Status, string? Folio, DateTime? IssuedAt, DateOnly? IssuedOn, string Currency, string CustomerBusinessName, string CustomerRut, string CustomerContactName, string SellerName, string SellerCode, decimal NetAmount, decimal TaxAmount, decimal TotalAmount, int ItemCount, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);

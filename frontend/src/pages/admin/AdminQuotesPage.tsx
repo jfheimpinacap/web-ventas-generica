@@ -296,7 +296,7 @@ function GeneratedQuotesView() {
                 <td><span className={`badge commercial-status commercial-status--${quote.status.toLowerCase()}`}>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</span></td>
                 <td><strong>{quote.seller_name || 'Sin nombre'}</strong><span className="admin-table__muted">{quote.seller_code}</span></td>
                 <td>{money(quote.total_amount, quote.currency)}</td>
-                <td><Link className="btn btn--secondary quote-table-action" to={`/admin/cotizaciones/${quote.id}/editar`}>{quote.status === 'Issued' ? 'Ver' : 'Editar'}</Link></td>
+                <td><Link className="btn btn--secondary quote-table-action" to={`/admin/cotizaciones/${quote.id}/editar`}>Ver</Link></td>
               </tr>
             ))}
           </tbody>

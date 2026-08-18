@@ -18,9 +18,7 @@ public static class AdminCommercialQuoteEndpoints
         var group = endpoints.MapGroup("/api/admin/commercial-quotes").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin commercial quotes");
         group.MapGet("", ListAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("", CreateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
-        group.MapPut("/{id:int}", UpdateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
-        group.MapPost("/{id:int}/issue", IssueAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        group.MapPost("/issue", IssueAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
         return endpoints;
     }
 
@@ -66,7 +64,7 @@ public static class AdminCommercialQuoteEndpoints
         return quote is null ? Results.NotFound() : Results.Ok(ToDetail(quote));
     }
 
-    private static async Task<IResult> CreateAsync(CommercialQuoteCreateRequest request, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    private static async Task<IResult> IssueAsync(CommercialQuoteIssueRequest request, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider, CancellationToken ct)
     {
         var seller = await ActiveSellerAsync(principal, db, ct);
         if (seller is null) return Results.Forbid();
@@ -76,64 +74,18 @@ public static class AdminCommercialQuoteEndpoints
         quote.ResponsibleSellerId = seller.Id;
         quote.ResponsibleSellerName = string.IsNullOrWhiteSpace(seller.FullName) ? seller.Username : seller.FullName.Trim();
         quote.ResponsibleSellerCode = seller.SellerCode!;
-        CommercialQuoteCalculator.Calculate(quote);
-        db.CommercialQuotes.Add(quote);
-        await db.SaveChangesAsync(ct);
-        return Results.Created($"/api/admin/commercial-quotes/{quote.Id}", ToDetail(quote));
-    }
-
-    private static async Task<IResult> UpdateAsync(int id, CommercialQuoteUpdateRequest request, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
-    {
-        var seller = await ActiveSellerAsync(principal, db, ct);
-        if (seller is null) return Results.Forbid();
-        var existing = await db.CommercialQuotes.Include(quote => quote.Items).SingleOrDefaultAsync(quote => quote.Id == id && quote.ResponsibleSellerId == seller.Id, ct);
-        if (existing is null) return Results.NotFound();
-        if (existing.Status != CommercialQuoteStatuses.Draft) return Results.Conflict(new { Detail = "Solo se puede actualizar un borrador." });
-        var prepared = await PrepareAsync(request, db, ct);
-        if (prepared.Errors.Count > 0) return Results.ValidationProblem(prepared.Errors);
-
-        var replacement = prepared.Quote!;
-        existing.CustomerProfileId = replacement.CustomerProfileId;
-        existing.CustomerBusinessName = replacement.CustomerBusinessName;
-        existing.CustomerRut = replacement.CustomerRut;
-        existing.CustomerBusinessActivity = replacement.CustomerBusinessActivity;
-        existing.CustomerAddress = replacement.CustomerAddress;
-        existing.CustomerPhone = replacement.CustomerPhone;
-        existing.CustomerCityOrCommune = replacement.CustomerCityOrCommune;
-        existing.CustomerContactName = replacement.CustomerContactName;
-        existing.CustomerEmail = replacement.CustomerEmail;
-        existing.Currency = replacement.Currency;
-        existing.SaleCondition = replacement.SaleCondition;
-        existing.ValidityDays = replacement.ValidityDays;
-        existing.DetailedDescription = replacement.DetailedDescription;
-        db.CommercialQuoteItems.RemoveRange(existing.Items);
-        existing.Items = replacement.Items;
-        CommercialQuoteCalculator.Calculate(existing);
-        await db.SaveChangesAsync(ct);
-        return Results.Ok(ToDetail(existing));
-    }
-
-    private static async Task<IResult> IssueAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider, CancellationToken ct)
-    {
-        var seller = await ActiveSellerAsync(principal, db, ct);
-        if (seller is null) return Results.Forbid();
-        await using var transaction = db.Database.IsRelational()
-            ? await db.Database.BeginTransactionAsync(CommercialQuoteFolioAllocator.SqlServerIsolationLevel, ct) : null;
-        var query = db.CommercialQuotes.Include(quote => quote.Items).Where(quote => quote.Id == id && quote.ResponsibleSellerId == seller.Id);
-        if (db.Database.IsSqlServer())
-            query = db.CommercialQuotes.FromSqlInterpolated($"SELECT * FROM [CommercialQuotes] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {id} AND [ResponsibleSellerId] = {seller.Id}").Include(quote => quote.Items);
-        var quote = await query.SingleOrDefaultAsync(ct);
-        if (quote is null) return Results.NotFound();
-        if (quote.Status != CommercialQuoteStatuses.Draft) return Results.Conflict(new { Detail = "La cotización ya fue emitida." });
         var errors = await ValidateForIssueAsync(quote, db, ct);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
         CommercialQuoteCalculator.Calculate(quote);
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(CommercialQuoteFolioAllocator.SqlServerIsolationLevel, ct) : null;
         var (utc, localDate) = ChileTime.Current(timeProvider);
         var sequence = await CommercialQuoteFolioAllocator.NextAsync(db, localDate.Year, ct);
         quote.Issue(localDate.Year, sequence, utc, localDate);
+        db.CommercialQuotes.Add(quote);
         await db.SaveChangesAsync(ct);
         if (transaction is not null) await transaction.CommitAsync(ct);
-        return Results.Ok(ToDetail(quote));
+        return Results.Created($"/api/admin/commercial-quotes/{quote.Id}", ToDetail(quote));
     }
 
     private static async Task<Dictionary<string, string[]>> ValidateForIssueAsync(CommercialQuote quote, JemNexusDbContext db, CancellationToken ct)
@@ -153,7 +105,7 @@ public static class AdminCommercialQuoteEndpoints
         return errors;
     }
 
-    private static async Task<PreparedQuote> PrepareAsync(CommercialQuoteDraftInput request, JemNexusDbContext db, CancellationToken ct)
+    private static async Task<PreparedQuote> PrepareAsync(CommercialQuoteInput request, JemNexusDbContext db, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         if (request.CustomerProfileId is int profileId && !await db.CustomerProfiles.AsNoTracking().AnyAsync(profile => profile.Id == profileId, ct)) errors["customer_profile_id"] = ["El perfil de cliente no existe."];

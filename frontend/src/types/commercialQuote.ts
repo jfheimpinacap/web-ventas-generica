@@ -19,7 +19,7 @@ export interface CommercialQuoteItemInput {
   model_name?: string; quantity: number; unit_net_amount: number; discount_percent?: number
 }
 
-export interface CommercialQuoteDraftInput extends CustomerSnapshot {
+export interface CommercialQuoteIssueInput extends CustomerSnapshot {
   currency: QuoteCurrency; sale_condition: SaleCondition; validity_days: number
   detailed_description?: string; items: CommercialQuoteItemInput[]
 }
