@@ -245,6 +245,7 @@ app.MapCommercialWriteEndpoints();
 app.MapTechnicalSheetEndpoints();
 app.MapAdminUserEndpoints();
 app.MapAdminCustomerEndpoints();
+app.MapAdminCommercialQuoteEndpoints();
 
 await SeedData.SeedUsersAsync(app.Services, app.Environment);
 
