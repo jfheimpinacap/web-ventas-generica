@@ -303,6 +303,11 @@ namespace JemNexus.Api.Data.Migrations
                 {
                     b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("Folio").HasMaxLength(40).HasColumnType("nvarchar(40)");
+                    b.Property<int?>("FolioYear").HasColumnType("int");
+                    b.Property<long?>("FolioSequenceNumber").HasColumnType("bigint");
+                    b.Property<DateTime?>("IssuedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateOnly?>("IssuedOn").HasColumnType("date");
                     b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
                     b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
                     b.Property<int?>("CustomerProfileId").HasColumnType("int");
@@ -326,7 +331,15 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<decimal>("TotalAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<DateTimeOffset>("UpdatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
                     b.Property<int>("ValidityDays").ValueGeneratedOnAdd().HasColumnType("int").HasDefaultValue(15);
-                    b.HasKey("Id"); b.HasIndex("CreatedAt"); b.HasIndex("CustomerProfileId"); b.HasIndex("ResponsibleSellerId"); b.HasIndex("Status"); b.ToTable("CommercialQuotes");
+                    b.HasKey("Id"); b.HasIndex("CreatedAt"); b.HasIndex("CustomerProfileId"); b.HasIndex("ResponsibleSellerId"); b.HasIndex("Status"); b.HasIndex("Folio").IsUnique().HasDatabaseName("UX_CommercialQuotes_Folio").HasFilter("[Folio] IS NOT NULL"); b.HasIndex("FolioYear", "FolioSequenceNumber").IsUnique().HasDatabaseName("UX_CommercialQuotes_FolioYear_Sequence").HasFilter("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL"); b.ToTable("CommercialQuotes");
+                });
+
+            modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteFolioCounter", b =>
+                {
+                    b.Property<int>("Year").ValueGeneratedNever().HasColumnType("int");
+                    b.Property<long>("LastNumber").HasColumnType("bigint");
+                    b.HasKey("Year");
+                    b.ToTable("CommercialQuoteFolioCounters");
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteItem", b =>

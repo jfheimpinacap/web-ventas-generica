@@ -31,6 +31,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     [InlineData("GET", "/api/admin/commercial-quotes/1")]
     [InlineData("POST", "/api/admin/commercial-quotes")]
     [InlineData("PUT", "/api/admin/commercial-quotes/1")]
+    [InlineData("POST", "/api/admin/commercial-quotes/1/issue")]
     public async Task AnonymousRequestsAreUnauthorized(string method, string path)
     {
         await using var factory = new QuoteApiFactory();
@@ -70,6 +71,40 @@ public sealed class AdminCommercialQuoteEndpointTests
         Assert.Equal("USD", update.GetProperty("currency").GetString());
         Assert.Equal(0m, update.GetProperty("total_amount").GetDecimal());
         Assert.Empty(update.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SellerIssuesOnceAndIssuedQuoteIsImmutable()
+    {
+        await using var factory = new QuoteApiFactory();
+        using var seller = await factory.AuthorizedClientAsync("seller");
+        var created = await JsonAsync(await seller.PostAsJsonAsync("/api/admin/commercial-quotes", ValidDraft(items:
+        [
+            new { source = "FreeText", product_name = "Servicio", quantity = 2, unit_net_amount = 100.55m, discount_percent = 10m }
+        ])));
+        var id = created.GetProperty("id").GetInt32();
+        using var issuedResponse = await seller.PostAsync($"/api/admin/commercial-quotes/{id}/issue", null);
+        Assert.Equal(HttpStatusCode.OK, issuedResponse.StatusCode);
+        var issued = await JsonAsync(issuedResponse);
+        Assert.Equal("Issued", issued.GetProperty("status").GetString());
+        Assert.Matches(@"^COT-\d{4}-000001$", issued.GetProperty("folio").GetString());
+        Assert.Equal(19m, issued.GetProperty("tax_rate_percent").GetDecimal());
+        Assert.NotEqual(JsonValueKind.Null, issued.GetProperty("issued_at").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, issued.GetProperty("issued_on").ValueKind);
+        Assert.Equal(HttpStatusCode.Conflict, (await seller.PostAsync($"/api/admin/commercial-quotes/{id}/issue", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await seller.PutAsJsonAsync($"/api/admin/commercial-quotes/{id}", ValidDraft())).StatusCode);
+    }
+
+    [Fact]
+    public async Task EmptyDraftCannotBeIssuedAndDoesNotConsumeTheCounter()
+    {
+        await using var factory = new QuoteApiFactory();
+        using var seller = await factory.AuthorizedClientAsync("seller");
+        var emptyId = (await JsonAsync(await seller.PostAsJsonAsync("/api/admin/commercial-quotes", ValidDraft()))).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.BadRequest, (await seller.PostAsync($"/api/admin/commercial-quotes/{emptyId}/issue", null)).StatusCode);
+        var validId = (await JsonAsync(await seller.PostAsJsonAsync("/api/admin/commercial-quotes", ValidDraft(items: [new { source = "FreeText", product_name = "Servicio", quantity = 1, unit_net_amount = 100m }])))).GetProperty("id").GetInt32();
+        var issued = await JsonAsync(await seller.PostAsync($"/api/admin/commercial-quotes/{validId}/issue", null));
+        Assert.EndsWith("-000001", issued.GetProperty("folio").GetString());
     }
 
     [Fact]
@@ -202,6 +237,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     [InlineData("GET", "/api/admin/commercial-quotes/1")]
     [InlineData("POST", "/api/admin/commercial-quotes")]
     [InlineData("PUT", "/api/admin/commercial-quotes/1")]
+    [InlineData("POST", "/api/admin/commercial-quotes/1/issue")]
     public async Task EveryDraftRouteForbidsUnrelatedRole(string method, string path)
     {
         await using var factory = new QuoteApiFactory();
@@ -353,7 +389,7 @@ public sealed class AdminCommercialQuoteEndpointTests
             db.Add(product); await db.SaveChangesAsync(); return product.Id;
         }
         public async Task<int> QuoteCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuotes.CountAsync(); }
-        public async Task SetStatusAsync(int id, string status) { using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); (await db.CommercialQuotes.FindAsync(id))!.Status = status; await db.SaveChangesAsync(); }
+        public async Task SetStatusAsync(int id, string status) { using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); db.Entry((await db.CommercialQuotes.FindAsync(id))!).Property(nameof(CommercialQuote.Status)).CurrentValue = status; await db.SaveChangesAsync(); }
         public async Task<string> ProfileBusinessNameAsync(int id) { using var scope = Services.CreateScope(); return (await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CustomerProfiles.FindAsync(id))!.BusinessName; }
         public async Task<string> ProductNameAsync(int id) { using var scope = Services.CreateScope(); return (await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().Products.FindAsync(id))!.Name; }
     }

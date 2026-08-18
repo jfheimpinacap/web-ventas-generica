@@ -3,7 +3,12 @@ namespace JemNexus.Api.Models;
 public sealed class CommercialQuote
 {
     public int Id { get; set; }
-    public string Status { get; set; } = CommercialQuoteStatuses.Draft;
+    public string Status { get; private set; } = CommercialQuoteStatuses.Draft;
+    public string? Folio { get; private set; }
+    public int? FolioYear { get; private set; }
+    public long? FolioSequenceNumber { get; private set; }
+    public DateTime? IssuedAtUtc { get; private set; }
+    public DateOnly? IssuedOn { get; private set; }
     public string Currency { get; set; } = CommercialQuoteCurrencies.Clp;
     public string SaleCondition { get; set; } = CommercialQuoteSaleConditions.Cash;
     public int ValidityDays { get; set; } = 15;
@@ -37,9 +42,21 @@ public sealed class CommercialQuote
         TaxAmount = taxAmount;
         TotalAmount = totalAmount;
     }
+
+    public void Issue(int year, long sequenceNumber, DateTime issuedAtUtc, DateOnly issuedOn)
+    {
+        if (Status != CommercialQuoteStatuses.Draft) throw new InvalidOperationException("Only a draft quote can be issued.");
+        if (year != issuedOn.Year || sequenceNumber <= 0 || issuedAtUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("Invalid issuance data.");
+        FolioYear = year;
+        FolioSequenceNumber = sequenceNumber;
+        Folio = $"COT-{year:D4}-{sequenceNumber:D6}";
+        IssuedAtUtc = issuedAtUtc;
+        IssuedOn = issuedOn;
+        Status = CommercialQuoteStatuses.Issued;
+    }
 }
 
-public static class CommercialQuoteStatuses { public const string Draft = "Draft"; }
+public static class CommercialQuoteStatuses { public const string Draft = "Draft"; public const string Issued = "Issued"; }
 public static class CommercialQuoteCurrencies { public const string Clp = "CLP"; public const string Usd = "USD"; }
 public static class CommercialQuoteSaleConditions { public const string Cash = "Cash"; public const string Credit30Days = "Credit30Days"; }
 public static class CommercialQuoteItemOrigins { public const string Catalog = "Catalog"; public const string FreeText = "FreeText"; }
