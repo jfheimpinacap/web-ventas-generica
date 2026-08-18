@@ -1,5 +1,5 @@
 import { authFetch } from './authApi'
-import type { CommercialQuoteDetail, CommercialQuoteDraftInput, CommercialQuotePage, CustomerProfile } from '../types/commercialQuote'
+import type { CommercialQuoteDetail, CommercialQuoteIssueInput, CommercialQuotePage, CustomerProfile } from '../types/commercialQuote'
 
 const json = (body: unknown) => ({ 'Content-Type': 'application/json', body: JSON.stringify(body) })
 
@@ -13,7 +13,6 @@ export function getCommercialQuotes({ search, page, pageSize = 20, signal }: { s
   return authFetch<CommercialQuotePage>('/api/admin/commercial-quotes', { params: { search, page, page_size: pageSize }, signal })
 }
 export function getCommercialQuote(id: number) { return authFetch<CommercialQuoteDetail>(`/api/admin/commercial-quotes/${id}`) }
-export function saveCommercialQuote(payload: CommercialQuoteDraftInput, id?: number) {
-  return authFetch<CommercialQuoteDetail>(id ? `/api/admin/commercial-quotes/${id}` : '/api/admin/commercial-quotes', { method: id ? 'PUT' : 'POST', ...json(payload) })
+export function issueCommercialQuote(payload: CommercialQuoteIssueInput) {
+  return authFetch<CommercialQuoteDetail>('/api/admin/commercial-quotes/issue', { method: 'POST', ...json(payload) })
 }
-export function issueCommercialQuote(id: number) { return authFetch<CommercialQuoteDetail>(`/api/admin/commercial-quotes/${id}/issue`, { method: 'POST' }) }
