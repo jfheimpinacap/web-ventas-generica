@@ -19,6 +19,8 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<QuoteRequest> QuoteRequests => Set<QuoteRequest>();
     public DbSet<TechnicalSheet> TechnicalSheets => Set<TechnicalSheet>();
     public DbSet<CustomerProfile> CustomerProfiles => Set<CustomerProfile>();
+    public DbSet<CommercialQuote> CommercialQuotes => Set<CommercialQuote>();
+    public DbSet<CommercialQuoteItem> CommercialQuoteItems => Set<CommercialQuoteItem>();
 
     public override int SaveChanges()
     {
@@ -70,6 +72,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             or HomeSectionItem
             or QuoteRequest
             or CustomerProfile
+            or CommercialQuote
             or TechnicalSheet;
     }
 
@@ -94,6 +97,60 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         ConfigureQuoteRequest(modelBuilder);
         ConfigureTechnicalSheet(modelBuilder);
         ConfigureCustomerProfile(modelBuilder);
+        ConfigureCommercialQuote(modelBuilder);
+    }
+
+    private static void ConfigureCommercialQuote(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CommercialQuote>(entity =>
+        {
+            entity.ToTable("CommercialQuotes");
+            entity.HasKey(quote => quote.Id);
+            entity.Property(quote => quote.Status).HasMaxLength(20).HasDefaultValue(CommercialQuoteStatuses.Draft).IsRequired();
+            entity.Property(quote => quote.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(quote => quote.SaleCondition).HasMaxLength(20).IsRequired();
+            entity.Property(quote => quote.ValidityDays).HasDefaultValue(CommercialQuoteRules.DefaultValidityDays);
+            entity.Property(quote => quote.DetailedDescription).HasMaxLength(CommercialQuoteRules.DetailedDescriptionMaxLength);
+            entity.Property(quote => quote.TaxRatePercent).HasPrecision(5, 2).HasDefaultValue(CommercialQuoteRules.TaxRatePercent);
+            entity.Property(quote => quote.CustomerBusinessName).HasMaxLength(200).IsRequired();
+            entity.Property(quote => quote.CustomerRut).HasMaxLength(12).IsRequired();
+            entity.Property(quote => quote.CustomerBusinessActivity).HasMaxLength(200).IsRequired();
+            entity.Property(quote => quote.CustomerAddress).HasMaxLength(300).IsRequired();
+            entity.Property(quote => quote.CustomerPhone).HasMaxLength(30).IsRequired();
+            entity.Property(quote => quote.CustomerCityOrCommune).HasMaxLength(120).IsRequired();
+            entity.Property(quote => quote.CustomerContactName).HasMaxLength(200).IsRequired();
+            entity.Property(quote => quote.CustomerEmail).HasMaxLength(254);
+            entity.Property(quote => quote.ResponsibleSellerName).HasMaxLength(180).IsRequired();
+            entity.Property(quote => quote.ResponsibleSellerCode).HasMaxLength(24).IsRequired();
+            entity.Property(quote => quote.NetAmount).HasPrecision(18, 2);
+            entity.Property(quote => quote.TaxAmount).HasPrecision(18, 2);
+            entity.Property(quote => quote.TotalAmount).HasPrecision(18, 2);
+            entity.Property(quote => quote.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(quote => quote.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.HasIndex(quote => quote.Status);
+            entity.HasIndex(quote => quote.ResponsibleSellerId);
+            entity.HasIndex(quote => quote.CustomerProfileId);
+            entity.HasIndex(quote => quote.CreatedAt);
+            entity.HasOne(quote => quote.CustomerProfile).WithMany().HasForeignKey(quote => quote.CustomerProfileId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(quote => quote.ResponsibleSeller).WithMany().HasForeignKey(quote => quote.ResponsibleSellerId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<CommercialQuoteItem>(entity =>
+        {
+            entity.ToTable("CommercialQuoteItems");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Origin).HasMaxLength(20).IsRequired();
+            entity.Property(item => item.ProductName).HasMaxLength(220).IsRequired();
+            entity.Property(item => item.BrandName).HasMaxLength(120);
+            entity.Property(item => item.ModelName).HasMaxLength(120);
+            entity.Property(item => item.DiscountPercent).HasPrecision(5, 2);
+            entity.Property(item => item.UnitNetAmount).HasPrecision(18, 2);
+            entity.Property(item => item.FinalUnitNetAmount).HasPrecision(18, 2);
+            entity.Property(item => item.LineNetAmount).HasPrecision(18, 2);
+            entity.HasIndex(item => new { item.CommercialQuoteId, item.Position }).IsUnique();
+            entity.HasOne(item => item.CommercialQuote).WithMany(quote => quote.Items).HasForeignKey(item => item.CommercialQuoteId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.Product).WithMany().HasForeignKey(item => item.ProductId).OnDelete(DeleteBehavior.NoAction);
+        });
     }
 
     private static void ConfigureCustomerProfile(ModelBuilder modelBuilder)
