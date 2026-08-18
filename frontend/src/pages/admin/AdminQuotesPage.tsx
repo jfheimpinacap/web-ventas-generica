@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -7,6 +7,9 @@ import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import { isSeller } from '../../services/authApi'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
+import { getCommercialQuotes } from '../../services/commercialQuotesApi'
+import type { CommercialQuoteSummary } from '../../types/commercialQuote'
+import { money } from '../../utils/commercialQuote'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
   QUOTE_STATUS_LABELS,
@@ -24,8 +27,7 @@ const STATUS_OPTIONS: Array<{ value: QuoteStatus; label: string }> = [
   { value: 'discarded', label: 'Descartadas' },
 ]
 
-export function AdminQuotesPage() {
-  const currentUser = useAdminUser()
+function QuoteRequestsView() {
   const [items, setItems] = useState<QuoteRequestAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,8 +95,8 @@ export function AdminQuotesPage() {
   }
 
   return (
-    <AdminLayout>
-      <AdminPageHeader title="Cotizaciones" actions={<div className="admin-page-header__toolbar">
+    <>
+      <div className="admin-page-header__toolbar quote-request-filters">
         <label>
           Estado
           <select
@@ -139,8 +141,7 @@ export function AdminQuotesPage() {
             <option value="status">Estado</option>
           </select>
         </label>
-      </div>} />
-      {isSeller(currentUser ?? undefined) ? <div className="quote-create-action"><Link className="button" to="/admin/cotizaciones/nueva">Crear cotización</Link></div> : null}
+      </div>
 
       <div className="quote-summary-cards" aria-label="Resumen de estados de cotización">
         <article className="quote-summary-card">
@@ -155,7 +156,7 @@ export function AdminQuotesPage() {
         ))}
       </div>
 
-      {loading ? <p className="ui-note">Cargando cotizaciones...</p> : null}
+      {loading ? <p className="ui-note">Cargando solicitudes recibidas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
 
       {!loading && !error ? (
@@ -231,6 +232,70 @@ export function AdminQuotesPage() {
           </table>
         </div>
       ) : null}
+    </>
+  )
+}
+
+function GeneratedQuotesView() {
+  const [items, setItems] = useState<CommercialQuoteSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    getCommercialQuotes()
+      .then((response) => setItems(response.results))
+      .catch(() => setError('No se pudieron cargar las cotizaciones generadas.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <p className="ui-note">Cargando cotizaciones generadas...</p>
+  if (error) return <p className="ui-note ui-note--error">{error}</p>
+
+  return (
+    <div className="admin-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
+      <table className="admin-table commercial-quotes-table">
+        <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
+        <tbody>
+          {items.length === 0 ? <tr><td colSpan={6}><p className="ui-note">Aún no hay cotizaciones generadas.</p></td></tr> : null}
+          {items.map((quote) => (
+            <tr key={quote.id}>
+              <td>{quote.folio ?? 'Pendiente'}</td>
+              <td>{quote.customer_business_name}</td>
+              <td>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</td>
+              <td>{quote.seller_code}</td>
+              <td>{money(quote.total_amount, quote.currency)}</td>
+              <td><Link to={`/admin/cotizaciones/${quote.id}/editar`}>{quote.status === 'Issued' ? 'Ver' : 'Editar'}</Link></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export function AdminQuotesPage() {
+  const currentUser = useAdminUser()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedView = searchParams.get('vista')
+  const activeView = requestedView === 'generadas' ? 'generadas' : 'solicitudes'
+
+  useEffect(() => {
+    if (requestedView && requestedView !== 'generadas') setSearchParams({}, { replace: true })
+  }, [requestedView, setSearchParams])
+
+  return (
+    <AdminLayout>
+      <AdminPageHeader
+        title="Cotizaciones"
+        actions={isSeller(currentUser ?? undefined) ? <Link className="button" to="/admin/cotizaciones/nueva">Crear cotización</Link> : undefined}
+      />
+      <nav className="quote-view-tabs" aria-label="Vistas de cotizaciones" role="tablist">
+        <Link className={activeView === 'solicitudes' ? 'quote-view-tab quote-view-tab--active' : 'quote-view-tab'} to="/admin/cotizaciones" role="tab" aria-selected={activeView === 'solicitudes'}>Solicitudes recibidas</Link>
+        <Link className={activeView === 'generadas' ? 'quote-view-tab quote-view-tab--active' : 'quote-view-tab'} to="/admin/cotizaciones?vista=generadas" role="tab" aria-selected={activeView === 'generadas'}>Cotizaciones generadas</Link>
+      </nav>
+      <section className="quote-view-panel" role="tabpanel" aria-label={activeView === 'solicitudes' ? 'Solicitudes recibidas' : 'Cotizaciones generadas'}>
+        {activeView === 'solicitudes' ? <QuoteRequestsView /> : <GeneratedQuotesView />}
+      </section>
     </AdminLayout>
   )
 }
