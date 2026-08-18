@@ -1,0 +1,175 @@
+using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using JemNexus.Api.Contracts.Admin;
+using JemNexus.Api.Data;
+using JemNexus.Api.Models;
+using JemNexus.Api.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace JemNexus.Api.Endpoints;
+
+public static class AdminCommercialQuoteEndpoints
+{
+    private const int MaximumPageSize = 100;
+
+    public static IEndpointRouteBuilder MapAdminCommercialQuoteEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api/admin/commercial-quotes").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin commercial quotes");
+        group.MapGet("", ListAsync);
+        group.MapGet("/{id:int}", GetAsync);
+        group.MapPost("", CreateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        group.MapPut("/{id:int}", UpdateAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        return endpoints;
+    }
+
+    private static async Task<IResult> ListAsync(ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct, string? search, string? currency, [FromQuery(Name = "sale_condition")] string? saleCondition, int page = 1, [FromQuery(Name = "page_size")] int pageSize = 20)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (page < 1 || pageSize is < 1 or > MaximumPageSize) errors["pagination"] = [$"page debe ser positivo y page_size debe estar entre 1 y {MaximumPageSize}."];
+        if (currency is not null && currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) errors["currency"] = ["Moneda no válida."];
+        if (saleCondition is not null && saleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) errors["sale_condition"] = ["Condición de venta no válida."];
+        if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+        var support = principal.IsInRole(AppRoles.SupportAdmin);
+        var userId = UserId(principal);
+        var query = db.CommercialQuotes.AsNoTracking().AsQueryable();
+        if (!support) query = query.Where(quote => quote.ResponsibleSellerId == userId);
+        if (currency is not null) query = query.Where(quote => quote.Currency == currency);
+        if (saleCondition is not null) query = query.Where(quote => quote.SaleCondition == saleCondition);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = CustomerTextNormalizer.Search(search);
+            var rut = new string(search.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            query = query.Where(quote => quote.CustomerBusinessName.ToUpper().Contains(term)
+                || quote.CustomerRut.Replace("-", "").Replace(".", "").ToUpper().Contains(rut)
+                || quote.CustomerContactName.ToUpper().Contains(term)
+                || (support && quote.ResponsibleSellerCode.ToUpper().Contains(term)));
+        }
+
+        var count = await query.CountAsync(ct);
+        var results = await query.OrderByDescending(quote => quote.UpdatedAt).ThenByDescending(quote => quote.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
+        return Results.Ok(new CommercialQuotePageResponse(results, page, pageSize, count));
+    }
+
+    private static async Task<IResult> GetAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    {
+        var query = db.CommercialQuotes.AsNoTracking().Include(quote => quote.Items).Where(quote => quote.Id == id);
+        if (!principal.IsInRole(AppRoles.SupportAdmin)) query = query.Where(quote => quote.ResponsibleSellerId == UserId(principal));
+        var quote = await query.SingleOrDefaultAsync(ct);
+        return quote is null ? Results.NotFound() : Results.Ok(ToDetail(quote));
+    }
+
+    private static async Task<IResult> CreateAsync(CommercialQuoteCreateRequest request, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    {
+        var seller = await ActiveSellerAsync(principal, db, ct);
+        if (seller is null) return Results.Forbid();
+        var prepared = await PrepareAsync(request, db, ct);
+        if (prepared.Errors.Count > 0) return Results.ValidationProblem(prepared.Errors);
+        var quote = prepared.Quote!;
+        quote.ResponsibleSellerId = seller.Id;
+        quote.ResponsibleSellerName = string.IsNullOrWhiteSpace(seller.FullName) ? seller.Username : seller.FullName.Trim();
+        quote.ResponsibleSellerCode = seller.SellerCode!;
+        CommercialQuoteCalculator.Calculate(quote);
+        db.CommercialQuotes.Add(quote);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/admin/commercial-quotes/{quote.Id}", ToDetail(quote));
+    }
+
+    private static async Task<IResult> UpdateAsync(int id, CommercialQuoteUpdateRequest request, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    {
+        var seller = await ActiveSellerAsync(principal, db, ct);
+        if (seller is null) return Results.Forbid();
+        var existing = await db.CommercialQuotes.Include(quote => quote.Items).SingleOrDefaultAsync(quote => quote.Id == id && quote.ResponsibleSellerId == seller.Id, ct);
+        if (existing is null) return Results.NotFound();
+        if (existing.Status != CommercialQuoteStatuses.Draft) return Results.Conflict(new { Detail = "Solo se puede actualizar un borrador." });
+        var prepared = await PrepareAsync(request, db, ct);
+        if (prepared.Errors.Count > 0) return Results.ValidationProblem(prepared.Errors);
+
+        var replacement = prepared.Quote!;
+        existing.CustomerProfileId = replacement.CustomerProfileId;
+        existing.CustomerBusinessName = replacement.CustomerBusinessName;
+        existing.CustomerRut = replacement.CustomerRut;
+        existing.CustomerBusinessActivity = replacement.CustomerBusinessActivity;
+        existing.CustomerAddress = replacement.CustomerAddress;
+        existing.CustomerPhone = replacement.CustomerPhone;
+        existing.CustomerCityOrCommune = replacement.CustomerCityOrCommune;
+        existing.CustomerContactName = replacement.CustomerContactName;
+        existing.CustomerEmail = replacement.CustomerEmail;
+        existing.Currency = replacement.Currency;
+        existing.SaleCondition = replacement.SaleCondition;
+        existing.ValidityDays = replacement.ValidityDays;
+        existing.DetailedDescription = replacement.DetailedDescription;
+        db.CommercialQuoteItems.RemoveRange(existing.Items);
+        existing.Items = replacement.Items;
+        CommercialQuoteCalculator.Calculate(existing);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ToDetail(existing));
+    }
+
+    private static async Task<PreparedQuote> PrepareAsync(CommercialQuoteDraftInput request, JemNexusDbContext db, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (request.CustomerProfileId is int profileId && !await db.CustomerProfiles.AsNoTracking().AnyAsync(profile => profile.Id == profileId, ct)) errors["customer_profile_id"] = ["El perfil de cliente no existe."];
+        var quote = new CommercialQuote
+        {
+            CustomerProfileId = request.CustomerProfileId,
+            CustomerBusinessName = CustomerTextNormalizer.Visible(request.CustomerBusinessName), CustomerRut = request.CustomerRut ?? string.Empty,
+            CustomerBusinessActivity = CustomerTextNormalizer.Visible(request.CustomerBusinessActivity), CustomerAddress = CustomerTextNormalizer.Visible(request.CustomerAddress),
+            CustomerPhone = CustomerTextNormalizer.Visible(request.CustomerPhone), CustomerCityOrCommune = CustomerTextNormalizer.Visible(request.CustomerCityOrCommune),
+            CustomerContactName = CustomerTextNormalizer.Visible(request.CustomerContactName), CustomerEmail = CustomerTextNormalizer.Optional(request.CustomerEmail),
+            Currency = request.Currency ?? string.Empty, SaleCondition = request.SaleCondition ?? string.Empty,
+            ValidityDays = request.ValidityDays ?? CommercialQuoteRules.DefaultValidityDays, DetailedDescription = CustomerTextNormalizer.Optional(request.DetailedDescription)
+        };
+        ValidateText(errors, "customer_business_name", quote.CustomerBusinessName, 2, 200);
+        ValidateText(errors, "customer_business_activity", quote.CustomerBusinessActivity, 2, 200);
+        ValidateText(errors, "customer_address", quote.CustomerAddress, 3, 300);
+        ValidateText(errors, "customer_phone", quote.CustomerPhone, 5, 30);
+        ValidateText(errors, "customer_city_or_commune", quote.CustomerCityOrCommune, 2, 120);
+        ValidateText(errors, "customer_contact_name", quote.CustomerContactName, 2, 200);
+        if (!ChileanRut.TryNormalize(quote.CustomerRut, out var normalizedRut)) errors["customer_rut"] = [ChileanRut.InvalidMessage]; else quote.CustomerRut = normalizedRut;
+        if (quote.CustomerEmail is not null && (quote.CustomerEmail.Length > 254 || !new EmailAddressAttribute().IsValid(quote.CustomerEmail))) errors["customer_email"] = ["El correo electrónico no es válido."];
+        if (quote.Currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) errors["currency"] = ["Moneda no válida."];
+        if (quote.SaleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) errors["sale_condition"] = ["Condición de venta no válida."];
+        if (quote.ValidityDays <= 0) errors["validity_days"] = ["La vigencia debe ser positiva."];
+        if (quote.DetailedDescription?.Length > CommercialQuoteRules.DetailedDescriptionMaxLength) errors["detailed_description"] = [$"La descripción no puede superar {CommercialQuoteRules.DetailedDescriptionMaxLength} caracteres."];
+        if (request.Items is null) errors["items"] = ["items es obligatorio (puede ser un arreglo vacío)."];
+
+        var inputs = request.Items ?? [];
+        var catalogIds = inputs.Where(item => item.Source == CommercialQuoteItemOrigins.Catalog && item.ProductId.HasValue).Select(item => item.ProductId!.Value).Distinct().ToList();
+        var products = await db.Products.AsNoTracking().Include(product => product.Brand).Where(product => catalogIds.Contains(product.Id)).ToDictionaryAsync(product => product.Id, ct);
+        for (var index = 0; index < inputs.Count; index++)
+        {
+            var input = inputs[index]; var key = $"items[{index}]";
+            if (input.Quantity <= 0) errors[$"{key}.quantity"] = ["La cantidad debe ser positiva."];
+            if (input.UnitNetAmount <= 0) errors[$"{key}.unit_net_amount"] = ["El precio neto debe ser positivo."];
+            var discount = input.DiscountPercent ?? 0m;
+            if (discount is < 0 or > 100 || decimal.Round(discount, 2) != discount) errors[$"{key}.discount_percent"] = ["El descuento debe estar entre 0 y 100 y usar hasta dos decimales."];
+            var item = new CommercialQuoteItem { Position = index + 1, Origin = input.Source ?? string.Empty, Quantity = input.Quantity, UnitNetAmount = input.UnitNetAmount, DiscountPercent = discount };
+            if (input.Source == CommercialQuoteItemOrigins.Catalog)
+            {
+                if (input.ProductId is null) errors[$"{key}.product_id"] = ["El producto es obligatorio para un ítem de catálogo."];
+                else if (!products.TryGetValue(input.ProductId.Value, out var product) || !product.IsPublished || product.StockStatus == StockStatuses.Sold) errors[$"{key}.product_id"] = ["El producto no existe o no está disponible para cotizar."];
+                else { item.ProductId = product.Id; item.ProductName = product.Name; item.BrandName = product.Brand?.Name; item.ModelName = product.Model; }
+            }
+            else if (input.Source == CommercialQuoteItemOrigins.FreeText)
+            {
+                if (input.ProductId is not null) errors[$"{key}.product_id"] = ["Un ítem libre no puede referenciar un producto."];
+                item.ProductName = CustomerTextNormalizer.Visible(input.ProductName); item.BrandName = CustomerTextNormalizer.Optional(input.BrandName); item.ModelName = CustomerTextNormalizer.Optional(input.ModelName);
+                ValidateText(errors, $"{key}.product_name", item.ProductName, 1, 220);
+            }
+            else errors[$"{key}.source"] = ["Origen no válido."];
+            quote.Items.Add(item);
+        }
+        return new PreparedQuote(errors.Count == 0 ? quote : null, errors);
+    }
+
+    private static async Task<AppUser?> ActiveSellerAsync(ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct) =>
+        await db.AppUsers.SingleOrDefaultAsync(user => user.Id == UserId(principal) && user.IsActive && user.Role == AppRoles.Seller && user.SellerCode != null, ct);
+    private static int UserId(ClaimsPrincipal principal) => int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub"), out var id) ? id : 0;
+    private static void ValidateText(Dictionary<string, string[]> errors, string key, string value, int min, int max) { if (value.Length < min || value.Length > max) errors[key] = [$"El campo debe tener entre {min} y {max} caracteres."]; }
+    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
+    private sealed record PreparedQuote(CommercialQuote? Quote, Dictionary<string, string[]> Errors);
+}
