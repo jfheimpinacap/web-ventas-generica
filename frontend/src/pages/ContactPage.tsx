@@ -7,7 +7,9 @@ import { trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
 import { buildPublicUrl } from '../utils/seo'
 import { buildWhatsAppUrl } from '../utils/whatsapp'
 
-const CONTACT_EMAIL = import.meta.env.VITE_CONTACT_EMAIL
+const CONTACT_EMAIL =
+  import.meta.env.VITE_CONTACT_EMAIL?.trim() ||
+  'jmateluna@jem-nexus.cl'
 
 export function ContactPage() {
   const contactJsonLd = {
@@ -39,25 +41,27 @@ export function ContactPage() {
         </p>
 
         <div className="trust-page__grid">
-          <article className="trust-page__card">
+          <article className="trust-page__card contact-page__card">
             <h2>WhatsApp</h2>
             <p>Atención comercial directa para resolver dudas y coordinar tu cotización.</p>
-            <a className="btn btn--whatsapp" href={buildWhatsAppUrl('Hola, quiero solicitar información comercial.')} target="_blank" rel="noreferrer" onClick={() => trackWhatsAppClick({ location: 'contact' })}>
+            <a className="btn btn--whatsapp contact-page__action" href={buildWhatsAppUrl('Hola, quiero solicitar información comercial.')} target="_blank" rel="noreferrer" onClick={() => trackWhatsAppClick({ location: 'contact' })}>
               Escribir por WhatsApp
             </a>
           </article>
 
-          <article className="trust-page__card">
+          <article className="trust-page__card contact-page__card">
             <h2>Formulario de cotización</h2>
             <p>Completa la solicitud con tu requerimiento técnico para una respuesta personalizada.</p>
-            <Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'contact' })}>
+            <Link className="btn btn--accent contact-page__action" to="/cotizar" onClick={() => trackQuoteClick({ location: 'contact' })}>
               Cotizar ahora
             </Link>
           </article>
 
-          <article className="trust-page__card">
+          <article className="trust-page__card contact-page__card">
             <h2>Correo</h2>
-            <p>{CONTACT_EMAIL ? CONTACT_EMAIL : 'Pendiente de publicación de canal de correo comercial.'}</p>
+            <p>
+              <a className="contact-page__email" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            </p>
           </article>
         </div>
       </section>
