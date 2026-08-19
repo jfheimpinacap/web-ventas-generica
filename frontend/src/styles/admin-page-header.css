@@ -32,7 +32,8 @@
 .admin-page-header__toolbar select { box-sizing: border-box; max-width: 100%; }
 .admin-page-header__toolbar .admin-search { width: min(280px, 100%); }
 .admin-inline-search { display: flex; align-items: center; gap: .5rem; min-width: 0; }
-.admin-icon-button { display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center; width: 40px; min-width: 40px; height: 40px; padding: 0; }
+.admin-search { box-sizing: border-box; height: 40px; }
+.admin-icon-button { box-sizing: border-box; display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
 .admin-icon-button:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
 .admin-icon-button .admin-icon { width: 18px; height: 18px; }
 
