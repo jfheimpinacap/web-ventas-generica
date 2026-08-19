@@ -173,6 +173,8 @@
 .admin-compact-list--brands {
   width: min(100%, 600px);
 }
+.admin-brands-content { display: flex; flex-direction: column; gap: .55rem; width: min(100%, 760px); }
+.admin-brands-content .admin-compact-list--brands { width: 100%; }
 
 .admin-compact-list--suppliers {
   width: min(100%, 920px);
@@ -193,10 +195,11 @@
 .technical-sheet-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
 .technical-sheet-form__filename { max-width: 100%; overflow-wrap: anywhere; }
 
-.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: fit-content; max-width: 100%; align-self: flex-start; }
-.admin-technical-sheets-table { width: auto; min-width: 760px; table-layout: fixed; }
-.admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 10rem; max-width: 14rem; overflow-wrap: anywhere; }
-.admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 11rem; max-width: 16rem; overflow-wrap: anywhere; }
+.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: 100%; max-width: 100%; align-self: flex-start; }
+.admin-technical-sheets-table { width: 100%; min-width: 1040px; table-layout: fixed; }
+.admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 12rem; white-space: nowrap; }
+.admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 14rem; white-space: nowrap; }
 .admin-technical-sheets-table th:nth-child(3), .admin-technical-sheets-table td:nth-child(3) { width: 5rem; white-space: nowrap; }
 .admin-technical-sheets-table th:nth-child(4), .admin-technical-sheets-table td:nth-child(4) { width: 6.5rem; white-space: nowrap; }
 .admin-technical-sheets-table th:nth-child(5), .admin-technical-sheets-table td:nth-child(5) { width: 22rem; }
+.admin-technical-sheets-table .admin-table-actions { flex-wrap: nowrap; white-space: nowrap; }

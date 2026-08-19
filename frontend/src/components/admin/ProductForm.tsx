@@ -335,6 +335,12 @@ export function ProductForm({
             Destacado
           </label>
         </div>
+        <fieldset className="admin-product-benefits admin-form-panel__full">
+          <legend>Incluye</legend>
+          <label className="admin-checkbox"><input type="checkbox" checked={values.includes_technical_review} onChange={(e) => setField('includes_technical_review', e.target.checked)} />Incluye revisión técnica</label>
+          <label className="admin-checkbox"><input type="checkbox" checked={values.includes_commercial_technical_advice} onChange={(e) => setField('includes_commercial_technical_advice', e.target.checked)} />Incluye asesoría técnico-comercial</label>
+          <label className="admin-checkbox"><input type="checkbox" checked={values.includes_coordinated_delivery} onChange={(e) => setField('includes_coordinated_delivery', e.target.checked)} />Incluye entrega coordinada</label>
+        </fieldset>
         </section>
 
         <section className="admin-form-panel admin-product-technical-grid">
@@ -457,22 +463,6 @@ export function ProductForm({
           Descripción
           <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
         </label>
-
-        <fieldset className="admin-product-benefits admin-form-panel__full">
-          <legend>Incluye</legend>
-          <label className="admin-checkbox">
-            <input type="checkbox" checked={values.includes_technical_review} onChange={(e) => setField('includes_technical_review', e.target.checked)} />
-            Incluye revisión técnica
-          </label>
-          <label className="admin-checkbox">
-            <input type="checkbox" checked={values.includes_commercial_technical_advice} onChange={(e) => setField('includes_commercial_technical_advice', e.target.checked)} />
-            Incluye asesoría técnico-comercial
-          </label>
-          <label className="admin-checkbox">
-            <input type="checkbox" checked={values.includes_coordinated_delivery} onChange={(e) => setField('includes_coordinated_delivery', e.target.checked)} />
-            Incluye entrega coordinada
-          </label>
-        </fieldset>
 
         </section>
       </div>

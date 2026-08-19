@@ -12,6 +12,7 @@ const MAX_SIZE = 10 * 1024 * 1024
 export function AdminTechnicalSheetsPage() {
   const [items, setItems] = useState<TechnicalSheet[]>([])
   const [search, setSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +29,7 @@ export function AdminTechnicalSheetsPage() {
     finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
-  const filtered = useMemo(() => items.filter(x => x.name.toLowerCase().includes(search.trim().toLowerCase())), [items, search])
+  const filtered = useMemo(() => items.filter(x => x.name.toLowerCase().includes(appliedSearch.trim().toLowerCase())), [items, appliedSearch])
 
   const validateFile = (selected: File | null) => {
     if (!selected) return 'Selecciona un archivo.'
@@ -92,8 +93,7 @@ export function AdminTechnicalSheetsPage() {
   }
 
   return <AdminLayout>
-    <AdminPageHeader title="Fichas técnicas" description="Administra archivos PDF, JPG/JPEG, PNG o WebP (máximo 10 MB) que podrás usar en tus productos." actions={<button className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button>} />
-    <div><input className="admin-search" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /></div>
+    <AdminPageHeader title="Fichas técnicas" description="Administra archivos PDF, JPG/JPEG, PNG o WebP (máximo 10 MB) que podrás usar en tus productos." actions={<div className="admin-page-header__toolbar"><button className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button><form className="admin-inline-search" role="search" onSubmit={e => { e.preventDefault(); setAppliedSearch(search) }}><input className="admin-search" aria-label="Buscar ficha técnica por nombre" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" title="Buscar ficha técnica" aria-label="Buscar ficha técnica"><AdminIcon name="search" /></button></form></div>} />
     {error ? <p className="ui-note ui-note--error">{error}</p> : null}{message ? <p className="ui-note">{message}</p> : null}
     {showCreate ? <section className="technical-sheet-form"><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF, JPG/JPEG, PNG o WebP (máximo 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p className="technical-sheet-form__filename">Archivo seleccionado: {file.name}</p> : null}<div className="technical-sheet-form__actions"><button className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando...' : 'Guardar'}</button> <button className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
     {loading ? <p>Cargando fichas técnicas...</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : (
