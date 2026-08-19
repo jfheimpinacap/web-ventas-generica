@@ -5,7 +5,7 @@ import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
 import { ProductForm } from "../../components/admin/ProductForm";
 import { ProductImageManager } from "../../components/admin/ProductImageManager";
-import { ProductTechnicalData } from "../../components/catalog/ProductTechnicalData";
+import { ProductAdminPreview } from "../../components/admin/ProductAdminPreview";
 import { usePendingProductImages } from "../../hooks/usePendingProductImages";
 import {
   createProductImage,
@@ -40,11 +40,6 @@ import type {
   SupplierSummary,
   TechnicalSheet,
 } from "../../types/catalog";
-import {
-  formatCondition,
-  formatPriceValue,
-  formatStockStatus,
-} from "../../utils/formatters";
 
 function mapProductToFormValues(
   product: Awaited<ReturnType<typeof getAdminProduct>>,
@@ -60,6 +55,7 @@ function mapProductToFormValues(
     short_description: product.short_description,
     description: product.description,
     model: product.model,
+    sku: product.sku ?? "",
     working_height_m: product.working_height_m,
     terrain_type: product.terrain_type,
     year: product.year,
@@ -74,7 +70,7 @@ function mapProductToFormValues(
     price_currency: product.price_currency ?? "CLP",
     price_tax_mode: product.price_tax_mode ?? "plus_vat",
     price_visible: product.price_visible,
-    stock_status: product.stock_status,
+    stock_status: product.product_type === "service" && product.stock_status !== "available" && product.stock_status !== "on_request" ? "on_request" : product.stock_status,
     is_featured: product.is_featured,
     is_published: product.is_published,
   };
@@ -214,8 +210,8 @@ export function AdminProductEditPage() {
       setIsSubmitting(true);
       setError(null);
       await updateProduct(slug, values);
-    } catch {
-      setError("No se pudo actualizar el producto.");
+    } catch (submitError) {
+      setError(getSafeApiErrorMessage(submitError, "No se pudo actualizar el producto."));
     } finally {
       setIsSubmitting(false);
     }
@@ -429,55 +425,7 @@ export function AdminProductEditPage() {
             <div className="admin-product-editor-sidebar">
               <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
-                <article className="product-card admin-product-preview-card">
-                  <div className="product-card__image-area">
-                    <img
-                      src={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE}
-                      alt={selectedPending?.altText.trim() || mainImage?.alt_text || previewValues?.name || "Producto"}
-                    />
-                  </div>
-                  <div className="product-card__content">
-                    <div className="product-card__badges">
-                      <span className="badge badge--condition">
-                        {formatCondition(
-                          previewValues?.condition ?? initialValues.condition,
-                        )}
-                      </span>
-                      <span className="badge badge--stock">
-                        {formatStockStatus(
-                          previewValues?.stock_status ??
-                            initialValues.stock_status,
-                        )}
-                      </span>
-                    </div>
-                    <h3>{previewValues?.name || "Producto sin nombre"}</h3>
-                    {previewValues?.model.trim() ? <p className="product-card__model">{previewValues.model.trim()}</p> : null}
-                    <ProductTechnicalData
-                      productType={previewValues?.product_type ?? initialValues.product_type}
-                      condition={previewValues?.condition ?? initialValues.condition}
-                      workingHeightM={previewValues?.working_height_m}
-                      maximumLoadCapacityKg={previewValues?.maximum_load_capacity_kg}
-                      powerSource={previewValues?.power_source}
-                      terrainType={previewValues?.terrain_type}
-                    />
-                    <p className="product-card__price">
-                      {formatPriceValue(
-                        previewValues?.price ?? initialValues.price,
-                        previewValues?.price_visible ??
-                          initialValues.price_visible,
-                        previewValues?.price_currency ??
-                          initialValues.price_currency,
-                        previewValues?.price_tax_mode ??
-                          initialValues.price_tax_mode,
-                      )}
-                    </p>
-                  </div>
-                  <div className="product-card__actions">
-                    <button type="button" className="btn btn--accent" disabled>
-                      Ver detalle
-                    </button>
-                  </div>
-                </article>
+                <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} imageUrl={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
               </section>
               <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
                 <h2>Eliminar producto</h2>

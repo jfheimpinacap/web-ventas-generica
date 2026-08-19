@@ -5,13 +5,12 @@ import { AdminLayout } from '../../components/admin/AdminLayout'
 import { ProductEditorLayout } from '../../components/admin/ProductEditorLayout'
 import { ProductForm } from '../../components/admin/ProductForm'
 import { ProductImageManager } from '../../components/admin/ProductImageManager'
-import { ProductTechnicalData } from '../../components/catalog/ProductTechnicalData'
+import { ProductAdminPreview } from '../../components/admin/ProductAdminPreview'
 import { usePendingProductImages } from '../../hooks/usePendingProductImages'
 import { createProduct, createProductImage, getTechnicalSheets } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import { getSafeApiErrorMessage } from '../../services/api'
 import type { Brand, Category, ProductFormValues, SupplierSummary, TechnicalSheet } from '../../types/catalog'
-import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
 
 const INITIAL_VALUES: ProductFormValues = {
   name: '',
@@ -24,6 +23,7 @@ const INITIAL_VALUES: ProductFormValues = {
   short_description: '',
   description: '',
   model: '',
+  sku: '',
   working_height_m: null,
   terrain_type: null,
   year: null,
@@ -123,8 +123,8 @@ export function AdminProductCreatePage() {
       }
       pending.clearImages()
       navigate('/admin/productos?status=created')
-    } catch {
-      setError('No se pudo crear el producto.')
+    } catch (submitError) {
+      setError(getSafeApiErrorMessage(submitError, 'No se pudo crear el producto.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -141,6 +141,7 @@ export function AdminProductCreatePage() {
           onBack={() => navigate('/admin/productos')}
           formId={PRODUCT_CREATE_FORM_ID}
           isSubmitting={isSubmitting}
+          showHeaderActions={false}
           form={
             <ProductForm
               formId={PRODUCT_CREATE_FORM_ID}
@@ -162,26 +163,7 @@ export function AdminProductCreatePage() {
           sidebar={
             <section className="admin-block admin-block--compact admin-product-preview">
               <h2>Vista previa pública</h2>
-                <article className="product-card admin-product-preview-card">
-                  <div className="product-card__image-area">
-                    <img src={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} alt={selectedPending?.altText.trim() || formValues.name || 'Producto'} />
-                  </div>
-                  <div className="product-card__content">
-                    <div className="product-card__badges">
-                      <span className="badge badge--condition">{formatCondition(formValues.condition)}</span>
-                      <span className="badge badge--stock">{formatStockStatus(formValues.stock_status)}</span>
-                    </div>
-                    <h3>{formValues.name || 'Producto sin nombre'}</h3>
-                    {formValues.model.trim() ? <p className="product-card__model">{formValues.model.trim()}</p> : null}
-                    <ProductTechnicalData productType={formValues.product_type} condition={formValues.condition} workingHeightM={formValues.working_height_m} maximumLoadCapacityKg={formValues.maximum_load_capacity_kg} powerSource={formValues.power_source} terrainType={formValues.terrain_type} />
-                    <p className="product-card__price">{formatPriceValue(formValues.price, formValues.price_visible, formValues.price_currency, formValues.price_tax_mode)}</p>
-                  </div>
-                  <div className="product-card__actions">
-                    <button type="button" className="btn btn--accent" disabled>
-                      Ver detalle
-                    </button>
-                  </div>
-                </article>
+                <ProductAdminPreview values={formValues} categories={categories} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} imageAlt={selectedPending?.altText.trim() || formValues.name || 'Producto'} />
             </section>
           }
         />

@@ -76,16 +76,28 @@ function toNullableNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function withBenefitsForProductType(values: ProductFormValues, productType: ProductType) {
-  if (productType === values.product_type) return values
-  const includesBenefits = productType === 'machinery'
+function convertProductType(values: ProductFormValues, productType: ProductType): ProductFormValues {
+  const machinery = productType === 'machinery'
   return {
     ...values,
+    category: 0,
     product_type: productType,
-    includes_technical_review: includesBenefits,
-    includes_commercial_technical_advice: includesBenefits,
-    includes_coordinated_delivery: includesBenefits,
-    machine_weight_kg: productType === 'machinery' ? values.machine_weight_kg : null,
+    condition: productType === 'service' ? 'not_applicable' : values.condition === 'not_applicable' ? 'new' : values.condition,
+    stock_status: productType === 'service' && !['available', 'on_request'].includes(values.stock_status) ? 'on_request' : values.stock_status,
+    brand: productType === 'service' ? null : values.brand,
+    model: productType === 'service' ? '' : values.model,
+    sku: '',
+    technical_sheet: productType === 'service' ? null : values.technical_sheet,
+    working_height_m: machinery ? values.working_height_m : null,
+    terrain_type: machinery ? values.terrain_type : null,
+    year: machinery ? values.year : null,
+    hours_meter: machinery ? values.hours_meter : null,
+    maximum_load_capacity_kg: machinery ? values.maximum_load_capacity_kg : null,
+    machine_weight_kg: machinery ? values.machine_weight_kg : null,
+    power_source: machinery ? values.power_source : null,
+    includes_technical_review: machinery,
+    includes_commercial_technical_advice: machinery,
+    includes_coordinated_delivery: machinery,
   }
 }
 
@@ -110,10 +122,12 @@ export function ProductForm({
   const [machineWeightInput, setMachineWeightInput] = useState(() => formatDecimalInput(initialValues.machine_weight_kg))
   const [machineWeightError, setMachineWeightError] = useState<string | null>(null)
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
+  const [categoryError, setCategoryError] = useState<string | null>(null)
 
   useEffect(() => {
     setValues(initialValues)
-    setPrimaryCategoryId(null)
+    const initialCategory = categories.find((item) => item.id === initialValues.category) ?? null
+    setPrimaryCategoryId(getRootCategory(initialCategory, categories)?.id ?? null)
     setPriceError(null)
     setWorkingHeightInput(formatDecimalInput(initialValues.working_height_m))
     setWorkingHeightError(null)
@@ -125,7 +139,18 @@ export function ProductForm({
     onValuesChange?.(values)
   }, [onValuesChange, values])
 
-  const rootCategories = useMemo(() => categories.filter((item) => item.is_active && item.parent === null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)), [categories])
+  const supportedTypes: Array<{ type: ProductType; label: string }> = [
+    { type: 'machinery', label: 'Maquinarias' },
+    { type: 'spare_part', label: 'Repuestos' },
+    { type: 'service', label: 'Servicios' },
+  ]
+  const rootsByType = useMemo(() => new Map(supportedTypes.map(({ type }) => [type, categories.filter((item) => item.is_active && item.parent === null && item.product_type === type)])), [categories])
+  useEffect(() => {
+    if (initialValues.category || primaryCategoryId !== null || categories.length === 0) return
+    const machineryRoots = rootsByType.get('machinery') ?? []
+    if (machineryRoots.length === 1) setPrimaryCategoryId(machineryRoots[0].id)
+  }, [categories.length, initialValues.category, primaryCategoryId, rootsByType])
+
   const selectedCategory = useMemo(() => categories.find((item) => item.id === values.category) ?? null, [categories, values.category])
   const categoryRoot = useMemo(() => getRootCategory(selectedCategory, categories), [categories, selectedCategory])
   const selectedRootId = categoryRoot?.id ?? primaryCategoryId
@@ -148,7 +173,7 @@ export function ProductForm({
             setMachineWeightInput('')
             setMachineWeightError(null)
           }
-          return { ...withBenefitsForProductType(prev, productType), category: 0 }
+          return { ...convertProductType(prev, productType), category: 0 }
         }
         setPrimaryCategoryId(root?.id ?? null)
         const productType = inferProductTypeFromRootCategory(root)
@@ -156,21 +181,48 @@ export function ProductForm({
           setMachineWeightInput('')
           setMachineWeightError(null)
         }
-        return { ...withBenefitsForProductType(prev, productType), category: Number(nextValue) }
+        return { ...prev, product_type: productType, category: Number(nextValue) }
       }
       return { ...prev, [field]: nextValue }
     })
   }
 
+  const handleTabChange = (productType: ProductType) => {
+    if (productType === values.product_type) return
+    const roots = rootsByType.get(productType) ?? []
+    if (roots.length !== 1) {
+      setCategoryError(roots.length === 0 ? 'No existe una categoría raíz activa para este tipo de producto.' : 'Existe más de una categoría raíz activa para este tipo de producto.')
+      return
+    }
+    if (!window.confirm('Al cambiar el tipo se limpiarán la subcategoría y los campos incompatibles. ¿Deseas continuar?')) return
+    setCategoryError(null)
+    setPrimaryCategoryId(roots[0].id)
+    setWorkingHeightInput('')
+    setWorkingHeightError(null)
+    setMachineWeightInput('')
+    setMachineWeightError(null)
+    setValues((current) => convertProductType(current, productType))
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    const matchingRoots = rootsByType.get(values.product_type) ?? []
+    if (matchingRoots.length !== 1 || selectedRoot?.id !== matchingRoots[0].id || !selectedCategory?.parent) {
+      setCategoryError('Selecciona una subcategoría válida para el tipo de producto.')
+      return
+    }
+    if (values.product_type === 'service' && values.stock_status !== 'available' && values.stock_status !== 'on_request') {
+      setCategoryError('Selecciona una disponibilidad válida para el servicio.')
+      return
+    }
 
     if (!isValidChileanPriceInput(values.price)) {
       setPriceError('Ingresa un precio válido usando solo números y puntos como separador de miles.')
       return
     }
 
-    const workingHeight = parseWorkingHeight(workingHeightInput)
+    const workingHeight = values.product_type === 'machinery' ? parseWorkingHeight(workingHeightInput) : { value: null, error: null }
     if (workingHeight.error) {
       setWorkingHeightError(workingHeight.error)
       return
@@ -186,8 +238,21 @@ export function ProductForm({
       ...values,
       working_height_m: workingHeight.value,
       machine_weight_kg: values.product_type === 'machinery' ? machineWeight.value : null,
-      product_type: inferProductTypeFromRootCategory(selectedRoot),
-      short_description: values.short_description || values.description.trim().slice(0, 280),
+      product_type: values.product_type,
+      condition: values.product_type === 'service' ? 'not_applicable' : values.condition,
+      brand: values.product_type === 'service' ? null : values.brand,
+      model: values.product_type === 'service' ? '' : values.model,
+      sku: values.product_type === 'spare_part' ? values.sku.trim() : '',
+      technical_sheet: values.product_type === 'service' ? null : values.technical_sheet,
+      terrain_type: values.product_type === 'machinery' ? values.terrain_type : null,
+      year: values.product_type === 'machinery' ? values.year : null,
+      hours_meter: values.product_type === 'machinery' ? values.hours_meter : null,
+      maximum_load_capacity_kg: values.product_type === 'machinery' ? values.maximum_load_capacity_kg : null,
+      power_source: values.product_type === 'machinery' ? values.power_source : null,
+      includes_technical_review: values.product_type === 'machinery' && values.includes_technical_review,
+      includes_commercial_technical_advice: values.product_type === 'machinery' && values.includes_commercial_technical_advice,
+      includes_coordinated_delivery: values.product_type === 'machinery' && values.includes_coordinated_delivery,
+      short_description: values.product_type === 'service' ? values.description.trim().slice(0, 280) : values.short_description,
       price: normalizeChileanPriceInput(values.price),
     })
   }
@@ -197,26 +262,21 @@ export function ProductForm({
   return (
     <form id={formId} className="admin-product-form admin-product-editor-form" onSubmit={handleSubmit}>
       {error ? <p className="ui-note ui-note--error admin-product-form__notice">{error}</p> : null}
+      <div className="quote-view-tabs admin-product-type-tabs" role="tablist" aria-label="Tipo de producto">
+        {supportedTypes.map(({ type, label }) => {
+          const rootCount = (rootsByType.get(type) ?? []).length
+          return <button key={type} id={`product-tab-${type}`} type="button" role="tab" aria-selected={values.product_type === type} aria-disabled={rootCount !== 1} aria-controls="product-editor-panels" className={`quote-view-tab${values.product_type === type ? ' quote-view-tab--active' : ''}`} onClick={() => handleTabChange(type)}>{label}</button>
+        })}
+      </div>
+      {categoryError ? <p className="ui-note ui-note--error admin-product-form__notice">{categoryError}</p> : null}
 
-      <div className="admin-product-information-grid">
+      <div id="product-editor-panels" className="admin-product-information-grid" role="tabpanel" aria-labelledby={`product-tab-${values.product_type}`}>
         <section className="admin-form-panel admin-form-panel--product-grid">
         <h3>Información general</h3>
 
         <label className="admin-form-panel__span-2 admin-product-name-field">
           Nombre
           <input value={values.name} onChange={(e) => setField('name', e.target.value)} required />
-        </label>
-
-        <label>
-          Categoría principal
-          <select value={selectedRootId ?? ''} onChange={(e) => setField('category', Number(e.target.value))} required>
-            <option value="">Selecciona categoría principal</option>
-            {rootCategories.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
         </label>
 
         <label>
@@ -234,6 +294,7 @@ export function ProductForm({
           ) : null}
         </label>
 
+        {values.product_type !== 'service' ? (
         <label>
           Marca
           <select value={values.brand ?? ''} onChange={(e) => setField('brand', toNullableNumber(e.target.value))}>
@@ -245,6 +306,7 @@ export function ProductForm({
             ))}
           </select>
         </label>
+        ) : null}
 
         <label>
           Proveedor
@@ -259,7 +321,7 @@ export function ProductForm({
         </label>
 
         <div className="admin-form-panel__full admin-product-condition-row">
-          <label>
+          {values.product_type !== 'service' ? <label>
             Condición
             <select value={values.condition} onChange={(e) => setField('condition', e.target.value as ProductCondition)} required>
               {PRODUCT_CONDITIONS.map((item) => (
@@ -268,12 +330,12 @@ export function ProductForm({
                 </option>
               ))}
             </select>
-          </label>
+          </label> : null}
 
           <label>
-            Stock
+            {values.product_type === 'service' ? 'Disponibilidad' : 'Stock'}
             <select value={values.stock_status} onChange={(e) => setField('stock_status', e.target.value as StockStatus)} required>
-              {STOCK_STATUSES.map((item) => (
+              {STOCK_STATUSES.filter((item) => values.product_type !== 'service' || item.value === 'available' || item.value === 'on_request').map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
@@ -335,22 +397,30 @@ export function ProductForm({
             Destacado
           </label>
         </div>
-        <fieldset className="admin-product-benefits admin-form-panel__full">
+        {values.product_type === 'machinery' ? <fieldset className="admin-product-benefits admin-form-panel__full">
           <legend>Incluye</legend>
           <label className="admin-checkbox"><input type="checkbox" checked={values.includes_technical_review} onChange={(e) => setField('includes_technical_review', e.target.checked)} />Incluye revisión técnica</label>
           <label className="admin-checkbox"><input type="checkbox" checked={values.includes_commercial_technical_advice} onChange={(e) => setField('includes_commercial_technical_advice', e.target.checked)} />Incluye asesoría técnico-comercial</label>
           <label className="admin-checkbox"><input type="checkbox" checked={values.includes_coordinated_delivery} onChange={(e) => setField('includes_coordinated_delivery', e.target.checked)} />Incluye entrega coordinada</label>
-        </fieldset>
+        </fieldset> : null}
         </section>
 
         <section className="admin-form-panel admin-product-technical-grid">
         <h3>Información técnica / comercial</h3>
 
+        {values.product_type !== 'service' ? (
         <label>
           Modelo
           <input value={values.model} onChange={(e) => setField('model', e.target.value)} />
         </label>
+        ) : null}
 
+        {values.product_type === 'spare_part' ? <label>
+          Código/SKU
+          <input value={values.sku} onChange={(e) => setField('sku', e.target.value)} />
+        </label> : null}
+
+        {values.product_type === 'machinery' ? <>
         <label>
           Altura de trabajo
           <span className="admin-product-unit-input">
@@ -450,7 +520,9 @@ export function ProductForm({
             {TERRAIN_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
         </label>
+        </> : null}
 
+        {values.product_type !== 'service' ? (
         <label>
           Ficha técnica
           <select value={values.technical_sheet ?? ''} onChange={(e) => setField('technical_sheet', toNullableNumber(e.target.value))}>
@@ -458,10 +530,11 @@ export function ProductForm({
             {technicalSheetOptions.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.original_file_name}</option>)}
           </select>
         </label>
+        ) : null}
 
         <label className="admin-form-panel__full">
           Descripción
-          <textarea value={values.description} onChange={(e) => setField('description', e.target.value)} rows={4} />
+          <textarea className={values.product_type === 'service' ? 'admin-product-service-description' : undefined} value={values.description} onChange={(e) => setField('description', e.target.value)} rows={values.product_type === 'service' ? 10 : 4} />
         </label>
 
         </section>
