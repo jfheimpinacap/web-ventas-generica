@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
 import { Seo } from '../components/common/Seo'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
+import { resolveMediaUrl } from '../services/api'
 import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
 import { trackQuoteSubmit } from '../utils/analytics'
@@ -58,28 +59,46 @@ export function QuotePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [imageLoadFailed, setImageLoadFailed] = useState(false)
+
+  const selectedProductImageUrl = useMemo(
+    () => resolveMediaUrl(selectedProduct?.main_image?.image),
+    [selectedProduct],
+  )
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [productFromQuery])
 
   useEffect(() => {
+    let active = true
+
     if (!productFromQuery) {
       setSelectedProduct(null)
-      return
+      return () => {
+        active = false
+      }
     }
 
     const run = async () => {
       try {
         const products = await getProducts()
-        setSelectedProduct(products.find((product) => product.id === productFromQuery) ?? null)
+        if (active) setSelectedProduct(products.find((product) => product.id === productFromQuery) ?? null)
       } catch {
-        setSelectedProduct(null)
+        if (active) setSelectedProduct(null)
       }
     }
 
     void run()
+
+    return () => {
+      active = false
+    }
   }, [productFromQuery])
+
+  useEffect(() => {
+    setImageLoadFailed(false)
+  }, [selectedProduct?.id, selectedProductImageUrl])
 
   const validate = () => {
     if (!form.customer_name.trim()) return 'El nombre es obligatorio.'
@@ -147,12 +166,13 @@ export function QuotePage() {
             {selectedProduct ? (
               <>
                 <div className="quote-preview__image-wrap">
-                  {selectedProduct.main_image?.image ? (
+                  {selectedProductImageUrl && !imageLoadFailed ? (
                     <img
                       className="quote-preview__image"
-                      src={selectedProduct.main_image.image}
-                      alt={selectedProduct.main_image.alt_text || selectedProduct.name}
+                      src={selectedProductImageUrl}
+                      alt={selectedProduct.main_image?.alt_text?.trim() || selectedProduct.name}
                       loading="lazy"
+                      onError={() => setImageLoadFailed(true)}
                     />
                   ) : (
                     <div className="quote-preview__placeholder">Sin imagen disponible</div>
