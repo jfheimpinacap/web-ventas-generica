@@ -257,6 +257,8 @@ export function ProductDetailPage() {
                   {!product.price_visible || !product.price ? <small>Solicita una cotización para recibir precio actualizado.</small> : null}
                 </div>
 
+                {!isMachinery && product.short_description?.trim() ? <p className="product-detail__short-description">{product.short_description.trim()}</p> : null}
+
                 {isMachinery ? (
                   <dl className="product-detail__facts">
                     {product.brand?.name ? <div><dt>Marca</dt><dd>{product.brand.name}</dd></div> : null}
@@ -324,10 +326,10 @@ export function ProductDetailPage() {
               </section>
             ) : null}
 
-            <section className="product-detail__description-card">
+            {(isMachinery || product.description?.trim()) ? <section className="product-detail__description-card">
               <h2>Descripción</h2>
               <p>{product.description || 'Sin descripción ampliada.'}</p>
-            </section>
+            </section> : null}
 
             <section className="product-detail__spec-section">
               <h2>Especificaciones técnicas</h2>
