@@ -11,6 +11,7 @@ import type { Brand } from '../../types/catalog'
 export function AdminBrandsPage() {
   const [items, setItems] = useState<Brand[]>([])
   const [search, setSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,11 +41,11 @@ export function AdminBrandsPage() {
           (activeFilter === 'active' ? item.is_active : !item.is_active)
         const matchesSearch = `${item.name} ${item.slug}`
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(appliedSearch.toLowerCase())
 
         return matchesStatus && matchesSearch
       }),
-    [items, search, activeFilter],
+    [items, appliedSearch, activeFilter],
   )
 
   const handleDelete = async (item: Brand) => {
@@ -59,15 +60,10 @@ export function AdminBrandsPage() {
 
   return (
     <AdminLayout>
-      <AdminPageHeader title="Marcas" actions={
+      <div className="admin-brands-content"><AdminPageHeader title="Marcas" actions={
         <div className="admin-page-header__toolbar">
           <Link className="btn btn--accent" to="/admin/marcas/nueva">Nueva marca</Link>
-          <input
-            className="admin-search"
-            placeholder="Buscar marca"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <form className="admin-inline-search" role="search" onSubmit={(e) => { e.preventDefault(); setAppliedSearch(search) }}><input className="admin-search" aria-label="Buscar marca" placeholder="Buscar marca" value={search} onChange={(e) => setSearch(e.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" title="Buscar marca" aria-label="Buscar marca"><AdminIcon name="search" /></button></form>
           <select
             className="admin-search"
             value={activeFilter}
@@ -123,7 +119,7 @@ export function AdminBrandsPage() {
             </tbody>
           </table>
         </div>
-      ) : null}
+      ) : null}</div>
     </AdminLayout>
   )
 }
