@@ -520,6 +520,7 @@ function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payl
   } as T
 
   if (payload.model !== undefined) Object.assign(nextPayload, { model: payload.model.trim() || null })
+  if (payload.sku !== undefined) Object.assign(nextPayload, { sku: payload.sku.trim() || null })
   if (Object.prototype.hasOwnProperty.call(payload, 'working_height_m')) {
     Object.assign(nextPayload, { working_height_m: payload.working_height_m ?? null })
   }

@@ -1027,3 +1027,10 @@
 @media (max-width: 340px) {
   .admin-image-gallery__grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.admin-product-type-tabs { min-width: 0; margin-bottom: 0; }
+.admin-product-type-tabs button { appearance: none; background: transparent; cursor: pointer; font: inherit; }
+.admin-product-type-tabs button:disabled { cursor: not-allowed; opacity: 0.5; }
+.admin-product-service-description { min-height: 15rem; resize: vertical; }
+.admin-product-preview__summary { display: -webkit-box; min-height: 3.8em; overflow: hidden; color: #475569; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+@media (max-width: 720px) { .admin-product-type-tabs { overflow-x: auto; } .admin-product-type-tabs .quote-view-tab { flex: 0 0 auto; } }

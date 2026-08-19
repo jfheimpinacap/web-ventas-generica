@@ -304,6 +304,7 @@ export interface ProductFormValues {
   short_description: string
   description: string
   model: string
+  sku: string
   working_height_m: number | null
   terrain_type: ProductTerrainType | null
   year: number | null
