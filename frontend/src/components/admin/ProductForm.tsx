@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 
 import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, StockStatus, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
@@ -123,6 +123,8 @@ export function ProductForm({
   const [machineWeightError, setMachineWeightError] = useState<string | null>(null)
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
   const [categoryError, setCategoryError] = useState<string | null>(null)
+  const [shortDescriptionError, setShortDescriptionError] = useState<string | null>(null)
+  const shortDescriptionRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     setValues(initialValues)
@@ -133,6 +135,7 @@ export function ProductForm({
     setWorkingHeightError(null)
     setMachineWeightInput(formatDecimalInput(initialValues.machine_weight_kg))
     setMachineWeightError(null)
+    setShortDescriptionError(null)
   }, [initialValues])
 
   useEffect(() => {
@@ -156,6 +159,9 @@ export function ProductForm({
   const selectedRootId = categoryRoot?.id ?? primaryCategoryId
   const selectedRoot = useMemo(() => categories.find((item) => item.id === selectedRootId) ?? categoryRoot, [categories, categoryRoot, selectedRootId])
   const subcategoryOptions = useMemo(() => selectedRootId ? categories.filter((item) => item.is_active && item.parent === selectedRootId).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) : [], [categories, selectedRootId])
+  const usesOptionalSubcategory = values.product_type === 'spare_part' || values.product_type === 'service'
+  const hasNoSubcategories = usesOptionalSubcategory && Boolean(selectedRoot) && subcategoryOptions.length === 0
+  const isExistingRootSelection = usesOptionalSubcategory && selectedCategory?.id === selectedRoot?.id
   const brandsOptions = useMemo(() => brands.filter((item) => item.is_active), [brands])
   const suppliersOptions = useMemo(() => suppliers.filter((item) => item.is_active), [suppliers])
   const technicalSheetOptions = useMemo(() => [...technicalSheets].sort((a, b) => a.name.localeCompare(b.name, 'es')), [technicalSheets])
@@ -208,12 +214,21 @@ export function ProductForm({
     event.preventDefault()
 
     const matchingRoots = rootsByType.get(values.product_type) ?? []
-    if (matchingRoots.length !== 1 || selectedRoot?.id !== matchingRoots[0].id || !selectedCategory?.parent) {
+    const matchingRoot = matchingRoots.length === 1 && selectedRoot?.id === matchingRoots[0].id
+    const validRootFallback = usesOptionalSubcategory && matchingRoot && (hasNoSubcategories || isExistingRootSelection)
+    const validSubcategory = matchingRoot && selectedCategory?.parent === matchingRoots[0].id
+    if (!validSubcategory && !validRootFallback) {
       setCategoryError('Selecciona una subcategoría válida para el tipo de producto.')
       return
     }
     if (values.product_type === 'service' && values.stock_status !== 'available' && values.stock_status !== 'on_request') {
       setCategoryError('Selecciona una disponibilidad válida para el servicio.')
+      return
+    }
+
+    if (usesOptionalSubcategory && values.is_published && !values.short_description.trim()) {
+      setShortDescriptionError('Ingresa una descripción para vista previa antes de publicar.')
+      shortDescriptionRef.current?.focus()
       return
     }
 
@@ -236,6 +251,7 @@ export function ProductForm({
     setPriceError(null)
     await onSubmit({
       ...values,
+      category: validRootFallback ? matchingRoots[0].id : values.category,
       working_height_m: workingHeight.value,
       machine_weight_kg: values.product_type === 'machinery' ? machineWeight.value : null,
       product_type: values.product_type,
@@ -252,7 +268,7 @@ export function ProductForm({
       includes_technical_review: values.product_type === 'machinery' && values.includes_technical_review,
       includes_commercial_technical_advice: values.product_type === 'machinery' && values.includes_commercial_technical_advice,
       includes_coordinated_delivery: values.product_type === 'machinery' && values.includes_coordinated_delivery,
-      short_description: values.product_type === 'service' ? values.description.trim().slice(0, 280) : values.short_description,
+      short_description: usesOptionalSubcategory ? values.short_description.trim() : values.short_description,
       price: normalizeChileanPriceInput(values.price),
     })
   }
@@ -281,17 +297,14 @@ export function ProductForm({
 
         <label>
           Subcategoría
-          <select value={selectedCategory?.parent ? values.category : ''} onChange={(e) => setField('category', Number(e.target.value))} required disabled={!selectedRootId || subcategoryOptions.length === 0}>
-            <option value="">Selecciona subcategoría</option>
+          <select value={selectedCategory?.parent ? values.category : (hasNoSubcategories || isExistingRootSelection) ? selectedRoot?.id : ''} onChange={(e) => setField('category', Number(e.target.value))} required disabled={!selectedRootId || hasNoSubcategories}>
+            {hasNoSubcategories || isExistingRootSelection ? <option value={selectedRoot?.id}>Sin subcategoría</option> : <option value="">Selecciona subcategoría</option>}
             {subcategoryOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
             ))}
           </select>
-          {selectedRootId && subcategoryOptions.length === 0 ? (
-            <span className="ui-note">No hay subcategorías activas para esta categoría principal. Puedes crearlas desde Categorías.</span>
-          ) : null}
         </label>
 
         {values.product_type !== 'service' ? (
@@ -388,7 +401,7 @@ export function ProductForm({
           </label>
 
           <label className="admin-checkbox">
-            <input type="checkbox" checked={values.is_published} onChange={(e) => setField('is_published', e.target.checked)} />
+            <input type="checkbox" checked={values.is_published} onChange={(e) => { setField('is_published', e.target.checked); if (!e.target.checked) setShortDescriptionError(null) }} />
             Publicado
           </label>
 
@@ -533,9 +546,16 @@ export function ProductForm({
         ) : null}
 
         <label className="admin-form-panel__full">
-          Descripción
-          <textarea className={values.product_type === 'service' ? 'admin-product-service-description' : undefined} value={values.description} onChange={(e) => setField('description', e.target.value)} rows={values.product_type === 'service' ? 10 : 4} />
+          {usesOptionalSubcategory ? 'Descripción detallada' : 'Descripción'}
+          <textarea className={usesOptionalSubcategory ? 'admin-product-detailed-description' : undefined} value={values.description} onChange={(e) => setField('description', e.target.value)} rows={usesOptionalSubcategory ? 8 : 4} />
         </label>
+
+        {usesOptionalSubcategory ? <label className="admin-form-panel__full admin-product-short-description">
+          <span>Descripción para vista previa pública {values.is_published ? <span aria-hidden="true">*</span> : null}</span>
+          <textarea ref={shortDescriptionRef} value={values.short_description} onChange={(e) => { setField('short_description', e.target.value); if (shortDescriptionError) setShortDescriptionError(null) }} onInvalid={(e) => { e.preventDefault(); setShortDescriptionError('Ingresa una descripción para vista previa antes de publicar.') }} rows={3} maxLength={280} required={values.is_published} aria-required={values.is_published} aria-invalid={Boolean(shortDescriptionError)} aria-describedby={shortDescriptionError ? 'short-description-error' : 'short-description-counter'} />
+          <span id="short-description-counter" className="admin-product-character-count">{values.short_description.length}/280</span>
+          {shortDescriptionError ? <span id="short-description-error" className="ui-note ui-note--error">{shortDescriptionError}</span> : null}
+        </label> : null}
 
         </section>
       </div>
