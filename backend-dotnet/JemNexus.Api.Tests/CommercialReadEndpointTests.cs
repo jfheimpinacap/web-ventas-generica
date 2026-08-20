@@ -98,6 +98,7 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
         Assert.Equal(JsonValueKind.Array, listDocument.RootElement.ValueKind);
         Assert.Single(listDocument.RootElement.EnumerateArray());
         Assert.Equal("excavadora-demo", listDocument.RootElement[0].GetProperty("slug").GetString());
+        Assert.Equal("EX-100", listDocument.RootElement[0].GetProperty("model").GetString());
         Assert.True(listDocument.RootElement[0].TryGetProperty("main_image", out _));
 
         var detail = await client.GetAsync("/api/products/excavadora-demo/");
