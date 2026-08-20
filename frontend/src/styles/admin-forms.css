@@ -1029,13 +1029,23 @@
 }
 
 .admin-product-type-tabs { min-width: 0; margin-bottom: 0; padding: .25rem; gap: .35rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-surface, #fff); }
-.admin-product-type-tabs .quote-view-tab { appearance: none; min-height: 42px; padding: .6rem 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-surface, #fff); color: var(--admin-primary); cursor: pointer; font: inherit; font-weight: 700; }
+.admin-product-type-tabs .quote-view-tab { appearance: none; min-height: 42px; padding: .6rem 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-surface, #fff); color: var(--admin-primary); cursor: pointer; font: inherit; font-weight: 400; }
 .admin-product-type-tabs .quote-view-tab:hover { border-color: var(--admin-primary); background: var(--color-accent-soft); }
 .admin-product-type-tabs .quote-view-tab:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
-.admin-product-type-tabs .quote-view-tab[aria-selected="true"] { border-color: var(--color-accent); background: var(--admin-primary); color: #fff; font-weight: 800; box-shadow: inset 0 -3px 0 var(--color-accent); }
+.admin-product-type-tabs .quote-view-tab[aria-selected="true"] { border-color: var(--color-accent); background: var(--admin-primary); color: #fff; font-weight: 400; box-shadow: inset 0 -3px 0 var(--color-accent); }
 .admin-product-type-tabs button:disabled { cursor: not-allowed; opacity: 0.5; }
 .admin-product-detailed-description { min-height: 12rem; resize: vertical; }
 .admin-product-short-description textarea { min-height: 5.5rem; resize: vertical; }
 .admin-product-character-count { justify-self: end; color: var(--admin-muted); font-size: .75rem; line-height: 1; }
 .admin-product-preview__summary { display: -webkit-box; min-height: 3.8em; overflow: hidden; color: #475569; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 @media (max-width: 720px) { .admin-product-type-tabs { overflow-x: auto; } .admin-product-type-tabs .quote-view-tab { flex: 0 0 auto; } }
+
+.admin-confirm-dialog { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 1rem; background: rgba(15, 23, 42, .65); }
+.admin-confirm-dialog__panel { box-sizing: border-box; width: min(100%, 540px); max-height: calc(100vh - 2rem); overflow-y: auto; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-surface, #fff); box-shadow: 0 20px 45px rgba(15, 23, 42, .28); }
+.admin-confirm-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; color: #fff; background: var(--admin-primary); }
+.admin-confirm-dialog__header h2 { margin: 0; font-size: 1.2rem; }
+.admin-confirm-dialog__content { padding: 1.25rem; }
+.admin-confirm-dialog__content p { margin: 0; }
+.admin-confirm-dialog__actions { display: flex; justify-content: flex-end; gap: .75rem; padding: 1rem 1.25rem; border-top: 1px solid var(--admin-border); background: var(--admin-surface-muted, #f8fafc); }
+.admin-confirm-dialog :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+@media (max-width: 480px) { .admin-confirm-dialog__actions { flex-direction: column-reverse; } .admin-confirm-dialog__actions .btn { width: 100%; } }

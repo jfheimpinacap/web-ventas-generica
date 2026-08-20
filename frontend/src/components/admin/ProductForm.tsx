@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import type { Brand, Category, ProductCondition, ProductFormValues, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, StockStatus, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 import { ProductEditorActions } from './ProductEditorActions'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface ProductFormProps {
   initialValues: ProductFormValues
@@ -125,6 +126,8 @@ export function ProductForm({
   const [categoryError, setCategoryError] = useState<string | null>(null)
   const [shortDescriptionError, setShortDescriptionError] = useState<string | null>(null)
   const shortDescriptionRef = useRef<HTMLTextAreaElement>(null)
+  const [pendingProductType, setPendingProductType] = useState<ProductType | null>(null)
+  const pendingTabRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     setValues(initialValues)
@@ -200,7 +203,18 @@ export function ProductForm({
       setCategoryError(roots.length === 0 ? 'No existe una categoría raíz activa para este tipo de producto.' : 'Existe más de una categoría raíz activa para este tipo de producto.')
       return
     }
-    if (!window.confirm('Al cambiar el tipo se limpiarán la subcategoría y los campos incompatibles. ¿Deseas continuar?')) return
+    setPendingProductType(productType)
+  }
+
+  const closeTypeDialog = () => {
+    setPendingProductType(null)
+    window.setTimeout(() => pendingTabRef.current?.focus(), 0)
+  }
+
+  const confirmTabChange = () => {
+    if (!pendingProductType) return
+    const productType = pendingProductType
+    const roots = rootsByType.get(productType) ?? []
     setCategoryError(null)
     setPrimaryCategoryId(roots[0].id)
     setWorkingHeightInput('')
@@ -208,6 +222,7 @@ export function ProductForm({
     setMachineWeightInput('')
     setMachineWeightError(null)
     setValues((current) => convertProductType(current, productType))
+    closeTypeDialog()
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -281,10 +296,11 @@ export function ProductForm({
       <div className="quote-view-tabs admin-product-type-tabs" role="tablist" aria-label="Tipo de producto">
         {supportedTypes.map(({ type, label }) => {
           const rootCount = (rootsByType.get(type) ?? []).length
-          return <button key={type} id={`product-tab-${type}`} type="button" role="tab" aria-selected={values.product_type === type} aria-disabled={rootCount !== 1} aria-controls="product-editor-panels" className={`quote-view-tab${values.product_type === type ? ' quote-view-tab--active' : ''}`} onClick={() => handleTabChange(type)}>{label}</button>
+          return <button key={type} id={`product-tab-${type}`} type="button" role="tab" aria-selected={values.product_type === type} aria-disabled={rootCount !== 1} aria-controls="product-editor-panels" className={`quote-view-tab${values.product_type === type ? ' quote-view-tab--active' : ''}`} onClick={(event) => { pendingTabRef.current = event.currentTarget; handleTabChange(type) }}>{label}</button>
         })}
       </div>
       {categoryError ? <p className="ui-note ui-note--error admin-product-form__notice">{categoryError}</p> : null}
+      {pendingProductType ? <ConfirmDialog title="Cambiar tipo de producto" onCancel={closeTypeDialog} onConfirm={confirmTabChange}><p>Al cambiar el tipo se limpiarán la subcategoría y los campos incompatibles. ¿Deseas continuar?</p></ConfirmDialog> : null}
 
       <div id="product-editor-panels" className="admin-product-information-grid" role="tabpanel" aria-labelledby={`product-tab-${values.product_type}`}>
         <section className="admin-form-panel admin-form-panel--product-grid">

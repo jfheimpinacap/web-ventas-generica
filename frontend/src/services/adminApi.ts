@@ -557,9 +557,11 @@ function dotnetUploadPending(): never {
 
 export async function getAdminProducts(
   params?: Record<string, string | number | boolean | undefined>,
+  signal?: AbortSignal,
 ) {
   const response = await authFetch<ApiListResponse<unknown>>('/products/', {
     params: { include_unpublished: true, ...(params ?? {}) },
+    signal,
   })
   return normalizeProductListResponse(response)
 }
