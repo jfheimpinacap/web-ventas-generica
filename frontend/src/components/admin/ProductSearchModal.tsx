@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getAdminProducts } from '../../services/adminApi'
 import type { ProductListItem } from '../../types/catalog'
+import { AdminIcon } from './AdminIcon'
 
 type SearchState = 'initial' | 'loading' | 'results' | 'empty' | 'error'
 
@@ -86,11 +87,11 @@ export function ProductSearchModal({ onSelect, onManual, onClose }: { onSelect: 
           : null
 
   return (
-    <div className="commercial-modal" role="presentation">
+    <div className="commercial-modal commercial-modal--product-search" role="presentation">
       <div ref={panelRef} className="commercial-modal__panel product-search-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
         <header className="product-search-modal__header">
           <h2 id="product-modal-title">Buscar producto</h2>
-          <button className="product-search-modal__close" type="button" onClick={close} aria-label="Cerrar búsqueda de producto">×</button>
+          <button className="product-search-modal__close" type="button" onClick={close} aria-label="Cerrar búsqueda de producto" title="Cerrar búsqueda de producto"><AdminIcon name="close" /></button>
         </header>
         <label className="product-search-modal__search" htmlFor="product-search">
           Buscar en el catálogo

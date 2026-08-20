@@ -584,6 +584,21 @@
   font-weight: 400;
 }
 
+.admin-content select {
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  padding-block: 0.3rem;
+  font: inherit;
+}
+
+@media (max-width: 680px) {
+  .admin-content select {
+    height: 40px;
+    min-height: 40px;
+  }
+}
+
 .admin-form-panel--columns-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

@@ -74,3 +74,29 @@
 .quote-items__head,.quote-item{min-width:950px;padding:.45rem .5rem}.quote-items__head{color:#fff;background:var(--admin-primary,#185f87);font:inherit;font-weight:700;border-bottom:0}.quote-items__head>span{text-align:center;white-space:nowrap}.quote-item{gap:var(--quote-gap);border-bottom:1px solid var(--admin-border,#c7cbd1)}.quote-item:last-child{border-bottom:0}.quote-item>span:first-child,.quote-item>span[data-label="Moneda"]{text-align:center}.quote-item output{font-weight:600;text-align:right;white-space:nowrap}.quote-item__quantity,.quote-item__net,.quote-item__discount{text-align:right}.quote-item__quantity{width:58px!important;justify-self:center}.quote-item__discount{width:82px!important;justify-self:center}.quote-item input{font:inherit}.quote-item__search{min-height:38px}
 @media(max-width:1180px) and (min-width:681px){.commercial-meta-grid{display:grid;grid-template-columns:210px 92px 190px}.commercial-meta-field{width:auto}}
 @media(max-width:680px){.commercial-meta-grid{display:grid;grid-template-columns:1fr}.commercial-meta-field{width:100%}.quote-items{border:0;border-radius:0}.quote-item{font-size:.9rem}.quote-item__quantity,.quote-item__discount{width:min(100%,7rem)!important;justify-self:start}.quote-item__net{width:100%}.quote-item output{text-align:left}}
+
+/* Compact product picker and quote line editor. */
+.commercial-modal--product-search{place-items:start center;padding:clamp(1.25rem,6vh,4rem) 1rem 1rem;overflow:hidden}
+.commercial-modal--product-search .product-search-modal{max-height:calc(100vh - clamp(2.25rem,8vh,5rem))}
+.product-search-modal__header{min-height:38px;box-sizing:border-box;padding:.3rem .75rem}
+.product-search-modal__header h2{font-size:1rem;line-height:1.2}
+.product-search-modal__close{display:grid;width:30px;min-width:30px;height:30px;min-height:30px;padding:0;place-items:center}
+.product-search-modal__close .admin-icon{width:16px;height:16px;flex-basis:16px}
+
+.commercial-meta-grid label{grid-template-rows:auto 34px}
+.commercial-meta-grid input,.commercial-meta-grid select{box-sizing:border-box;height:34px;min-height:34px;padding:.3rem .55rem;font:inherit}
+.commercial-meta-field--condition{width:200px}.commercial-meta-field--currency{width:88px}.commercial-meta-field--folio,.commercial-meta-field--seller{width:180px}.commercial-meta-field--date{width:130px}
+.commercial-meta-field--folio input,.commercial-meta-field--seller input,.commercial-meta-field--date input{text-align:center;padding-inline:.45rem}
+
+.quote-items{--quote-columns:42px minmax(175px,1.5fr) minmax(145px,1fr) 76px 62px 116px 104px 142px 44px}
+.quote-items__head,.quote-item{padding:.3rem .45rem}
+.quote-items__head{color:var(--admin-text,#25313b);background:#f2f6fa;border-bottom:1px solid var(--admin-border,#c7cbd1);font-size:.82rem;font-weight:600}
+.quote-item{font-size:.88rem;vertical-align:middle}
+.quote-item>div:nth-child(3),.quote-item>span[data-label="Moneda"]{text-align:center}
+.quote-item__quantity,.quote-item__net,.quote-item__discount{box-sizing:border-box;height:34px!important;min-height:34px!important;padding:.25rem .45rem!important;text-align:right}
+.quote-item__quantity{width:62px!important}.quote-item__net{width:108px!important;justify-self:end}.quote-item__discount{width:76px!important;justify-self:end}
+.quote-item__search{min-height:34px;padding-block:.25rem}
+.quote-item__remove{display:grid;width:32px;min-width:32px;height:32px;min-height:32px;padding:0;place-items:center}
+.quote-item__remove .admin-icon{width:16px;height:16px;flex-basis:16px}
+
+@media(max-width:680px){.commercial-modal--product-search{padding:.75rem .5rem .5rem}.commercial-modal--product-search .product-search-modal{max-height:calc(100vh - 1.25rem)}.commercial-meta-grid input,.commercial-meta-grid select{height:40px;min-height:40px}.quote-item input,.quote-item__search{min-height:40px!important}.quote-item__remove{width:40px;min-width:40px;height:40px;min-height:40px}.quote-item output{text-align:left}}
