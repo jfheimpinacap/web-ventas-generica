@@ -75,6 +75,16 @@ export function ProductSearchModal({ onSelect, onManual, onClose }: { onSelect: 
     onSelect(selected)
   }
 
+  const statusMessage = state === 'initial'
+    ? 'Escribe al menos 2 caracteres para buscar.'
+    : state === 'loading'
+      ? 'Buscando productos…'
+      : state === 'empty'
+        ? 'No se encontraron productos, repuestos o servicios.'
+        : state === 'error'
+          ? 'No fue posible realizar la búsqueda. Intenta nuevamente.'
+          : null
+
   return (
     <div className="commercial-modal" role="presentation">
       <div ref={panelRef} className="commercial-modal__panel product-search-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
@@ -86,12 +96,7 @@ export function ProductSearchModal({ onSelect, onManual, onClose }: { onSelect: 
           Buscar en el catálogo
           <input ref={inputRef} id="product-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre, marca o modelo" autoComplete="off" />
         </label>
-        <div className="product-search-modal__status" aria-live="polite">
-          {state === 'initial' ? 'Escribe al menos 2 caracteres para buscar.' : null}
-          {state === 'loading' ? 'Buscando productos…' : null}
-          {state === 'empty' ? 'No se encontraron productos, repuestos o servicios.' : null}
-          {state === 'error' ? 'No fue posible realizar la búsqueda. Intenta nuevamente.' : null}
-        </div>
+        {statusMessage ? <div className="product-search-modal__status" aria-live="polite">{statusMessage}</div> : null}
         {items.length > 0 && state !== 'error' ? (
           <div className="product-search-modal__table-wrap">
             <table className="product-search-modal__table">
