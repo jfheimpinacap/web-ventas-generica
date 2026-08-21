@@ -6,6 +6,10 @@ using JemNexus.Api.Services.TechnicalSheets;
 using JemNexus.Api.Validation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace JemNexus.Api.Endpoints;
 
@@ -40,6 +44,7 @@ public static class CommercialPublicReadEndpoints
             .WithTags("Commercial public read-only");
 
         group.MapGet("/products", GetProductsAsync).WithName("CommercialPublicProductsList").WithOpenApi();
+        group.MapGet("/sitemap-products.xml", GetProductSitemapAsync).WithName("CommercialPublicProductSitemap").WithOpenApi();
         group.MapGet("/products/{idOrSlug}", GetProductAsync).WithName("CommercialPublicProductsDetail").WithOpenApi();
         group.MapGet("/products/{idOrSlug}/technical-sheet/file", GetProductTechnicalSheetFileAsync)
             .WithName("CommercialPublicProductTechnicalSheetFile").WithOpenApi();
@@ -53,6 +58,62 @@ public static class CommercialPublicReadEndpoints
         group.MapGet("/product-specs", GetProductSpecsAsync).WithName("CommercialPublicProductSpecsList").WithOpenApi();
 
         return app;
+    }
+
+    private static async Task<IResult> GetProductSitemapAsync(
+        JemNexusDbContext dbContext,
+        IConfiguration configuration,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetPublicSiteUri(configuration["PublicSiteUrl"], out var publicSiteUri))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Unable to generate sitemap.");
+        }
+
+        var products = await ApplyPublicProductFilters(dbContext.Products.AsNoTracking())
+            .Where(product => product.Slug != null && product.Slug != "")
+            .OrderBy(product => product.Slug)
+            .ThenBy(product => product.Id)
+            .Select(product => new { product.Slug, product.UpdatedAt })
+            .ToListAsync(cancellationToken);
+
+        XNamespace sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var urlset = new XElement(sitemapNamespace + "urlset");
+        foreach (var product in products.Where(product => !string.IsNullOrWhiteSpace(product.Slug)))
+        {
+            var productUri = new Uri(publicSiteUri, $"producto/{Uri.EscapeDataString(product.Slug)}");
+            urlset.Add(new XElement(sitemapNamespace + "url",
+                new XElement(sitemapNamespace + "loc", productUri.AbsoluteUri),
+                new XElement(sitemapNamespace + "lastmod", product.UpdatedAt.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture))));
+        }
+
+        var document = new XDocument(new XDeclaration("1.0", "utf-8", null), urlset);
+        using var stream = new MemoryStream();
+        using (var writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true }))
+        {
+            document.Save(writer);
+        }
+
+        httpContext.Response.Headers.CacheControl = "public, max-age=3600";
+        return Results.Bytes(stream.ToArray(), "application/xml; charset=utf-8");
+    }
+
+    private static bool TryGetPublicSiteUri(string? configuredValue, out Uri publicSiteUri)
+    {
+        publicSiteUri = null!;
+        if (string.IsNullOrWhiteSpace(configuredValue)
+            || !Uri.TryCreate(configuredValue.TrimEnd('/') + "/", UriKind.Absolute, out var candidate)
+            || candidate.Scheme is not (Uri.UriSchemeHttp or Uri.UriSchemeHttps)
+            || !string.IsNullOrEmpty(candidate.UserInfo)
+            || !string.IsNullOrEmpty(candidate.Query)
+            || !string.IsNullOrEmpty(candidate.Fragment))
+        {
+            return false;
+        }
+
+        publicSiteUri = candidate;
+        return true;
     }
 
     private static async Task<IResult> CreateQuoteRequestAsync(
