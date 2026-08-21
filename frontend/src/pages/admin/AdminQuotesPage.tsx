@@ -10,6 +10,7 @@ import { getAdminQuotes, updateQuote } from '../../services/adminApi'
 import { getCommercialQuotes } from '../../services/commercialQuotesApi'
 import type { CommercialQuoteSummary } from '../../types/commercialQuote'
 import { money } from '../../utils/commercialQuote'
+import { formatChileanRutInput, normalizeChileanRut } from '../../utils/chileanRut'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
   QUOTE_STATUS_LABELS,
@@ -277,14 +278,14 @@ function GeneratedQuotesView() {
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize))
   return (
-    <>
+    <div className="generated-quotes-results">
       <div className="generated-quotes-toolbar">
         <label htmlFor="generated-quote-search">Búsqueda</label>
         <input id="generated-quote-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por razón social, RUT, folio o código de vendedor" />
       </div>
       {loading ? <p className="ui-note">Cargando cotizaciones generadas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-      {!loading && !error ? <div className="admin-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
+      {!loading && !error ? <div className="generated-quotes-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
         <table className="admin-table commercial-quotes-table">
           <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
           <tbody>
@@ -292,7 +293,7 @@ function GeneratedQuotesView() {
             {items.map((quote) => (
               <tr key={quote.id}>
                 <td><strong>{quote.folio ?? 'Pendiente'}</strong></td>
-                <td><strong>{quote.customer_business_name}</strong><span className="admin-table__muted">{quote.customer_rut}</span></td>
+                <td><strong>{quote.customer_business_name}</strong><span className="admin-table__muted">{normalizeChileanRut(quote.customer_rut) ? formatChileanRutInput(quote.customer_rut) : quote.customer_rut}</span></td>
                 <td><span className={`badge commercial-status commercial-status--${quote.status.toLowerCase()}`}>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</span></td>
                 <td><strong>{quote.seller_name || 'Sin nombre'}</strong><span className="admin-table__muted">{quote.seller_code}</span></td>
                 <td>{money(quote.total_amount, quote.currency)}</td>
@@ -307,7 +308,7 @@ function GeneratedQuotesView() {
         <span>Página {page} de {totalPages} · {count} resultados</span>
         <button className="btn btn--secondary" type="button" disabled={loading || page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Siguiente</button>
       </nav> : null}
-    </>
+    </div>
   )
 }
 
