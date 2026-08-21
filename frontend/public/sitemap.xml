@@ -1,9 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://web-ventas-ps62.onrender.com/</loc>
+    <loc>https://jem-nexus.cl/</loc>
   </url>
   <url>
-    <loc>https://web-ventas-ps62.onrender.com/catalogo</loc>
+    <loc>https://jem-nexus.cl/catalogo</loc>
+  </url>
+  <url>
+    <loc>https://jem-nexus.cl/maquinaria-nueva</loc>
+  </url>
+  <url>
+    <loc>https://jem-nexus.cl/maquinaria-usada</loc>
+  </url>
+  <url>
+    <loc>https://jem-nexus.cl/contacto</loc>
+  </url>
+  <url>
+    <loc>https://jem-nexus.cl/sobre-nosotros</loc>
+  </url>
+  <url>
+    <loc>https://jem-nexus.cl/preguntas-frecuentes</loc>
   </url>
 </urlset>

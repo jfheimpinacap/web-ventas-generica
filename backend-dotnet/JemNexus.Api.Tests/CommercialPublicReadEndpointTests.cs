@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Globalization;
 using System.Text.Json;
+using System.Xml.Linq;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services.TechnicalSheets;
@@ -27,6 +29,72 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
     }
 
     public void Dispose() => _factory.Dispose();
+
+    [Fact]
+    public async Task PublicProductSitemapIsAnonymousXmlAndUsesConfiguredCanonicalHost()
+    {
+        await SeedPublicCatalogDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            db.Products.Add(new Product { Id = 7, Name = "Sin Marca", Slug = "sin-marca", CategoryId = 1, Brand = null, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true });
+            await db.SaveChangesAsync();
+        }
+        using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Host = "attacker.example";
+
+        using var response = await client.GetAsync("/api/public/sitemap-products.xml");
+        var body = await response.Content.ReadAsStringAsync();
+        var document = XDocument.Parse(body);
+        XNamespace sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var locations = document.Root!.Elements(sitemapNamespace + "url")
+            .Select(element => element.Element(sitemapNamespace + "loc")!.Value)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/xml", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("utf-8", response.Content.Headers.ContentType?.CharSet);
+        Assert.Equal(sitemapNamespace, document.Root.Name.Namespace);
+        Assert.Contains("https://jem-nexus.cl/producto/excavadora", locations);
+        Assert.Contains("https://jem-nexus.cl/producto/sin-marca", locations);
+        Assert.DoesNotContain(locations, location => location.Contains("attacker.example", StringComparison.Ordinal));
+        Assert.Equal("public, max-age=3600", response.Headers.CacheControl?.ToString());
+        Assert.DoesNotContain("/admin", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("supplier", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("customer", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PublicProductSitemapAppliesPublicFiltersAndUsesProductUpdatedAt()
+    {
+        await SeedPublicCatalogDataAsync();
+        using var client = _factory.CreateClient();
+
+        var document = XDocument.Parse(await (await client.GetAsync("/api/public/sitemap-products.xml")).Content.ReadAsStringAsync());
+        var body = document.ToString();
+        XNamespace sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var excavator = document.Root!.Elements(sitemapNamespace + "url")
+            .Single(element => element.Element(sitemapNamespace + "loc")!.Value.EndsWith("/producto/excavadora", StringComparison.Ordinal));
+
+        Assert.Equal("2026-01-02T03:04:05Z", excavator.Element(sitemapNamespace + "lastmod")!.Value);
+        Assert.DoesNotContain("borrador", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("excavadora-vendida", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("producto-inactivo", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("marca-oculta", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PublicProductSitemapCanReturnAnEmptyUrlset()
+    {
+        using var client = _factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/public/sitemap-products.xml");
+        var document = XDocument.Parse(await response.Content.ReadAsStringAsync());
+        XNamespace sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(document.Root!.Elements(sitemapNamespace + "url"));
+    }
 
     [Theory]
     [InlineData("/api/public/products/")]
@@ -507,6 +575,8 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var inactiveCategoryProduct = new Product { Id = 4, Name = "Producto Inactivo", Slug = "producto-inactivo", Category = inactiveCategory, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
         var inactiveBrandProduct = new Product { Id = 5, Name = "Marca Oculta", Slug = "marca-oculta", CategoryId = 1, Brand = inactiveBrand, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
         var soldProduct = new Product { Id = 6, Name = "Excavadora Vendida", Slug = "excavadora-vendida", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Sold, IsPublished = true };
+        var publishedProduct = await dbContext.Products.SingleAsync(product => product.Slug == "excavadora");
+        publishedProduct.UpdatedAt = DateTimeOffset.Parse("2026-01-02T03:04:05+00:00", CultureInfo.InvariantCulture);
 
         dbContext.Categories.Add(inactiveCategory);
         dbContext.Brands.Add(inactiveBrand);

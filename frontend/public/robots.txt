@@ -1,7 +1,16 @@
 User-agent: *
 Allow: /
-
-Disallow: /login
 Disallow: /admin
+Disallow: /login
+Disallow: /diagnostico-api
+Disallow: /cotizar
 
-Sitemap: https://web-ventas-backend.onrender.com/sitemap.xml
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /diagnostico-api
+Disallow: /cotizar
+
+Sitemap: https://jem-nexus.cl/sitemap.xml
+Sitemap: https://api.jem-nexus.cl/api/public/sitemap-products.xml

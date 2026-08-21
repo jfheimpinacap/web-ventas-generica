@@ -205,12 +205,20 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     : effectiveRootCategory
       ? `Ver productos disponibles en ${effectiveRootCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
       : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
+  const parameterEntries = Array.from(searchParams.entries())
+  const categoryValues = searchParams.getAll('category')
+  const hasValidCategory = Boolean(explicitSelectedCategory && selectedRootCategory)
+  const isCleanCategoryView = !commercialConfig
+    && parameterEntries.length === 1
+    && categoryValues.length === 1
+    && hasValidCategory
+  const isCleanCatalogView = !commercialConfig && parameterEntries.length === 0
+  const isCleanCommercialView = Boolean(commercialConfig) && parameterEntries.length === 0
+  const isIndexableView = isCleanCatalogView || isCleanCategoryView || isCleanCommercialView
   const canonicalPath = commercialConfig?.canonicalPath ?? (explicitSelectedCategory && selectedRootCategory
     ? `/catalogo?category=${explicitSelectedCategory.id}`
-    : effectiveRootCategory
-      ? `/catalogo?category=${effectiveRootCategory.id}`
     : '/catalogo')
-  const seoRobots = hasSearch ? 'noindex,follow' : 'index,follow'
+  const seoRobots = isIndexableView ? 'index,follow' : 'noindex,follow'
   const canonicalUrl = buildPublicUrl(canonicalPath)
 
   const buildCatalogHref = (categoryId?: number) => {
@@ -294,7 +302,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const totalPages = Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage))
   const paginatedProducts = displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  const shouldRenderItemList = !hasSearch
+  const shouldRenderItemList = isIndexableView
   const visiblePublishedProducts = useMemo(
     () => paginatedProducts.filter((product) => product.is_published !== false),
     [paginatedProducts],
