@@ -36,13 +36,20 @@
 
 
 
+.admin-content {
+  --admin-compact-control-height: 34px;
+}
+
 .admin-search {
   width: min(440px, 100%);
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 0.45rem 0.65rem;
-  min-height: 38px;
+  box-sizing: border-box;
+  height: var(--admin-compact-control-height);
+  min-height: var(--admin-compact-control-height);
+  padding: 0.3rem 0.65rem;
   font: inherit;
+  line-height: 1.2;
 }
 
 
@@ -586,16 +593,20 @@
 
 .admin-content select {
   box-sizing: border-box;
-  height: 34px;
-  min-height: 34px;
+  height: var(--admin-compact-control-height);
+  min-height: var(--admin-compact-control-height);
   padding-block: 0.3rem;
   font: inherit;
 }
 
 @media (max-width: 680px) {
+  .admin-content {
+    --admin-compact-control-height: 40px;
+  }
+
   .admin-content select {
-    height: 40px;
-    min-height: 40px;
+    height: var(--admin-compact-control-height);
+    min-height: var(--admin-compact-control-height);
   }
 }
 
