@@ -23,7 +23,6 @@ import {
 } from "../../services/adminApi";
 import {
   getSafeApiErrorMessage,
-  resolveMediaUrl,
 } from "../../services/api";
 import {
   getAdminBrands,
@@ -425,7 +424,7 @@ export function AdminProductEditPage() {
             <div className="admin-product-editor-sidebar">
               <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
-                <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} imageUrl={selectedPending?.previewUrl || resolveMediaUrl(mainImage?.image) || PLACEHOLDER_IMAGE} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
+                <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} existingImageId={selectedPending ? null : mainImage?.id} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
               </section>
               <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
                 <h2>Eliminar producto</h2>

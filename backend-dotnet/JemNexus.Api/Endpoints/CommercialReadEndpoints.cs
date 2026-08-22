@@ -4,6 +4,7 @@ using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services.Notifications;
+using JemNexus.Api.Services.ProductImages;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -43,6 +44,7 @@ public static class CommercialReadEndpoints
 
         group.MapGet("/product-images", GetProductImagesAsync).WithName("CommercialProductImagesList").WithOpenApi();
         group.MapGet("/product-images/{id:int}", GetProductImageAsync).WithName("CommercialProductImagesDetail").WithOpenApi();
+        group.MapGet("/product-images/{id:int}/file", GetProductImageFileAsync).WithName("CommercialProductImagesFile").WithOpenApi();
 
         group.MapGet("/product-specs", GetProductSpecsAsync).WithName("CommercialProductSpecsList").WithOpenApi();
         group.MapGet("/product-specs/{id:int}", GetProductSpecAsync).WithName("CommercialProductSpecsDetail").WithOpenApi();
@@ -452,6 +454,36 @@ public static class CommercialReadEndpoints
     {
         var image = await dbContext.ProductImages.AsNoTracking().FirstOrDefaultAsync(image => image.Id == id, cancellationToken);
         return image is null ? Results.NotFound() : Results.Ok(ProductImageReadDto.FromImage(image));
+    }
+
+    private static async Task<IResult> GetProductImageFileAsync(
+        int id,
+        JemNexusDbContext dbContext,
+        IProductImageStorage storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var publicPath = await dbContext.ProductImages.AsNoTracking()
+            .Where(image => image.Id == id)
+            .Select(image => image.Image)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (publicPath is null) return Results.NotFound();
+
+        var contentType = Path.GetExtension(publicPath).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => null
+        };
+        if (contentType is null) return Results.NotFound();
+
+        var stream = await storage.OpenReadAsync(publicPath, cancellationToken);
+        if (stream is null) return Results.NotFound();
+
+        httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+        httpContext.Response.Headers.CacheControl = "private, no-store";
+        return Results.File(stream, contentType, enableRangeProcessing: true);
     }
 
     private static async Task<IResult> GetProductSpecsAsync(

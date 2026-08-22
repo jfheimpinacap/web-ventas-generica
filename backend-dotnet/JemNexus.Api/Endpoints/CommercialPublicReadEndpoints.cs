@@ -3,6 +3,7 @@ using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
+using JemNexus.Api.Services;
 using JemNexus.Api.Services.Notifications;
 using JemNexus.Api.Services.TechnicalSheets;
 using JemNexus.Api.Validation;
@@ -74,7 +75,7 @@ public static class CommercialPublicReadEndpoints
             return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Unable to generate sitemap.");
         }
 
-        var products = await ApplyPublicProductFilters(dbContext.Products.AsNoTracking())
+        var products = await PublicProductQuery.Apply(dbContext.Products.AsNoTracking())
             .Where(product => product.Slug != null && product.Slug != "")
             .OrderBy(product => product.Slug)
             .ThenBy(product => product.Id)
@@ -131,7 +132,7 @@ public static class CommercialPublicReadEndpoints
         Product? product = null;
         if (productId.HasValue)
         {
-            product = await ApplyPublicProductFilters(dbContext.Products)
+            product = await PublicProductQuery.Apply(dbContext.Products)
                 .FirstOrDefaultAsync(candidate => candidate.Id == productId.Value, cancellationToken);
             if (product is null) return Results.BadRequest(new { detail = "product does not exist." });
         }
@@ -193,7 +194,7 @@ public static class CommercialPublicReadEndpoints
         [FromQuery(Name = "ordering")] string? ordering,
         CancellationToken cancellationToken)
     {
-        var query = ApplyPublicProductFilters(PublicProductReadQuery(dbContext.Products));
+        var query = PublicProductQuery.Apply(PublicProductReadQuery(dbContext.Products));
 
         if (isFeatured.HasValue)
         {
@@ -209,7 +210,7 @@ public static class CommercialPublicReadEndpoints
 
     private static async Task<IResult> GetProductAsync(string idOrSlug, JemNexusDbContext dbContext, CancellationToken cancellationToken)
     {
-        var query = ApplyPublicProductFilters(PublicProductReadQuery(dbContext.Products)
+        var query = PublicProductQuery.Apply(PublicProductReadQuery(dbContext.Products)
             .Include(product => product.TechnicalSheet));
         var product = int.TryParse(idOrSlug, out var id)
             ? await query.FirstOrDefaultAsync(product => product.Id == id, cancellationToken)
@@ -226,7 +227,7 @@ public static class CommercialPublicReadEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var query = ApplyPublicProductFilters(dbContext.Products.AsNoTracking()
+        var query = PublicProductQuery.Apply(dbContext.Products.AsNoTracking()
             .Include(product => product.Category)
             .Include(product => product.Brand)
             .Include(product => product.TechnicalSheet));
@@ -510,12 +511,6 @@ public static class CommercialPublicReadEndpoints
         "-price" => query.OrderByDescending(product => product.Price),
         _ => query.OrderByDescending(product => product.IsFeatured).ThenBy(product => product.Name).ThenBy(product => product.Id)
     };
-
-    private static IQueryable<Product> ApplyPublicProductFilters(IQueryable<Product> query) => query
-        .Where(product => product.IsPublished)
-        .Where(product => product.Category.IsActive)
-        .Where(product => product.Brand == null || product.Brand.IsActive)
-        .Where(product => product.StockStatus != StockStatuses.Sold);
 
     private static IQueryable<Product> PublicProductReadQuery(IQueryable<Product> products) => products
         .AsNoTracking()

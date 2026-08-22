@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 
 import type { ProductImage } from '../../types/catalog'
 import type { PendingProductImage } from '../../hooks/usePendingProductImages'
-import { resolveMediaUrl } from '../../services/api'
+import { AdminProductImage } from './AdminProductImage'
 
 interface ProductImageManagerProps {
   existingImages?: ProductImage[]
@@ -93,7 +93,7 @@ export function ProductImageManager({
             {existingImages.map((image) => (
               <article key={image.id} className={`admin-image-card${image.is_main ? ' admin-image-card--main' : ''}`}>
                 <div className="admin-image-card__media">
-                  <img src={resolveMediaUrl(image.image)} alt={image.alt_text || 'Imagen de producto'} />
+                  <AdminProductImage imageId={image.id} alt={image.alt_text || 'Imagen de producto'} />
                   {image.is_main ? <span className="admin-image-main-badge">Principal actual</span> : null}
                 </div>
                 <div className="admin-image-card__actions">
