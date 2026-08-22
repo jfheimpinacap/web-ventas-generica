@@ -8,6 +8,7 @@ public sealed class AppRefreshToken
     public string TokenHash { get; set; } = string.Empty;
     public Guid FamilyId { get; set; }
     public string? ReplacedByTokenHash { get; set; }
+    public string? PasswordVersion { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

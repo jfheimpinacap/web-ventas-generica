@@ -178,6 +178,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         var tokens = await db.AppRefreshTokens.AsNoTracking().ToListAsync();
         var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        var user = await db.AppUsers.AsNoTracking().SingleAsync(candidate => candidate.Username == "demo");
         var originalHash = tokenService.HashRefreshToken(familyA.Refresh);
         var successorHash = tokenService.HashRefreshToken(successorA.Refresh);
         var familyBHash = tokenService.HashRefreshToken(familyB.Refresh);
@@ -191,6 +192,136 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.NotEqual(original.FamilyId, otherFamily.FamilyId);
         Assert.DoesNotContain(tokens, token => token.TokenHash == successorA.Refresh);
         Assert.Single(tokens.Where(token => token.FamilyId == original.FamilyId && token.RevokedAt == null));
+        Assert.False(string.IsNullOrWhiteSpace(original.PasswordVersion));
+        Assert.Equal(original.PasswordVersion, successor.PasswordVersion);
+        Assert.Equal(tokenService.GetPasswordVersion(user), original.PasswordVersion);
+    }
+
+    [Theory]
+    [InlineData("/api/auth/logout")]
+    [InlineData("/api/auth/logout/")]
+    public async Task LogoutRevokesCurrentFamily(string logoutPath)
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+
+        var logout = await client.PostAsJsonAsync(logoutPath, new { refresh = login.Refresh });
+
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        Assert.Empty(await logout.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, login.Refresh)).StatusCode);
+    }
+
+    [Fact]
+    public async Task LogoutIsIdempotentAndDoesNotEnumerateTokens()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = "unknown" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = login.Refresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = login.Refresh })).StatusCode);
+    }
+
+    [Fact]
+    public async Task LogoutOnlyRevokesSelectedLoginFamily()
+    {
+        using var client = _factory.CreateClient();
+        var familyA = await LoginAsync(client);
+        var familyB = await LoginAsync(client);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = familyA.Refresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, familyA.Refresh)).StatusCode);
+        Assert.True((await PostRefreshAsync(client, familyB.Refresh)).IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task LogoutWithRotatedTokenRevokesSuccessor()
+    {
+        using var client = _factory.CreateClient();
+        var original = await LoginAsync(client);
+        var successor = await RefreshAsync(client, original.Refresh);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { refresh = original.Refresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, successor.Refresh)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshAndLogoutLeaveFamilyWithoutUsableSuccessor()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+        using var scope = _factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        var familyId = (await db.AppRefreshTokens.AsNoTracking()
+            .SingleAsync(token => token.TokenHash == service.HashRefreshToken(login.Refresh))).FamilyId;
+
+        var refreshTask = PostRefreshAsync(client, login.Refresh);
+        var logoutTask = client.PostAsJsonAsync("/api/auth/logout", new { refresh = login.Refresh });
+        await Task.WhenAll(refreshTask, logoutTask);
+
+        Assert.Equal(HttpStatusCode.NoContent, logoutTask.Result.StatusCode);
+        Assert.Contains(refreshTask.Result.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Unauthorized });
+        if (refreshTask.Result.StatusCode == HttpStatusCode.OK)
+        {
+            var successor = await ReadSuccessfulJsonAsync<RefreshPayload>(refreshTask.Result);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, successor.Refresh)).StatusCode);
+        }
+
+        db.ChangeTracker.Clear();
+        Assert.False(await db.AppRefreshTokens.AnyAsync(token => token.FamilyId == familyId && token.RevokedAt == null));
+    }
+
+    [Fact]
+    public async Task HistoricalTokenWithoutPasswordVersionIsRejectedAndFamilyRevoked()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var service = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+            var token = await db.AppRefreshTokens.SingleAsync(candidate => candidate.TokenHash == service.HashRefreshToken(login.Refresh));
+            token.PasswordVersion = null;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, login.Refresh)).StatusCode);
+        using var verificationScope = _factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        var active = await verificationDb.AppRefreshTokens.CountAsync(token => token.PasswordVersion == null && token.RevokedAt == null);
+        Assert.Equal(0, active);
+    }
+
+    [Fact]
+    public async Task DirectPasswordHashChangeRejectsRefreshAndRevokesFamily()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+        string originalHash;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var user = await db.AppUsers.SingleAsync(candidate => candidate.Username == "demo");
+            originalHash = user.PasswordHash;
+            user.PasswordHash = $"externally-changed-{Guid.NewGuid():N}";
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, login.Refresh)).StatusCode);
+        }
+        finally
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var user = await db.AppUsers.SingleAsync(candidate => candidate.Username == "demo");
+            user.PasswordHash = originalHash;
+            await db.SaveChangesAsync();
+        }
     }
 
     [Fact]

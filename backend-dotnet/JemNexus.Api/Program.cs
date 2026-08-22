@@ -271,6 +271,7 @@ static void MapAuthEndpoints(WebApplication app)
 {
     app.MapPost("/api/auth/login", LoginAsync).AllowAnonymous().WithName("AuthLogin").WithOpenApi();
     app.MapPost("/api/auth/refresh", RefreshAsync).AllowAnonymous().WithName("AuthRefresh").WithOpenApi();
+    app.MapPost("/api/auth/logout", LogoutAsync).AllowAnonymous().WithName("AuthLogout").WithOpenApi();
     app.MapGet("/api/auth/me", MeAsync).RequireAuthorization().WithName("AuthMe").WithOpenApi();
 }
 
@@ -301,6 +302,7 @@ static async Task<IResult> LoginAsync(
         UserId = user.Id,
         FamilyId = Guid.NewGuid(),
         TokenHash = jwtTokenService.HashRefreshToken(tokenPair.Refresh),
+        PasswordVersion = jwtTokenService.GetPasswordVersion(user),
         ExpiresAt = tokenPair.RefreshExpiresAt
     };
 
@@ -347,6 +349,13 @@ static async Task<IResult> RefreshAsync(
         return Results.Unauthorized();
     }
 
+    var currentPasswordVersion = jwtTokenService.GetPasswordVersion(refreshToken.User);
+    if (!PasswordVersionsMatch(refreshToken.PasswordVersion, currentPasswordVersion))
+    {
+        await RevokeRefreshTokenFamilyAsync(dbContext, refreshToken.FamilyId, cancellationToken);
+        return Results.Unauthorized();
+    }
+
     var tokenPair = jwtTokenService.GenerateTokenPair(refreshToken.User);
     var successorHash = jwtTokenService.HashRefreshToken(tokenPair.Refresh);
     refreshToken.RevokedAt = DateTimeOffset.UtcNow;
@@ -356,6 +365,7 @@ static async Task<IResult> RefreshAsync(
         UserId = refreshToken.UserId,
         FamilyId = refreshToken.FamilyId,
         TokenHash = successorHash,
+        PasswordVersion = currentPasswordVersion,
         ExpiresAt = tokenPair.RefreshExpiresAt
     });
 
@@ -380,21 +390,85 @@ static async Task<IResult> RefreshAsync(
     return Results.Ok(new RefreshResponse(tokenPair.Access, tokenPair.Refresh));
 }
 
+static async Task<IResult> LogoutAsync(
+    LogoutRequest request,
+    JemNexusDbContext dbContext,
+    IJwtTokenService jwtTokenService,
+    CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(request.Refresh))
+    {
+        return Results.NoContent();
+    }
+
+    var tokenHash = jwtTokenService.HashRefreshToken(request.Refresh);
+    var familyId = await dbContext.AppRefreshTokens
+        .AsNoTracking()
+        .Where(token => token.TokenHash == tokenHash)
+        .Select(token => (Guid?)token.FamilyId)
+        .FirstOrDefaultAsync(cancellationToken);
+    if (familyId is not null)
+    {
+        await RevokeRefreshTokenFamilyAsync(dbContext, familyId.Value, cancellationToken);
+    }
+
+    return Results.NoContent();
+}
+
+static bool PasswordVersionsMatch(string? persistedVersion, string currentVersion)
+{
+    if (string.IsNullOrWhiteSpace(persistedVersion) || string.IsNullOrWhiteSpace(currentVersion))
+    {
+        return false;
+    }
+
+    var persistedBytes = Encoding.UTF8.GetBytes(persistedVersion);
+    var currentBytes = Encoding.UTF8.GetBytes(currentVersion);
+    return persistedBytes.Length == currentBytes.Length
+        && CryptographicOperations.FixedTimeEquals(persistedBytes, currentBytes);
+}
+
 static async Task RevokeRefreshTokenFamilyAsync(
     JemNexusDbContext dbContext,
     Guid familyId,
     CancellationToken cancellationToken)
 {
-    var activeTokens = await dbContext.AppRefreshTokens
-        .Where(token => token.FamilyId == familyId && token.RevokedAt == null)
-        .ToListAsync(cancellationToken);
-    var revokedAt = DateTimeOffset.UtcNow;
-    foreach (var token in activeTokens)
+    const int maximumAttempts = 3;
+    for (var attempt = 0; attempt < maximumAttempts; attempt++)
     {
-        token.RevokedAt = revokedAt;
-    }
+        var activeTokens = await dbContext.AppRefreshTokens
+            .Where(token => token.FamilyId == familyId && token.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+        if (activeTokens.Count == 0)
+        {
+            return;
+        }
 
-    await dbContext.SaveChangesAsync(cancellationToken);
+        var revokedAt = DateTimeOffset.UtcNow;
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAt = revokedAt;
+        }
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            dbContext.ChangeTracker.Clear();
+            if (attempt == maximumAttempts - 1)
+            {
+                var stillActive = await dbContext.AppRefreshTokens
+                    .AsNoTracking()
+                    .AnyAsync(token => token.FamilyId == familyId && token.RevokedAt == null, cancellationToken);
+                if (stillActive)
+                {
+                    throw;
+                }
+            }
+        }
+    }
 }
 
 static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext dbContext, CancellationToken cancellationToken)

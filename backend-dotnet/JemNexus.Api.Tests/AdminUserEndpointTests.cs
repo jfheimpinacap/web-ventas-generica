@@ -152,6 +152,7 @@ public sealed class AdminUserEndpointTests
     {
         await using var factory = new AdminApiFactory();
         var id = await AddSellerAsync(factory, "editable", "edit@example.test", "Editable", true);
+        var existingSession = await ReadLoginAsync(await LoginAsync(factory.CreateClient(), "editable", Password));
         using var client = factory.CreateClient();
         await AuthenticateAsync(client, "support", Password);
         var response = await client.PatchAsJsonAsync($"/api/admin/users/{id}", new { username = "edited", email = " ", full_name = "", is_active = true, password = "" });
@@ -159,6 +160,7 @@ public sealed class AdminUserEndpointTests
 
         using var loginClient = factory.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(loginClient, "edited", Password)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().PostAsJsonAsync("/api/auth/refresh", new { refresh = existingSession.Refresh })).StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"email\":null", body);
         Assert.Contains("\"full_name\":null", body);
@@ -171,6 +173,7 @@ public sealed class AdminUserEndpointTests
         var id = await AddSellerAsync(factory, "changing", null, null, true);
         using var sessionClient = factory.CreateClient();
         var oldLogin = await ReadLoginAsync(await LoginAsync(sessionClient, "changing", Password));
+        var secondOldLogin = await ReadLoginAsync(await LoginAsync(factory.CreateClient(), "changing", Password));
         using var admin = factory.CreateClient();
         await AuthenticateAsync(admin, "support", Password);
         var update = await admin.PutAsJsonAsync($"/api/admin/users/{id}", new { username = "changing", email = (string?)null, full_name = (string?)null, is_active = true, password = NewPassword });
@@ -179,9 +182,13 @@ public sealed class AdminUserEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(factory.CreateClient(), "changing", Password)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(factory.CreateClient(), "changing", NewPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().PostAsJsonAsync("/api/auth/refresh", new { refresh = oldLogin.Refresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().PostAsJsonAsync("/api/auth/refresh", new { refresh = secondOldLogin.Refresh })).StatusCode);
         using var oldAccess = factory.CreateClient();
         oldAccess.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", oldLogin.Access);
         Assert.Equal(HttpStatusCode.Unauthorized, (await oldAccess.GetAsync("/api/auth/me")).StatusCode);
+        using var secondOldAccess = factory.CreateClient();
+        secondOldAccess.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secondOldLogin.Access);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await secondOldAccess.GetAsync("/api/auth/me")).StatusCode);
     }
 
     [Fact]
