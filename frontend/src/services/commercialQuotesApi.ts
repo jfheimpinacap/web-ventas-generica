@@ -13,6 +13,6 @@ export function getCommercialQuotes({ search, page, pageSize = 20, signal }: { s
   return authFetch<CommercialQuotePage>('/api/admin/commercial-quotes', { params: { search, page, page_size: pageSize }, signal })
 }
 export function getCommercialQuote(id: number) { return authFetch<CommercialQuoteDetail>(`/api/admin/commercial-quotes/${id}`) }
-export function issueCommercialQuote(payload: CommercialQuoteIssueInput) {
-  return authFetch<CommercialQuoteDetail>('/api/admin/commercial-quotes/issue', { method: 'POST', ...json(payload) })
+export function issueCommercialQuote(payload: CommercialQuoteIssueInput, idempotencyKey: string) {
+  return authFetch<CommercialQuoteDetail>('/api/admin/commercial-quotes/issue', { method: 'POST', ...json(payload), headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey } })
 }

@@ -358,11 +358,31 @@ namespace JemNexus.Api.Data.Migrations
                     b.ToTable("CommercialQuoteFolioCounters");
                 });
 
+            modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteIssueIdempotencyRecord", b =>
+                {
+                    b.Property<int>("ResponsibleSellerId").HasColumnType("int");
+                    b.Property<Guid>("IdempotencyKey").HasColumnType("uniqueidentifier");
+                    b.Property<int>("CommercialQuoteId").HasColumnType("int");
+                    b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
+                    b.Property<string>("RequestFingerprint").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.HasKey("ResponsibleSellerId", "IdempotencyKey");
+                    b.HasIndex("CommercialQuoteId").IsUnique().HasDatabaseName("UX_CommercialQuoteIssueIdempotencyRecords_CommercialQuoteId");
+                    b.ToTable("CommercialQuoteIssueIdempotencyRecords");
+                });
+
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteItem", b =>
                 {
                     b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int"); SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                     b.Property<string>("BrandName").HasMaxLength(120).HasColumnType("nvarchar(120)"); b.Property<int>("CommercialQuoteId").HasColumnType("int"); b.Property<decimal>("DiscountPercent").HasPrecision(5, 2).HasColumnType("decimal(5,2)"); b.Property<decimal>("FinalUnitNetAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)"); b.Property<decimal>("LineNetAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)"); b.Property<string>("ModelName").HasMaxLength(120).HasColumnType("nvarchar(120)"); b.Property<string>("Origin").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)"); b.Property<int>("Position").HasColumnType("int"); b.Property<int?>("ProductId").HasColumnType("int"); b.Property<string>("ProductName").IsRequired().HasMaxLength(220).HasColumnType("nvarchar(220)"); b.Property<int>("Quantity").HasColumnType("int"); b.Property<decimal>("UnitNetAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.HasKey("Id"); b.HasIndex("ProductId"); b.HasIndex("CommercialQuoteId", "Position").IsUnique(); b.ToTable("CommercialQuoteItems");
+                });
+
+            modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteIssueIdempotencyRecord", b =>
+                {
+                    b.HasOne("JemNexus.Api.Models.CommercialQuote", "CommercialQuote").WithOne().HasForeignKey("JemNexus.Api.Models.CommercialQuoteIssueIdempotencyRecord", "CommercialQuoteId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("JemNexus.Api.Models.AppUser", "ResponsibleSeller").WithMany().HasForeignKey("ResponsibleSellerId").OnDelete(DeleteBehavior.NoAction).IsRequired();
+                    b.Navigation("CommercialQuote");
+                    b.Navigation("ResponsibleSeller");
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.CustomerProfile", b =>

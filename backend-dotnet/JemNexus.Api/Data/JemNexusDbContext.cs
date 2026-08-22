@@ -22,6 +22,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
     public DbSet<CommercialQuote> CommercialQuotes => Set<CommercialQuote>();
     public DbSet<CommercialQuoteItem> CommercialQuoteItems => Set<CommercialQuoteItem>();
     public DbSet<CommercialQuoteFolioCounter> CommercialQuoteFolioCounters => Set<CommercialQuoteFolioCounter>();
+    public DbSet<CommercialQuoteIssueIdempotencyRecord> CommercialQuoteIssueIdempotencyRecords => Set<CommercialQuoteIssueIdempotencyRecord>();
 
     public override int SaveChanges()
     {
@@ -99,6 +100,21 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
         ConfigureTechnicalSheet(modelBuilder);
         ConfigureCustomerProfile(modelBuilder);
         ConfigureCommercialQuote(modelBuilder);
+        ConfigureCommercialQuoteIssueIdempotency(modelBuilder);
+    }
+
+    private static void ConfigureCommercialQuoteIssueIdempotency(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CommercialQuoteIssueIdempotencyRecord>(entity =>
+        {
+            entity.ToTable("CommercialQuoteIssueIdempotencyRecords");
+            entity.HasKey(record => new { record.ResponsibleSellerId, record.IdempotencyKey });
+            entity.Property(record => record.RequestFingerprint).HasMaxLength(64).IsRequired();
+            entity.Property(record => record.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()").IsRequired();
+            entity.HasIndex(record => record.CommercialQuoteId).HasDatabaseName("UX_CommercialQuoteIssueIdempotencyRecords_CommercialQuoteId").IsUnique();
+            entity.HasOne(record => record.ResponsibleSeller).WithMany().HasForeignKey(record => record.ResponsibleSellerId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(record => record.CommercialQuote).WithOne().HasForeignKey<CommercialQuoteIssueIdempotencyRecord>(record => record.CommercialQuoteId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static void ConfigureCommercialQuote(ModelBuilder modelBuilder)

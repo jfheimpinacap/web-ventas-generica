@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using JemNexus.Api.Contracts.Admin;
@@ -66,10 +68,23 @@ public static class AdminCommercialQuoteEndpoints
         return quote is null ? Results.NotFound() : Results.Ok(ToDetail(quote));
     }
 
-    private static async Task<IResult> IssueAsync(CommercialQuoteIssueRequest request, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider, CancellationToken ct)
+    private static readonly JsonSerializerOptions FingerprintJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
+
+    private static async Task<IResult> IssueAsync(CommercialQuoteIssueRequest request, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider,
+        CommercialQuoteIssueCoordinator coordinator, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
     {
         var seller = await ActiveSellerAsync(principal, db, ct);
         if (seller is null) return Results.Forbid();
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia es obligatoria."] });
+        if (!Guid.TryParse(idempotencyKey, out var parsedKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia debe ser un UUID válido."] });
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, FingerprintJsonOptions)));
+        await using var keyLock = await coordinator.AcquireAsync(seller.Id, parsedKey, ct);
+        var existing = await FindIdempotencyRecordAsync(db, seller.Id, parsedKey, ct);
+        if (existing is not null) return ReplayOrConflict(existing, fingerprint);
         var prepared = await PrepareAsync(request, db, ct);
         if (prepared.Errors.Count > 0) return Results.ValidationProblem(prepared.Errors);
         var quote = prepared.Quote!;
@@ -85,10 +100,32 @@ public static class AdminCommercialQuoteEndpoints
         var sequence = await CommercialQuoteFolioAllocator.NextAsync(db, localDate.Year, ct);
         quote.Issue(localDate.Year, sequence, utc, localDate);
         db.CommercialQuotes.Add(quote);
-        await db.SaveChangesAsync(ct);
+        db.CommercialQuoteIssueIdempotencyRecords.Add(new CommercialQuoteIssueIdempotencyRecord
+        {
+            ResponsibleSellerId = seller.Id, IdempotencyKey = parsedKey, RequestFingerprint = fingerprint,
+            CommercialQuote = quote, CreatedAt = new DateTimeOffset(utc)
+        });
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException)
+        {
+            if (transaction is not null) { await transaction.RollbackAsync(ct); await transaction.DisposeAsync(); }
+            db.ChangeTracker.Clear();
+            var raced = await FindIdempotencyRecordAsync(db, seller.Id, parsedKey, ct);
+            if (raced is null) throw;
+            return ReplayOrConflict(raced, fingerprint);
+        }
         if (transaction is not null) await transaction.CommitAsync(ct);
         return Results.Created($"/api/admin/commercial-quotes/{quote.Id}", ToDetail(quote));
     }
+
+    private static Task<CommercialQuoteIssueIdempotencyRecord?> FindIdempotencyRecordAsync(JemNexusDbContext db, int sellerId, Guid key, CancellationToken ct) =>
+        db.CommercialQuoteIssueIdempotencyRecords.AsNoTracking().Include(record => record.CommercialQuote).ThenInclude(quote => quote.Items)
+            .SingleOrDefaultAsync(record => record.ResponsibleSellerId == sellerId && record.IdempotencyKey == key, ct);
+
+    private static IResult ReplayOrConflict(CommercialQuoteIssueIdempotencyRecord record, string fingerprint) =>
+        string.Equals(record.RequestFingerprint, fingerprint, StringComparison.Ordinal)
+            ? Results.Created($"/api/admin/commercial-quotes/{record.CommercialQuoteId}", ToDetail(record.CommercialQuote))
+            : Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflicto de idempotencia.", detail: "La clave de idempotencia ya fue utilizada con una solicitud diferente.");
 
     private static async Task<Dictionary<string, string[]>> ValidateForIssueAsync(CommercialQuote quote, JemNexusDbContext db, CancellationToken ct)
     {
