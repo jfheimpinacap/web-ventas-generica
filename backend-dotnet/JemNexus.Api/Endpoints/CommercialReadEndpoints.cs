@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.RateLimiting;
 using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
+using JemNexus.Api.Options;
 using JemNexus.Api.Services.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +36,7 @@ public static class CommercialReadEndpoints
 
         group.MapGet("/quote-requests", GetQuoteRequestsAsync).WithName("CommercialQuoteRequestsList").WithOpenApi();
         group.MapGet("/quote-requests/{id:int}", GetQuoteRequestAsync).WithName("CommercialQuoteRequestsDetail").WithOpenApi();
-        group.MapPost("/quote-notifications/test", TestQuoteNotificationAsync).WithName("CommercialQuoteNotificationsTest").WithOpenApi();
+        group.MapPost("/quote-notifications/test", TestQuoteNotificationAsync).RequireRateLimiting(RateLimitPolicies.NotificationTest).WithName("CommercialQuoteNotificationsTest").WithOpenApi();
 
         group.MapGet("/home-section-items", GetHomeSectionItemsAsync).WithName("CommercialHomeSectionItemsList").WithOpenApi();
         group.MapGet("/home-section-items/{id:int}", GetHomeSectionItemAsync).WithName("CommercialHomeSectionItemsDetail").WithOpenApi();

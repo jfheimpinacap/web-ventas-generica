@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
+using System.Threading.RateLimiting;
 using JemNexus.Api.Contracts.Auth;
 using JemNexus.Api.Data;
 using JemNexus.Api.Endpoints;
@@ -16,6 +18,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -33,6 +36,51 @@ builder.Services.Configure<SeedUserOptions>(builder.Configuration.GetSection(See
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.Configure<QuoteNotificationOptions>(builder.Configuration.GetSection(QuoteNotificationOptions.SectionName));
 builder.Services.Configure<FrontendOptions>(builder.Configuration.GetSection(FrontendOptions.SectionName));
+
+var rateLimitOptions = builder.Configuration.GetSection(JemNexusRateLimitOptions.SectionName).Get<JemNexusRateLimitOptions>()
+    ?? throw new InvalidOperationException("RateLimiting configuration is required.");
+foreach (var (name, rule) in rateLimitOptions.RequiredRules())
+{
+    if (rule is null || rule.PermitLimit <= 0 || rule.WindowSeconds <= 0)
+    {
+        throw new InvalidOperationException($"RateLimiting:{name} must define PermitLimit and WindowSeconds greater than zero.");
+    }
+}
+
+var rateLimitingEnabled = rateLimitOptions.Enabled
+    && (!builder.Environment.IsEnvironment("Test") || rateLimitOptions.EnableInTest);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        CreateRateLimitPartition(context, context.User.Identity?.IsAuthenticated == true
+            ? rateLimitOptions.GlobalAuthenticated!
+            : rateLimitOptions.GlobalAnonymous!, rateLimitingEnabled));
+
+    AddPolicy(options, RateLimitPolicies.AuthLogin, rateLimitOptions.AuthLogin!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.AuthSession, rateLimitOptions.AuthSession!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.PublicSubmission, rateLimitOptions.PublicSubmission!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.AuthenticatedWrite, rateLimitOptions.AuthenticatedWrite!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.Upload, rateLimitOptions.Upload!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.Download, rateLimitOptions.Download!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.NotificationTest, rateLimitOptions.NotificationTest!, rateLimitingEnabled);
+    AddPolicy(options, RateLimitPolicies.QuoteIssue, rateLimitOptions.QuoteIssue!, rateLimitingEnabled);
+
+    options.OnRejected = async (rejectedContext, cancellationToken) =>
+    {
+        if (rejectedContext.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            var seconds = Math.Max(1, (long)Math.Ceiling(retryAfter.TotalSeconds));
+            rejectedContext.HttpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+        }
+
+        await Results.Problem(
+            statusCode: StatusCodes.Status429TooManyRequests,
+            title: "Demasiadas solicitudes.",
+            detail: "Espera antes de intentarlo nuevamente.")
+            .ExecuteAsync(rejectedContext.HttpContext);
+    };
+});
 
 var jwtOptions = ResolveJwtOptions(builder.Configuration, builder.Environment);
 builder.Services.Configure<JwtOptions>(options =>
@@ -215,6 +263,7 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseCors(CorsPolicyName);
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 IResult HealthResponse(IHostEnvironment environment)
@@ -269,9 +318,9 @@ static Task NormalizeKnownTrailingSlashPaths(HttpContext context, Func<Task> nex
 
 static void MapAuthEndpoints(WebApplication app)
 {
-    app.MapPost("/api/auth/login", LoginAsync).AllowAnonymous().WithName("AuthLogin").WithOpenApi();
-    app.MapPost("/api/auth/refresh", RefreshAsync).AllowAnonymous().WithName("AuthRefresh").WithOpenApi();
-    app.MapPost("/api/auth/logout", LogoutAsync).AllowAnonymous().WithName("AuthLogout").WithOpenApi();
+    app.MapPost("/api/auth/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.AuthLogin).WithName("AuthLogin").WithOpenApi();
+    app.MapPost("/api/auth/refresh", RefreshAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.AuthSession).WithName("AuthRefresh").WithOpenApi();
+    app.MapPost("/api/auth/logout", LogoutAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.AuthSession).WithName("AuthLogout").WithOpenApi();
     app.MapGet("/api/auth/me", MeAsync).RequireAuthorization().WithName("AuthMe").WithOpenApi();
 }
 
@@ -514,6 +563,41 @@ static JwtOptions ResolveJwtOptions(IConfiguration configuration, IHostEnvironme
     }
 
     return options;
+}
+
+static void AddPolicy(RateLimiterOptions options, string name, FixedWindowRateLimitRule rule, bool enabled)
+{
+    options.AddPolicy(name, context => CreateRateLimitPartition(context, rule, enabled));
+}
+
+static RateLimitPartition<string> CreateRateLimitPartition(HttpContext context, FixedWindowRateLimitRule rule, bool enabled)
+{
+    var key = GetRateLimitPartitionKey(context);
+    return enabled
+        ? RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rule.PermitLimit,
+            Window = TimeSpan.FromSeconds(rule.WindowSeconds),
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            AutoReplenishment = true
+        })
+        : RateLimitPartition.GetNoLimiter(key);
+}
+
+static string GetRateLimitPartitionKey(HttpContext context)
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var id = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.User.FindFirstValue("sub")
+            ?? context.User.Identity.Name;
+        if (!string.IsNullOrWhiteSpace(id)) return $"user:{id}";
+    }
+
+    var address = context.Connection.RemoteIpAddress;
+    if (address?.IsIPv4MappedToIPv6 == true) address = address.MapToIPv4();
+    return $"ip:{address?.ToString() ?? "unknown"}";
 }
 
 static string FirstNonEmpty(params string?[] values)

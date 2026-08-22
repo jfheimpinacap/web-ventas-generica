@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using JemNexus.Api.Contracts.Admin;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
+using JemNexus.Api.Options;
 using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -21,8 +23,8 @@ public static partial class AdminCustomerEndpoints
         var group = endpoints.MapGroup("/api/admin/customers").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin customers");
         group.MapGet("", SearchAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("", CreateAsync);
-        group.MapPut("/{id:int}", UpdateAsync);
+        group.MapPost("", CreateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPut("/{id:int}", UpdateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
         return endpoints;
     }
 
