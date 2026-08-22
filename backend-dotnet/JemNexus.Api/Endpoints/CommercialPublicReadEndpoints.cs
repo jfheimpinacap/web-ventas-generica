@@ -104,7 +104,8 @@ public static class CommercialPublicReadEndpoints
         publicSiteUri = null!;
         if (string.IsNullOrWhiteSpace(configuredValue)
             || !Uri.TryCreate(configuredValue.TrimEnd('/') + "/", UriKind.Absolute, out var candidate)
-            || candidate.Scheme is not (Uri.UriSchemeHttp or Uri.UriSchemeHttps)
+            || (!string.Equals(candidate.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(candidate.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             || !string.IsNullOrEmpty(candidate.UserInfo)
             || !string.IsNullOrEmpty(candidate.Query)
             || !string.IsNullOrEmpty(candidate.Fragment))
