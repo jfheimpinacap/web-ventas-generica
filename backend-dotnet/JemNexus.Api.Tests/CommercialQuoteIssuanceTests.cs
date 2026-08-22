@@ -49,6 +49,12 @@ public sealed class CommercialQuoteIssuanceTests
         Assert.True(folio.IsUnique); Assert.Equal("[Folio] IS NOT NULL", folio.GetFilter());
         Assert.True(sequence.IsUnique); Assert.Equal("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL", sequence.GetFilter());
         Assert.Equal(nameof(CommercialQuoteFolioCounter.Year), db.Model.FindEntityType(typeof(CommercialQuoteFolioCounter))!.FindPrimaryKey()!.Properties.Single().Name);
+        var idempotency = db.Model.FindEntityType(typeof(CommercialQuoteIssueIdempotencyRecord))!;
+        Assert.Equal("CommercialQuoteIssueIdempotencyRecords", idempotency.GetTableName());
+        Assert.Equal(new[] { nameof(CommercialQuoteIssueIdempotencyRecord.ResponsibleSellerId), nameof(CommercialQuoteIssueIdempotencyRecord.IdempotencyKey) }, idempotency.FindPrimaryKey()!.Properties.Select(property => property.Name));
+        Assert.Equal(typeof(Guid), idempotency.FindProperty(nameof(CommercialQuoteIssueIdempotencyRecord.IdempotencyKey))!.ClrType);
+        Assert.Equal(64, idempotency.FindProperty(nameof(CommercialQuoteIssueIdempotencyRecord.RequestFingerprint))!.GetMaxLength());
+        Assert.True(idempotency.GetIndexes().Single(index => index.Properties.Single().Name == nameof(CommercialQuoteIssueIdempotencyRecord.CommercialQuoteId)).IsUnique);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider

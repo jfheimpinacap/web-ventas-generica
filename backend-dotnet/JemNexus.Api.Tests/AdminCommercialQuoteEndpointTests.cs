@@ -24,7 +24,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task SellerIssuesCompleteQuoteInOneRequestWithoutDraft()
     {
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
-        using var response = await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue());
+        using var response = await IssueAsync(seller, ValidIssue());
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var quote = await JsonAsync(response);
         Assert.Equal("Issued", quote.GetProperty("status").GetString());
@@ -41,7 +41,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task OnlySellerCanIssue(string username, HttpStatusCode expected)
     {
         await using var factory = new QuoteApiFactory(); using var client = await factory.AuthorizedClientAsync(username);
-        Assert.Equal(expected, (await client.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue())).StatusCode);
+        Assert.Equal(expected, (await IssueAsync(client, ValidIssue())).StatusCode);
         Assert.Equal(0, await factory.QuoteCountAsync());
     }
 
@@ -49,7 +49,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task AnonymousCannotIssue()
     {
         await using var factory = new QuoteApiFactory(); using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue())).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await IssueAsync(client, ValidIssue())).StatusCode);
     }
 
     [Theory]
@@ -58,7 +58,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task InvalidInputDoesNotPersist(string rut, string currency)
     {
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
-        Assert.Equal(HttpStatusCode.BadRequest, (await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue(rut, currency))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(seller, ValidIssue(rut, currency))).StatusCode);
         Assert.Equal(0, await factory.QuoteCountAsync());
     }
 
@@ -66,9 +66,9 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task EmptyItemsAndUnavailableCatalogProductDoNotPersist()
     {
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
-        Assert.Equal(HttpStatusCode.BadRequest, (await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue(items: []))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(seller, ValidIssue(items: []))).StatusCode);
         var productId = await factory.AddProductAsync(false, false);
-        Assert.Equal(HttpStatusCode.BadRequest, (await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue(items: [new { source = "Catalog", product_id = productId, quantity = 1, unit_net_amount = 100m }]))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(seller, ValidIssue(items: [new { source = "Catalog", product_id = productId, quantity = 1, unit_net_amount = 100m }]))).StatusCode);
         Assert.Equal(0, await factory.QuoteCountAsync());
     }
 
@@ -78,7 +78,7 @@ public sealed class AdminCommercialQuoteEndpointTests
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await seller.PostAsJsonAsync("/api/admin/commercial-quotes", ValidIssue())).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await seller.PutAsJsonAsync("/api/admin/commercial-quotes/1", ValidIssue())).StatusCode);
-        var issued = await JsonAsync(await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue()));
+        var issued = await JsonAsync(await IssueAsync(seller, ValidIssue()));
         var id = issued.GetProperty("id").GetInt32();
         await factory.AddUserAsync("other", AppRoles.Seller, "VEN-0002"); using var other = await factory.AuthorizedClientAsync("other");
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/admin/commercial-quotes/{id}")).StatusCode);
@@ -89,11 +89,95 @@ public sealed class AdminCommercialQuoteEndpointTests
     public async Task TwoIssuesUseDistinctFoliosAndPublicDtoOmitsInternalFields()
     {
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
-        var first = await JsonAsync(await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue()));
-        var secondResponse = await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue());
+        var first = await JsonAsync(await IssueAsync(seller, ValidIssue()));
+        var secondResponse = await IssueAsync(seller, ValidIssue());
         var raw = await secondResponse.Content.ReadAsStringAsync(); var second = JsonDocument.Parse(raw).RootElement;
         Assert.NotEqual(first.GetProperty("folio").GetString(), second.GetProperty("folio").GetString());
         foreach (var forbidden in new[] { "password", "hash", "token", "normalized_rut", "responsible_seller_id", "folio_sequence_number" }) Assert.DoesNotContain(forbidden, raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task IdempotencyHeaderIsRequiredAndMustBeAUuid()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
+        Assert.Equal(HttpStatusCode.BadRequest, (await seller.PostAsJsonAsync("/api/admin/commercial-quotes/issue", ValidIssue())).StatusCode);
+        using var malformed = new HttpRequestMessage(HttpMethod.Post, "/api/admin/commercial-quotes/issue") { Content = JsonContent.Create(ValidIssue()) };
+        malformed.Headers.Add("Idempotency-Key", "not-a-uuid");
+        Assert.Equal(HttpStatusCode.BadRequest, (await seller.SendAsync(malformed)).StatusCode);
+        Assert.Equal(0, await factory.QuoteCountAsync()); Assert.Equal(0, await factory.IdempotencyCountAsync());
+    }
+
+    [Fact]
+    public async Task SameKeyAndPayloadReplaysWhileDifferentPayloadConflicts()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        var first = await IssueAsync(seller, ValidIssue(), key); var replay = await IssueAsync(seller, ValidIssue(), key);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
+        Assert.Equal((await JsonAsync(first)).GetProperty("id").GetInt32(), (await JsonAsync(replay)).GetProperty("id").GetInt32());
+        var conflict = await IssueAsync(seller, ValidIssue(currency: "USD"), key);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal("application/problem+json", conflict.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(1, await factory.QuoteCountAsync()); Assert.Equal(1, await factory.IdempotencyCountAsync());
+    }
+
+    [Fact]
+    public async Task ConcurrentSameKeyRequestsCreateOneQuote()
+    {
+        await using var factory = new QuoteApiFactory(); using var firstClient = await factory.AuthorizedClientAsync("seller"); using var secondClient = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        var responses = await Task.WhenAll(IssueAsync(firstClient, ValidIssue(), key), IssueAsync(secondClient, ValidIssue(), key));
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.Created, response.StatusCode));
+        Assert.Equal((await JsonAsync(responses[0])).GetProperty("folio").GetString(), (await JsonAsync(responses[1])).GetProperty("folio").GetString());
+        Assert.Equal(1, await factory.QuoteCountAsync()); Assert.Equal(1, await factory.IdempotencyCountAsync());
+    }
+
+    [Fact]
+    public async Task SameIdempotencyKeyIsScopedPerSeller()
+    {
+        await using var factory = new QuoteApiFactory();
+        await factory.AddUserAsync("second-seller", AppRoles.Seller, "VEN-0002");
+        using var firstClient = await factory.AuthorizedClientAsync("seller"); using var secondClient = await factory.AuthorizedClientAsync("second-seller");
+        var key = Guid.NewGuid();
+        using var firstResponse = await IssueAsync(firstClient, ValidIssue(), key); using var secondResponse = await IssueAsync(secondClient, ValidIssue(), key);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode); Assert.Equal(HttpStatusCode.Created, secondResponse.StatusCode);
+        var first = await JsonAsync(firstResponse); var second = await JsonAsync(secondResponse);
+        var firstId = first.GetProperty("id").GetInt32(); var secondId = second.GetProperty("id").GetInt32();
+        Assert.NotEqual(firstId, secondId); Assert.NotEqual(first.GetProperty("folio").GetString(), second.GetProperty("folio").GetString());
+        var records = await factory.IdempotencyRecordsAsync();
+        Assert.Equal(2, await factory.QuoteCountAsync()); Assert.Equal(2, records.Count);
+        Assert.All(records, record => Assert.Equal(key, record.IdempotencyKey));
+        Assert.Equal(2, records.Select(record => record.ResponsibleSellerId).Distinct().Count());
+        Assert.Equal(new[] { firstId, secondId }.Order(), records.Select(record => record.CommercialQuoteId).Order());
+        Assert.All(records, record => Assert.Equal(record.ResponsibleSellerId, record.QuoteResponsibleSellerId));
+    }
+
+    [Fact]
+    public async Task ValidationFailureDoesNotConsumeIdempotencyKey()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        using var invalid = await IssueAsync(seller, ValidIssue(items: []), key);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Equal(0, await factory.QuoteCountAsync()); Assert.Equal(0, await factory.IdempotencyCountAsync()); Assert.Equal(0, await factory.FolioCounterCountAsync());
+        using var valid = await IssueAsync(seller, ValidIssue(), key);
+        Assert.Equal(HttpStatusCode.Created, valid.StatusCode); var quote = await JsonAsync(valid); var quoteId = quote.GetProperty("id").GetInt32();
+        Assert.NotNull(quote.GetProperty("folio").GetString()); Assert.Equal(1, quote.GetProperty("items").GetArrayLength());
+        Assert.Equal(1, await factory.QuoteCountAsync()); Assert.Equal(1, await factory.IdempotencyCountAsync()); Assert.Equal(1, await factory.FolioCounterCountAsync());
+        Assert.Equal(quoteId, Assert.Single(await factory.IdempotencyRecordsAsync()).CommercialQuoteId);
+    }
+
+    [Fact]
+    public async Task IdempotencyPersistenceStoresOnlyGuidAndFingerprintAndResponseOmitsInternalFields()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        using var response = await IssueAsync(seller, ValidIssue(), key); Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var raw = await response.Content.ReadAsStringAsync(); var quoteId = JsonDocument.Parse(raw).RootElement.GetProperty("id").GetInt32();
+        var record = Assert.Single(await factory.IdempotencyRecordsAsync()); var sellerId = await factory.UserIdAsync("seller");
+        Assert.Equal(key, record.IdempotencyKey); Assert.False(string.IsNullOrWhiteSpace(record.RequestFingerprint)); Assert.Equal(64, record.RequestFingerprint.Length);
+        Assert.All(record.RequestFingerprint, character => Assert.True(Uri.IsHexDigit(character)));
+        Assert.Equal(quoteId, record.CommercialQuoteId); Assert.Equal(sellerId, record.ResponsibleSellerId);
+        foreach (var forbidden in new[] { "ACME enviada", "12.345.678-5", "Servicios industriales", "Servicio", "Idempotency-Key", "access", "refresh", "Bearer", "customer_business_name" })
+            Assert.DoesNotContain(forbidden, record.RequestFingerprint, StringComparison.OrdinalIgnoreCase);
+        foreach (var forbidden in new[] { "idempotency_key", "idempotencyKey", "request_fingerprint", "requestFingerprint", "CommercialQuoteIssueIdempotencyRecords", "ResponsibleSellerId", "CommercialQuoteId" })
+            Assert.DoesNotContain(forbidden, raw, StringComparison.OrdinalIgnoreCase);
     }
 
     private static object ValidIssue(string rut = "12.345.678-5", string currency = "CLP", object[]? items = null) => new
@@ -103,6 +187,12 @@ public sealed class AdminCommercialQuoteEndpointTests
         customer_email = (string?)null, currency, sale_condition = "Cash", validity_days = 15, detailed_description = (string?)null,
         items = items ?? [new { source = "FreeText", product_name = "Servicio", quantity = 2, unit_net_amount = 100m, discount_percent = 0m }]
     };
+    private static async Task<HttpResponseMessage> IssueAsync(HttpClient client, object payload, Guid? key = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/admin/commercial-quotes/issue") { Content = JsonContent.Create(payload) };
+        request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString());
+        return await client.SendAsync(request);
+    }
     private static async Task<JsonElement> JsonAsync(HttpResponseMessage response) => JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
 
     public sealed class QuoteApiFactory : WebApplicationFactory<Program>
@@ -152,8 +242,19 @@ public sealed class AdminCommercialQuoteEndpointTests
             db.Add(product); await db.SaveChangesAsync(); return product.Id;
         }
         public async Task<int> QuoteCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuotes.CountAsync(); }
+        public async Task<int> IdempotencyCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteIssueIdempotencyRecords.CountAsync(); }
+        public async Task<int> FolioCounterCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteFolioCounters.AsNoTracking().CountAsync(); }
+        public async Task<int> UserIdAsync(string username) { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.AsNoTracking().Where(user => user.Username == username).Select(user => user.Id).SingleAsync(); }
+        public async Task<List<IdempotencyRecordSnapshot>> IdempotencyRecordsAsync()
+        {
+            using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            return await db.CommercialQuoteIssueIdempotencyRecords.AsNoTracking().OrderBy(record => record.ResponsibleSellerId)
+                .Select(record => new IdempotencyRecordSnapshot(record.ResponsibleSellerId, record.IdempotencyKey, record.RequestFingerprint, record.CommercialQuoteId, record.CommercialQuote.ResponsibleSellerId)).ToListAsync();
+        }
         public async Task SetStatusAsync(int id, string status) { using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); db.Entry((await db.CommercialQuotes.FindAsync(id))!).Property(nameof(CommercialQuote.Status)).CurrentValue = status; await db.SaveChangesAsync(); }
         public async Task<string> ProfileBusinessNameAsync(int id) { using var scope = Services.CreateScope(); return (await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CustomerProfiles.FindAsync(id))!.BusinessName; }
         public async Task<string> ProductNameAsync(int id) { using var scope = Services.CreateScope(); return (await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().Products.FindAsync(id))!.Name; }
     }
+
+    public sealed record IdempotencyRecordSnapshot(int ResponsibleSellerId, Guid IdempotencyKey, string RequestFingerprint, int CommercialQuoteId, int QuoteResponsibleSellerId);
 }

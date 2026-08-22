@@ -40,6 +40,7 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260816000000_AddSellerCodes", discoveredMigrationIds);
         Assert.Contains("20260822000000_AddRefreshTokenRotation", discoveredMigrationIds);
         Assert.Contains("20260822010000_AddRefreshTokenPasswordVersion", discoveredMigrationIds);
+        Assert.Contains("20260822020000_AddCommercialQuoteIssueIdempotency", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
     }
 
@@ -66,6 +67,29 @@ public sealed class MigrationMetadataTests
         Assert.True(token.FindProperty("RevokedAt")!.IsConcurrencyToken);
         Assert.Contains(token.GetIndexes(), index => !index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["FamilyId"]));
         Assert.Contains(token.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["TokenHash"]));
+    }
+
+    [Fact]
+    public void CommercialQuoteIssueIdempotencyMigrationCreatesAndDropsOnlyIdempotencyTable()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_QuoteIdempotencyScriptTests;Trusted_Connection=True;TrustServerCertificate=True")
+            .Options;
+        using var context = new JemNexusDbContext(options); var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260822010000_AddRefreshTokenPasswordVersion", "20260822020000_AddCommercialQuoteIssueIdempotency");
+        Assert.Contains("CREATE TABLE [CommercialQuoteIssueIdempotencyRecords]", up);
+        Assert.Contains("[ResponsibleSellerId] int NOT NULL", up); Assert.Contains("[IdempotencyKey] uniqueidentifier NOT NULL", up);
+        Assert.Contains("[RequestFingerprint] nvarchar(64) NOT NULL", up); Assert.Contains("[CommercialQuoteId] int NOT NULL", up); Assert.Contains("[CreatedAt] datetimeoffset NOT NULL", up);
+        Assert.Contains("PRIMARY KEY ([ResponsibleSellerId], [IdempotencyKey])", up);
+        Assert.Contains("REFERENCES [AppUsers] ([Id])", up); Assert.Contains("REFERENCES [CommercialQuotes] ([Id])", up);
+        Assert.Contains("CREATE UNIQUE INDEX [UX_CommercialQuoteIssueIdempotencyRecords_CommercialQuoteId]", up);
+        Assert.DoesNotContain("ALTER TABLE [CommercialQuotes]", up); Assert.DoesNotContain("ALTER TABLE [AppRefreshTokens]", up);
+        Assert.DoesNotContain("CommercialQuoteFolioCounters", up); Assert.DoesNotContain("CommercialQuoteItems", up);
+
+        var down = migrator.GenerateScript("20260822020000_AddCommercialQuoteIssueIdempotency", "20260822010000_AddRefreshTokenPasswordVersion");
+        Assert.Contains("DROP TABLE [CommercialQuoteIssueIdempotencyRecords]", down);
+        Assert.DoesNotContain("DROP COLUMN", down); Assert.DoesNotContain("ALTER TABLE [CommercialQuotes]", down);
+        Assert.DoesNotContain("ALTER TABLE [AppRefreshTokens]", down); Assert.DoesNotContain("CommercialQuoteFolioCounters", down);
     }
 
     [Fact]
