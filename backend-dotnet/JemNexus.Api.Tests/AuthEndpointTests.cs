@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
+using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -111,6 +112,85 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
 
         Assert.NotNull(payload);
         Assert.False(string.IsNullOrWhiteSpace(payload.Access));
+        Assert.False(string.IsNullOrWhiteSpace(payload.Refresh));
+        Assert.NotEqual(login.Refresh, payload.Refresh);
+    }
+
+    [Fact]
+    public async Task ReusingRotatedRefreshTokenRevokesItsSuccessor()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+        var rotated = await RefreshAsync(client, login.Refresh);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, login.Refresh)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, rotated.Refresh)).StatusCode);
+    }
+
+    [Fact]
+    public async Task SuccessiveRefreshesReturnDistinctTokens()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+        var first = await RefreshAsync(client, login.Refresh);
+        var second = await RefreshAsync(client, first.Refresh);
+
+        Assert.NotEqual(login.Refresh, first.Refresh);
+        Assert.NotEqual(first.Refresh, second.Refresh);
+    }
+
+    [Fact]
+    public async Task RefreshTokenReuseOnlyRevokesCompromisedFamily()
+    {
+        using var client = _factory.CreateClient();
+        var familyA = await LoginAsync(client);
+        var familyB = await LoginAsync(client);
+        var successorA = await RefreshAsync(client, familyA.Refresh);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, familyA.Refresh)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, successorA.Refresh)).StatusCode);
+        var successorB = await RefreshAsync(client, familyB.Refresh);
+        Assert.False(string.IsNullOrWhiteSpace(successorB.Refresh));
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshAllowsOneWinnerAndRevokesItsSuccessor()
+    {
+        using var client = _factory.CreateClient();
+        var login = await LoginAsync(client);
+
+        var responses = await Task.WhenAll(PostRefreshAsync(client, login.Refresh), PostRefreshAsync(client, login.Refresh));
+        Assert.Equal(1, responses.Count(response => response.IsSuccessStatusCode));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Unauthorized));
+        var winner = await ReadSuccessfulJsonAsync<RefreshPayload>(responses.Single(response => response.IsSuccessStatusCode));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostRefreshAsync(client, winner.Refresh)).StatusCode);
+    }
+
+    [Fact]
+    public async Task RotationPersistsHashesAndKeepsLoginFamiliesIndependent()
+    {
+        using var client = _factory.CreateClient();
+        var familyA = await LoginAsync(client);
+        var familyB = await LoginAsync(client);
+        var successorA = await RefreshAsync(client, familyA.Refresh);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        var tokens = await db.AppRefreshTokens.AsNoTracking().ToListAsync();
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        var originalHash = tokenService.HashRefreshToken(familyA.Refresh);
+        var successorHash = tokenService.HashRefreshToken(successorA.Refresh);
+        var familyBHash = tokenService.HashRefreshToken(familyB.Refresh);
+        var original = tokens.Single(token => token.TokenHash == originalHash);
+        var successor = tokens.Single(token => token.TokenHash == successorHash);
+        var otherFamily = tokens.Single(token => token.TokenHash == familyBHash);
+
+        Assert.NotNull(original.RevokedAt);
+        Assert.Equal(successorHash, original.ReplacedByTokenHash);
+        Assert.Equal(original.FamilyId, successor.FamilyId);
+        Assert.NotEqual(original.FamilyId, otherFamily.FamilyId);
+        Assert.DoesNotContain(tokens, token => token.TokenHash == successorA.Refresh);
+        Assert.Single(tokens.Where(token => token.FamilyId == original.FamilyId && token.RevokedAt == null));
     }
 
     [Fact]
@@ -166,6 +246,16 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         return payload!;
     }
 
+    private static async Task<LoginPayload> LoginAsync(HttpClient client) =>
+        await ReadSuccessfulJsonAsync<LoginPayload>(
+            await client.PostAsJsonAsync("/api/auth/login", new { username = "demo", password = TestPassword }));
+
+    private static Task<HttpResponseMessage> PostRefreshAsync(HttpClient client, string refresh) =>
+        client.PostAsJsonAsync("/api/auth/refresh", new { refresh });
+
+    private static async Task<RefreshPayload> RefreshAsync(HttpClient client, string refresh) =>
+        await ReadSuccessfulJsonAsync<RefreshPayload>(await PostRefreshAsync(client, refresh));
+
     public sealed class AuthApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("AuthEndpointTests");
@@ -190,6 +280,6 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
     }
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
-    private sealed record RefreshPayload(string Access);
+    private sealed record RefreshPayload(string Access, string Refresh);
     private sealed record UserPayload(int Id, string Username, [property: JsonPropertyName("seller_code")] string? SellerCode, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
 }
