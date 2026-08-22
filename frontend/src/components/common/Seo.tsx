@@ -44,6 +44,10 @@ function upsertLink(selector: string, rel: string, href: string) {
   link.setAttribute('href', href)
 }
 
+function removeHeadElement(selector: string) {
+  document.head.querySelector(selector)?.remove()
+}
+
 export function Seo({
   title,
   description = DEFAULT_DESCRIPTION,
@@ -73,16 +77,30 @@ export function Seo({
     upsertMeta('meta[property="og:title"]', { property: 'og:title', content: normalizedOgTitle })
     upsertMeta('meta[property="og:description"]', { property: 'og:description', content: normalizedOgDescription })
     upsertMeta('meta[property="og:type"]', { property: 'og:type', content: ogType })
-    if (ogUrl) upsertMeta('meta[property="og:url"]', { property: 'og:url', content: ogUrl })
-    if (ogImage) upsertMeta('meta[property="og:image"]', { property: 'og:image', content: ogImage })
+    if (ogUrl) {
+      upsertMeta('meta[property="og:url"]', { property: 'og:url', content: ogUrl })
+    } else {
+      removeHeadElement('meta[property="og:url"]')
+    }
+    if (ogImage) {
+      upsertMeta('meta[property="og:image"]', { property: 'og:image', content: ogImage })
+    } else {
+      removeHeadElement('meta[property="og:image"]')
+    }
 
     upsertMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: twitterCard })
     upsertMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: normalizedTwitterTitle })
     upsertMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: normalizedTwitterDescription })
-    if (twitterImage) upsertMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: twitterImage })
+    if (twitterImage) {
+      upsertMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: twitterImage })
+    } else {
+      removeHeadElement('meta[name="twitter:image"]')
+    }
 
     if (canonical) {
       upsertLink('link[rel="canonical"]', 'canonical', canonical)
+    } else {
+      removeHeadElement('link[rel="canonical"]')
     }
   }, [
     canonical,
