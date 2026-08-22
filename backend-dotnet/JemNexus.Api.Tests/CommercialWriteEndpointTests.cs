@@ -588,16 +588,19 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     {
         private readonly Action<IServiceCollection>? _configureTestServices;
         private readonly Action<DbContextOptionsBuilder>? _configureDbContext;
+        private readonly string _publicBasePath;
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("CommercialWriteEndpointTests");
         private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
         private readonly string _uploadRoot = Path.Combine(Path.GetTempPath(), "jemnexus-product-images-" + Guid.NewGuid().ToString("N"));
 
         public CommercialWriteApiFactory(
             Action<IServiceCollection>? configureTestServices = null,
-            Action<DbContextOptionsBuilder>? configureDbContext = null)
+            Action<DbContextOptionsBuilder>? configureDbContext = null,
+            string publicBasePath = "/media")
         {
             _configureTestServices = configureTestServices;
             _configureDbContext = configureDbContext;
+            _publicBasePath = publicBasePath;
         }
 
         public string UploadRoot => _uploadRoot;
@@ -623,7 +626,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
                 var configuration = new Dictionary<string, string?>(TestConfiguration)
                 {
                     ["Uploads:RootPath"] = _uploadRoot,
-                    ["Uploads:PublicBasePath"] = "/media",
+                    ["Uploads:PublicBasePath"] = _publicBasePath,
                     ["Uploads:MaxFileSizeMb"] = "1"
                 };
                 configurationBuilder.AddInMemoryCollection(configuration);
@@ -738,6 +741,8 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     {
         public Task<StoredProductImage> SaveAsync(int productId, IFormFile file, CancellationToken cancellationToken) =>
             Task.FromResult(new StoredProductImage($"/media/product-images/{productId}/fake.jpg", $"product-images/{productId}/fake.jpg"));
+
+        public Task<Stream?> OpenReadAsync(string publicPath, CancellationToken cancellationToken) => Task.FromResult<Stream?>(null);
 
         public Task DeleteIfManagedAsync(string publicPath, CancellationToken cancellationToken) =>
             throw new IOException("Simulated delete failure.");

@@ -1,16 +1,18 @@
 import { ProductTechnicalData } from '../catalog/ProductTechnicalData'
 import type { Category, ProductFormValues } from '../../types/catalog'
 import { formatCondition, formatPriceValue, formatStockStatus } from '../../utils/formatters'
+import { useAdminProductImageUrl } from '../../hooks/useAdminProductImageUrl'
 
-interface Props { values: ProductFormValues; categories: Category[]; imageUrl: string; imageAlt: string }
+interface Props { values: ProductFormValues; categories: Category[]; imageUrl: string; imageAlt: string; existingImageId?: number | null }
 
-export function ProductAdminPreview({ values, categories, imageUrl, imageAlt }: Props) {
+export function ProductAdminPreview({ values, categories, imageUrl, imageAlt, existingImageId = null }: Props) {
+  const { url: authenticatedImageUrl } = useAdminProductImageUrl(existingImageId)
   const isService = values.product_type === 'service'
   const selectedSubcategory = categories.find((category) => category.id === values.category && category.parent !== null)
   const usesShortSummary = values.product_type === 'service' || values.product_type === 'spare_part'
   const shortSummary = values.short_description.trim()
   return <article className="product-card admin-product-preview-card">
-    <div className="product-card__image-area"><img src={imageUrl} alt={imageAlt} /></div>
+    <div className="product-card__image-area"><img src={authenticatedImageUrl || imageUrl} alt={imageAlt} /></div>
     <div className="product-card__content">
       <div className="product-card__badges">
         {!isService ? <span className="badge badge--condition">{formatCondition(values.condition)}</span> : null}

@@ -28,7 +28,7 @@ import type {
 } from '../types/catalog'
 import { ApiError } from './api'
 import { normalizeChileanPriceInput } from '../utils/formatters'
-import { authFetch } from './authApi'
+import { authBlobFetch, authFetch } from './authApi'
 
 type ApiRecord = Record<string, unknown>
 type ApiListResponse<T> = T[] | { results?: T[]; items?: T[]; data?: T[] }
@@ -607,6 +607,10 @@ export async function getProductImages(productId: number) {
     response,
     (item) => normalizeProductImage(item) as ProductImage,
   )
+}
+
+export function getAdminProductImageFile(id: number) {
+  return authBlobFetch(`/product-images/${id}/file`)
 }
 
 export async function createProductImage(payload: ProductImageWritePayload) {

@@ -17,8 +17,12 @@ public sealed class LocalProductImageStorage(IHostEnvironment environment, IOpti
         var directory = Path.Combine(ProductImagesRoot, productId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Directory.CreateDirectory(directory);
 
-        var storageKey = $"product-images/{productId}/{Guid.NewGuid():N}{extension}";
-        var finalPath = GetSafeManagedPath(storageKey);
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var storageKey = $"product-images/{productId}/{fileName}";
+        var publicPath = ProductImagePath.BuildPublicPath(_options.PublicBasePath, productId, fileName)
+            ?? throw new InvalidOperationException("Invalid product image path.");
+        var finalPath = ProductImagePath.GetManagedPhysicalPath(Root, _options.PublicBasePath, publicPath)
+            ?? throw new InvalidOperationException("Invalid product image storage key.");
         var temporaryPath = Path.Combine(directory, $".{Guid.NewGuid():N}.tmp");
 
         try
@@ -29,7 +33,7 @@ public sealed class LocalProductImageStorage(IHostEnvironment environment, IOpti
             }
 
             File.Move(temporaryPath, finalPath, overwrite: false);
-            return new StoredProductImage(ToPublicPath(storageKey), storageKey);
+            return new StoredProductImage(publicPath, storageKey);
         }
         catch
         {
@@ -39,33 +43,19 @@ public sealed class LocalProductImageStorage(IHostEnvironment environment, IOpti
         }
     }
 
+    public Task<Stream?> OpenReadAsync(string publicPath, CancellationToken cancellationToken)
+    {
+        var path = ProductImagePath.GetManagedPhysicalPath(Root, _options.PublicBasePath, publicPath);
+        if (path is null || !File.Exists(path)) return Task.FromResult<Stream?>(null);
+        Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Task.FromResult<Stream?>(stream);
+    }
+
     public Task DeleteIfManagedAsync(string publicPath, CancellationToken cancellationToken)
     {
-        var basePath = NormalizeBasePath(_options.PublicBasePath);
-        if (!publicPath.StartsWith(basePath + "/product-images/", StringComparison.OrdinalIgnoreCase)) return Task.CompletedTask;
-        var relative = publicPath[basePath.Length..].TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var path = Path.GetFullPath(Path.Combine(Root, relative));
-        var root = Path.GetFullPath(Root);
-        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)) return Task.CompletedTask;
+        var path = ProductImagePath.GetManagedPhysicalPath(Root, _options.PublicBasePath, publicPath);
+        if (path is null) return Task.CompletedTask;
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
-    }
-
-    private string GetSafeManagedPath(string storageKey)
-    {
-        var normalized = storageKey.Replace('/', Path.DirectorySeparatorChar);
-        var path = Path.GetFullPath(Path.Combine(Root, normalized));
-        var root = Path.GetFullPath(Root);
-        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            throw new InvalidOperationException("Invalid product image storage key.");
-        return path;
-    }
-
-    private string ToPublicPath(string storageKey) => $"{NormalizeBasePath(_options.PublicBasePath)}/{storageKey.Replace('\\', '/')}";
-
-    private static string NormalizeBasePath(string value)
-    {
-        var path = string.IsNullOrWhiteSpace(value) ? "/media" : value.Trim();
-        return "/" + path.Trim('/');
     }
 }
