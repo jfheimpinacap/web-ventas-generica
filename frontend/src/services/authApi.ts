@@ -3,6 +3,7 @@ import { apiRequest, ApiError, buildApiUrl } from './api'
 
 export const ACCESS_TOKEN_KEY = 'ventas_access_token'
 const REFRESH_TOKEN_KEY = 'ventas_refresh_token'
+let refreshInFlight: Promise<string | null> | null = null
 
 export interface AuthTokens {
   accessToken: string
@@ -155,10 +156,9 @@ export async function login(username: string, password: string) {
   return tokens
 }
 
-export async function refreshToken() {
+async function performRefresh() {
   const refresh = getRefreshToken()
   if (!refresh) {
-    clearSession()
     return null
   }
 
@@ -167,12 +167,24 @@ export async function refreshToken() {
       method: 'POST',
       body: JSON.stringify({ refresh }),
     })
-    const tokens = normalizeAuthResponse({ ...response, refresh })
-    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken)
+    const tokens = normalizeAuthResponse(response)
+    if (getRefreshToken() !== refresh) return null
+    saveTokens(tokens)
     return tokens.accessToken
   } catch {
-    clearSession()
+    if (getRefreshToken() === refresh) clearSession()
     return null
+  }
+}
+
+export async function refreshToken() {
+  if (!refreshInFlight) refreshInFlight = performRefresh()
+  const currentRefresh = refreshInFlight
+
+  try {
+    return await currentRefresh
+  } finally {
+    if (refreshInFlight === currentRefresh) refreshInFlight = null
   }
 }
 
@@ -198,7 +210,6 @@ export async function authFetch<T>(
     if (error instanceof ApiError && error.status === 401) {
       const nextAccess = await refreshToken()
       if (!nextAccess) {
-        clearSession()
         throw error
       }
 
@@ -239,7 +250,6 @@ export async function authBlobFetch(
     if (error instanceof ApiError && error.status === 401) {
       const nextAccess = await refreshToken()
       if (!nextAccess) {
-        clearSession()
         throw error
       }
       return requestAuthenticatedBlob(path, nextAccess, params)

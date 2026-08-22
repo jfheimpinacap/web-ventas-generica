@@ -279,7 +279,6 @@ static async Task<IResult> LoginAsync(
     JemNexusDbContext dbContext,
     IPasswordHasherService passwordHasher,
     IJwtTokenService jwtTokenService,
-    Microsoft.Extensions.Options.IOptions<JwtOptions> jwtOptions,
     CancellationToken cancellationToken)
 {
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
@@ -300,8 +299,9 @@ static async Task<IResult> LoginAsync(
     var refreshToken = new AppRefreshToken
     {
         UserId = user.Id,
+        FamilyId = Guid.NewGuid(),
         TokenHash = jwtTokenService.HashRefreshToken(tokenPair.Refresh),
-        ExpiresAt = DateTimeOffset.UtcNow.AddDays(jwtOptions.Value.RefreshTokenDays)
+        ExpiresAt = tokenPair.RefreshExpiresAt
     };
 
     user.LastLoginAt = DateTimeOffset.UtcNow;
@@ -327,13 +327,74 @@ static async Task<IResult> RefreshAsync(
         .Include(token => token.User)
         .FirstOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
 
-    if (refreshToken is null || refreshToken.RevokedAt is not null || refreshToken.ExpiresAt <= DateTimeOffset.UtcNow || !refreshToken.User.IsActive)
+    if (refreshToken is null)
     {
         return Results.Unauthorized();
     }
 
-    var access = jwtTokenService.GenerateAccessToken(refreshToken.User);
-    return Results.Ok(new RefreshResponse(access));
+    if (refreshToken.RevokedAt is not null)
+    {
+        if (refreshToken.ReplacedByTokenHash is not null)
+        {
+            await RevokeRefreshTokenFamilyAsync(dbContext, refreshToken.FamilyId, cancellationToken);
+        }
+
+        return Results.Unauthorized();
+    }
+
+    if (refreshToken.ExpiresAt <= DateTimeOffset.UtcNow || !refreshToken.User.IsActive)
+    {
+        return Results.Unauthorized();
+    }
+
+    var tokenPair = jwtTokenService.GenerateTokenPair(refreshToken.User);
+    var successorHash = jwtTokenService.HashRefreshToken(tokenPair.Refresh);
+    refreshToken.RevokedAt = DateTimeOffset.UtcNow;
+    refreshToken.ReplacedByTokenHash = successorHash;
+    dbContext.AppRefreshTokens.Add(new AppRefreshToken
+    {
+        UserId = refreshToken.UserId,
+        FamilyId = refreshToken.FamilyId,
+        TokenHash = successorHash,
+        ExpiresAt = tokenPair.RefreshExpiresAt
+    });
+
+    try
+    {
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        dbContext.ChangeTracker.Clear();
+        var persistedToken = await dbContext.AppRefreshTokens
+            .AsNoTracking()
+            .FirstOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
+        if (persistedToken?.RevokedAt is not null && persistedToken.ReplacedByTokenHash is not null)
+        {
+            await RevokeRefreshTokenFamilyAsync(dbContext, persistedToken.FamilyId, cancellationToken);
+        }
+
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(new RefreshResponse(tokenPair.Access, tokenPair.Refresh));
+}
+
+static async Task RevokeRefreshTokenFamilyAsync(
+    JemNexusDbContext dbContext,
+    Guid familyId,
+    CancellationToken cancellationToken)
+{
+    var activeTokens = await dbContext.AppRefreshTokens
+        .Where(token => token.FamilyId == familyId && token.RevokedAt == null)
+        .ToListAsync(cancellationToken);
+    var revokedAt = DateTimeOffset.UtcNow;
+    foreach (var token in activeTokens)
+    {
+        token.RevokedAt = revokedAt;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
 }
 
 static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext dbContext, CancellationToken cancellationToken)

@@ -243,9 +243,13 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.ToTable("AppRefreshTokens");
             entity.HasKey(token => token.Id);
             entity.Property(token => token.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(token => token.FamilyId).HasDefaultValueSql("NEWID()").IsRequired();
+            entity.Property(token => token.ReplacedByTokenHash).HasMaxLength(128);
+            entity.Property(token => token.RevokedAt).IsConcurrencyToken();
             entity.Property(token => token.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(token => token.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasIndex(token => token.TokenHash).IsUnique();
+            entity.HasIndex(token => token.FamilyId);
             entity.HasIndex(token => new { token.UserId, token.ExpiresAt });
             entity.HasOne(token => token.User)
                 .WithMany(user => user.RefreshTokens)

@@ -38,7 +38,49 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260811000000_AddStructuredMachineryTechnicalData", discoveredMigrationIds);
         Assert.Contains("20260812000000_AddProductMachineWeight", discoveredMigrationIds);
         Assert.Contains("20260816000000_AddSellerCodes", discoveredMigrationIds);
+        Assert.Contains("20260822000000_AddRefreshTokenRotation", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
+    }
+
+    [Fact]
+    public void RefreshTokenModelHasRotationFamilyAndConcurrencyMetadata()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_RefreshTokenMetadataTests;Trusted_Connection=True;TrustServerCertificate=True")
+            .Options;
+        using var context = new JemNexusDbContext(options);
+        var model = context.GetService<IDesignTimeModel>().Model;
+        var token = model.FindEntityType(typeof(JemNexus.Api.Models.AppRefreshToken))!;
+        var family = token.FindProperty("FamilyId")!;
+        var replacement = token.FindProperty("ReplacedByTokenHash")!;
+
+        Assert.False(family.IsNullable);
+        Assert.Equal("NEWID()", family.GetDefaultValueSql());
+        Assert.True(replacement.IsNullable);
+        Assert.Equal(128, replacement.GetMaxLength());
+        Assert.True(token.FindProperty("RevokedAt")!.IsConcurrencyToken);
+        Assert.Contains(token.GetIndexes(), index => !index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["FamilyId"]));
+        Assert.Contains(token.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["TokenHash"]));
+    }
+
+    [Fact]
+    public void RefreshTokenRotationMigrationScriptAddsAndRemovesFamilyMetadata()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_RefreshTokenScriptTests;Trusted_Connection=True;TrustServerCertificate=True")
+            .Options;
+        using var context = new JemNexusDbContext(options);
+        var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260816000000_AddSellerCodes", "20260822000000_AddRefreshTokenRotation");
+        Assert.Contains("[FamilyId] uniqueidentifier NOT NULL DEFAULT (NEWID())", up);
+        Assert.Contains("[ReplacedByTokenHash] nvarchar(128) NULL", up);
+        Assert.Contains("IX_AppRefreshTokens_FamilyId", up);
+
+        var down = migrator.GenerateScript("20260822000000_AddRefreshTokenRotation", "20260816000000_AddSellerCodes");
+        Assert.True(down.IndexOf("DROP INDEX [IX_AppRefreshTokens_FamilyId]", StringComparison.Ordinal)
+            < down.IndexOf("DROP COLUMN [ReplacedByTokenHash]", StringComparison.Ordinal));
+        Assert.True(down.IndexOf("DROP COLUMN [ReplacedByTokenHash]", StringComparison.Ordinal)
+            < down.IndexOf("DROP COLUMN [FamilyId]", StringComparison.Ordinal));
     }
 
     [Fact]

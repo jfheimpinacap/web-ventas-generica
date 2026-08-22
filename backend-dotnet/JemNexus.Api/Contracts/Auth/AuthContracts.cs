@@ -24,4 +24,4 @@ public sealed record AuthUserResponse(
 
 public sealed record LoginResponse(string Access, string Refresh, AuthUserResponse User);
 
-public sealed record RefreshResponse(string Access);
+public sealed record RefreshResponse(string Access, string Refresh);
