@@ -68,6 +68,20 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
     public async Task PublicProductSitemapAppliesPublicFiltersAndUsesProductUpdatedAt()
     {
         await SeedPublicCatalogDataAsync();
+        DateTimeOffset persistedUpdatedAt;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            persistedUpdatedAt = await dbContext.Products
+                .AsNoTracking()
+                .Where(product => product.Slug == "excavadora")
+                .Select(product => product.UpdatedAt)
+                .SingleAsync();
+        }
+
+        var expectedLastModified = persistedUpdatedAt
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
         using var client = _factory.CreateClient();
 
         var document = XDocument.Parse(await (await client.GetAsync("/api/public/sitemap-products.xml")).Content.ReadAsStringAsync());
@@ -76,7 +90,7 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var excavator = document.Root!.Elements(sitemapNamespace + "url")
             .Single(element => element.Element(sitemapNamespace + "loc")!.Value.EndsWith("/producto/excavadora", StringComparison.Ordinal));
 
-        Assert.Equal("2026-01-02T03:04:05Z", excavator.Element(sitemapNamespace + "lastmod")!.Value);
+        Assert.Equal(expectedLastModified, excavator.Element(sitemapNamespace + "lastmod")!.Value);
         Assert.DoesNotContain("borrador", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("excavadora-vendida", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("producto-inactivo", body, StringComparison.OrdinalIgnoreCase);
@@ -575,9 +589,6 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var inactiveCategoryProduct = new Product { Id = 4, Name = "Producto Inactivo", Slug = "producto-inactivo", Category = inactiveCategory, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
         var inactiveBrandProduct = new Product { Id = 5, Name = "Marca Oculta", Slug = "marca-oculta", CategoryId = 1, Brand = inactiveBrand, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true };
         var soldProduct = new Product { Id = 6, Name = "Excavadora Vendida", Slug = "excavadora-vendida", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Sold, IsPublished = true };
-        var publishedProduct = await dbContext.Products.SingleAsync(product => product.Slug == "excavadora");
-        publishedProduct.UpdatedAt = DateTimeOffset.Parse("2026-01-02T03:04:05+00:00", CultureInfo.InvariantCulture);
-
         dbContext.Categories.Add(inactiveCategory);
         dbContext.Brands.Add(inactiveBrand);
         dbContext.Products.AddRange(draftProduct, inactiveCategoryProduct, inactiveBrandProduct, soldProduct);

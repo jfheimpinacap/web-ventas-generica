@@ -21,10 +21,10 @@ public sealed class CommercialQuoteCalculatorTests
     }
 
     [Theory]
-    [InlineData("CLP", 2857, 543, 3400)]
-    [InlineData("USD", 28.56, 5.43, 33.99)]
-    public void SumsMultipleItems(string currency, decimal net, decimal tax, decimal total)
-    { var q = ValidQuote(currency); q.Items.Add(Item(1, 2, 1000, 0)); q.Items.Add(Item(2, 1, 1000, 14.3m)); CommercialQuoteCalculator.Calculate(q); Assert.Equal(net, q.NetAmount); Assert.Equal(tax, q.TaxAmount); Assert.Equal(total, q.TotalAmount); }
+    [InlineData("CLP", 1000, 14.3, 2857, 543, 3400)]
+    [InlineData("USD", 10, 14.4, 28.56, 5.43, 33.99)]
+    public void SumsMultipleItems(string currency, decimal unitNetAmount, decimal secondItemDiscount, decimal net, decimal tax, decimal total)
+    { var q = ValidQuote(currency); q.Items.Add(Item(1, 2, unitNetAmount, 0)); q.Items.Add(Item(2, 1, unitNetAmount, secondItemDiscount)); CommercialQuoteCalculator.Calculate(q); Assert.Equal(net, q.NetAmount); Assert.Equal(tax, q.TaxAmount); Assert.Equal(total, q.TotalAmount); }
 
     [Fact] public void EmptyDraftHasZeroTotals() { var q = ValidQuote(); CommercialQuoteCalculator.Calculate(q); Assert.Equal(0m, q.TotalAmount); }
     [Fact] public void CalculationIsDeterministicAndDefaultDiscountIsZero() { var q = ValidQuote(); q.Items.Add(Item(1, 1, 10)); CommercialQuoteCalculator.Calculate(q); var first = q.TotalAmount; CommercialQuoteCalculator.Calculate(q); Assert.Equal(first, q.TotalAmount); }
