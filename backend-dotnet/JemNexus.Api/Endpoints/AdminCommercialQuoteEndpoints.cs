@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using JemNexus.Api.Contracts.Admin;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
+using JemNexus.Api.Options;
 using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +20,7 @@ public static class AdminCommercialQuoteEndpoints
         var group = endpoints.MapGroup("/api/admin/commercial-quotes").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin commercial quotes");
         group.MapGet("", ListAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("/issue", IssueAsync).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        group.MapPost("/issue", IssueAsync).RequireRateLimiting(RateLimitPolicies.QuoteIssue).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
         return endpoints;
     }
 

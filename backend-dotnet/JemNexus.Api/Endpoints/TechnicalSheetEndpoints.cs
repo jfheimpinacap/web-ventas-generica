@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.RateLimiting;
 using JemNexus.Api.Data;
+using JemNexus.Api.Options;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services.TechnicalSheets;
@@ -17,10 +19,10 @@ public static class TechnicalSheetEndpoints
         var group = endpoints.MapGroup("/api/technical-sheets").RequireAuthorization("RequireCommercialWrite");
         group.MapGet("/", ListAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("/", CreateAsync).DisableAntiforgery();
+        group.MapPost("/", CreateAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
         group.MapPatch("/{id:int}", RenameAsync);
-        group.MapPost("/{id:int}/file", ReplaceFileAsync).DisableAntiforgery();
-        group.MapGet("/{id:int}/file", DownloadAsync);
+        group.MapPost("/{id:int}/file", ReplaceFileAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
+        group.MapGet("/{id:int}/file", DownloadAsync).RequireRateLimiting(RateLimitPolicies.Download);
         group.MapDelete("/{id:int}", DeleteAsync);
         return endpoints;
     }

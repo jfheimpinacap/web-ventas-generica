@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
@@ -38,6 +39,7 @@ public static class CommercialWriteEndpoints
     {
         var group = app.MapGroup("/api")
             .RequireAuthorization(CommercialWritePolicy)
+            .RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite)
             .WithTags("Commercial write");
 
         group.MapPost("/categories", CreateCategoryAsync).WithName("CommercialCategoriesCreate").WithOpenApi();
@@ -60,7 +62,7 @@ public static class CommercialWriteEndpoints
         group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).WithName("CommercialProductsUpdate");
         group.MapDelete("/products/{idOrSlug}", DeleteProductAsync).WithName("CommercialProductsDelete").WithOpenApi();
 
-        group.MapPost("/product-images", CreateProductImageAsync).DisableAntiforgery().WithName("CommercialProductImagesCreate").WithOpenApi();
+        group.MapPost("/product-images", CreateProductImageAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload).WithName("CommercialProductImagesCreate").WithOpenApi();
         group.MapMethods("/product-images/{id:int}", ["PUT", "PATCH"], UpdateProductImageAsync).WithName("CommercialProductImagesUpdate");
         group.MapDelete("/product-images/{id:int}", DeleteProductImageAsync).WithName("CommercialProductImagesDelete").WithOpenApi();
 

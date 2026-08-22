@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.RateLimiting;
 using JemNexus.Api.Data;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
+using JemNexus.Api.Options;
 using JemNexus.Api.Services.Notifications;
 using JemNexus.Api.Services.TechnicalSheets;
 using JemNexus.Api.Validation;
@@ -47,12 +49,13 @@ public static class CommercialPublicReadEndpoints
         group.MapGet("/sitemap-products.xml", GetProductSitemapAsync).WithName("CommercialPublicProductSitemap").WithOpenApi();
         group.MapGet("/products/{idOrSlug}", GetProductAsync).WithName("CommercialPublicProductsDetail").WithOpenApi();
         group.MapGet("/products/{idOrSlug}/technical-sheet/file", GetProductTechnicalSheetFileAsync)
+            .RequireRateLimiting(RateLimitPolicies.Download)
             .WithName("CommercialPublicProductTechnicalSheetFile").WithOpenApi();
 
         group.MapGet("/categories", GetCategoriesAsync).WithName("CommercialPublicCategoriesList").WithOpenApi();
         group.MapGet("/brands", GetBrandsAsync).WithName("CommercialPublicBrandsList").WithOpenApi();
         group.MapGet("/promotions", GetPromotionsAsync).WithName("CommercialPublicPromotionsList").WithOpenApi();
-        group.MapPost("/quote-requests", CreateQuoteRequestAsync).WithName("CommercialPublicQuoteRequestsCreate").WithOpenApi();
+        group.MapPost("/quote-requests", CreateQuoteRequestAsync).RequireRateLimiting(RateLimitPolicies.PublicSubmission).WithName("CommercialPublicQuoteRequestsCreate").WithOpenApi();
         group.MapGet("/home-section-items", GetHomeSectionItemsAsync).WithName("CommercialPublicHomeSectionItemsList").WithOpenApi();
         group.MapGet("/product-images", GetProductImagesAsync).WithName("CommercialPublicProductImagesList").WithOpenApi();
         group.MapGet("/product-specs", GetProductSpecsAsync).WithName("CommercialPublicProductSpecsList").WithOpenApi();
