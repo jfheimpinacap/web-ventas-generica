@@ -8,6 +8,7 @@ import { ContactPage } from '../pages/ContactPage'
 import { FaqPage } from '../pages/FaqPage'
 import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
+import { NotFoundPage } from '../pages/NotFoundPage'
 import { ProductDetailPage } from '../pages/ProductDetailPage'
 import { QuotePage } from '../pages/QuotePage'
 import { AdminBrandFormPage } from '../pages/admin/AdminBrandFormPage'
@@ -55,7 +56,7 @@ export function AppRouter() {
       <Route path="/maquinaria-usada" element={<CatalogPage commercialConfig={usedMachineryConfig} />} />
       <Route path="/producto/:slug" element={<ProductDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/diagnostico-api" element={<ApiDiagnostics />} />
+      {import.meta.env.DEV ? <Route path="/diagnostico-api" element={<ApiDiagnostics />} /> : null}
       <Route path="/cotizar" element={<QuotePage />} />
       <Route path="/contacto" element={<ContactPage />} />
       <Route path="/sobre-nosotros" element={<AboutPage />} />
@@ -93,7 +94,7 @@ export function AppRouter() {
         <Route path="/admin/usuarios/:userId/editar" element={<AdminUserEditPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }
