@@ -51,6 +51,10 @@ namespace JemNexus.Api.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PasswordVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");

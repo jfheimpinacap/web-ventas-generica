@@ -245,6 +245,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(token => token.TokenHash).HasMaxLength(128).IsRequired();
             entity.Property(token => token.FamilyId).HasDefaultValueSql("NEWID()").IsRequired();
             entity.Property(token => token.ReplacedByTokenHash).HasMaxLength(128);
+            entity.Property(token => token.PasswordVersion).HasMaxLength(128);
             entity.Property(token => token.RevokedAt).IsConcurrencyToken();
             entity.Property(token => token.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(token => token.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");

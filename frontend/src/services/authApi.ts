@@ -278,5 +278,13 @@ export async function getMeWithAccessToken(accessToken: string) {
 }
 
 export function logout() {
+  const refresh = getRefreshToken()
   clearSession()
+  if (!refresh) return
+
+  void apiRequest<void>('/auth/logout/', {
+    method: 'POST',
+    body: JSON.stringify({ refresh }),
+    keepalive: true,
+  }).catch(() => undefined)
 }

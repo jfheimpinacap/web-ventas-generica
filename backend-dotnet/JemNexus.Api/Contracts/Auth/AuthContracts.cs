@@ -7,6 +7,8 @@ public sealed record LoginRequest(string Username, string Password);
 
 public sealed record RefreshRequest(string Refresh);
 
+public sealed record LogoutRequest(string? Refresh);
+
 public sealed record AuthUserResponse(
     int Id,
     string Username,

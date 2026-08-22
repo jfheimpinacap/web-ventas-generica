@@ -39,6 +39,7 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260812000000_AddProductMachineWeight", discoveredMigrationIds);
         Assert.Contains("20260816000000_AddSellerCodes", discoveredMigrationIds);
         Assert.Contains("20260822000000_AddRefreshTokenRotation", discoveredMigrationIds);
+        Assert.Contains("20260822010000_AddRefreshTokenPasswordVersion", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
     }
 
@@ -53,14 +54,35 @@ public sealed class MigrationMetadataTests
         var token = model.FindEntityType(typeof(JemNexus.Api.Models.AppRefreshToken))!;
         var family = token.FindProperty("FamilyId")!;
         var replacement = token.FindProperty("ReplacedByTokenHash")!;
+        var passwordVersion = token.FindProperty("PasswordVersion")!;
 
         Assert.False(family.IsNullable);
         Assert.Equal("NEWID()", family.GetDefaultValueSql());
         Assert.True(replacement.IsNullable);
         Assert.Equal(128, replacement.GetMaxLength());
+        Assert.True(passwordVersion.IsNullable);
+        Assert.Equal(128, passwordVersion.GetMaxLength());
+        Assert.DoesNotContain(token.GetIndexes(), index => index.Properties.Any(property => property.Name == "PasswordVersion"));
         Assert.True(token.FindProperty("RevokedAt")!.IsConcurrencyToken);
         Assert.Contains(token.GetIndexes(), index => !index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["FamilyId"]));
         Assert.Contains(token.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["TokenHash"]));
+    }
+
+    [Fact]
+    public void RefreshTokenPasswordVersionMigrationOnlyAddsAndRemovesNullableColumn()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_PasswordVersionScriptTests;Trusted_Connection=True;TrustServerCertificate=True")
+            .Options;
+        using var context = new JemNexusDbContext(options);
+        var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260822000000_AddRefreshTokenRotation", "20260822010000_AddRefreshTokenPasswordVersion");
+        Assert.Contains("ADD [PasswordVersion] nvarchar(128) NULL", up);
+        Assert.DoesNotContain("FamilyId", up);
+
+        var down = migrator.GenerateScript("20260822010000_AddRefreshTokenPasswordVersion", "20260822000000_AddRefreshTokenRotation");
+        Assert.Contains("DROP COLUMN [PasswordVersion]", down);
+        Assert.DoesNotContain("FamilyId", down);
     }
 
     [Fact]
