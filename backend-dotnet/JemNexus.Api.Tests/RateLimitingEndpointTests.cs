@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using JemNexus.Api.Data;
 using JemNexus.Api.Options;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
