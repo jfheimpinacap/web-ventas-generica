@@ -203,7 +203,10 @@ export function AdminProductEditPage() {
   };
 
   const handleSubmit = async (values: ProductFormValues) => {
-    if (!slug) return;
+    if (!slug || pending.isProcessing) {
+      if (pending.isProcessing) setError("Espera a que termine la optimización de imágenes antes de guardar el producto.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -217,7 +220,7 @@ export function AdminProductEditPage() {
   };
 
   const handleCreateImages = async () => {
-    if (!productId || imageSaving || pending.images.length === 0) return;
+    if (!productId || imageSaving || pending.isProcessing || pending.images.length === 0) return;
     const queue = pending.images.filter((image) => image.status === "pending" || image.status === "error");
     const successfulIds = new Set<string>();
     let uploaded = 0;
@@ -387,6 +390,7 @@ export function AdminProductEditPage() {
           onBack={() => navigate("/admin/productos")}
           formId={PRODUCT_EDIT_FORM_ID}
           isSubmitting={isSubmitting}
+          submitBlocked={pending.isProcessing}
           form={
             <ProductForm
               formId={PRODUCT_EDIT_FORM_ID}
@@ -398,6 +402,8 @@ export function AdminProductEditPage() {
               technicalSheets={technicalSheets}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
+              submitBlocked={pending.isProcessing}
+              submitBlockedMessage="Espera a que termine la optimización de imágenes antes de guardar el producto."
               error={error}
               onValuesChange={setFormValues}
               beforeActions={
@@ -406,6 +412,8 @@ export function AdminProductEditPage() {
                   pendingImages={pending.images}
                   selectedPendingId={selectedPendingId}
                   disabled={imageSaving}
+                  isProcessing={pending.isProcessing}
+                  processingMessage={pending.processingMessage}
                   status={imageStatus}
                   error={pending.selectionError || imageError}
                   uploadLabel={imageSaving ? "Subiendo imágenes…" : `Subir ${pending.images.length} ${pending.images.length === 1 ? "imagen" : "imágenes"}`}

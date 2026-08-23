@@ -93,6 +93,10 @@ export function AdminProductCreatePage() {
   }, [pending.images, selectedPendingId])
 
   const handleSubmit = async (values: ProductFormValues) => {
+    if (pending.isProcessing) {
+      setError('Espera a que termine la optimización de imágenes antes de guardar el producto.')
+      return
+    }
     try {
       setIsSubmitting(true)
       setError(null)
@@ -141,6 +145,7 @@ export function AdminProductCreatePage() {
           onBack={() => navigate('/admin/productos')}
           formId={PRODUCT_CREATE_FORM_ID}
           isSubmitting={isSubmitting}
+          submitBlocked={pending.isProcessing}
           showHeaderActions={false}
           form={
             <ProductForm
@@ -153,10 +158,12 @@ export function AdminProductCreatePage() {
               technicalSheets={technicalSheets}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
+              submitBlocked={pending.isProcessing}
+              submitBlockedMessage="Espera a que termine la optimización de imágenes antes de guardar el producto."
               error={error}
               onValuesChange={setFormValues}
               beforeActions={
-                <ProductImageManager pendingImages={pending.images} selectedPendingId={selectedPendingId} disabled={isSubmitting} status={imageStatus} error={pending.selectionError} onAddFiles={pending.addFiles} onAltTextChange={(id, altText) => pending.updateImage(id, { altText })} onSelectPending={setSelectedPendingId} onRemovePending={pending.removeImage} />
+                <ProductImageManager pendingImages={pending.images} selectedPendingId={selectedPendingId} disabled={isSubmitting} isProcessing={pending.isProcessing} processingMessage={pending.processingMessage} status={imageStatus} error={pending.selectionError} onAddFiles={pending.addFiles} onAltTextChange={(id, altText) => pending.updateImage(id, { altText })} onSelectPending={setSelectedPendingId} onRemovePending={pending.removeImage} />
               }
             />
           }

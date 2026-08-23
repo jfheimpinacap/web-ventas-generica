@@ -11,9 +11,10 @@ interface ProductEditorLayoutProps {
   formId: string
   isSubmitting: boolean
   showHeaderActions?: boolean
+  submitBlocked?: boolean
 }
 
-export function ProductEditorLayout({ title, onBack, form, sidebar, formId, isSubmitting, showHeaderActions = true }: ProductEditorLayoutProps) {
+export function ProductEditorLayout({ title, onBack, form, sidebar, formId, isSubmitting, showHeaderActions = true, submitBlocked = false }: ProductEditorLayoutProps) {
   return (
     <AdminEditorLayout
       title={title}
@@ -22,7 +23,7 @@ export function ProductEditorLayout({ title, onBack, form, sidebar, formId, isSu
       sidebar={sidebar}
       hideDefaultBackAction
       headerActions={showHeaderActions ? (
-        <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onBack} submitControl />
+        <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onBack} submitControl submitBlocked={submitBlocked} />
       ) : undefined}
     />
   )

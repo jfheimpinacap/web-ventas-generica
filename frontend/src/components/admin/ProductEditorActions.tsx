@@ -3,9 +3,11 @@ interface ProductEditorActionsProps {
   isSubmitting: boolean
   onCancel: () => void
   submitControl?: boolean
+  submitBlocked?: boolean
+  blockedLabel?: string
 }
 
-export function ProductEditorActions({ formId, isSubmitting, onCancel, submitControl = false }: ProductEditorActionsProps) {
+export function ProductEditorActions({ formId, isSubmitting, onCancel, submitControl = false, submitBlocked = false, blockedLabel }: ProductEditorActionsProps) {
   const requestSubmit = () => {
     const form = document.getElementById(formId)
     if (form instanceof HTMLFormElement) form.requestSubmit()
@@ -17,14 +19,14 @@ export function ProductEditorActions({ formId, isSubmitting, onCancel, submitCon
         type={submitControl ? 'submit' : 'button'}
         form={submitControl ? formId : undefined}
         className="btn btn--accent"
-        disabled={isSubmitting}
+        disabled={isSubmitting || submitBlocked}
         onClick={submitControl ? undefined : requestSubmit}
       >
         <svg className="admin-product-actions__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
           <path d="M17 21v-8H7v8M7 3v5h8" />
         </svg>
-        {isSubmitting ? 'Guardando…' : 'Guardar producto'}
+        {isSubmitting ? 'Guardando…' : submitBlocked ? (blockedLabel ?? 'Optimizando imágenes…') : 'Guardar producto'}
       </button>
       <button type="button" className="btn btn--ghost" onClick={onCancel} disabled={isSubmitting}>
         <svg className="admin-product-actions__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -12,7 +12,9 @@ interface ProductImageManagerProps {
   status: string | null
   error: string | null
   uploadLabel?: string
-  onAddFiles: (files: File[]) => void
+  isProcessing: boolean
+  processingMessage: string | null
+  onAddFiles: (files: File[]) => Promise<void>
   onAltTextChange: (id: string, value: string) => void
   onSelectPending: (id: string) => void
   onRemovePending: (id: string) => void
@@ -23,8 +25,14 @@ interface ProductImageManagerProps {
 
 const ACCEPTED_IMAGES = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 KB'
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toLocaleString('es-CL', { maximumFractionDigits: 1 })} MB`
+}
+
 export function ProductImageManager({
-  existingImages = [], pendingImages, selectedPendingId, disabled, status, error, uploadLabel,
+  existingImages = [], pendingImages, selectedPendingId, disabled, status, error, uploadLabel, isProcessing, processingMessage,
   onAddFiles, onAltTextChange, onSelectPending, onRemovePending, onSelectExisting, onDeleteExisting, onUpload,
 }: ProductImageManagerProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -33,11 +41,11 @@ export function ProductImageManager({
   const placeholderCount = Math.max(0, 10 - totalCards)
 
   const incorporate = (files: FileList | null) => {
-    if (!files || disabled) return
-    onAddFiles(Array.from(files))
+    if (!files || disabled || isProcessing) return
+    void onAddFiles(Array.from(files))
   }
   const openPicker = () => {
-    if (!disabled) inputRef.current?.click()
+    if (!disabled && !isProcessing) inputRef.current?.click()
   }
   const handleDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault()
@@ -52,7 +60,7 @@ export function ProductImageManager({
   }
 
   return (
-    <section className="admin-form-panel admin-form-panel--media admin-image-manager" aria-busy={disabled}>
+    <section className="admin-form-panel admin-form-panel--media admin-image-manager" aria-busy={isProcessing ? 'true' : undefined}>
       <h3>Imágenes</h3>
       <input
         ref={inputRef}
@@ -62,7 +70,7 @@ export function ProductImageManager({
         accept={ACCEPTED_IMAGES}
         aria-label="Seleccionar imágenes del producto"
         aria-describedby="product-images-help"
-        disabled={disabled}
+        disabled={disabled || isProcessing}
         onChange={(event) => {
           incorporate(event.currentTarget.files)
           event.currentTarget.value = ''
@@ -72,20 +80,20 @@ export function ProductImageManager({
         <div
           className={`admin-image-dropzone${dragActive ? ' is-drag-active' : ''}`}
           role="button"
-          tabIndex={disabled ? -1 : 0}
-          aria-disabled={disabled}
+          tabIndex={disabled || isProcessing ? -1 : 0}
+          aria-disabled={disabled || isProcessing}
           aria-describedby="product-images-help"
           onClick={openPicker}
           onKeyDown={handleKeyDown}
-          onDragEnter={(event) => { event.preventDefault(); if (!disabled) setDragActive(true) }}
-          onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = disabled ? 'none' : 'copy' }}
+          onDragEnter={(event) => { event.preventDefault(); if (!disabled && !isProcessing) setDragActive(true) }}
+          onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = disabled || isProcessing ? 'none' : 'copy' }}
           onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragActive(false) }}
           onDrop={handleDrop}
         >
           <strong>{dragActive ? 'Suelta las imágenes para agregarlas' : 'Arrastra imágenes aquí'}</strong>
           <span>o selecciónalas desde tu equipo</span>
           <span className="admin-image-dropzone__picker">Seleccionar archivo</span>
-          <span id="product-images-help" className="ui-note">Formatos permitidos: JPG, PNG y WebP.</span>
+          <span id="product-images-help" className="ui-note">JPG, PNG o WebP. Las imágenes se optimizan automáticamente a WebP, con un máximo de 1920 px. Archivo original máximo: 20 MB.</span>
         </div>
 
         <div className="admin-image-gallery">
@@ -112,7 +120,7 @@ export function ProductImageManager({
                     <img src={image.previewUrl} alt={image.altText.trim() || image.file.name} />
                     {selected ? <span className="admin-image-main-badge">Será principal</span> : null}
                   </div>
-                  <p className="admin-image-card__filename" title={image.file.name}>{image.file.name}</p>
+                  <p className="admin-image-card__filename" title={image.originalFileName}>{image.originalFileName} · {formatBytes(image.originalSize)} → WebP {image.width} × {image.height} · {formatBytes(image.file.size)}</p>
                   <p className="admin-image-card__state">{stateText}</p>
                   <label>
                     Texto alternativo (opcional)
@@ -127,16 +135,17 @@ export function ProductImageManager({
               )
             })}
 
-            <button type="button" className="admin-image-add-card" aria-label="Agregar más imágenes" disabled={disabled} onClick={openPicker} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+            <button type="button" className="admin-image-add-card" aria-label="Agregar más imágenes" disabled={disabled || isProcessing} onClick={openPicker} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
               <span aria-hidden="true">+</span>
               Agregar
             </button>
             {Array.from({ length: placeholderCount }, (_, index) => <div key={`placeholder-${index}`} className="admin-image-placeholder" aria-hidden="true" />)}
           </div>
           {onUpload ? (
-            <button type="button" className="btn btn--accent admin-image-gallery__upload" disabled={disabled || pendingImages.length === 0} onClick={onUpload}>{uploadLabel}</button>
+            <button type="button" className="btn btn--accent admin-image-gallery__upload" disabled={disabled || isProcessing || pendingImages.length === 0} onClick={onUpload}>{uploadLabel}</button>
           ) : <p className="ui-note">Las imágenes seleccionadas se cargarán después de crear el producto.</p>}
           <div className="admin-image-manager__status" role="status" aria-live="polite">
+            {processingMessage ? <p className="ui-note">{processingMessage}</p> : null}
             {status ? <p className="ui-note ui-note--success">{status}</p> : null}
             {error ? <p className="ui-note ui-note--error">{error}</p> : null}
           </div>
