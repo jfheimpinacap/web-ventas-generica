@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { optimizeProductImage } from '../utils/productImageOptimizer'
 
 export type PendingImageStatus = 'pending' | 'uploading' | 'error'
 
@@ -9,48 +10,67 @@ export interface PendingProductImage {
   altText: string
   status: PendingImageStatus
   error: string | null
+  originalFileName: string
+  originalSize: number
+  width: number
+  height: number
 }
-
-const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 let imageSequence = 0
 
 function revokeAfterRender(previewUrl: string) {
   window.setTimeout(() => URL.revokeObjectURL(previewUrl), 0)
 }
 
-function isAllowedImage(file: File) {
-  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
-  return ALLOWED_EXTENSIONS.includes(extension) && ALLOWED_TYPES.includes(file.type.toLowerCase())
-}
-
 export function usePendingProductImages() {
   const [images, setImages] = useState<PendingProductImage[]>([])
   const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processingMessage, setProcessingMessage] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const processingRef = useRef(false)
   const imagesRef = useRef(images)
   imagesRef.current = images
 
   useEffect(() => () => {
+    mountedRef.current = false
     imagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
   }, [])
 
-  const addFiles = useCallback((files: File[]) => {
-    const validFiles = files.filter(isAllowedImage)
-    const invalidCount = files.length - validFiles.length
-    setSelectionError(invalidCount > 0
-      ? `${invalidCount === 1 ? 'Un archivo no corresponde' : `${invalidCount} archivos no corresponden`} a los formatos JPG, PNG o WebP.`
-      : null)
-    if (validFiles.length === 0) return
-
-    const additions = validFiles.map((file) => ({
-      id: `pending-image-${Date.now()}-${imageSequence++}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-      altText: '',
-      status: 'pending' as const,
-      error: null,
-    }))
-    setImages((current) => [...current, ...additions])
+  const addFiles = useCallback(async (files: File[]): Promise<void> => {
+    if (processingRef.current || files.length === 0) return
+    processingRef.current = true
+    setIsProcessing(true)
+    setSelectionError(null)
+    const failures: string[] = []
+    for (let index = 0; index < files.length; index += 1) {
+      if (!mountedRef.current) break
+      setProcessingMessage(`Optimizando ${index + 1} de ${files.length} imágenes…`)
+      try {
+        const optimized = await optimizeProductImage(files[index])
+        const previewUrl = URL.createObjectURL(optimized.file)
+        if (!mountedRef.current) {
+          URL.revokeObjectURL(previewUrl)
+          break
+        }
+        setImages((current) => [...current, {
+          id: `pending-image-${Date.now()}-${imageSequence++}`,
+          ...optimized,
+          previewUrl,
+          altText: '',
+          status: 'pending',
+          error: null,
+        }])
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'No fue posible optimizar el archivo.'
+        failures.push(`${files[index].name}: ${reason}`)
+      }
+    }
+    processingRef.current = false
+    if (mountedRef.current) {
+      setSelectionError(failures.length ? `No se incorporaron ${failures.length === 1 ? '1 archivo' : `${failures.length} archivos`}: ${failures.join(' ')}` : null)
+      setProcessingMessage(null)
+      setIsProcessing(false)
+    }
   }, [])
 
   const removeImage = useCallback((id: string) => {
@@ -79,5 +99,5 @@ export function usePendingProductImages() {
     })
   }, [])
 
-  return { images, addFiles, removeImage, updateImage, removeSuccessfulImages, clearImages, selectionError }
+  return { images, addFiles, removeImage, updateImage, removeSuccessfulImages, clearImages, selectionError, isProcessing, processingMessage }
 }

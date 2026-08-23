@@ -18,6 +18,8 @@ interface ProductFormProps {
   beforeActions?: ReactNode
   formId: string
   onCancel: () => void
+  submitBlocked?: boolean
+  submitBlockedMessage?: string
 }
 
 const PRODUCT_CONDITIONS: Array<{ value: ProductCondition; label: string }> = [
@@ -115,6 +117,8 @@ export function ProductForm({
   beforeActions,
   formId,
   onCancel,
+  submitBlocked = false,
+  submitBlockedMessage,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -227,6 +231,7 @@ export function ProductForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (submitBlocked) return
 
     const matchingRoots = rootsByType.get(values.product_type) ?? []
     const matchingRoot = matchingRoots.length === 1 && selectedRoot?.id === matchingRoots[0].id
@@ -578,7 +583,8 @@ export function ProductForm({
 
       {beforeActions}
 
-      <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onCancel} />
+      {submitBlocked && submitBlockedMessage ? <p className="ui-note" role="status" aria-live="polite">{submitBlockedMessage}</p> : null}
+      <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onCancel} submitBlocked={submitBlocked} />
     </form>
   )
 }
