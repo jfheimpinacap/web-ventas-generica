@@ -7,6 +7,7 @@ using System.Threading.RateLimiting;
 using JemNexus.Api.Contracts.Auth;
 using JemNexus.Api.Data;
 using JemNexus.Api.Endpoints;
+using JemNexus.Api.Middleware;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
 using JemNexus.Api.Services;
@@ -27,6 +28,14 @@ const string AppName = "JEM Nexus API";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddEnvironmentVariables();
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = false;
+    options.Preload = false;
+});
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CommercialQuoteIssueCoordinator>();
@@ -226,6 +235,8 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<ApiSecurityHeadersMiddleware>();
+
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QA"))
 {
     app.UseSwagger();
@@ -242,6 +253,11 @@ if (!app.Environment.IsDevelopment())
             return Task.CompletedTask;
         });
     });
+}
+
+if (app.Environment.IsProduction())
+{
+    app.UseHsts();
 }
 
 if (!app.Environment.IsEnvironment("Test"))
