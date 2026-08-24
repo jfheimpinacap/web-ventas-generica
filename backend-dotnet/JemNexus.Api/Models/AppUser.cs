@@ -6,6 +6,7 @@ public sealed class AppUser
     public string Username { get; set; } = string.Empty;
     public string? SellerCode { get; set; }
     public string? Email { get; set; }
+    public string? Phone { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = AppRoles.Seller;
     public string? FullName { get; set; }

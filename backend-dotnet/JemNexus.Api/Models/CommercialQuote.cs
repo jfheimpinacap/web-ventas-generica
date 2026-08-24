@@ -28,6 +28,8 @@ public sealed class CommercialQuote
     public AppUser ResponsibleSeller { get; set; } = null!;
     public string ResponsibleSellerName { get; set; } = string.Empty;
     public string ResponsibleSellerCode { get; set; } = string.Empty;
+    public string? ResponsibleSellerEmail { get; set; }
+    public string? ResponsibleSellerPhone { get; set; }
     public decimal NetAmount { get; private set; }
     public decimal TaxAmount { get; private set; }
     public decimal TotalAmount { get; private set; }

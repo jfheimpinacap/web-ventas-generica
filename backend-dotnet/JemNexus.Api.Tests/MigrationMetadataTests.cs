@@ -41,7 +41,32 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260822000000_AddRefreshTokenRotation", discoveredMigrationIds);
         Assert.Contains("20260822010000_AddRefreshTokenPasswordVersion", discoveredMigrationIds);
         Assert.Contains("20260822020000_AddCommercialQuoteIssueIdempotency", discoveredMigrationIds);
+        Assert.Contains("20260824010000_AddSellerContactQuoteSnapshots", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
+    }
+
+
+    [Fact]
+    public void SellerContactSnapshotMigrationAddsBackfillsAndDropsOnlyExpectedColumns()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_SellerContactScriptTests;Trusted_Connection=True;TrustServerCertificate=True").Options;
+        using var context = new JemNexusDbContext(options);
+        var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260822020000_AddCommercialQuoteIssueIdempotency", "20260824010000_AddSellerContactQuoteSnapshots");
+        Assert.Contains("ADD [Phone] nvarchar(32) NULL", up);
+        Assert.Contains("ADD [ResponsibleSellerEmail] nvarchar(254) NULL", up);
+        Assert.Contains("ADD [ResponsibleSellerPhone] nvarchar(32) NULL", up);
+        Assert.Contains("jmateluna@jem-nexus.cl", up); Assert.Contains("+56 9 4611 5064", up);
+        Assert.Contains("[Phone] IS NULL OR LTRIM(RTRIM([Phone]))", up);
+        Assert.Contains("INNER JOIN [AppUsers]", up);
+        foreach (var forbidden in new[] { "Currency", "NetAmount", "TotalAmount", "Folio", "CommercialQuoteItems", "AppRefreshTokens", "IdempotencyKey" })
+            Assert.DoesNotContain(forbidden, up);
+
+        var down = migrator.GenerateScript("20260824010000_AddSellerContactQuoteSnapshots", "20260822020000_AddCommercialQuoteIssueIdempotency");
+        Assert.Contains("DROP COLUMN [ResponsibleSellerPhone]", down);
+        Assert.Contains("DROP COLUMN [ResponsibleSellerEmail]", down);
+        Assert.Contains("DROP COLUMN [Phone]", down);
     }
 
     [Fact]

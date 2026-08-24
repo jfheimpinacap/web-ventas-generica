@@ -65,7 +65,9 @@ public static partial class AdminUserEndpoints
         var username = request.Username?.Trim() ?? string.Empty;
         var email = NormalizeOptional(request.Email);
         var fullName = NormalizeOptional(request.FullName);
+        var phone = NormalizeOptional(request.Phone);
         var errors = Validate(username, email, fullName, request.Password, passwordRequired: true);
+        if (phone is { Length: > 32 }) errors["phone"] = ["El teléfono no puede superar los 32 caracteres."];
         await AddUniquenessErrorsAsync(errors, username, email, null, db, ct);
         if (errors.Count > 0)
         {
@@ -78,6 +80,7 @@ public static partial class AdminUserEndpoints
             SellerCode = await sellerCodeGenerator.GenerateAsync(ct),
             Email = email,
             FullName = fullName,
+            Phone = phone,
             IsActive = request.IsActive,
             Role = AppRoles.Seller,
             IsStaff = true,
@@ -106,9 +109,11 @@ public static partial class AdminUserEndpoints
         var username = request.Username?.Trim() ?? user.Username;
         var email = NormalizeOptional(request.Email);
         var fullName = NormalizeOptional(request.FullName);
+        var phone = NormalizeOptional(request.Phone);
         var password = string.IsNullOrWhiteSpace(request.Password) ? null : request.Password;
         var reactivating = !user.IsActive && request.IsActive == true;
         var errors = Validate(username, email, fullName, password, passwordRequired: reactivating);
+        if (phone is { Length: > 32 }) errors["phone"] = ["El teléfono no puede superar los 32 caracteres."];
         await AddUniquenessErrorsAsync(errors, username, email, id, db, ct);
         if (errors.Count > 0)
         {
@@ -118,6 +123,7 @@ public static partial class AdminUserEndpoints
         user.Username = username;
         user.Email = email;
         user.FullName = fullName;
+        user.Phone = phone;
         user.IsActive = request.IsActive ?? user.IsActive;
         user.Role = AppRoles.Seller;
         user.IsStaff = true;

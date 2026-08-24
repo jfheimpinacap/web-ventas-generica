@@ -140,6 +140,8 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(quote => quote.CustomerEmail).HasMaxLength(254);
             entity.Property(quote => quote.ResponsibleSellerName).HasMaxLength(180).IsRequired();
             entity.Property(quote => quote.ResponsibleSellerCode).HasMaxLength(24).IsRequired();
+            entity.Property(quote => quote.ResponsibleSellerEmail).HasMaxLength(254);
+            entity.Property(quote => quote.ResponsibleSellerPhone).HasMaxLength(32);
             entity.Property(quote => quote.NetAmount).HasPrecision(18, 2);
             entity.Property(quote => quote.TaxAmount).HasPrecision(18, 2);
             entity.Property(quote => quote.TotalAmount).HasPrecision(18, 2);
@@ -233,6 +235,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(user => user.Username).HasMaxLength(150).IsRequired();
             entity.Property(user => user.SellerCode).HasMaxLength(24);
             entity.Property(user => user.Email).HasMaxLength(254);
+            entity.Property(user => user.Phone).HasMaxLength(32);
             entity.Property(user => user.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(user => user.Role).HasMaxLength(40).IsRequired();
             entity.Property(user => user.FullName).HasMaxLength(180);

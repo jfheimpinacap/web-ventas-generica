@@ -14,13 +14,14 @@ public sealed record AuthUserResponse(
     string Username,
     string? SellerCode,
     string? Email,
+    string? Phone,
     string Role,
     [property: JsonPropertyName("is_staff")] bool IsStaff,
     [property: JsonPropertyName("is_superuser")] bool IsSuperuser)
 {
     public static AuthUserResponse FromUser(AppUser user)
     {
-        return new AuthUserResponse(user.Id, user.Username, user.SellerCode, user.Email, user.Role, user.IsStaff, user.IsSuperuser);
+        return new AuthUserResponse(user.Id, user.Username, user.SellerCode, user.Email, user.Phone, user.Role, user.IsStaff, user.IsSuperuser);
     }
 }
 
