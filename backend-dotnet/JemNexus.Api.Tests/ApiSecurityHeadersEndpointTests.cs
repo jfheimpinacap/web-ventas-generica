@@ -119,9 +119,12 @@ public sealed class ApiSecurityHeadersEndpointTests
     public async Task ProductionHttpsResponseContainsExactHstsAndSecurityBaseline()
     {
         await using var factory = new SecurityHeadersApiFactory("Production");
-        using var client = CreateHttpsClient(factory);
+        using var client = CreateHttpsClient(factory, new Uri("https://api.jem-nexus.test"));
         using var response = await client.GetAsync("/api/health");
 
+        var requestUri = Assert.IsType<Uri>(response.RequestMessage?.RequestUri);
+        Assert.Equal(Uri.UriSchemeHttps, requestUri.Scheme);
+        Assert.Equal("api.jem-nexus.test", requestUri.Host);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertBaseline(response);
         AssertSingleHeader(response, "Strict-Transport-Security", "max-age=31536000");
@@ -130,10 +133,10 @@ public sealed class ApiSecurityHeadersEndpointTests
         Assert.DoesNotContain("preload", hsts, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static HttpClient CreateHttpsClient(WebApplicationFactory<Program> factory) =>
+    private static HttpClient CreateHttpsClient(WebApplicationFactory<Program> factory, Uri? baseAddress = null) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
         {
-            BaseAddress = new Uri("https://localhost"),
+            BaseAddress = baseAddress ?? new Uri("https://localhost"),
             AllowAutoRedirect = false
         });
 
