@@ -191,7 +191,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.Equal(original.FamilyId, successor.FamilyId);
         Assert.NotEqual(original.FamilyId, otherFamily.FamilyId);
         Assert.DoesNotContain(tokens, token => token.TokenHash == successorA.Refresh);
-        Assert.Single(tokens.Where(token => token.FamilyId == original.FamilyId && token.RevokedAt == null));
+        Assert.Single(tokens, token => token.FamilyId == original.FamilyId && token.RevokedAt == null);
         Assert.False(string.IsNullOrWhiteSpace(original.PasswordVersion));
         Assert.Equal(original.PasswordVersion, successor.PasswordVersion);
         Assert.Equal(tokenService.GetPasswordVersion(user), original.PasswordVersion);

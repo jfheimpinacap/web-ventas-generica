@@ -27,7 +27,12 @@ public sealed class PublicMediaEndpointTests
         Assert.Equal(ImageBytes, await response.Content.ReadAsByteArrayAsync());
         Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
-        Assert.Equal("public, max-age=0, must-revalidate", response.Headers.CacheControl?.ToString());
+        Assert.NotNull(response.Headers.CacheControl);
+        Assert.True(response.Headers.CacheControl.Public);
+        Assert.Equal(TimeSpan.Zero, response.Headers.CacheControl.MaxAge);
+        Assert.True(response.Headers.CacheControl.MustRevalidate);
+        Assert.False(response.Headers.CacheControl.Private);
+        Assert.False(response.Headers.CacheControl.NoStore);
         Assert.Null(response.Content.Headers.ContentDisposition);
 
         using var head = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path));
@@ -151,7 +156,10 @@ public sealed class PublicMediaEndpointTests
         Assert.Equal(ImageBytes, await response.Content.ReadAsByteArrayAsync());
         Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
-        Assert.Equal("private, no-store", response.Headers.CacheControl?.ToString());
+        Assert.NotNull(response.Headers.CacheControl);
+        Assert.True(response.Headers.CacheControl.Private);
+        Assert.True(response.Headers.CacheControl.NoStore);
+        Assert.False(response.Headers.CacheControl.Public);
         Assert.Null(response.Content.Headers.ContentDisposition);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/product-images/{imageId}/file");
