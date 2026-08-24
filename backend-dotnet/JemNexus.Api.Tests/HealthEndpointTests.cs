@@ -1,20 +1,24 @@
 using System.Net;
 using System.Net.Http.Json;
+using JemNexus.Api.Data;
+using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace JemNexus.Api.Tests;
 
-public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests : IClassFixture<HealthEndpointTests.HealthApiFactory>
 {
     private readonly HttpClient _client;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory)
+    public HealthEndpointTests(HealthApiFactory factory)
     {
-        _client = factory
-            .WithWebHostBuilder(builder => builder.UseEnvironment("Test"))
-            .CreateClient();
+        _client = factory.CreateClient();
     }
 
     [Theory]
@@ -46,4 +50,23 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
         string App,
         string Environment,
         DateTimeOffset Timestamp);
+
+    public sealed class HealthApiFactory : WebApplicationFactory<Program>
+    {
+        private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("HealthEndpointTests");
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Test");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
+                services.RemoveAll<ISellerCodeGenerator>();
+                services.AddSingleton<ISellerCodeGenerator, TestSellerCodeGenerator>();
+                services.AddDbContext<JemNexusDbContext>(options =>
+                    InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
+            });
+        }
+    }
 }
