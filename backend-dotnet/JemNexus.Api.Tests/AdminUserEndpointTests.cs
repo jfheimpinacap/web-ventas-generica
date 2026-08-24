@@ -79,7 +79,7 @@ public sealed class AdminUserEndpointTests
         await AuthenticateAsync(client, "support", Password);
         var response = await client.PostAsJsonAsync("/api/admin/users", new
         {
-            username = " new.seller ", email = " new@example.test ", full_name = " New Seller ", password = NewPassword,
+            username = " new.seller ", email = " new@example.test ", full_name = " New Seller ", phone = " +56 9 1234 5678 ", password = NewPassword,
             role = AppRoles.SupportAdmin, is_staff = false, is_superuser = true, seller_code = "VEN-9999"
         });
         var body = await response.Content.ReadAsStringAsync();
@@ -96,6 +96,7 @@ public sealed class AdminUserEndpointTests
         Assert.NotEqual(NewPassword, stored.PasswordHash);
         Assert.StartsWith("AQAAAA", stored.PasswordHash);
         Assert.NotNull(stored.SellerCode);
+        Assert.Equal("+56 9 1234 5678", stored.Phone);
         Assert.Contains($"\"seller_code\":\"{stored.SellerCode}\"", body);
 
         using var loginClient = factory.CreateClient();
@@ -155,7 +156,7 @@ public sealed class AdminUserEndpointTests
         var existingSession = await ReadLoginAsync(await LoginAsync(factory.CreateClient(), "editable", Password));
         using var client = factory.CreateClient();
         await AuthenticateAsync(client, "support", Password);
-        var response = await client.PatchAsJsonAsync($"/api/admin/users/{id}", new { username = "edited", email = " ", full_name = "", is_active = true, password = "" });
+        var response = await client.PatchAsJsonAsync($"/api/admin/users/{id}", new { username = "edited", email = " ", full_name = "", phone = "   ", is_active = true, password = "" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var loginClient = factory.CreateClient();
@@ -164,6 +165,7 @@ public sealed class AdminUserEndpointTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"email\":null", body);
         Assert.Contains("\"full_name\":null", body);
+        Assert.Contains("\"phone\":null", body);
     }
 
     [Fact]

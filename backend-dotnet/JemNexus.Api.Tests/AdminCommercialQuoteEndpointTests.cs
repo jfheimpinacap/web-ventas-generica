@@ -33,6 +33,8 @@ public sealed class AdminCommercialQuoteEndpointTests
         Assert.Equal(38m, quote.GetProperty("tax_amount").GetDecimal());
         Assert.Equal(238m, quote.GetProperty("total_amount").GetDecimal());
         Assert.Equal(1, quote.GetProperty("items").GetArrayLength());
+        Assert.Equal("seller@example.test", quote.GetProperty("seller_email").GetString());
+        Assert.Equal("+56 9 1111 2222", quote.GetProperty("seller_phone").GetString());
         Assert.Equal(1, await factory.QuoteCountAsync());
     }
 
@@ -224,7 +226,7 @@ public sealed class AdminCommercialQuoteEndpointTests
         public async Task AddUserAsync(string username, string role, string? sellerCode)
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password); db.Add(user); await db.SaveChangesAsync();
+            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = "+56 9 1111 2222", IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password); db.Add(user); await db.SaveChangesAsync();
         }
         public async Task<(int ProfileId, int ProductId)> AddCatalogDataAsync()
         {

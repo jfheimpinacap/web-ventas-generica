@@ -105,6 +105,10 @@ namespace JemNexus.Api.Data.Migrations
                         .HasMaxLength(180)
                         .HasColumnType("nvarchar(180)");
 
+                    b.Property<string>("Phone")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -340,6 +344,8 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int>("ResponsibleSellerId").HasColumnType("int");
                     b.Property<string>("ResponsibleSellerCode").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
                     b.Property<string>("ResponsibleSellerName").IsRequired().HasMaxLength(180).HasColumnType("nvarchar(180)");
+                    b.Property<string>("ResponsibleSellerEmail").HasMaxLength(254).HasColumnType("nvarchar(254)");
+                    b.Property<string>("ResponsibleSellerPhone").HasMaxLength(32).HasColumnType("nvarchar(32)");
                     b.Property<string>("SaleCondition").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                     b.Property<string>("Status").IsRequired().ValueGeneratedOnAdd().HasMaxLength(20).HasColumnType("nvarchar(20)").HasDefaultValue("Draft");
                     b.Property<decimal>("TaxAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");

@@ -59,7 +59,7 @@ public static class AdminCommercialQuoteEndpoints
         var count = await query.CountAsync(ct);
         var results = await query.OrderByDescending(quote => quote.UpdatedAt).ThenByDescending(quote => quote.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
+            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
         return Results.Ok(new CommercialQuotePageResponse(results, page, pageSize, count));
     }
 
@@ -110,6 +110,8 @@ public static class AdminCommercialQuoteEndpoints
         quote.ResponsibleSellerId = seller.Id;
         quote.ResponsibleSellerName = string.IsNullOrWhiteSpace(seller.FullName) ? seller.Username : seller.FullName.Trim();
         quote.ResponsibleSellerCode = seller.SellerCode!;
+        quote.ResponsibleSellerEmail = seller.Email;
+        quote.ResponsibleSellerPhone = seller.Phone;
         var errors = await ValidateForIssueAsync(quote, db, ct);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
         CommercialQuoteCalculator.Calculate(quote);
@@ -175,7 +177,7 @@ public static class AdminCommercialQuoteEndpoints
             CustomerPhone = CustomerTextNormalizer.Visible(request.CustomerPhone), CustomerCityOrCommune = CustomerTextNormalizer.Visible(request.CustomerCityOrCommune),
             CustomerContactName = CustomerTextNormalizer.Visible(request.CustomerContactName), CustomerEmail = CustomerTextNormalizer.Optional(request.CustomerEmail),
             Currency = request.Currency ?? string.Empty, SaleCondition = request.SaleCondition ?? string.Empty,
-            ValidityDays = request.ValidityDays ?? CommercialQuoteRules.DefaultValidityDays, DetailedDescription = CustomerTextNormalizer.Optional(request.DetailedDescription)
+            ValidityDays = request.ValidityDays ?? CommercialQuoteRules.DefaultValidityDays, DetailedDescription = CustomerTextNormalizer.Multiline(request.DetailedDescription)
         };
         ValidateText(errors, "customer_business_name", quote.CustomerBusinessName, 2, 200);
         ValidateText(errors, "customer_business_activity", quote.CustomerBusinessActivity, 2, 200);
@@ -224,6 +226,6 @@ public static class AdminCommercialQuoteEndpoints
         await db.AppUsers.SingleOrDefaultAsync(user => user.Id == UserId(principal) && user.IsActive && user.Role == AppRoles.Seller && user.SellerCode != null, ct);
     private static int UserId(ClaimsPrincipal principal) => int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub"), out var id) ? id : 0;
     private static void ValidateText(Dictionary<string, string[]> errors, string key, string value, int min, int max) { if (value.Length < min || value.Length > max) errors[key] = [$"El campo debe tener entre {min} y {max} caracteres."]; }
-    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
+    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
     private sealed record PreparedQuote(CommercialQuote? Quote, Dictionary<string, string[]> Errors);
 }

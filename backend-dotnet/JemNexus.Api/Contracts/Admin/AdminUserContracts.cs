@@ -6,6 +6,7 @@ public sealed record AdminUserCreateRequest(
     string? Username,
     string? Email,
     string? FullName,
+    string? Phone,
     string? Password,
     bool IsActive = true);
 
@@ -13,6 +14,7 @@ public sealed record AdminUserUpdateRequest(
     string? Username,
     string? Email,
     string? FullName,
+    string? Phone,
     bool? IsActive,
     string? Password);
 
@@ -22,6 +24,7 @@ public sealed record AdminUserResponse(
     string? SellerCode,
     string? Email,
     string? FullName,
+    string? Phone,
     string Role,
     bool IsActive,
     bool IsStaff,
@@ -36,6 +39,7 @@ public sealed record AdminUserResponse(
         user.SellerCode,
         user.Email,
         user.FullName,
+        user.Phone,
         user.Role,
         user.IsActive,
         user.IsStaff,
