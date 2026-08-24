@@ -22,5 +22,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\frontend\public\logos\jem-nexus.png"
+                      LogicalName="JemNexus.Api.Assets.jem-nexus.png" />
   </ItemGroup>
 </Project>
