@@ -16,6 +16,8 @@ namespace JemNexus.Api.Tests;
 
 public sealed class ApiSecurityHeadersEndpointTests
 {
+    private const string TestJwtSecret = "DummyJwtSecretForSecurityHeaderTests1234567890!";
+
     private static readonly IReadOnlyDictionary<string, string> ExpectedHeaders =
         new Dictionary<string, string>
         {
@@ -84,7 +86,7 @@ public sealed class ApiSecurityHeadersEndpointTests
         using var response = await client.GetAsync(publicPath);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertSingleHeader(response, "X-Content-Type-Options", "nosniff");
-        Assert.Equal("public, max-age=0, must-revalidate", response.Headers.CacheControl?.ToString());
+        AssertPublicRevalidationCache(response);
         Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
         Assert.Null(response.Content.Headers.ContentDisposition);
 
@@ -94,7 +96,7 @@ public sealed class ApiSecurityHeadersEndpointTests
         Assert.Equal(HttpStatusCode.PartialContent, rangeResponse.StatusCode);
         Assert.Equal(imageBytes[1..4], await rangeResponse.Content.ReadAsByteArrayAsync());
         AssertSingleHeader(rangeResponse, "X-Content-Type-Options", "nosniff");
-        Assert.Equal("public, max-age=0, must-revalidate", rangeResponse.Headers.CacheControl?.ToString());
+        AssertPublicRevalidationCache(rangeResponse);
     }
 
     [Fact]
@@ -149,6 +151,16 @@ public sealed class ApiSecurityHeadersEndpointTests
         Assert.Equal(expectedValue, Assert.Single(values));
     }
 
+    private static void AssertPublicRevalidationCache(HttpResponseMessage response)
+    {
+        Assert.NotNull(response.Headers.CacheControl);
+        Assert.True(response.Headers.CacheControl.Public);
+        Assert.Equal(TimeSpan.Zero, response.Headers.CacheControl.MaxAge);
+        Assert.True(response.Headers.CacheControl.MustRevalidate);
+        Assert.False(response.Headers.CacheControl.Private);
+        Assert.False(response.Headers.CacheControl.NoStore);
+    }
+
     private sealed class SecurityHeadersApiFactory(string environment) : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName($"ApiSecurityHeaders-{environment}");
@@ -157,6 +169,7 @@ public sealed class ApiSecurityHeadersEndpointTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(environment);
+            builder.UseSetting("JWT_SECRET", TestJwtSecret);
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(TestConfiguration));
             builder.ConfigureServices(services =>
             {
@@ -173,7 +186,6 @@ public sealed class ApiSecurityHeadersEndpointTests
     {
         ["Jwt:Issuer"] = "JEM Nexus API Test",
         ["Jwt:Audience"] = "JEM Nexus Frontend Test",
-        ["Jwt:Secret"] = "DummyJwtSecretForTests1234567890!",
         ["Jwt:AccessTokenMinutes"] = "60",
         ["Jwt:RefreshTokenDays"] = "7",
         ["SeedUsers:SellerUsername"] = "security-seller",
