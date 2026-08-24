@@ -6,6 +6,7 @@ import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import { CustomerSearch } from '../../components/admin/CustomerSearch'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
 import { QuoteItemsEditor } from '../../components/admin/QuoteItemsEditor'
+import { useCommercialQuotePdfDownload } from '../../hooks/useCommercialQuotePdfDownload'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { isSeller } from '../../services/authApi'
 import { getCommercialQuote, issueCommercialQuote, saveCustomer } from '../../services/commercialQuotesApi'
@@ -18,6 +19,7 @@ const customerFields: Array<[keyof CustomerSnapshot, string, number, boolean, st
 const fromDetail = (q: CommercialQuoteDetail): QuoteEditorItem[] => [...q.items].sort((a,b) => a.position-b.position).map<QuoteEditorItem>(i => ({ key: String(i.id), source: i.source, product_id: i.product_id ?? null, product_name: i.product_name, brand_name: i.brand_name ?? '', model_name: i.model_name ?? '', quantity: String(i.quantity), unit_net_amount: String(i.unit_net_amount), discount_percent: i.discount_percent ? String(i.discount_percent) : '' })).concat([emptyQuoteItem()])
 
 export function CommercialQuoteEditorPage() {
+  const { downloadPdf, error: downloadError, isDownloading } = useCommercialQuotePdfDownload()
   const currentUser = useAdminUser()
   const params = useParams(); const navigate = useNavigate(); const routeId = params.id ? Number(params.id) : undefined
   const id = routeId; const [customer, setCustomer] = useState(emptyCustomer); const [currency, setCurrency] = useState<QuoteCurrency>('CLP'); const [condition, setCondition] = useState<SaleCondition>('Cash'); const [description, setDescription] = useState(''); const [items, setItems] = useState<QuoteEditorItem[]>([emptyQuoteItem()]); const [persisted, setPersisted] = useState<CommercialQuoteDetail | null>(null)
@@ -37,7 +39,7 @@ export function CommercialQuoteEditorPage() {
   const issue = async () => { if (saving || readonly) return; const issuePayload = payload(); const payloadFingerprint = JSON.stringify(issuePayload); if (!pendingIssue.current || pendingIssue.current.payloadFingerprint !== payloadFingerprint) pendingIssue.current = { payloadFingerprint, idempotencyKey: crypto.randomUUID() }; const idempotencyKey = pendingIssue.current.idempotencyKey; setShowIssueDialog(false); setSaving(true); setError(''); try { const issued = await issueCommercialQuote(issuePayload, idempotencyKey); pendingIssue.current = null; apply(issued); setMessage(`Cotización emitida con folio ${issued.folio}.`); navigate(`/admin/cotizaciones/${issued.id}/editar`, { replace:true }) } catch(e) { setError(getSafeApiErrorMessage(e,'No se pudo emitir la cotización. Los datos del formulario se conservaron.')) } finally { setSaving(false) } }
   const goBack = () => { if (!dirty || window.confirm('Hay cambios sin guardar. ¿Desea volver?')) navigate('/admin/cotizaciones?vista=generadas') }
   if (loading) return <AdminLayout><p className="ui-note">Cargando cotización…</p></AdminLayout>
-  return <AdminLayout><AdminPageHeader title={id ? 'Ver cotización' : 'Crear cotización'} /><div ref={firstError} tabIndex={-1}>{error ? <p className="ui-note ui-note--error">{error}</p>:null}{message ? <p className="ui-note ui-note--success">{message}</p>:null}</div>
+  return <AdminLayout><AdminPageHeader title={id ? 'Ver cotización' : 'Crear cotización'} /><div ref={firstError} tabIndex={-1}>{error ? <p className="ui-note ui-note--error">{error}</p>:null}{downloadError ? <p className="ui-note ui-note--error" role="alert">{downloadError}</p>:null}{message ? <p className="ui-note ui-note--success">{message}</p>:null}</div>
     <div className="commercial-editor-grid">
       <main className="commercial-editor-main">
       <section className="commercial-section commercial-customer-panel">
@@ -58,7 +60,7 @@ export function CommercialQuoteEditorPage() {
           <h3>Productos</h3><QuoteItemsEditor currency={currency} items={items} disabled={Boolean(readonly)||saving} onChange={next=>{setItems(next);touch()}} />
         </section>
         <section className="commercial-section commercial-description"><h2>Descripción detallada opcional</h2><textarea rows={3} maxLength={1000} value={description} disabled={readonly||saving} onChange={e=>{setDescription(e.target.value);touch()}} /><small>{description.length}/1000</small></section>
-        <div className="commercial-actions"><button className="btn btn--ghost" type="button" onClick={goBack}>Volver</button>{!readonly ? <button ref={issueButton} className="btn btn--accent commercial-primary-action" type="button" disabled={saving} onClick={requestIssue}>{saving ? 'Emitiendo…' : 'Emitir cotización'}</button> : null}<button className="btn btn--secondary" type="button" disabled title="Disponible cuando se implemente el servicio PDF">Descargar PDF</button><small>La descarga estará disponible después de implementar el servicio PDF.</small></div>
+        <div className="commercial-actions"><button className="btn btn--ghost" type="button" onClick={goBack}>Volver</button>{!readonly ? <button ref={issueButton} className="btn btn--accent commercial-primary-action" type="button" disabled={saving} onClick={requestIssue}>{saving ? 'Emitiendo…' : 'Emitir cotización'}</button> : null}{persisted?.status === 'Issued' && persisted.folio?.trim() && Number.isInteger(persisted.id) && persisted.id > 0 ? <button className="btn btn--secondary" type="button" disabled={isDownloading(persisted.id)} aria-busy={isDownloading(persisted.id) || undefined} aria-label={`${isDownloading(persisted.id) ? 'Descargando' : 'Descargar PDF de la cotización'} ${persisted.folio}`} onClick={() => void downloadPdf(persisted.id, persisted.folio)}>{isDownloading(persisted.id) ? 'Descargando…' : 'Descargar PDF'}</button> : null}</div>
       </main>
       <aside className="commercial-values-column"><section className="commercial-section quote-values"><h2>Valor final</h2><dl><div><dt>Neto</dt><dd>{money(totals.net,currency)}</dd></div><div><dt>IVA 19%</dt><dd>{money(totals.tax,currency)}</dd></div><div><dt>Total</dt><dd>{money(totals.total,currency)}</dd></div></dl><small>Vista previa; el cálculo definitivo lo realiza el servidor.</small></section></aside>
     </div>
