@@ -155,6 +155,7 @@ public sealed class RateLimitingEndpointTests
         AssertPolicy(endpoints, "/api/public/products/{idOrSlug}/technical-sheet/file", "GET", RateLimitPolicies.Download);
         AssertPolicy(endpoints, "/api/quote-notifications/test", "POST", RateLimitPolicies.NotificationTest);
         AssertPolicy(endpoints, "/api/admin/commercial-quotes/issue", "POST", RateLimitPolicies.QuoteIssue);
+        AssertPolicy(endpoints, "/api/admin/commercial-quotes/{id:int}/pdf", "GET", RateLimitPolicies.Download);
         AssertPolicy(endpoints, "/api/product-images", "POST", RateLimitPolicies.Upload);
         AssertPolicy(endpoints, "/api/technical-sheets/", "POST", RateLimitPolicies.Upload);
         AssertPolicy(endpoints, "/api/technical-sheets/{id:int}/file", "POST", RateLimitPolicies.Upload);

@@ -27,6 +27,8 @@ const string AppName = "JEM Nexus API";
 
 var builder = WebApplication.CreateBuilder(args);
 
+JemNexusPdfFontResolver.EnsureConfigured();
+
 builder.Configuration.AddEnvironmentVariables();
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
@@ -39,6 +41,7 @@ builder.Services.AddHsts(options =>
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CommercialQuoteIssueCoordinator>();
+builder.Services.AddSingleton<ICommercialQuotePdfGenerator, CommercialQuotePdfGenerator>();
 
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
 builder.Services.Configure<SeedUserOptions>(builder.Configuration.GetSection(SeedUserOptions.SectionName));

@@ -22,6 +22,9 @@ public static class AdminCommercialQuoteEndpoints
         var group = endpoints.MapGroup("/api/admin/commercial-quotes").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin commercial quotes");
         group.MapGet("", ListAsync);
         group.MapGet("/{id:int}", GetAsync);
+        group.MapGet("/{id:int}/pdf", GetPdfAsync)
+            .RequireRateLimiting(RateLimitPolicies.Download)
+            .WithName("AdminCommercialQuotePdf");
         group.MapPost("/issue", IssueAsync).RequireRateLimiting(RateLimitPolicies.QuoteIssue).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
         return endpoints;
     }
@@ -66,6 +69,22 @@ public static class AdminCommercialQuoteEndpoints
         if (!principal.IsInRole(AppRoles.SupportAdmin)) query = query.Where(quote => quote.ResponsibleSellerId == UserId(principal));
         var quote = await query.SingleOrDefaultAsync(ct);
         return quote is null ? Results.NotFound() : Results.Ok(ToDetail(quote));
+    }
+
+    private static async Task<IResult> GetPdfAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db,
+        ICommercialQuotePdfGenerator generator, HttpContext context, CancellationToken ct)
+    {
+        var query = db.CommercialQuotes.AsNoTracking().Include(quote => quote.Items)
+            .Where(quote => quote.Id == id && quote.Status == CommercialQuoteStatuses.Issued && quote.Folio != null);
+        if (!principal.IsInRole(AppRoles.SupportAdmin))
+            query = query.Where(quote => quote.ResponsibleSellerId == UserId(principal));
+
+        var quote = await query.SingleOrDefaultAsync(ct);
+        if (quote is null) return Results.NotFound();
+
+        var pdf = generator.Generate(quote);
+        context.Response.Headers.CacheControl = "private, no-store";
+        return Results.File(pdf, "application/pdf", $"cotizacion-{quote.Folio}.pdf");
     }
 
     private static readonly JsonSerializerOptions FingerprintJsonOptions = new()
