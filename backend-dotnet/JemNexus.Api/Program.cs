@@ -37,20 +37,21 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailO
 builder.Services.Configure<QuoteNotificationOptions>(builder.Configuration.GetSection(QuoteNotificationOptions.SectionName));
 builder.Services.Configure<FrontendOptions>(builder.Configuration.GetSection(FrontendOptions.SectionName));
 
-var rateLimitOptions = builder.Configuration.GetSection(JemNexusRateLimitOptions.SectionName).Get<JemNexusRateLimitOptions>()
-    ?? throw new InvalidOperationException("RateLimiting configuration is required.");
-foreach (var (name, rule) in rateLimitOptions.RequiredRules())
-{
-    if (rule is null || rule.PermitLimit <= 0 || rule.WindowSeconds <= 0)
-    {
-        throw new InvalidOperationException($"RateLimiting:{name} must define PermitLimit and WindowSeconds greater than zero.");
-    }
-}
-
-var rateLimitingEnabled = rateLimitOptions.Enabled
-    && (!builder.Environment.IsEnvironment("Test") || rateLimitOptions.EnableInTest);
 builder.Services.AddRateLimiter(options =>
 {
+    var rateLimitOptions = builder.Configuration.GetSection(JemNexusRateLimitOptions.SectionName).Get<JemNexusRateLimitOptions>()
+        ?? throw new InvalidOperationException("RateLimiting configuration is required.");
+    foreach (var (name, rule) in rateLimitOptions.RequiredRules())
+    {
+        if (rule is null || rule.PermitLimit <= 0 || rule.WindowSeconds <= 0)
+        {
+            throw new InvalidOperationException($"RateLimiting:{name} must define PermitLimit and WindowSeconds greater than zero.");
+        }
+    }
+
+    var rateLimitingEnabled = rateLimitOptions.Enabled
+        && (!builder.Environment.IsEnvironment("Test") || rateLimitOptions.EnableInTest);
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         CreateRateLimitPartition(context, context.User.Identity?.IsAuthenticated == true

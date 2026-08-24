@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using JemNexus.Api.Data;
 using JemNexus.Api.Options;
+using JemNexus.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -152,7 +153,7 @@ public sealed class RateLimitingEndpointTests
         AssertPolicy(endpoints, "/api/auth/logout", "POST", RateLimitPolicies.AuthSession);
         AssertPolicy(endpoints, "/api/public/quote-requests", "POST", RateLimitPolicies.PublicSubmission);
         AssertPolicy(endpoints, "/api/public/products/{idOrSlug}/technical-sheet/file", "GET", RateLimitPolicies.Download);
-        AssertPolicy(endpoints, "/api/commercial/quote-notifications/test", "POST", RateLimitPolicies.NotificationTest);
+        AssertPolicy(endpoints, "/api/quote-notifications/test", "POST", RateLimitPolicies.NotificationTest);
         AssertPolicy(endpoints, "/api/admin/commercial-quotes/issue", "POST", RateLimitPolicies.QuoteIssue);
         AssertPolicy(endpoints, "/api/product-images", "POST", RateLimitPolicies.Upload);
         AssertPolicy(endpoints, "/api/technical-sheets/", "POST", RateLimitPolicies.Upload);
@@ -240,6 +241,8 @@ public sealed class RateLimitingEndpointTests
                 configuration.AddInMemoryCollection(settings ?? new Dictionary<string, string?>()));
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<ISellerCodeGenerator>();
+                services.AddSingleton<ISellerCodeGenerator, TestSellerCodeGenerator>();
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                     InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
