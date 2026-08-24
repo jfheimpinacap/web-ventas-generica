@@ -30,7 +30,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             throw new ArgumentException("Solo se pueden generar cotizaciones emitidas con folio.", nameof(quote));
 
         var document = CreateDocument(quote);
-        var renderer = new PdfDocumentRenderer(unicode: true) { Document = document };
+        var renderer = new PdfDocumentRenderer() { Document = document };
         renderer.RenderDocument();
         renderer.PdfDocument.Info.Title = $"Cotización {quote.Folio}";
         renderer.PdfDocument.Info.Author = "JEM Nexus";
@@ -47,7 +47,6 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         document.Info.Title = $"Cotización {quote.Folio}";
         document.Info.Author = "JEM Nexus";
         document.Info.Subject = "Cotización comercial";
-        document.Info.Creator = "JEM Nexus API";
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = FontName;
         normal.Font.Size = 8.5;
@@ -149,8 +148,9 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private static void AddNumber(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddTotal(Table table, string label, string value, bool strong) { var row = table.AddRow(); AddNumber(row.Cells[0], label); AddNumber(row.Cells[1], value); row.Format.Font.Bold = strong; if (strong) { row.Shading.Color = Color.Parse("#EAF4F8"); row.Format.Font.Size = 10; row.Format.Font.Color = Color.Parse("#042149"); } }
     private static string Money(decimal value, string currency) => currency == CommercialQuoteCurrencies.Clp ? $"CLP $ {value.ToString("N0", ChileanCulture)}" : $"USD US$ {value.ToString("N2", ChileanCulture)}";
-    private static string Normalize(string value)
+    private static string Normalize(string? value)
     {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
         var builder = new StringBuilder(value.Length);
         foreach (var character in value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n'))
             if (character is '\n' or '\t' || !char.IsControl(character)) builder.Append(character);
