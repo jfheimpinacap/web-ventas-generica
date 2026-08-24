@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { useAdminUser } from '../../components/admin/ProtectedRoute'
+import { useCommercialQuotePdfDownload } from '../../hooks/useCommercialQuotePdfDownload'
 import { isSeller } from '../../services/authApi'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
@@ -238,6 +239,7 @@ function QuoteRequestsView() {
 }
 
 function GeneratedQuotesView() {
+  const { downloadPdf, error: downloadError, isDownloading } = useCommercialQuotePdfDownload()
   const [items, setItems] = useState<CommercialQuoteSummary[]>([])
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
@@ -285,6 +287,7 @@ function GeneratedQuotesView() {
       </div>
       {loading ? <p className="ui-note">Cargando cotizaciones generadas...</p> : null}
       {error ? <p className="ui-note ui-note--error">{error}</p> : null}
+      {downloadError ? <p className="ui-note ui-note--error" role="alert">{downloadError}</p> : null}
       {!loading && !error ? <div className="generated-quotes-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
         <table className="admin-table commercial-quotes-table">
           <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
@@ -297,7 +300,7 @@ function GeneratedQuotesView() {
                 <td><span className={`badge commercial-status commercial-status--${quote.status.toLowerCase()}`}>{quote.status === 'Issued' ? 'Emitida' : 'Borrador'}</span></td>
                 <td><strong>{quote.seller_name || 'Sin nombre'}</strong><span className="admin-table__muted">{quote.seller_code}</span></td>
                 <td>{money(quote.total_amount, quote.currency)}</td>
-                <td><div className="generated-quote-actions"><Link className="btn btn--secondary quote-table-action" to={`/admin/cotizaciones/${quote.id}/editar`}>Ver</Link><button className="btn btn--secondary quote-table-action" type="button" disabled title="Disponible cuando se implemente el servicio PDF">Descargar PDF</button></div></td>
+                <td><div className="generated-quote-actions"><Link className="btn btn--secondary quote-table-action" to={`/admin/cotizaciones/${quote.id}/editar`}>Ver</Link><button className="btn btn--secondary quote-table-action" type="button" disabled={quote.status !== 'Issued' || !quote.folio?.trim() || isDownloading(quote.id)} title={quote.status !== 'Issued' || !quote.folio?.trim() ? 'Disponible solo para cotizaciones emitidas.' : undefined} aria-busy={isDownloading(quote.id) || undefined} aria-label={`${isDownloading(quote.id) ? 'Descargando' : 'Descargar PDF de la cotización'} ${quote.folio?.trim() || quote.id}`} onClick={() => void downloadPdf(quote.id, quote.folio)}>{isDownloading(quote.id) ? 'Descargando…' : 'Descargar PDF'}</button></div></td>
               </tr>
             ))}
           </tbody>
