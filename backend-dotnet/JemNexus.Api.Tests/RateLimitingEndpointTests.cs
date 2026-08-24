@@ -178,10 +178,23 @@ public sealed class RateLimitingEndpointTests
 
     private static void AssertPolicy(IReadOnlyList<Endpoint> endpoints, string path, string method, string policy)
     {
-        var endpoint = endpoints.OfType<RouteEndpoint>().Single(candidate =>
-            candidate.RoutePattern.RawText == path
+        var endpoint = Assert.Single(endpoints.OfType<RouteEndpoint>(), candidate =>
+            string.Equals(
+                NormalizeRoutePattern(candidate.RoutePattern.RawText),
+                NormalizeRoutePattern(path),
+                StringComparison.Ordinal)
             && candidate.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains(method) == true);
         Assert.Contains(endpoint.Metadata.GetOrderedMetadata<EnableRateLimitingAttribute>(), value => value.PolicyName == policy);
+    }
+
+    private static string NormalizeRoutePattern(string? path)
+    {
+        if (string.IsNullOrEmpty(path) || path == "/")
+        {
+            return path ?? string.Empty;
+        }
+
+        return path.TrimEnd('/');
     }
 
     private static Dictionary<string, string?> EnabledRateLimitingSettings()
