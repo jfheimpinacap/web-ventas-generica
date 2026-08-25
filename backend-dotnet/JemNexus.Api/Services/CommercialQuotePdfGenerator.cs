@@ -12,6 +12,9 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     internal const string LogoResourceName = "JemNexus.Api.Assets.jem-nexus.png";
     public const string UsdDisclosure = "Valores expresados en dólares estadounidenses (USD). En caso de aceptar la cotización se aplicará el valor del dólar observado a la fecha de emisión de la factura.";
     private const string FontName = "Arial";
+    private const double ContentWidthInches = 7.4;
+    private const double NormalBlockSpacingPoints = 7;
+    private const double TotalsBlockSpacingPoints = NormalBlockSpacingPoints / 2;
     private static readonly CultureInfo ChileanCulture = CultureInfo.GetCultureInfo("es-CL");
     private readonly string _logoData;
 
@@ -65,7 +68,10 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         AddInformation(section, quote);
         AddItems(section, quote);
         if (!string.IsNullOrWhiteSpace(quote.DetailedDescription))
+        {
             AddSpecifications(section, quote.DetailedDescription);
+            AddVerticalSpacer(section, TotalsBlockSpacingPoints);
+        }
         AddTotals(section, quote);
         return document;
     }
@@ -73,14 +79,15 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private void AddHeader(Section section, CommercialQuote quote)
     {
         var table = section.AddTable();
-        table.AddColumn(Unit.FromInch(3.9)); table.AddColumn(Unit.FromInch(3.5));
+        ConfigureContentTable(table);
+        table.AddColumn(Unit.FromInch(3.9)); table.AddColumn(Unit.FromInch(ContentWidthInches - 3.9));
         var row = table.AddRow();
         var image = row.Cells[0].AddImage(_logoData); image.LockAspectRatio = true; image.Width = Unit.FromInch(2.25);
         var title = row.Cells[1].AddParagraph("COTIZACIÓN"); title.Format.Alignment = ParagraphAlignment.Right;
         title.Format.Font.Size = 20; title.Format.Font.Bold = true; title.Format.Font.Color = Color.Parse("#042149");
         AddRight(row.Cells[1], $"Folio: {quote.Folio}");
         AddRight(row.Cells[1], $"Fecha: {quote.IssuedOn:dd-MM-yyyy}");
-        var line = section.AddParagraph(); line.Format.Borders.Bottom.Width = 2; line.Format.Borders.Bottom.Color = Color.Parse("#0077B6"); line.Format.SpaceAfter = 7;
+        var line = section.AddParagraph(); line.Format.Borders.Bottom.Width = 2; line.Format.Borders.Bottom.Color = Color.Parse("#0077B6"); line.Format.SpaceAfter = NormalBlockSpacingPoints;
     }
 
     private static void AddInformation(Section section, CommercialQuote quote)
@@ -104,7 +111,9 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     {
         AddHeading(section, "PRODUCTOS O SERVICIOS");
         var table = section.AddTable();
-        foreach (var width in new[] { .3, 2.05, 1.05, .55, 1.2, .7, 1.55 }) table.AddColumn(Unit.FromInch(width));
+        ConfigureContentTable(table);
+        foreach (var width in new[] { .3, 2.05, 1.05, .55, 1.2, .7, ContentWidthInches - .3 - 2.05 - 1.05 - .55 - 1.2 - .7 })
+            table.AddColumn(Unit.FromInch(width));
         var header = table.AddRow(); header.HeadingFormat = true; header.Shading.Color = Color.Parse("#EAF4F8"); header.Format.Font.Bold = true;
         var rows = new List<Row> { header };
         string[] labels = ["#", "Producto / descripción", "Marca / modelo", "Cant.", "Neto unitario", "Dto.", "Total neto"];
@@ -120,15 +129,18 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             AddNumber(row.Cells[5], item.DiscountPercent.ToString("N0", ChileanCulture) + " %"); AddNumber(row.Cells[6], Money(item.LineNetAmount, quote.Currency));
         }
         ApplyOuterBorder(rows);
-        table.Format.SpaceAfter = 7;
+        table.Format.SpaceAfter = NormalBlockSpacingPoints;
     }
 
     private static void AddTotals(Section section, CommercialQuote quote)
     {
         var table = section.AddTable();
-        table.AddColumn(Unit.FromInch(5.25));
+        ConfigureContentTable(table);
+        var disclosureColumn = table.AddColumn(Unit.FromInch(5.25));
         table.AddColumn(Unit.FromInch(.75));
-        table.AddColumn(Unit.FromInch(1.4));
+        var valueColumn = table.AddColumn(Unit.FromInch(ContentWidthInches - 5.25 - .75));
+        disclosureColumn.LeftPadding = 4;
+        valueColumn.RightPadding = 4;
         var netRow = table.AddRow();
         var rows = new List<Row> { netRow };
         netRow.Cells[0].MergeDown = 2;
@@ -160,8 +172,9 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private static void AddInformationGrid(Section section, params (string LeftLabel, string? LeftValue, string RightLabel, string? RightValue)[] fields)
     {
         var table = section.AddTable();
-        var leftColumn = table.AddColumn(Unit.FromInch(3.7));
-        var rightColumn = table.AddColumn(Unit.FromInch(3.7));
+        ConfigureContentTable(table);
+        var leftColumn = table.AddColumn(Unit.FromInch(ContentWidthInches / 2));
+        var rightColumn = table.AddColumn(Unit.FromInch(ContentWidthInches / 2));
         leftColumn.LeftPadding = rightColumn.LeftPadding = 4;
         leftColumn.RightPadding = rightColumn.RightPadding = 4;
         var rows = new List<Row>(fields.Length);
@@ -173,7 +186,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             rows.Add(row);
         }
         ApplyOuterBorder(rows);
-        table.Format.SpaceAfter = 7;
+        table.Format.SpaceAfter = NormalBlockSpacingPoints;
     }
 
     private static void ApplyOuterBorder(IReadOnlyList<Row> rows)
@@ -204,7 +217,8 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     {
         AddHeading(section, "ESPECIFICACIONES TÉCNICAS");
         var table = section.AddTable();
-        var column = table.AddColumn(Unit.FromInch(7.4));
+        ConfigureContentTable(table);
+        var column = table.AddColumn(Unit.FromInch(ContentWidthInches));
         column.LeftPadding = 4;
         column.RightPadding = 4;
         var row = table.AddRow();
@@ -218,7 +232,23 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             paragraph.AddText(lines[index]);
         }
         ApplyOuterBorder([row]);
-        table.Format.SpaceAfter = 7;
+    }
+
+    private static void ConfigureContentTable(Table table)
+    {
+        table.Rows.Alignment = RowAlignment.Left;
+        table.Rows.LeftIndent = Unit.Zero;
+    }
+
+    private static void AddVerticalSpacer(Section section, double heightInPoints)
+    {
+        var spacer = section.AddParagraph();
+        spacer.Format.Font.Size = .1;
+        spacer.Format.LineSpacingRule = LineSpacingRule.Exactly;
+        spacer.Format.LineSpacing = Unit.FromPoint(heightInPoints);
+        spacer.Format.SpaceBefore = 0;
+        spacer.Format.SpaceAfter = 0;
+        spacer.Format.KeepWithNext = true;
     }
 
     private static void AddHeading(Section section, string value) { var p = section.AddParagraph(value); StyleHeading(p); }

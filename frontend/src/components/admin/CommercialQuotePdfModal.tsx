@@ -98,7 +98,9 @@ export function CommercialQuotePdfModal({ quoteId, folio, onClose, returnFocusRe
       <div ref={dialogRef} className="commercial-pdf-modal__dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} aria-busy={loading || undefined}>
         <header className="commercial-pdf-modal__header">
           <div><h2 id={titleId}>Cotización emitida</h2><p id={descriptionId}>La cotización {folio ? `con folio ${folio}` : ''} fue emitida correctamente.</p></div>
-          <button ref={closeRef} type="button" className="btn btn--ghost commercial-pdf-modal__close" onClick={onClose} aria-label="Cerrar visor de cotización">×</button>
+          <button ref={closeRef} type="button" className="btn btn--ghost commercial-pdf-modal__close" onClick={onClose} aria-label="Cerrar visor PDF" title="Cerrar">
+            <span aria-hidden="true">×</span>
+          </button>
         </header>
         <div className="commercial-pdf-modal__viewer">
           {loading ? <div className="commercial-pdf-modal__status" role="status"><span className="commercial-pdf-modal__spinner" aria-hidden="true" />Preparando PDF…</div> : null}
