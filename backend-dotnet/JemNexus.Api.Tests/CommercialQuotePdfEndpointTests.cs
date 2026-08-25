@@ -69,7 +69,9 @@ public sealed class CommercialQuotePdfEndpointTests
     {
         await using var factory = new AdminCommercialQuoteEndpointTests.QuoteApiFactory();
         using var owner = await factory.AuthorizedClientAsync("seller");
-        var (id, folio) = await IssueAsync(owner, currency, 4, "Observación con español: áéíóú, ñ y símbolos & ®.\nSegunda línea.");
+        var (id, folio) = await IssueAsync(owner, currency, 4, "Observación con español: áéíóú, ñ y símbolos & ®.\nSegunda línea.", 45);
+        var detail = await owner.GetFromJsonAsync<JsonElement>($"/api/admin/commercial-quotes/{id}");
+        Assert.Equal(45, detail.GetProperty("validity_days").GetInt32());
         var bytes = await owner.GetByteArrayAsync($"/api/admin/commercial-quotes/{id}/pdf");
         using var stream = new MemoryStream(bytes);
         using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
@@ -145,7 +147,7 @@ public sealed class CommercialQuotePdfEndpointTests
             await db.CommercialQuotes.AsNoTracking().Where(quote => quote.Id == id).Select(quote => quote.UpdatedAt).SingleAsync());
     }
 
-    private static async Task<(int Id, string Folio)> IssueAsync(HttpClient client, string currency, int itemCount, string? observations = null)
+    private static async Task<(int Id, string Folio)> IssueAsync(HttpClient client, string currency, int itemCount, string? observations = null, int validityDays = 15)
     {
         var items = Enumerable.Range(1, itemCount).Select(position => new
         {
@@ -157,7 +159,7 @@ public sealed class CommercialQuotePdfEndpointTests
         {
             Content = JsonContent.Create(new { customer_business_name = "Cliente PDF", customer_rut = "12.345.678-5", customer_business_activity = "Servicios",
                 customer_address = "Dirección 123", customer_phone = "+56 9 1234 5678", customer_city_or_commune = "Santiago", customer_contact_name = "Señora Ñandú",
-                customer_email = "pdf@example.test", currency, sale_condition = "Cash", validity_days = 15, detailed_description = observations, items })
+                customer_email = "pdf@example.test", currency, sale_condition = "Cash", validity_days = validityDays, detailed_description = observations, items })
         };
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         using var response = await client.SendAsync(request); response.EnsureSuccessStatusCode();

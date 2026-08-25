@@ -89,6 +89,77 @@ public sealed class AdminCommercialQuoteEndpointTests
     }
 
     [Fact]
+    public async Task OmittedValidityDefaultsToFifteenAndMatchesExplicitFifteenForIdempotency()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        using var omitted = await IssueAsync(seller, ValidIssue(includeValidity: false), key);
+        using var explicitFifteen = await IssueAsync(seller, ValidIssue(validityDays: 15), key);
+        Assert.Equal(HttpStatusCode.Created, omitted.StatusCode); Assert.Equal(HttpStatusCode.Created, explicitFifteen.StatusCode);
+        var first = await JsonAsync(omitted); var replay = await JsonAsync(explicitFifteen);
+        Assert.Equal(first.GetProperty("id").GetInt32(), replay.GetProperty("id").GetInt32());
+        Assert.Equal(15, first.GetProperty("validity_days").GetInt32());
+        Assert.Equal(15, await factory.QuoteValidityAsync(first.GetProperty("id").GetInt32()));
+    }
+
+    [Theory]
+    [InlineData(15)]
+    [InlineData(30)]
+    [InlineData(45)]
+    [InlineData(60)]
+    public async Task AllowedValidityIsReturnedPersistedAndRecoverable(int validityDays)
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
+        using var response = await IssueAsync(seller, ValidIssue(validityDays: validityDays));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var issued = await JsonAsync(response); var id = issued.GetProperty("id").GetInt32();
+        Assert.Equal(validityDays, issued.GetProperty("validity_days").GetInt32());
+        Assert.Equal(validityDays, await factory.QuoteValidityAsync(id));
+        using var recoveredResponse = await seller.GetAsync($"/api/admin/commercial-quotes/{id}");
+        Assert.Equal(HttpStatusCode.OK, recoveredResponse.StatusCode);
+        Assert.Equal(validityDays, (await JsonAsync(recoveredResponse)).GetProperty("validity_days").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(-15)]
+    [InlineData(0)]
+    [InlineData(20)]
+    [InlineData(90)]
+    public async Task InvalidValidityReturnsValidationProblemWithoutCommercialWrites(int validityDays)
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
+        using var response = await IssueAsync(seller, ValidIssue(validityDays: validityDays));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await JsonAsync(response); Assert.True(problem.GetProperty("errors").TryGetProperty("validity_days", out _));
+        Assert.Equal(0, await factory.QuoteCountAsync()); Assert.Equal(0, await factory.IdempotencyCountAsync()); Assert.Equal(0, await factory.FolioCounterCountAsync());
+    }
+
+    [Theory]
+    [InlineData(CommercialQuoteSaleConditions.Credit60Days)]
+    [InlineData(CommercialQuoteSaleConditions.HalfCashBalance30Days)]
+    [InlineData(CommercialQuoteSaleConditions.Documented)]
+    [InlineData(CommercialQuoteSaleConditions.CashPayment)]
+    public async Task NewSaleConditionsAreAccepted(string saleCondition)
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
+        using var response = await IssueAsync(seller, ValidIssue(saleCondition: saleCondition));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(saleCondition, (await JsonAsync(response)).GetProperty("sale_condition").GetString());
+    }
+
+    [Fact]
+    public async Task SameIdempotencyKeyWithDifferentValidityConflicts()
+    {
+        await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller"); var key = Guid.NewGuid();
+        using var first = await IssueAsync(seller, ValidIssue(validityDays: 30), key);
+        using var replay = await IssueAsync(seller, ValidIssue(validityDays: 30), key);
+        using var conflict = await IssueAsync(seller, ValidIssue(validityDays: 45), key);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal((await JsonAsync(first)).GetProperty("id").GetInt32(), (await JsonAsync(replay)).GetProperty("id").GetInt32());
+        Assert.Equal(1, await factory.QuoteCountAsync()); Assert.Equal(1, await factory.IdempotencyCountAsync());
+    }
+
+    [Fact]
     public async Task TwoIssuesUseDistinctFoliosAndPublicDtoOmitsInternalFields()
     {
         await using var factory = new QuoteApiFactory(); using var seller = await factory.AuthorizedClientAsync("seller");
@@ -183,13 +254,19 @@ public sealed class AdminCommercialQuoteEndpointTests
             Assert.DoesNotContain(forbidden, raw, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static object ValidIssue(string rut = "12.345.678-5", string currency = "CLP", object[]? items = null) => new
+    private static object ValidIssue(string rut = "12.345.678-5", string currency = "CLP", object[]? items = null, int? validityDays = 15, bool includeValidity = true, string saleCondition = CommercialQuoteSaleConditions.Cash)
     {
-        customer_profile_id = (int?)null, customer_business_name = "ACME enviada", customer_rut = rut, customer_business_activity = "Servicios industriales",
-        customer_address = "Calle Uno 123", customer_phone = "+56 9 1234 5678", customer_city_or_commune = "Santiago", customer_contact_name = "Ana Pérez",
-        customer_email = (string?)null, currency, sale_condition = "Cash", validity_days = 15, detailed_description = (string?)null,
-        items = items ?? [new { source = "FreeText", product_name = "Servicio", quantity = 2, unit_net_amount = 100m, discount_percent = 0m }]
-    };
+        var payload = new Dictionary<string, object?>
+        {
+            ["customer_profile_id"] = null, ["customer_business_name"] = "ACME enviada", ["customer_rut"] = rut,
+            ["customer_business_activity"] = "Servicios industriales", ["customer_address"] = "Calle Uno 123",
+            ["customer_phone"] = "+56 9 1234 5678", ["customer_city_or_commune"] = "Santiago", ["customer_contact_name"] = "Ana Pérez",
+            ["customer_email"] = null, ["currency"] = currency, ["sale_condition"] = saleCondition, ["detailed_description"] = null,
+            ["items"] = items ?? [new { source = "FreeText", product_name = "Servicio", quantity = 2, unit_net_amount = 100m, discount_percent = 0m }]
+        };
+        if (includeValidity) payload["validity_days"] = validityDays;
+        return payload;
+    }
     private static async Task<HttpResponseMessage> IssueAsync(HttpClient client, object payload, Guid? key = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/admin/commercial-quotes/issue") { Content = JsonContent.Create(payload) };
@@ -244,6 +321,7 @@ public sealed class AdminCommercialQuoteEndpointTests
             var product = new Product { Name = "Estado producto", Slug = Guid.NewGuid().ToString(), Category = category, ProductType = ProductTypes.Machinery, IsPublished = published, StockStatus = sold ? StockStatuses.Sold : StockStatuses.Available };
             db.Add(product); await db.SaveChangesAsync(); return product.Id;
         }
+        public async Task<int> QuoteValidityAsync(int id) { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuotes.AsNoTracking().Where(quote => quote.Id == id).Select(quote => quote.ValidityDays).SingleAsync(); }
         public async Task<int> QuoteCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuotes.CountAsync(); }
         public async Task<int> IdempotencyCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteIssueIdempotencyRecords.CountAsync(); }
         public async Task<int> FolioCounterCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteFolioCounters.AsNoTracking().CountAsync(); }

@@ -31,8 +31,8 @@ public static class CommercialQuoteCalculator
     {
         if (quote.Status != CommercialQuoteStatuses.Draft) throw new ArgumentException("Only Draft is supported.");
         if (quote.Currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) throw new ArgumentException("Unsupported currency.");
-        if (quote.SaleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) throw new ArgumentException("Unsupported sale condition.");
-        if (quote.ValidityDays <= 0) throw new ArgumentException("Validity days must be positive.");
+        if (!CommercialQuoteSaleConditions.IsAllowed(quote.SaleCondition)) throw new ArgumentException("Unsupported sale condition.");
+        if (!CommercialQuoteRules.IsAllowedValidityDays(quote.ValidityDays)) throw new ArgumentException("Unsupported validity days.");
         if (quote.DetailedDescription?.Length > CommercialQuoteRules.DetailedDescriptionMaxLength) throw new ArgumentException("Detailed description is too long.");
         Require(quote.CustomerBusinessName, nameof(quote.CustomerBusinessName));
         Require(quote.CustomerBusinessActivity, nameof(quote.CustomerBusinessActivity));

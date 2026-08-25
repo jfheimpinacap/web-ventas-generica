@@ -11,7 +11,7 @@ public sealed class CommercialQuote
     public DateOnly? IssuedOn { get; private set; }
     public string Currency { get; set; } = CommercialQuoteCurrencies.Clp;
     public string SaleCondition { get; set; } = CommercialQuoteSaleConditions.Cash;
-    public int ValidityDays { get; set; } = 15;
+    public int ValidityDays { get; set; } = CommercialQuoteRules.DefaultValidityDays;
     public string? DetailedDescription { get; set; }
     public decimal TaxRatePercent { get; private set; } = CommercialQuoteRules.TaxRatePercent;
     public int? CustomerProfileId { get; set; }
@@ -60,11 +60,33 @@ public sealed class CommercialQuote
 
 public static class CommercialQuoteStatuses { public const string Draft = "Draft"; public const string Issued = "Issued"; }
 public static class CommercialQuoteCurrencies { public const string Clp = "CLP"; public const string Usd = "USD"; }
-public static class CommercialQuoteSaleConditions { public const string Cash = "Cash"; public const string Credit30Days = "Credit30Days"; }
+public static class CommercialQuoteSaleConditions
+{
+    public const string Cash = "Cash";
+    public const string Credit30Days = "Credit30Days";
+    public const string Credit60Days = "Credit60Days";
+    public const string HalfCashBalance30Days = "HalfCashBalance30";
+    public const string Documented = "Documented";
+    public const string CashPayment = "CashPayment";
+
+    public static bool IsAllowed(string value) => value is Cash or Credit30Days or Credit60Days or HalfCashBalance30Days or Documented or CashPayment;
+
+    public static string GetDisplayName(string value) => value switch
+    {
+        Cash => "Contado",
+        Credit30Days => "Crédito a 30 días",
+        Credit60Days => "Crédito a 60 días",
+        HalfCashBalance30Days => "50% contado saldo a 30 días",
+        Documented => "Documentado",
+        CashPayment => "Efectivo",
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unsupported sale condition.")
+    };
+}
 public static class CommercialQuoteItemOrigins { public const string Catalog = "Catalog"; public const string FreeText = "FreeText"; }
 public static class CommercialQuoteRules
 {
     public const decimal TaxRatePercent = 19.00m;
     public const int DefaultValidityDays = 15;
+    public static bool IsAllowedValidityDays(int value) => value is 15 or 30 or 45 or 60;
     public const int DetailedDescriptionMaxLength = 1000;
 }
