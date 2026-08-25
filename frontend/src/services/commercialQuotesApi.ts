@@ -12,7 +12,28 @@ export function saveCustomer(customer: Omit<CustomerProfile, 'id' | 'created_at'
 export function getCommercialQuotes({ search, page, pageSize = 20, signal }: { search?: string; page: number; pageSize?: number; signal?: AbortSignal }) {
   return authFetch<CommercialQuotePage>('/api/admin/commercial-quotes', { params: { search, page, page_size: pageSize }, signal })
 }
-export function getCommercialQuote(id: number) { return authFetch<CommercialQuoteDetail>(`/api/admin/commercial-quotes/${id}`) }
+type RawCommercialQuoteDetail = Omit<CommercialQuoteDetail, 'responsibleSellerName' | 'responsibleSellerCode' | 'responsibleSellerEmail' | 'responsibleSellerPhone'> & {
+  responsible_seller_name?: string
+  responsible_seller_code?: string
+  responsible_seller_email?: string | null
+  responsible_seller_phone?: string | null
+  seller_email?: string | null
+  seller_phone?: string | null
+}
+
+function normalizeCommercialQuoteDetail(quote: RawCommercialQuoteDetail): CommercialQuoteDetail {
+  return {
+    ...quote,
+    responsibleSellerName: quote.responsible_seller_name ?? quote.seller_name,
+    responsibleSellerCode: quote.responsible_seller_code ?? quote.seller_code,
+    responsibleSellerEmail: quote.responsible_seller_email ?? quote.seller_email ?? null,
+    responsibleSellerPhone: quote.responsible_seller_phone ?? quote.seller_phone ?? null,
+  }
+}
+
+export async function getCommercialQuote(id: number) {
+  return normalizeCommercialQuoteDetail(await authFetch<RawCommercialQuoteDetail>(`/api/admin/commercial-quotes/${id}`))
+}
 export async function getCommercialQuotePdf(id: number): Promise<Blob> {
   if (!Number.isInteger(id) || id <= 0) throw new Error('La cotización indicada no es válida.')
 
@@ -28,5 +49,5 @@ export async function getCommercialQuotePdf(id: number): Promise<Blob> {
   return blob
 }
 export function issueCommercialQuote(payload: CommercialQuoteIssueInput, idempotencyKey: string) {
-  return authFetch<CommercialQuoteDetail>('/api/admin/commercial-quotes/issue', { method: 'POST', ...json(payload), headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey } })
+  return authFetch<RawCommercialQuoteDetail>('/api/admin/commercial-quotes/issue', { method: 'POST', ...json(payload), headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey } }).then(normalizeCommercialQuoteDetail)
 }

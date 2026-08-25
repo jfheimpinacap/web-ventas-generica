@@ -31,6 +31,8 @@ export interface CommercialQuoteItem extends CommercialQuoteItemInput {
 export interface CommercialQuoteDetail extends CustomerSnapshot {
   id: number; status: 'Draft' | 'Issued'; folio: string | null; issued_at: string | null; issued_on: string | null
   seller_name: string; seller_code: string; currency: QuoteCurrency; sale_condition: SaleCondition
+  responsibleSellerName: string; responsibleSellerCode: string
+  responsibleSellerEmail: string | null; responsibleSellerPhone: string | null
   validity_days: number; detailed_description: string | null; tax_rate_percent: number
   net_amount: number; tax_amount: number; total_amount: number; created_at: string; updated_at: string
   items: CommercialQuoteItem[]
