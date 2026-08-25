@@ -7,6 +7,7 @@ public sealed class SeedUserOptions
     public string SellerUsername { get; set; } = "demo";
     public string SellerPassword { get; set; } = string.Empty;
     public string SellerEmail { get; set; } = string.Empty;
+    public string SellerPhone { get; set; } = string.Empty;
     public string SellerFullName { get; set; } = "Vendedor Demo";
     public string SupportUsername { get; set; } = "support";
     public string SupportPassword { get; set; } = string.Empty;
