@@ -72,7 +72,7 @@ public sealed class CommercialQuotePdfEndpointTests
         var (id, folio) = await IssueAsync(owner, currency, 4, "Observación con español: áéíóú, ñ y símbolos & ®.\nSegunda línea.");
         var bytes = await owner.GetByteArrayAsync($"/api/admin/commercial-quotes/{id}/pdf");
         using var stream = new MemoryStream(bytes);
-        using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.ReadOnly);
+        using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
         Assert.NotEmpty(pdf.Pages);
         Assert.All(pdf.Pages.Cast<PdfSharp.Pdf.PdfPage>(), page =>
         {
@@ -96,7 +96,7 @@ public sealed class CommercialQuotePdfEndpointTests
         Assert.All(downloads, bytes =>
         {
             using var stream = new MemoryStream(bytes);
-            using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.ReadOnly);
+            using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
             Assert.True(pdf.PageCount > 1);
             Assert.All(pdf.Pages.Cast<PdfSharp.Pdf.PdfPage>(), page =>
             {
