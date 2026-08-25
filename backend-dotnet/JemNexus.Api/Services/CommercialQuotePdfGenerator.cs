@@ -99,7 +99,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         AddInformationGrid(section,
             ("Vendedor", quote.ResponsibleSellerName, "Correo", quote.ResponsibleSellerEmail),
             ("Teléfono", quote.ResponsibleSellerPhone, "Código de vendedor", quote.ResponsibleSellerCode),
-            ("Condición de venta", quote.SaleCondition == CommercialQuoteSaleConditions.Cash ? "Contado" : "Crédito a 30 días", "Vigencia", $"{quote.ValidityDays} días"),
+            ("Condición de venta", CommercialQuoteSaleConditions.GetDisplayName(quote.SaleCondition), "Vigencia", $"{quote.ValidityDays} días"),
             ("Fecha de emisión", $"{quote.IssuedOn:dd-MM-yyyy}", "Folio", quote.Folio));
     }
 

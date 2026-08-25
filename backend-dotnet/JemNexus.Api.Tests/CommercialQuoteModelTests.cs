@@ -26,6 +26,9 @@ public sealed class CommercialQuoteModelTests
         var phone = user.FindProperty(nameof(AppUser.Phone))!;
         Assert.True(phone.IsNullable); Assert.Equal(32, phone.GetMaxLength());
         Assert.DoesNotContain(user.GetIndexes(), index => index.Properties.Contains(phone));
+        var validity = quote.FindProperty(nameof(CommercialQuote.ValidityDays))!;
+        Assert.Equal(typeof(int), validity.ClrType); Assert.False(validity.IsNullable); Assert.Equal(15, validity.GetDefaultValue());
+        Assert.DoesNotContain(quote.GetIndexes(), index => index.Properties.Contains(validity));
         var folioProperty = quote.FindProperty(nameof(CommercialQuote.Folio));
         Assert.NotNull(folioProperty); Assert.True(folioProperty.IsNullable); Assert.Equal(40, folioProperty.GetMaxLength());
         Assert.Null(item.FindProperty("Currency")); Assert.Null(quote.FindProperty("PdfPath"));

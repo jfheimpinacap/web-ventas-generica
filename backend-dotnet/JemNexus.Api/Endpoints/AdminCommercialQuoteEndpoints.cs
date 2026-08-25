@@ -34,7 +34,7 @@ public static class AdminCommercialQuoteEndpoints
         var errors = new Dictionary<string, string[]>();
         if (page < 1 || pageSize is < 1 or > MaximumPageSize) errors["pagination"] = [$"page debe ser positivo y page_size debe estar entre 1 y {MaximumPageSize}."];
         if (currency is not null && currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) errors["currency"] = ["Moneda no válida."];
-        if (saleCondition is not null && saleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) errors["sale_condition"] = ["Condición de venta no válida."];
+        if (saleCondition is not null && !CommercialQuoteSaleConditions.IsAllowed(saleCondition)) errors["sale_condition"] = ["Condición de venta no válida."];
         if (status is not null && status is not (CommercialQuoteStatuses.Draft or CommercialQuoteStatuses.Issued)) errors["status"] = ["Estado no válido."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
@@ -59,7 +59,7 @@ public static class AdminCommercialQuoteEndpoints
         var count = await query.CountAsync(ct);
         var results = await query.OrderByDescending(quote => quote.UpdatedAt).ThenByDescending(quote => quote.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
+            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.ValidityDays, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
         return Results.Ok(new CommercialQuotePageResponse(results, page, pageSize, count));
     }
 
@@ -100,11 +100,15 @@ public static class AdminCommercialQuoteEndpoints
         if (seller is null) return Results.Forbid();
         if (string.IsNullOrWhiteSpace(idempotencyKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia es obligatoria."] });
         if (!Guid.TryParse(idempotencyKey, out var parsedKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia debe ser un UUID válido."] });
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, FingerprintJsonOptions)));
+        var effectiveValidityDays = request.ValidityDays ?? CommercialQuoteRules.DefaultValidityDays;
+        if (!CommercialQuoteRules.IsAllowedValidityDays(effectiveValidityDays))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["validity_days"] = ["La vigencia debe ser 15, 30, 45 o 60 días."] });
+        var canonicalRequest = request with { ValidityDays = effectiveValidityDays };
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(canonicalRequest, FingerprintJsonOptions)));
         await using var keyLock = await coordinator.AcquireAsync(seller.Id, parsedKey, ct);
         var existing = await FindIdempotencyRecordAsync(db, seller.Id, parsedKey, ct);
         if (existing is not null) return ReplayOrConflict(existing, fingerprint);
-        var prepared = await PrepareAsync(request, db, ct);
+        var prepared = await PrepareAsync(canonicalRequest, db, ct);
         if (prepared.Errors.Count > 0) return Results.ValidationProblem(prepared.Errors);
         var quote = prepared.Quote!;
         quote.ResponsibleSellerId = seller.Id;
@@ -188,8 +192,8 @@ public static class AdminCommercialQuoteEndpoints
         if (!ChileanRut.TryNormalize(quote.CustomerRut, out var normalizedRut)) errors["customer_rut"] = [ChileanRut.InvalidMessage]; else quote.CustomerRut = normalizedRut;
         if (quote.CustomerEmail is not null && (quote.CustomerEmail.Length > 254 || !new EmailAddressAttribute().IsValid(quote.CustomerEmail))) errors["customer_email"] = ["El correo electrónico no es válido."];
         if (quote.Currency is not (CommercialQuoteCurrencies.Clp or CommercialQuoteCurrencies.Usd)) errors["currency"] = ["Moneda no válida."];
-        if (quote.SaleCondition is not (CommercialQuoteSaleConditions.Cash or CommercialQuoteSaleConditions.Credit30Days)) errors["sale_condition"] = ["Condición de venta no válida."];
-        if (quote.ValidityDays <= 0) errors["validity_days"] = ["La vigencia debe ser positiva."];
+        if (!CommercialQuoteSaleConditions.IsAllowed(quote.SaleCondition)) errors["sale_condition"] = ["Condición de venta no válida."];
+        if (!CommercialQuoteRules.IsAllowedValidityDays(quote.ValidityDays)) errors["validity_days"] = ["La vigencia debe ser 15, 30, 45 o 60 días."];
         if (quote.DetailedDescription?.Length > CommercialQuoteRules.DetailedDescriptionMaxLength) errors["detailed_description"] = [$"La descripción no puede superar {CommercialQuoteRules.DetailedDescriptionMaxLength} caracteres."];
         if (request.Items is null) errors["items"] = ["items es obligatorio (puede ser un arreglo vacío)."];
 
