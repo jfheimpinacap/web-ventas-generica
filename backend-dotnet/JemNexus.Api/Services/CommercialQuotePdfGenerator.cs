@@ -64,12 +64,9 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         AddHeader(section, quote);
         AddInformation(section, quote);
         AddItems(section, quote);
-        AddTotals(section, quote);
         if (!string.IsNullOrWhiteSpace(quote.DetailedDescription))
-        {
-            AddHeading(section, "ESPECIFICACIONES TÉCNICAS");
-            AddMultilineText(section, quote.DetailedDescription);
-        }
+            AddSpecifications(section, quote.DetailedDescription);
+        AddTotals(section, quote);
         return document;
     }
 
@@ -106,20 +103,24 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private static void AddItems(Section section, CommercialQuote quote)
     {
         AddHeading(section, "PRODUCTOS O SERVICIOS");
-        var table = section.AddTable(); table.Borders.Color = Color.Parse("#D1D5DB"); table.Borders.Width = .4;
+        var table = section.AddTable();
         foreach (var width in new[] { .3, 2.05, 1.05, .55, 1.2, .7, 1.55 }) table.AddColumn(Unit.FromInch(width));
         var header = table.AddRow(); header.HeadingFormat = true; header.Shading.Color = Color.Parse("#EAF4F8"); header.Format.Font.Bold = true;
+        var rows = new List<Row> { header };
         string[] labels = ["#", "Producto / descripción", "Marca / modelo", "Cant.", "Neto unitario", "Dto.", "Total neto"];
         for (var index = 0; index < labels.Length; index++) header.Cells[index].AddParagraph(labels[index]);
         foreach (var item in quote.Items.OrderBy(item => item.Position))
         {
             var row = table.AddRow(); row.TopPadding = 3; row.BottomPadding = 3;
+            rows.Add(row);
             row.Cells[0].AddParagraph(item.Position.ToString(ChileanCulture)); row.Cells[1].AddParagraph(Normalize(item.ProductName));
             row.Cells[2].AddParagraph(string.Join(" / ", new[] { item.BrandName, item.ModelName }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(Normalize)));
             AddNumber(row.Cells[3], item.Quantity.ToString("N0", ChileanCulture));
             AddNumber(row.Cells[4], Money(item.UnitNetAmount, quote.Currency));
             AddNumber(row.Cells[5], item.DiscountPercent.ToString("N0", ChileanCulture) + " %"); AddNumber(row.Cells[6], Money(item.LineNetAmount, quote.Currency));
         }
+        ApplyOuterBorder(rows);
+        table.Format.SpaceAfter = 7;
     }
 
     private static void AddTotals(Section section, CommercialQuote quote)
@@ -129,6 +130,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         table.AddColumn(Unit.FromInch(.75));
         table.AddColumn(Unit.FromInch(1.4));
         var netRow = table.AddRow();
+        var rows = new List<Row> { netRow };
         netRow.Cells[0].MergeDown = 2;
         if (quote.Currency == CommercialQuoteCurrencies.Usd)
         {
@@ -136,9 +138,11 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             disclosure.Format.RightIndent = Unit.FromInch(.25);
         }
         AddTotal(netRow, "Neto", Money(quote.NetAmount, quote.Currency), false);
-        AddTotal(table.AddRow(), $"IVA ({quote.TaxRatePercent.ToString("N2", ChileanCulture)} %)", Money(quote.TaxAmount, quote.Currency), false);
-        AddTotal(table.AddRow(), "TOTAL", Money(quote.TotalAmount, quote.Currency), true);
-        table.Format.SpaceBefore = 7;
+        var taxRow = table.AddRow(); rows.Add(taxRow);
+        AddTotal(taxRow, $"IVA ({quote.TaxRatePercent.ToString("N0", ChileanCulture)}%)", Money(quote.TaxAmount, quote.Currency), false);
+        var totalRow = table.AddRow(); rows.Add(totalRow);
+        AddTotal(totalRow, "TOTAL", Money(quote.TotalAmount, quote.Currency), true);
+        ApplyOuterBorder(rows);
         table.Format.SpaceAfter = 8;
     }
 
@@ -169,7 +173,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             rows.Add(row);
         }
         ApplyOuterBorder(rows);
-        table.Format.SpaceAfter = 3;
+        table.Format.SpaceAfter = 7;
     }
 
     private static void ApplyOuterBorder(IReadOnlyList<Row> rows)
@@ -177,14 +181,14 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         var borderColor = Color.Parse("#9CA3AF");
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
-            for (var columnIndex = 0; columnIndex < 2; columnIndex++)
+            for (var columnIndex = 0; columnIndex < rows[rowIndex].Cells.Count; columnIndex++)
             {
                 var borders = rows[rowIndex].Cells[columnIndex].Borders;
                 borders.Visible = false;
                 if (rowIndex == 0) SetBorder(borders.Top, borderColor);
                 if (rowIndex == rows.Count - 1) SetBorder(borders.Bottom, borderColor);
                 if (columnIndex == 0) SetBorder(borders.Left, borderColor);
-                if (columnIndex == 1) SetBorder(borders.Right, borderColor);
+                if (columnIndex == rows[rowIndex].Cells.Count - 1) SetBorder(borders.Right, borderColor);
             }
         }
     }
@@ -196,16 +200,25 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         border.Width = .6;
     }
 
-    private static void AddMultilineText(Section section, string value)
+    private static void AddSpecifications(Section section, string value)
     {
-        var paragraph = section.AddParagraph();
+        AddHeading(section, "ESPECIFICACIONES TÉCNICAS");
+        var table = section.AddTable();
+        var column = table.AddColumn(Unit.FromInch(7.4));
+        column.LeftPadding = 4;
+        column.RightPadding = 4;
+        var row = table.AddRow();
+        row.TopPadding = 3;
+        row.BottomPadding = 3;
+        var paragraph = row.Cells[0].AddParagraph();
         var lines = Normalize(value).Split('\n');
         for (var index = 0; index < lines.Length; index++)
         {
             if (index > 0) paragraph.AddLineBreak();
             paragraph.AddText(lines[index]);
         }
-        paragraph.Format.SpaceAfter = 8;
+        ApplyOuterBorder([row]);
+        table.Format.SpaceAfter = 7;
     }
 
     private static void AddHeading(Section section, string value) { var p = section.AddParagraph(value); StyleHeading(p); }
@@ -216,7 +229,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private static void AddRight(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddNumber(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddTotal(Row row, string label, string value, bool strong) { AddNumber(row.Cells[1], label); AddNumber(row.Cells[2], value); row.Format.Font.Bold = strong; if (strong) { row.Cells[1].Shading.Color = Color.Parse("#EAF4F8"); row.Cells[2].Shading.Color = Color.Parse("#EAF4F8"); row.Format.Font.Size = 10; row.Format.Font.Color = Color.Parse("#042149"); } }
-    private static string Money(decimal value, string currency) => currency == CommercialQuoteCurrencies.Clp ? $"CLP $ {value.ToString("N0", ChileanCulture)}" : $"USD US$ {value.ToString("N2", ChileanCulture)}";
+    private static string Money(decimal value, string currency) => currency == CommercialQuoteCurrencies.Clp ? $"CLP $ {value.ToString("N0", ChileanCulture)}" : $"USD $ {value.ToString("N2", ChileanCulture)}";
     private static string Normalize(string? value)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
