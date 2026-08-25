@@ -19,6 +19,7 @@ namespace JemNexus.Api.Tests;
 public sealed class AdminCommercialQuoteEndpointTests
 {
     private const string Password = "Strong-test-password-130!";
+    private const string SellerPhone = "+56 9 1111 2222";
 
     [Fact]
     public async Task SellerIssuesCompleteQuoteInOneRequestWithoutDraft()
@@ -207,7 +208,7 @@ public sealed class AdminCommercialQuoteEndpointTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Jwt:Issuer"] = "Quote API Test", ["Jwt:Audience"] = "Quote Frontend Test", ["Jwt:Secret"] = "quote-api-test-secret-not-for-production-32chars",
-                ["SeedUsers:SellerUsername"] = "seller", ["SeedUsers:SellerPassword"] = Password, ["SeedUsers:SellerEmail"] = "seller@example.test",
+                ["SeedUsers:SellerUsername"] = "seller", ["SeedUsers:SellerPassword"] = Password, ["SeedUsers:SellerEmail"] = "seller@example.test", ["SeedUsers:SellerPhone"] = SellerPhone,
                 ["SeedUsers:SupportUsername"] = "support", ["SeedUsers:SupportPassword"] = Password, ["SeedUsers:SupportEmail"] = "support@example.test"
             }));
             builder.ConfigureServices(services =>
@@ -226,7 +227,7 @@ public sealed class AdminCommercialQuoteEndpointTests
         public async Task AddUserAsync(string username, string role, string? sellerCode)
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = "+56 9 1111 2222", IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password); db.Add(user); await db.SaveChangesAsync();
+            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = SellerPhone, IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password); db.Add(user); await db.SaveChangesAsync();
         }
         public async Task<(int ProfileId, int ProductId)> AddCatalogDataAsync()
         {

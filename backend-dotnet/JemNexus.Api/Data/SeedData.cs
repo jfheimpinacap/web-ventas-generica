@@ -32,6 +32,7 @@ public static class SeedData
             username: options.SellerUsername,
             password: options.SellerPassword,
             email: options.SellerEmail,
+            phone: options.SellerPhone,
             fullName: options.SellerFullName,
             role: AppRoles.Seller,
             isStaff: true,
@@ -48,6 +49,7 @@ public static class SeedData
             username: options.SupportUsername,
             password: options.SupportPassword,
             email: options.SupportEmail,
+            phone: null,
             fullName: options.SupportFullName,
             role: AppRoles.SupportAdmin,
             isStaff: true,
@@ -70,6 +72,7 @@ public static class SeedData
         string username,
         string password,
         string email,
+        string? phone,
         string fullName,
         string role,
         bool isStaff,
@@ -118,6 +121,7 @@ public static class SeedData
         {
             Username = normalizedUsername,
             Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
+            Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
             Role = role,
             SellerCode = role == AppRoles.Seller
                 ? await sellerCodeGenerator.GenerateAsync(cancellationToken)
