@@ -117,7 +117,11 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         var header = table.AddRow(); header.HeadingFormat = true; header.Shading.Color = Color.Parse("#EAF4F8"); header.Format.Font.Bold = true;
         var rows = new List<Row> { header };
         string[] labels = ["#", "Producto / descripción", "Marca / modelo", "Cant.", "Neto unitario", "Dto.", "Total neto"];
-        for (var index = 0; index < labels.Length; index++) header.Cells[index].AddParagraph(labels[index]);
+        for (var index = 0; index < labels.Length; index++)
+        {
+            var paragraph = header.Cells[index].AddParagraph(labels[index]);
+            if (index >= 3) paragraph.Format.Alignment = ParagraphAlignment.Center;
+        }
         foreach (var item in quote.Items.OrderBy(item => item.Position))
         {
             var row = table.AddRow(); row.TopPadding = 3; row.BottomPadding = 3;
@@ -258,7 +262,25 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     private static void AddField(Cell cell, string label, string? value) { var p = cell.AddParagraph(); p.AddFormattedText(label + ": ", TextFormat.Bold); p.AddText(string.IsNullOrWhiteSpace(value) ? "No informado" : Normalize(value)); }
     private static void AddRight(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddNumber(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
-    private static void AddTotal(Row row, string label, string value, bool strong) { AddNumber(row.Cells[1], label); AddNumber(row.Cells[2], value); row.Format.Font.Bold = strong; if (strong) { row.Cells[1].Shading.Color = Color.Parse("#EAF4F8"); row.Cells[2].Shading.Color = Color.Parse("#EAF4F8"); row.Format.Font.Size = 10; row.Format.Font.Color = Color.Parse("#042149"); } }
+    private static void AddTotal(Row row, string label, string value, bool strong)
+    {
+        AddNumber(row.Cells[1], label);
+        AddNumber(row.Cells[2], value);
+        row.Format.Font.Bold = strong;
+        if (!strong) return;
+
+        foreach (var cell in new[] { row.Cells[1], row.Cells[2] })
+        {
+            cell.Shading.Color = Color.Parse("#EAF4F8");
+            cell.VerticalAlignment = VerticalAlignment.Center;
+            cell.TopPadding = 3;
+            cell.BottomPadding = 3;
+            cell.Paragraphs[0].Format.SpaceBefore = 0;
+            cell.Paragraphs[0].Format.SpaceAfter = 0;
+        }
+        row.Format.Font.Size = 10;
+        row.Format.Font.Color = Color.Parse("#042149");
+    }
     private static string Money(decimal value, string currency) => currency == CommercialQuoteCurrencies.Clp ? $"CLP $ {value.ToString("N0", ChileanCulture)}" : $"USD $ {value.ToString("N2", ChileanCulture)}";
     private static string Normalize(string? value)
     {
