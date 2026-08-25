@@ -224,7 +224,9 @@ export interface AuthUser {
   id: number
   username: string
   email: string
+  phone: string | null
   seller_code: string | null
+  full_name?: string | null
   first_name: string
   last_name: string
   is_staff: boolean

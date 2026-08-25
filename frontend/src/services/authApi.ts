@@ -21,6 +21,7 @@ type RawAuthUser = Partial<AuthUser> &
     isSuperUser: boolean
     userRole: string
     user_role: string
+    fullName: string
   }>
 
 type AuthResponse = Partial<{
@@ -46,7 +47,9 @@ export function normalizeAuthUser(user?: RawAuthUser | null): AuthUser | undefin
     id: typeof user.id === 'number' ? user.id : Number(user.id ?? 0),
     username: typeof user.username === 'string' ? user.username : '',
     email: typeof user.email === 'string' ? user.email : '',
+    phone: typeof user.phone === 'string' ? user.phone : null,
     seller_code: typeof user.seller_code === 'string' ? user.seller_code : null,
+    full_name: typeof user.full_name === 'string' ? user.full_name : typeof user.fullName === 'string' ? user.fullName : null,
     first_name: typeof user.first_name === 'string' ? user.first_name : typeof user.firstName === 'string' ? user.firstName : '',
     last_name: typeof user.last_name === 'string' ? user.last_name : typeof user.lastName === 'string' ? user.lastName : '',
     is_staff: normalizeBoolean(user.is_staff ?? user.isStaff),
