@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -9,6 +10,7 @@ import { deleteSupplier, getAdminSuppliers } from '../../services/adminApi'
 import type { SupplierSummary } from '../../types/catalog'
 
 export function AdminSuppliersPage() {
+  const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<SupplierSummary[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
@@ -48,7 +50,7 @@ export function AdminSuppliersPage() {
   )
 
   const handleDelete = async (item: SupplierSummary) => {
-    if (!window.confirm(`¿Eliminar proveedor "${item.name}"?`)) return
+    if (!await requestConfirmation({ title: 'Eliminar proveedor', message: `¿Eliminar proveedor "${item.name}"?`, confirmLabel: 'Eliminar', variant: 'danger' })) return
     try {
       await deleteSupplier(item.id)
       await load()

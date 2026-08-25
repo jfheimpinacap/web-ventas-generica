@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { getSafeApiErrorMessage } from '../../services/api'
@@ -8,6 +9,7 @@ import { deletePromotion, getAdminPromotions } from '../../services/adminApi'
 import type { Promotion } from '../../types/catalog'
 
 export function AdminPromotionsPage() {
+  const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<Promotion[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
@@ -49,7 +51,7 @@ export function AdminPromotionsPage() {
     [items, search, activeFilter],
   )
   const handleDelete = async (item: Promotion) => {
-    if (!window.confirm(`¿Eliminar oferta "${item.title}"?`)) return
+    if (!await requestConfirmation({ title: 'Eliminar oferta', message: `¿Eliminar oferta "${item.title}"?`, confirmLabel: 'Eliminar', variant: 'danger' })) return
     try {
       await deletePromotion(item.id)
       await load()

@@ -5,6 +5,7 @@ import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import { CustomerSearch } from '../../components/admin/CustomerSearch'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { QuoteItemsEditor } from '../../components/admin/QuoteItemsEditor'
 import { useCommercialQuotePdfDownload } from '../../hooks/useCommercialQuotePdfDownload'
 import { getSafeApiErrorMessage } from '../../services/api'
@@ -20,19 +21,22 @@ const customerFields: Array<[keyof CustomerSnapshot, string, number, boolean, st
 const fromDetail = (q: CommercialQuoteDetail): QuoteEditorItem[] => [...q.items].sort((a,b) => a.position-b.position).map<QuoteEditorItem>(i => ({ key: String(i.id), source: i.source, product_id: i.product_id ?? null, product_name: i.product_name, brand_name: i.brand_name ?? '', model_name: i.model_name ?? '', quantity: String(i.quantity), unit_net_amount: String(i.unit_net_amount), discount_percent: i.discount_percent ? String(i.discount_percent) : '' })).concat([emptyQuoteItem()])
 
 export function CommercialQuoteEditorPage() {
+  const { requestConfirmation } = useSystemDialog()
   const { downloadPdf, error: downloadError, isDownloading } = useCommercialQuotePdfDownload()
   const currentUser = useAdminUser()
   const params = useParams(); const navigate = useNavigate(); const routeId = params.id ? Number(params.id) : undefined
   const id = routeId; const [customer, setCustomer] = useState(emptyCustomer); const [currency, setCurrency] = useState<QuoteCurrency>('CLP'); const [condition, setCondition] = useState<SaleCondition>('Cash'); const [validityDays, setValidityDays] = useState<CommercialQuoteValidityDays>(15); const [description, setDescription] = useState(''); const [items, setItems] = useState<QuoteEditorItem[]>([emptyQuoteItem()]); const [persisted, setPersisted] = useState<CommercialQuoteDetail | null>(null)
   const [loading, setLoading] = useState(Boolean(routeId)); const [saving, setSaving] = useState(false); const [dirty, setDirty] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [rutReviewed, setRutReviewed] = useState(false); const [showIssueDialog, setShowIssueDialog] = useState(false); const firstError = useRef<HTMLDivElement>(null); const rutInput = useRef<HTMLInputElement>(null); const issueButton = useRef<HTMLButtonElement>(null); const readonly = Boolean(routeId) || !isSeller(currentUser ?? undefined)
   const pendingIssue = useRef<{ payloadFingerprint: string; idempotencyKey: string } | null>(null)
+  const navigationConfirmationPending = useRef(false)
+  const currencyConfirmationPending = useRef(false)
   const currentSellerName = currentUser?.full_name?.trim() || [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(' ').trim() || currentUser?.username || 'No informado'
   const seller = persisted ? { name: persisted.responsibleSellerName, code: persisted.responsibleSellerCode, email: persisted.responsibleSellerEmail, phone: persisted.responsibleSellerPhone } : { name: currentSellerName, code: currentUser?.seller_code, email: currentUser?.email, phone: currentUser?.phone }
   const informed = (value: string | null | undefined) => value?.trim() || 'No informado'
   const totals = useMemo(() => persisted && !dirty ? { net: persisted.net_amount, tax: persisted.tax_amount, total: persisted.total_amount } : quoteTotals(items.filter(i => !isEmptyItem(i)), currency), [currency, dirty, items, persisted])
   const apply = useCallback((quote: CommercialQuoteDetail) => { setPersisted(quote); setCustomer({ customer_profile_id: quote.customer_profile_id, customer_business_name: quote.customer_business_name, customer_rut: formatChileanRutInput(quote.customer_rut), customer_business_activity: quote.customer_business_activity, customer_address: quote.customer_address, customer_phone: quote.customer_phone, customer_city_or_commune: quote.customer_city_or_commune, customer_contact_name: quote.customer_contact_name, customer_email: quote.customer_email ?? '' }); setCurrency(quote.currency); setCondition(quote.sale_condition); setValidityDays(quote.validityDays); setDescription(quote.detailed_description ?? ''); setItems(fromDetail(quote)); setDirty(false) }, [])
   useEffect(() => { if (!routeId) return; getCommercialQuote(routeId).then(apply).catch(e => setError(getSafeApiErrorMessage(e, 'No se pudo cargar la cotización.'))).finally(() => setLoading(false)) }, [apply, routeId])
-  useEffect(() => { const warn = (e: BeforeUnloadEvent) => { if (dirty) e.preventDefault() }; addEventListener('beforeunload', warn); return () => removeEventListener('beforeunload', warn) }, [dirty])
+  useEffect(() => { if (!dirty) return; const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }; addEventListener('beforeunload', warn); return () => removeEventListener('beforeunload', warn) }, [dirty])
   const touch = () => { setDirty(true); setMessage('') }
   const selectCustomer = (p: CustomerProfile) => { setCustomer({ customer_profile_id:p.id, customer_business_name:p.business_name, customer_rut:formatChileanRutInput(p.rut), customer_business_activity:p.business_activity, customer_address:p.address, customer_phone:p.phone, customer_city_or_commune:p.city_or_commune, customer_contact_name:p.contact_name, customer_email:p.email ?? '' }); setRutReviewed(false); touch() }
   const rutError = rutReviewed ? (!customer.customer_rut.trim() ? 'El RUT es obligatorio.' : !normalizeChileanRut(customer.customer_rut) ? 'El RUT ingresado no es válido. Revise el número y el dígito verificador.' : '') : ''
@@ -41,7 +45,24 @@ export function CommercialQuoteEditorPage() {
   const requestIssue = () => { if (saving || readonly || !validate(true)) return; setShowIssueDialog(true) }
   const closeIssueDialog = () => { setShowIssueDialog(false); window.setTimeout(() => issueButton.current?.focus(), 0) }
   const issue = async () => { if (saving || readonly) return; const issuePayload = payload(); const payloadFingerprint = JSON.stringify(issuePayload); if (!pendingIssue.current || pendingIssue.current.payloadFingerprint !== payloadFingerprint) pendingIssue.current = { payloadFingerprint, idempotencyKey: crypto.randomUUID() }; const idempotencyKey = pendingIssue.current.idempotencyKey; setShowIssueDialog(false); setSaving(true); setError(''); try { const issued = await issueCommercialQuote(issuePayload, idempotencyKey); pendingIssue.current = null; apply(issued); setMessage(`Cotización emitida con folio ${issued.folio}.`); navigate(`/admin/cotizaciones/${issued.id}/editar`, { replace:true }) } catch(e) { setError(getSafeApiErrorMessage(e,'No se pudo emitir la cotización. Los datos del formulario se conservaron.')) } finally { setSaving(false) } }
-  const goBack = () => { if (!dirty || window.confirm('Hay cambios sin guardar. ¿Desea volver?')) navigate('/admin/cotizaciones?vista=generadas') }
+  const goBack = async () => {
+    if (navigationConfirmationPending.current) return
+    if (!dirty) { navigate('/admin/cotizaciones?vista=generadas'); return }
+    navigationConfirmationPending.current = true
+    const accepted = await requestConfirmation({ title: 'Cambios sin guardar', message: 'Hay cambios sin guardar. Si vuelves ahora, se perderán.', confirmLabel: 'Volver sin guardar', cancelLabel: 'Continuar editando', variant: 'danger' })
+    navigationConfirmationPending.current = false
+    if (accepted) navigate('/admin/cotizaciones?vista=generadas')
+  }
+  const changeCurrency = async (next: QuoteCurrency) => {
+    if (next === currency || currencyConfirmationPending.current) return
+    if (items.some(item => Number(item.unit_net_amount) > 0)) {
+      currencyConfirmationPending.current = true
+      const accepted = await requestConfirmation({ title: 'Cambiar moneda', message: 'No existe conversión monetaria automática. Al cambiar la moneda se limpiarán los precios ingresados.', confirmLabel: 'Cambiar moneda', cancelLabel: 'Cancelar' })
+      currencyConfirmationPending.current = false
+      if (!accepted) return
+    }
+    setCurrency(next); setItems(current => current.map(item => ({ ...item, unit_net_amount: '', discount_percent: '' }))); touch()
+  }
   if (loading) return <AdminLayout><p className="ui-note">Cargando cotización…</p></AdminLayout>
   return <AdminLayout><AdminPageHeader title={id ? 'Ver cotización' : 'Crear cotización'} /><div ref={firstError} tabIndex={-1}>{error ? <p className="ui-note ui-note--error" role="alert">{error}</p>:null}{downloadError ? <p className="ui-note ui-note--error" role="alert">{downloadError}</p>:null}{message ? <p className="ui-note ui-note--success">{message}</p>:null}</div>
     <div className="commercial-editor-grid">
@@ -56,7 +77,7 @@ export function CommercialQuoteEditorPage() {
           <h2>Datos comerciales y productos a cotizar</h2>
           <div className="commercial-meta-row commercial-meta-row--primary">
             <label className="commercial-meta-field commercial-meta-field--condition">Condición de venta<select value={condition} disabled={readonly||saving} onChange={e=>{setCondition(e.target.value as SaleCondition);touch()}}>{SALE_CONDITION_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <label className="commercial-meta-field commercial-meta-field--currency">Moneda<select value={currency} disabled={readonly||saving} onChange={e=>{const next=e.target.value as QuoteCurrency;if(items.some(i=>Number(i.unit_net_amount)>0)&&!window.confirm('No existe conversión monetaria. Se limpiarán los precios ingresados. ¿Continuar?'))return;setCurrency(next);setItems(current=>current.map(i=>({...i,unit_net_amount:'',discount_percent:''})));touch()}}><option>CLP</option><option>USD</option></select></label>
+            <label className="commercial-meta-field commercial-meta-field--currency">Moneda<select value={currency} disabled={readonly||saving} onChange={e=>void changeCurrency(e.target.value as QuoteCurrency)}><option>CLP</option><option>USD</option></select></label>
             <label className="commercial-meta-field commercial-meta-field--validity">Vigencia<select value={validityDays} disabled={readonly||saving} onChange={e=>{setValidityDays(Number(e.target.value) as CommercialQuoteValidityDays);touch()}}>{COMMERCIAL_QUOTE_VALIDITY_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             <label className="commercial-meta-field commercial-meta-field--seller-name">Vendedor<input readOnly value={informed(seller.name)} /></label>
             <label className="commercial-meta-field commercial-meta-field--seller-email">Correo<input readOnly value={informed(seller.email)} /></label>

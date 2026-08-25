@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { useSystemDialog } from "../../context/SystemDialogContext";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
 import { ProductForm } from "../../components/admin/ProductForm";
@@ -87,6 +88,7 @@ const PLACEHOLDER_IMAGE =
 const PRODUCT_EDIT_FORM_ID = "admin-product-edit-form";
 
 export function AdminProductEditPage() {
+  const { requestConfirmation } = useSystemDialog();
   const location = useLocation();
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
@@ -278,7 +280,7 @@ export function AdminProductEditPage() {
 
   const handleDeleteImage = async (imageId: number) => {
     if (!productId) return;
-    if (!window.confirm("¿Eliminar esta imagen?")) return;
+    if (!await requestConfirmation({ title: "Eliminar imagen", message: "¿Eliminar esta imagen?", confirmLabel: "Eliminar", variant: "danger" })) return;
 
     try {
       setImageSaving(true);
@@ -341,7 +343,7 @@ export function AdminProductEditPage() {
 
   const handleDeleteSpec = async (specId: number) => {
     if (!productId) return;
-    if (!window.confirm("¿Eliminar esta especificación?")) return;
+    if (!await requestConfirmation({ title: "Eliminar especificación", message: "¿Eliminar esta especificación?", confirmLabel: "Eliminar", variant: "danger" })) return;
 
     try {
       setSpecSaving(true);
