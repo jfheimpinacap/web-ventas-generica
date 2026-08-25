@@ -10,6 +10,7 @@ namespace JemNexus.Api.Services;
 public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
 {
     internal const string LogoResourceName = "JemNexus.Api.Assets.jem-nexus.png";
+    internal const string UsdDisclosure = "Valores expresados en dólares estadounidenses (USD). En caso de aceptar la cotización se aplicará el valor del dólar observado a la fecha de emisión de la factura.";
     private const string FontName = "Arial";
     private static readonly CultureInfo ChileanCulture = CultureInfo.GetCultureInfo("es-CL");
     private readonly string _logoData;
@@ -59,16 +60,15 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         section.PageSetup.RightMargin = Unit.FromInch(.5);
         section.PageSetup.TopMargin = Unit.FromInch(.5);
         section.PageSetup.BottomMargin = Unit.FromInch(.58);
-        AddFooter(section, quote.Folio!);
+        AddFooter(section, quote);
         AddHeader(section, quote);
         AddInformation(section, quote);
         AddItems(section, quote);
         AddTotals(section, quote);
         if (!string.IsNullOrWhiteSpace(quote.DetailedDescription))
         {
-            AddHeading(section, "OBSERVACIONES");
-            var observations = section.AddParagraph(Normalize(quote.DetailedDescription));
-            observations.Format.SpaceAfter = 8;
+            AddHeading(section, "ESPECIFICACIONES TÉCNICAS");
+            AddMultilineText(section, quote.DetailedDescription);
         }
         return document;
     }
@@ -82,26 +82,25 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         var title = row.Cells[1].AddParagraph("COTIZACIÓN"); title.Format.Alignment = ParagraphAlignment.Right;
         title.Format.Font.Size = 20; title.Format.Font.Bold = true; title.Format.Font.Color = Color.Parse("#042149");
         AddRight(row.Cells[1], $"Folio: {quote.Folio}");
-        AddRight(row.Cells[1], $"Estado: Emitida");
-        AddRight(row.Cells[1], $"Fecha: {quote.IssuedOn:dd-MM-yyyy} · Moneda: {quote.Currency}");
+        AddRight(row.Cells[1], $"Fecha: {quote.IssuedOn:dd-MM-yyyy}");
         var line = section.AddParagraph(); line.Format.Borders.Bottom.Width = 2; line.Format.Borders.Bottom.Color = Color.Parse("#0077B6"); line.Format.SpaceAfter = 7;
     }
 
     private static void AddInformation(Section section, CommercialQuote quote)
     {
-        var table = section.AddTable(); table.AddColumn(Unit.FromInch(3.65)); table.AddColumn(Unit.FromInch(3.75));
-        var row = table.AddRow();
-        AddHeading(row.Cells[0], "DATOS DEL CLIENTE");
-        AddField(row.Cells[0], "Razón social", quote.CustomerBusinessName); AddField(row.Cells[0], "RUT", quote.CustomerRut);
-        AddField(row.Cells[0], "Actividad o giro", quote.CustomerBusinessActivity); AddField(row.Cells[0], "Dirección", quote.CustomerAddress);
-        AddField(row.Cells[0], "Ciudad o comuna", quote.CustomerCityOrCommune); AddField(row.Cells[0], "Contacto", quote.CustomerContactName);
-        AddField(row.Cells[0], "Teléfono", quote.CustomerPhone); AddField(row.Cells[0], "Correo", quote.CustomerEmail);
-        AddHeading(row.Cells[1], "DATOS COMERCIALES");
-        AddField(row.Cells[1], "Vendedor responsable", quote.ResponsibleSellerName); AddField(row.Cells[1], "Código vendedor", quote.ResponsibleSellerCode);
-        AddField(row.Cells[1], "Condición de venta", quote.SaleCondition == CommercialQuoteSaleConditions.Cash ? "Contado" : "Crédito a 30 días");
-        AddField(row.Cells[1], "Moneda", quote.Currency == CommercialQuoteCurrencies.Clp ? "Peso chileno (CLP)" : "Dólar estadounidense (USD)");
-        AddField(row.Cells[1], "Vigencia", $"{quote.ValidityDays} días"); AddField(row.Cells[1], "Fecha de emisión", $"{quote.IssuedOn:dd-MM-yyyy}"); AddField(row.Cells[1], "Folio", quote.Folio);
-        table.Format.SpaceAfter = 8;
+        AddHeading(section, "DATOS DEL CLIENTE");
+        AddInformationGrid(section,
+            ("Razón social", quote.CustomerBusinessName, "RUT", quote.CustomerRut),
+            ("Actividad o giro", quote.CustomerBusinessActivity, "Dirección", quote.CustomerAddress),
+            ("Comuna o ciudad", quote.CustomerCityOrCommune, "Nombre de contacto", quote.CustomerContactName),
+            ("Teléfono", quote.CustomerPhone, "Correo electrónico", quote.CustomerEmail));
+
+        AddHeading(section, "DATOS COMERCIALES");
+        AddInformationGrid(section,
+            ("Vendedor", quote.ResponsibleSellerName, "Correo", quote.ResponsibleSellerEmail),
+            ("Teléfono", quote.ResponsibleSellerPhone, "Código de vendedor", quote.ResponsibleSellerCode),
+            ("Condición de venta", quote.SaleCondition == CommercialQuoteSaleConditions.Cash ? "Contado" : "Crédito a 30 días", "Vigencia", $"{quote.ValidityDays} días"),
+            ("Fecha de emisión", $"{quote.IssuedOn:dd-MM-yyyy}", "Folio", quote.Folio));
     }
 
     private static void AddItems(Section section, CommercialQuote quote)
@@ -118,32 +117,68 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
             row.Cells[0].AddParagraph(item.Position.ToString(ChileanCulture)); row.Cells[1].AddParagraph(Normalize(item.ProductName));
             row.Cells[2].AddParagraph(string.Join(" / ", new[] { item.BrandName, item.ModelName }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(Normalize)));
             AddNumber(row.Cells[3], item.Quantity.ToString("N0", ChileanCulture));
-            AddNumber(row.Cells[4], item.DiscountPercent == 0
-                ? Money(item.UnitNetAmount, quote.Currency)
-                : $"{Money(item.UnitNetAmount, quote.Currency)}\nFinal: {Money(item.FinalUnitNetAmount, quote.Currency)}");
-            AddNumber(row.Cells[5], item.DiscountPercent.ToString("N2", ChileanCulture) + " %"); AddNumber(row.Cells[6], Money(item.LineNetAmount, quote.Currency));
+            AddNumber(row.Cells[4], Money(item.UnitNetAmount, quote.Currency));
+            AddNumber(row.Cells[5], item.DiscountPercent.ToString("N0", ChileanCulture) + " %"); AddNumber(row.Cells[6], Money(item.LineNetAmount, quote.Currency));
         }
     }
 
     private static void AddTotals(Section section, CommercialQuote quote)
     {
-        var table = section.AddTable(); table.AddColumn(Unit.FromInch(5.25)); table.AddColumn(Unit.FromInch(2.15));
-        AddTotal(table, "Neto", Money(quote.NetAmount, quote.Currency), false);
-        AddTotal(table, $"IVA ({quote.TaxRatePercent.ToString("N2", ChileanCulture)} %)", Money(quote.TaxAmount, quote.Currency), false);
-        AddTotal(table, "TOTAL", Money(quote.TotalAmount, quote.Currency), true); table.Format.SpaceBefore = 7; table.Format.SpaceAfter = 8;
+        var layout = section.AddTable(); layout.AddColumn(Unit.FromInch(5.25)); layout.AddColumn(Unit.FromInch(2.15));
+        var row = layout.AddRow();
+        if (quote.Currency == CommercialQuoteCurrencies.Usd)
+        {
+            var disclosure = row.Cells[0].AddParagraph(UsdDisclosure);
+            disclosure.Format.RightIndent = Unit.FromInch(.25);
+        }
+        var totals = row.Cells[1].AddTable(); totals.AddColumn(Unit.FromInch(.75)); totals.AddColumn(Unit.FromInch(1.4));
+        AddTotal(totals, "Neto", Money(quote.NetAmount, quote.Currency), false);
+        AddTotal(totals, $"IVA ({quote.TaxRatePercent.ToString("N2", ChileanCulture)} %)", Money(quote.TaxAmount, quote.Currency), false);
+        AddTotal(totals, "TOTAL", Money(quote.TotalAmount, quote.Currency), true); layout.Format.SpaceBefore = 7; layout.Format.SpaceAfter = 8;
     }
 
-    private static void AddFooter(Section section, string folio)
+    private static void AddFooter(Section section, CommercialQuote quote)
     {
         var footer = section.Footers.Primary.AddParagraph(); footer.Format.Font.Size = 8; footer.Format.Font.Color = Color.Parse("#6B7280");
-        footer.AddText($"JEM Nexus · https://jem-nexus.cl · {folio} · Documento de cotización comercial. · Página ");
+        var sellerContact = new[] { quote.ResponsibleSellerName, quote.ResponsibleSellerPhone }
+            .Where(value => !string.IsNullOrWhiteSpace(value)).Select(Normalize);
+        var segments = new[] { "JEM Nexus", "https://jem-nexus.cl", quote.Folio, string.Join(" · ", sellerContact) }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+        footer.AddText(string.Join(" · ", segments) + " · Página ");
         footer.AddPageField(); footer.AddText(" de "); footer.AddNumPagesField();
+    }
+
+    private static void AddInformationGrid(Section section, params (string LeftLabel, string? LeftValue, string RightLabel, string? RightValue)[] fields)
+    {
+        var table = section.AddTable(); table.AddColumn(Unit.FromInch(3.7)); table.AddColumn(Unit.FromInch(3.7));
+        table.Borders.Color = Color.Parse("#9CA3AF"); table.Borders.Width = .6;
+        foreach (var field in fields)
+        {
+            var row = table.AddRow(); row.TopPadding = 4; row.BottomPadding = 4;
+            row.Cells[0].LeftPadding = row.Cells[1].LeftPadding = 5;
+            row.Cells[0].RightPadding = row.Cells[1].RightPadding = 5;
+            AddField(row.Cells[0], field.LeftLabel, field.LeftValue);
+            AddField(row.Cells[1], field.RightLabel, field.RightValue);
+        }
+        table.Format.SpaceAfter = 6;
+    }
+
+    private static void AddMultilineText(Section section, string value)
+    {
+        var paragraph = section.AddParagraph();
+        var lines = Normalize(value).Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (index > 0) paragraph.AddLineBreak();
+            paragraph.AddText(lines[index]);
+        }
+        paragraph.Format.SpaceAfter = 8;
     }
 
     private static void AddHeading(Section section, string value) { var p = section.AddParagraph(value); StyleHeading(p); }
     private static void AddHeading(Cell cell, string value) { var p = cell.AddParagraph(value); StyleHeading(p); }
     private static void StyleHeading(Paragraph p) { p.Format.Font.Bold = true; p.Format.Font.Color = Color.Parse("#042149"); p.Format.SpaceBefore = 3; p.Format.SpaceAfter = 4; }
-    private static void AddField(Cell cell, string label, string? value) { if (string.IsNullOrWhiteSpace(value)) return; var p = cell.AddParagraph(); p.AddFormattedText(label + ": ", TextFormat.Bold); p.AddText(Normalize(value)); }
+    private static void AddField(Cell cell, string label, string? value) { var p = cell.AddParagraph(); p.AddFormattedText(label + ": ", TextFormat.Bold); p.AddText(string.IsNullOrWhiteSpace(value) ? "No informado" : Normalize(value)); }
     private static void AddRight(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddNumber(Cell cell, string value) { var p = cell.AddParagraph(value); p.Format.Alignment = ParagraphAlignment.Right; }
     private static void AddTotal(Table table, string label, string value, bool strong) { var row = table.AddRow(); AddNumber(row.Cells[0], label); AddNumber(row.Cells[1], value); row.Format.Font.Bold = strong; if (strong) { row.Shading.Color = Color.Parse("#EAF4F8"); row.Format.Font.Size = 10; row.Format.Font.Color = Color.Parse("#042149"); } }

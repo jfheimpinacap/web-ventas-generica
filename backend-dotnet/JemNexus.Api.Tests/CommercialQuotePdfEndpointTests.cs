@@ -74,6 +74,7 @@ public sealed class CommercialQuotePdfEndpointTests
         using var stream = new MemoryStream(bytes);
         using var pdf = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
         Assert.NotEmpty(pdf.Pages);
+        Assert.Single(pdf.Pages);
         Assert.All(pdf.Pages.Cast<PdfSharp.Pdf.PdfPage>(), page =>
         {
             Assert.True(page.Height.Point > page.Width.Point);
@@ -113,6 +114,9 @@ public sealed class CommercialQuotePdfEndpointTests
         Assert.Contains("JemNexus.Api.Assets.jem-nexus.png", assembly.GetManifestResourceNames());
         using var stream = assembly.GetManifestResourceStream("JemNexus.Api.Assets.jem-nexus.png");
         Assert.NotNull(stream); Assert.True(stream.Length > 0);
+        Assert.Equal(
+            "Valores expresados en dólares estadounidenses (USD). En caso de aceptar la cotización se aplicará el valor del dólar observado a la fecha de emisión de la factura.",
+            CommercialQuotePdfGenerator.UsdDisclosure);
     }
 
     [Fact]
