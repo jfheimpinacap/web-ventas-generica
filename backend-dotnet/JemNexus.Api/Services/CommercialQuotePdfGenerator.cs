@@ -10,7 +10,7 @@ namespace JemNexus.Api.Services;
 public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
 {
     internal const string LogoResourceName = "JemNexus.Api.Assets.jem-nexus.png";
-    internal const string UsdDisclosure = "Valores expresados en dólares estadounidenses (USD). En caso de aceptar la cotización se aplicará el valor del dólar observado a la fecha de emisión de la factura.";
+    public const string UsdDisclosure = "Valores expresados en dólares estadounidenses (USD). En caso de aceptar la cotización se aplicará el valor del dólar observado a la fecha de emisión de la factura.";
     private const string FontName = "Arial";
     private static readonly CultureInfo ChileanCulture = CultureInfo.GetCultureInfo("es-CL");
     private readonly string _logoData;
