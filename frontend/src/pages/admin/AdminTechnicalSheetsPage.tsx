@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -10,6 +11,7 @@ import type { TechnicalSheet } from '../../types/catalog'
 const MAX_SIZE = 10 * 1024 * 1024
 
 export function AdminTechnicalSheetsPage() {
+  const { requestConfirmation, requestText } = useSystemDialog()
   const [items, setItems] = useState<TechnicalSheet[]>([])
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -53,7 +55,7 @@ export function AdminTechnicalSheetsPage() {
   }
 
   const editName = async (item: TechnicalSheet) => {
-    const next = window.prompt('Nombre de la ficha técnica', item.name)
+    const next = await requestText({ title: 'Editar ficha técnica', label: 'Nombre de la ficha técnica', initialValue: item.name, confirmLabel: 'Guardar nombre' })
     if (next === null || next.trim() === item.name) return
     if (!next.trim()) { setError('El nombre es obligatorio.'); return }
     setBusy(true)
@@ -72,7 +74,7 @@ export function AdminTechnicalSheetsPage() {
   }
 
   const remove = async (item: TechnicalSheet) => {
-    if (!window.confirm(`¿Eliminar la ficha técnica "${item.name}"? Esta acción no se puede deshacer.`)) return
+    if (!await requestConfirmation({ title: 'Eliminar ficha técnica', message: `¿Eliminar la ficha técnica "${item.name}"? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', variant: 'danger' })) return
     setBusy(true)
     try { await deleteTechnicalSheet(item.id); setItems(xs => xs.filter(x => x.id !== item.id)); setMessage('Ficha técnica eliminada.') }
     catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo eliminar la ficha técnica.')) }

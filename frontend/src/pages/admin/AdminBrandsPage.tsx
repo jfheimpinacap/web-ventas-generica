@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -9,6 +10,7 @@ import { deleteBrand, getAdminBrands } from '../../services/adminApi'
 import type { Brand } from '../../types/catalog'
 
 export function AdminBrandsPage() {
+  const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<Brand[]>([])
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -49,7 +51,7 @@ export function AdminBrandsPage() {
   )
 
   const handleDelete = async (item: Brand) => {
-    if (!window.confirm(`¿Eliminar marca "${item.name}"?`)) return
+    if (!await requestConfirmation({ title: 'Eliminar marca', message: `¿Eliminar marca "${item.name}"?`, confirmLabel: 'Eliminar', variant: 'danger' })) return
     try {
       await deleteBrand(item.id)
       await load()

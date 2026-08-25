@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useSystemDialog } from '../../context/SystemDialogContext'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -9,6 +10,7 @@ import { deleteCategory, getAdminCategories } from '../../services/adminApi'
 import type { Category } from '../../types/catalog'
 
 export function AdminCategoriesPage() {
+  const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<Category[]>([])
   const [selectedRootId, setSelectedRootId] = useState<number | null>(null)
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
@@ -52,7 +54,7 @@ export function AdminCategoriesPage() {
   )
 
   const handleDelete = async (item: Category) => {
-    if (!window.confirm(`¿Seguro que deseas borrar esta categoría? Esta acción no se puede deshacer.`)) return
+    if (!await requestConfirmation({ title: 'Eliminar categoría', message: '¿Seguro que deseas borrar esta categoría? Esta acción no se puede deshacer.', confirmLabel: 'Eliminar', variant: 'danger' })) return
     try {
       await deleteCategory(item.id)
       setSuccess('Categoría borrada.')
