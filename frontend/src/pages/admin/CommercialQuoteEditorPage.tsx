@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { CommercialQuotePdfModal } from '../../components/admin/CommercialQuotePdfModal'
@@ -20,16 +20,24 @@ import { formatChileanRutInput, normalizeChileanRut } from '../../utils/chileanR
 const emptyCustomer: CustomerSnapshot = { customer_profile_id: null, customer_business_name: '', customer_rut: '', customer_business_activity: '', customer_address: '', customer_phone: '', customer_city_or_commune: '', customer_contact_name: '', customer_email: '' }
 const customerFields: Array<[keyof CustomerSnapshot, string, number, boolean, string]> = [['customer_business_name','Razón social',200,true,'business'],['customer_rut','RUT',12,true,'rut'],['customer_phone','Teléfono',30,true,'phone'],['customer_city_or_commune','Comuna o ciudad',120,true,'city'],['customer_business_activity','Giro',200,true,'activity'],['customer_address','Dirección',300,true,'address'],['customer_contact_name','Nombre de contacto',200,true,'contact'],['customer_email','Correo electrónico',254,false,'email']]
 const fromDetail = (q: CommercialQuoteDetail): QuoteEditorItem[] => [...q.items].sort((a,b) => a.position-b.position).map<QuoteEditorItem>(i => ({ key: String(i.id), source: i.source, product_id: i.product_id ?? null, product_name: i.product_name, brand_name: i.brand_name ?? '', model_name: i.model_name ?? '', quantity: String(i.quantity), unit_net_amount: String(i.unit_net_amount), discount_percent: i.discount_percent ? String(i.discount_percent) : '' })).concat([emptyQuoteItem()])
+type QuoteEditorLocationState = { issuedQuotePdfPreview?: { quoteId?: unknown; folio?: unknown } }
+
+const issuedPdfPreviewFrom = (state: unknown, routeId: number | undefined) => {
+  const signal = (state as QuoteEditorLocationState | null)?.issuedQuotePdfPreview
+  if (!signal || typeof signal.quoteId !== 'number' || !Number.isInteger(signal.quoteId) || signal.quoteId <= 0 || signal.quoteId !== routeId) return null
+  return { id: signal.quoteId, folio: typeof signal.folio === 'string' ? signal.folio.trim() || null : null }
+}
 
 export function CommercialQuoteEditorPage() {
   const { requestConfirmation } = useSystemDialog()
   const { downloadPdf, error: downloadError, isDownloading } = useCommercialQuotePdfDownload()
   const currentUser = useAdminUser()
-  const params = useParams(); const navigate = useNavigate(); const routeId = params.id ? Number(params.id) : undefined
+  const params = useParams(); const navigate = useNavigate(); const location = useLocation(); const routeId = params.id ? Number(params.id) : undefined
   const id = routeId; const [customer, setCustomer] = useState(emptyCustomer); const [currency, setCurrency] = useState<QuoteCurrency>('CLP'); const [condition, setCondition] = useState<SaleCondition>('Cash'); const [validityDays, setValidityDays] = useState<CommercialQuoteValidityDays>(15); const [description, setDescription] = useState(''); const [items, setItems] = useState<QuoteEditorItem[]>([emptyQuoteItem()]); const [persisted, setPersisted] = useState<CommercialQuoteDetail | null>(null)
   const [loading, setLoading] = useState(Boolean(routeId)); const [saving, setSaving] = useState(false); const [dirty, setDirty] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [rutReviewed, setRutReviewed] = useState(false); const [showIssueDialog, setShowIssueDialog] = useState(false); const firstError = useRef<HTMLDivElement>(null); const rutInput = useRef<HTMLInputElement>(null); const issueButton = useRef<HTMLButtonElement>(null); const readonly = Boolean(routeId) || !isSeller(currentUser ?? undefined)
   const [pdfPreview, setPdfPreview] = useState<{ id: number; folio: string | null } | null>(null)
   const [issuedHere, setIssuedHere] = useState(false)
+  const consumedPdfPreview = useRef<string | null>(null)
   const pendingIssue = useRef<{ payloadFingerprint: string; idempotencyKey: string } | null>(null)
   const navigationConfirmationPending = useRef(false)
   const currencyConfirmationPending = useRef(false)
@@ -39,6 +47,7 @@ export function CommercialQuoteEditorPage() {
   const totals = useMemo(() => persisted && !dirty ? { net: persisted.net_amount, tax: persisted.tax_amount, total: persisted.total_amount } : quoteTotals(items.filter(i => !isEmptyItem(i)), currency), [currency, dirty, items, persisted])
   const apply = useCallback((quote: CommercialQuoteDetail) => { setPersisted(quote); setCustomer({ customer_profile_id: quote.customer_profile_id, customer_business_name: quote.customer_business_name, customer_rut: formatChileanRutInput(quote.customer_rut), customer_business_activity: quote.customer_business_activity, customer_address: quote.customer_address, customer_phone: quote.customer_phone, customer_city_or_commune: quote.customer_city_or_commune, customer_contact_name: quote.customer_contact_name, customer_email: quote.customer_email ?? '' }); setCurrency(quote.currency); setCondition(quote.sale_condition); setValidityDays(quote.validityDays); setDescription(quote.detailed_description ?? ''); setItems(fromDetail(quote)); setDirty(false) }, [])
   useEffect(() => { if (!routeId) return; getCommercialQuote(routeId).then(apply).catch(e => setError(getSafeApiErrorMessage(e, 'No se pudo cargar la cotización.'))).finally(() => setLoading(false)) }, [apply, routeId])
+  useEffect(() => { const preview = issuedPdfPreviewFrom(location.state, routeId); if (!preview) return; const signalKey = `${location.key}:${preview.id}`; if (consumedPdfPreview.current === signalKey) return; consumedPdfPreview.current = signalKey; setPdfPreview(preview) }, [location.key, location.state, routeId])
   useEffect(() => { if (!dirty) return; const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }; addEventListener('beforeunload', warn); return () => removeEventListener('beforeunload', warn) }, [dirty])
   const touch = () => { setDirty(true); setMessage('') }
   const selectCustomer = (p: CustomerProfile) => { setCustomer({ customer_profile_id:p.id, customer_business_name:p.business_name, customer_rut:formatChileanRutInput(p.rut), customer_business_activity:p.business_activity, customer_address:p.address, customer_phone:p.phone, customer_city_or_commune:p.city_or_commune, customer_contact_name:p.contact_name, customer_email:p.email ?? '' }); setRutReviewed(false); touch() }
@@ -47,7 +56,11 @@ export function CommercialQuoteEditorPage() {
   const payload = () => ({ ...customer, customer_rut: normalizeChileanRut(customer.customer_rut)!, currency, sale_condition: condition, validity_days: validityDays, detailed_description: description || undefined, items: items.filter(i=>!isEmptyItem(i)).map(i => ({ source: i.source as 'Catalog'|'FreeText', ...(i.product_id ? { product_id:i.product_id } : {}), product_name:i.product_name, ...(i.brand_name ? {brand_name:i.brand_name}:{}), ...(i.model_name ? {model_name:i.model_name}:{}), quantity:Number(i.quantity), unit_net_amount:Number(i.unit_net_amount), ...(i.discount_percent ? {discount_percent:Math.min(100,Math.max(0,Number(i.discount_percent)))}:{}) })) })
   const requestIssue = () => { if (saving || readonly || !validate(true)) return; setShowIssueDialog(true) }
   const closeIssueDialog = () => { setShowIssueDialog(false); window.setTimeout(() => issueButton.current?.focus(), 0) }
-  const issue = async () => { if (saving || readonly) return; const issuePayload = payload(); const payloadFingerprint = JSON.stringify(issuePayload); if (!pendingIssue.current || pendingIssue.current.payloadFingerprint !== payloadFingerprint) pendingIssue.current = { payloadFingerprint, idempotencyKey: crypto.randomUUID() }; const idempotencyKey = pendingIssue.current.idempotencyKey; setShowIssueDialog(false); setSaving(true); setError(''); try { const issued = await issueCommercialQuote(issuePayload, idempotencyKey); pendingIssue.current = null; apply(issued); setIssuedHere(true); setPdfPreview({ id: issued.id, folio: issued.folio }); setMessage(`Cotización emitida con folio ${issued.folio}.`); navigate(`/admin/cotizaciones/${issued.id}/editar`, { replace:true }) } catch(e) { setError(getSafeApiErrorMessage(e,'No se pudo emitir la cotización. Los datos del formulario se conservaron.')) } finally { setSaving(false) } }
+  const issue = async () => { if (saving || readonly) return; const issuePayload = payload(); const payloadFingerprint = JSON.stringify(issuePayload); if (!pendingIssue.current || pendingIssue.current.payloadFingerprint !== payloadFingerprint) pendingIssue.current = { payloadFingerprint, idempotencyKey: crypto.randomUUID() }; const idempotencyKey = pendingIssue.current.idempotencyKey; setShowIssueDialog(false); setSaving(true); setError(''); try { const issued = await issueCommercialQuote(issuePayload, idempotencyKey); pendingIssue.current = null; apply(issued); setIssuedHere(true); setMessage(`Cotización emitida con folio ${issued.folio}.`); navigate(`/admin/cotizaciones/${issued.id}/editar`, { replace:true, state: { issuedQuotePdfPreview: { quoteId: issued.id, folio: issued.folio } } }) } catch(e) { setError(getSafeApiErrorMessage(e,'No se pudo emitir la cotización. Los datos del formulario se conservaron.')) } finally { setSaving(false) } }
+  const closePdfPreview = useCallback(() => {
+    setPdfPreview(null)
+    if (issuedPdfPreviewFrom(location.state, routeId)) navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state: null })
+  }, [location.hash, location.pathname, location.search, location.state, navigate, routeId])
   const goBack = async () => {
     if (navigationConfirmationPending.current) return
     if (!dirty) { navigate('/admin/cotizaciones?vista=generadas'); return }
@@ -100,6 +113,6 @@ export function CommercialQuoteEditorPage() {
       </main>
     </div>
     {showIssueDialog ? <ConfirmDialog title="Emitir cotización" cancelLabel="Cancelar" confirmLabel="Emitir cotización" onCancel={closeIssueDialog} onConfirm={() => void issue()}>La cotización no podrá editarse después de emitirla. ¿Desea continuar?</ConfirmDialog> : null}
-    {pdfPreview ? <CommercialQuotePdfModal quoteId={pdfPreview.id} folio={pdfPreview.folio} onClose={() => setPdfPreview(null)} returnFocusRef={issueButton} /> : null}
+    {pdfPreview ? <CommercialQuotePdfModal quoteId={pdfPreview.id} folio={pdfPreview.folio} onClose={closePdfPreview} returnFocusRef={issueButton} /> : null}
   </AdminLayout>
 }
