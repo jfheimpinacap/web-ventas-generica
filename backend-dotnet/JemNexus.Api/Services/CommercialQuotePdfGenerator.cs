@@ -88,19 +88,19 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
 
     private static void AddInformation(Section section, CommercialQuote quote)
     {
-        AddHeading(section, "DATOS DEL CLIENTE");
+        AddInformationHeading(section, "DATOS DEL CLIENTE");
         AddInformationGrid(section,
-            ("Razón social", quote.CustomerBusinessName, "RUT", quote.CustomerRut),
-            ("Actividad o giro", quote.CustomerBusinessActivity, "Dirección", quote.CustomerAddress),
-            ("Comuna o ciudad", quote.CustomerCityOrCommune, "Nombre de contacto", quote.CustomerContactName),
-            ("Teléfono", quote.CustomerPhone, "Correo electrónico", quote.CustomerEmail));
+            ("Razón social", quote.CustomerBusinessName, "Comuna o ciudad", quote.CustomerCityOrCommune),
+            ("RUT", quote.CustomerRut, "Nombre de contacto", quote.CustomerContactName),
+            ("Giro", quote.CustomerBusinessActivity, "Teléfono", quote.CustomerPhone),
+            ("Dirección", quote.CustomerAddress, "Correo electrónico", quote.CustomerEmail));
 
-        AddHeading(section, "DATOS COMERCIALES");
+        AddInformationHeading(section, "DATOS COMERCIALES");
         AddInformationGrid(section,
-            ("Vendedor", quote.ResponsibleSellerName, "Correo", quote.ResponsibleSellerEmail),
-            ("Teléfono", quote.ResponsibleSellerPhone, "Código de vendedor", quote.ResponsibleSellerCode),
-            ("Condición de venta", CommercialQuoteSaleConditions.GetDisplayName(quote.SaleCondition), "Vigencia", $"{quote.ValidityDays} días"),
-            ("Fecha de emisión", $"{quote.IssuedOn:dd-MM-yyyy}", "Folio", quote.Folio));
+            ("Vendedor", quote.ResponsibleSellerName, "Folio", quote.Folio),
+            ("Código vendedor", quote.ResponsibleSellerCode, "Fecha", $"{quote.IssuedOn:dd-MM-yyyy}"),
+            ("Teléfono", quote.ResponsibleSellerPhone, "Condición de venta", CommercialQuoteSaleConditions.GetDisplayName(quote.SaleCondition)),
+            ("Correo", quote.ResponsibleSellerEmail, "Vigencia", $"{quote.ValidityDays} días"));
     }
 
     private static void AddItems(Section section, CommercialQuote quote)
@@ -158,16 +158,42 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         var table = section.AddTable();
         var leftColumn = table.AddColumn(Unit.FromInch(3.7));
         var rightColumn = table.AddColumn(Unit.FromInch(3.7));
-        leftColumn.LeftPadding = rightColumn.LeftPadding = 5;
-        leftColumn.RightPadding = rightColumn.RightPadding = 5;
-        table.Borders.Color = Color.Parse("#9CA3AF"); table.Borders.Width = .6;
+        leftColumn.LeftPadding = rightColumn.LeftPadding = 4;
+        leftColumn.RightPadding = rightColumn.RightPadding = 4;
+        var rows = new List<Row>(fields.Length);
         foreach (var field in fields)
         {
-            var row = table.AddRow(); row.TopPadding = 4; row.BottomPadding = 4;
+            var row = table.AddRow(); row.TopPadding = 2; row.BottomPadding = 2;
             AddField(row.Cells[0], field.LeftLabel, field.LeftValue);
             AddField(row.Cells[1], field.RightLabel, field.RightValue);
+            rows.Add(row);
         }
-        table.Format.SpaceAfter = 6;
+        ApplyOuterBorder(rows);
+        table.Format.SpaceAfter = 3;
+    }
+
+    private static void ApplyOuterBorder(IReadOnlyList<Row> rows)
+    {
+        var borderColor = Color.Parse("#9CA3AF");
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            for (var columnIndex = 0; columnIndex < 2; columnIndex++)
+            {
+                var borders = rows[rowIndex].Cells[columnIndex].Borders;
+                borders.Visible = false;
+                if (rowIndex == 0) SetBorder(borders.Top, borderColor);
+                if (rowIndex == rows.Count - 1) SetBorder(borders.Bottom, borderColor);
+                if (columnIndex == 0) SetBorder(borders.Left, borderColor);
+                if (columnIndex == 1) SetBorder(borders.Right, borderColor);
+            }
+        }
+    }
+
+    private static void SetBorder(Border border, Color color)
+    {
+        border.Visible = true;
+        border.Color = color;
+        border.Width = .6;
     }
 
     private static void AddMultilineText(Section section, string value)
@@ -183,6 +209,7 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
     }
 
     private static void AddHeading(Section section, string value) { var p = section.AddParagraph(value); StyleHeading(p); }
+    private static void AddInformationHeading(Section section, string value) { var p = section.AddParagraph(value); StyleHeading(p); p.Format.SpaceBefore = 2; p.Format.SpaceAfter = 2; p.Format.KeepWithNext = true; }
     private static void AddHeading(Cell cell, string value) { var p = cell.AddParagraph(value); StyleHeading(p); }
     private static void StyleHeading(Paragraph p) { p.Format.Font.Bold = true; p.Format.Font.Color = Color.Parse("#042149"); p.Format.SpaceBefore = 3; p.Format.SpaceAfter = 4; }
     private static void AddField(Cell cell, string label, string? value) { var p = cell.AddParagraph(); p.AddFormattedText(label + ": ", TextFormat.Bold); p.AddText(string.IsNullOrWhiteSpace(value) ? "No informado" : Normalize(value)); }
