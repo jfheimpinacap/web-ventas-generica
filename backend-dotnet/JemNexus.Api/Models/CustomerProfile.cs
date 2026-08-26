@@ -13,6 +13,7 @@ public sealed class CustomerProfile
     public string ContactName { get; set; } = string.Empty;
     public string? Email { get; set; }
     public string NormalizedBusinessName { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public int? CreatedById { get; set; }

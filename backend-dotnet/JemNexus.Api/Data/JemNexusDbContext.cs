@@ -198,6 +198,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(customer => customer.ContactName).HasMaxLength(200).IsRequired();
             entity.Property(customer => customer.Email).HasMaxLength(254);
             entity.Property(customer => customer.NormalizedBusinessName).HasMaxLength(200).IsRequired();
+            entity.Property(customer => customer.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(customer => customer.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.Property(customer => customer.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             ConfigureAuditUsers(entity);

@@ -172,7 +172,12 @@ public static class AdminCommercialQuoteEndpoints
     private static async Task<PreparedQuote> PrepareAsync(CommercialQuoteInput request, JemNexusDbContext db, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
-        if (request.CustomerProfileId is int profileId && !await db.CustomerProfiles.AsNoTracking().AnyAsync(profile => profile.Id == profileId, ct)) errors["customer_profile_id"] = ["El perfil de cliente no existe."];
+        if (request.CustomerProfileId is int profileId)
+        {
+            var profileStatus = await db.CustomerProfiles.AsNoTracking().Where(profile => profile.Id == profileId).Select(profile => (bool?)profile.IsActive).SingleOrDefaultAsync(ct);
+            if (profileStatus is null) errors["customer_profile_id"] = ["El perfil de cliente no existe."];
+            else if (!profileStatus.Value) errors["customer_profile_id"] = ["El perfil de cliente está inactivo."];
+        }
         var quote = new CommercialQuote
         {
             CustomerProfileId = request.CustomerProfileId,

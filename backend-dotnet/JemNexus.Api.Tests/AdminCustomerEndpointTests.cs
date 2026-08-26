@@ -189,8 +189,6 @@ public sealed class AdminCustomerEndpointTests
 
     [Theory]
     [InlineData("/api/admin/customers?search=a")]
-    [InlineData("/api/admin/customers?search=")]
-    [InlineData("/api/admin/customers")]
     [InlineData("/api/admin/customers?search=valid&page_size=101")]
     public async Task SearchRejectsUnsafeLimitsAndDoesNotEnumerateAll(string path)
     {
@@ -198,6 +196,33 @@ public sealed class AdminCustomerEndpointTests
         using var client = await AuthorizedClientAsync(factory, "seller");
         await CreateAsync(client, Payload(Rut(10000020)));
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ListingFiltersStatusAndLifecycleActionsAreIdempotent()
+    {
+        await using var factory = new CustomerApiFactory();
+        using var client = await AuthorizedClientAsync(factory, "support");
+        var id = await CreateAsync(client, Payload(Rut(10000021)));
+
+        foreach (var path in new[] { $"/api/admin/customers/{id}/deactivate", $"/api/admin/customers/{id}/deactivate" })
+        {
+            var response = await client.PostAsync(path, null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.False((await JsonAsync(response)).GetProperty("is_active").GetBoolean());
+        }
+        Assert.Equal(0, (await JsonAsync(await client.GetAsync("/api/admin/customers?status=active"))).GetProperty("count").GetInt32());
+        Assert.Equal(1, (await JsonAsync(await client.GetAsync("/api/admin/customers?status=inactive"))).GetProperty("count").GetInt32());
+        Assert.Equal(1, (await JsonAsync(await client.GetAsync("/api/admin/customers?status=all"))).GetProperty("count").GetInt32());
+
+        foreach (var path in new[] { $"/api/admin/customers/{id}/reactivate", $"/api/admin/customers/{id}/reactivate" })
+        {
+            var response = await client.PostAsync(path, null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True((await JsonAsync(response)).GetProperty("is_active").GetBoolean());
+        }
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/admin/customers?status=deleted")).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync($"/api/admin/customers/{id}")).StatusCode);
     }
 
     [Fact]
@@ -288,6 +313,8 @@ public sealed class AdminCustomerEndpointTests
         yield return new(HttpMethod.Get, "/api/admin/customers/1");
         yield return JsonRequest(HttpMethod.Post, "/api/admin/customers");
         yield return JsonRequest(HttpMethod.Put, "/api/admin/customers/1");
+        yield return JsonRequest(HttpMethod.Post, "/api/admin/customers/1/deactivate");
+        yield return JsonRequest(HttpMethod.Post, "/api/admin/customers/1/reactivate");
     }
 
     private static HttpRequestMessage JsonRequest(HttpMethod method, string path) => new(method, path) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
@@ -315,6 +342,7 @@ public sealed class AdminCustomerEndpointTests
     private static void AssertSafeContract(JsonElement value)
     {
         var json = value.GetRawText();
+        Assert.True(value.TryGetProperty("is_active", out _));
         foreach (var forbidden in new[] { "normalized_rut", "normalized_business_name", "created_by_user_id", "updated_by_user_id", "created_by", "updated_by", "password", "password_hash", "token" })
             Assert.DoesNotContain(forbidden, json, StringComparison.OrdinalIgnoreCase);
     }

@@ -16,7 +16,7 @@ namespace JemNexus.Api.Endpoints;
 public static partial class AdminCustomerEndpoints
 {
     private const int MaximumPageSize = 100;
-    private const string DuplicateMessage = "Ya existe un cliente con ese RUT.";
+    private const string DuplicateMessage = "Ya existe un cliente con ese RUT; si está inactivo, debe reactivarse.";
 
     public static IEndpointRouteBuilder MapAdminCustomerEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -25,16 +25,25 @@ public static partial class AdminCustomerEndpoints
         group.MapGet("/{id:int}", GetAsync);
         group.MapPost("", CreateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
         group.MapPut("/{id:int}", UpdateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPost("/{id:int}/deactivate", DeactivateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPost("/{id:int}/reactivate", ReactivateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
         return endpoints;
     }
 
-    private static async Task<IResult> SearchAsync(JemNexusDbContext db, CancellationToken ct, string? search, int page = 1, [FromQuery(Name = "page_size")] int pageSize = 20)
+    private static async Task<IResult> SearchAsync(JemNexusDbContext db, CancellationToken ct, string? search, string status = "all", int page = 1, [FromQuery(Name = "page_size")] int pageSize = 20)
     {
-        if (page < 1 || pageSize is < 1 or > MaximumPageSize) return Results.ValidationProblem(new Dictionary<string, string[]> { ["pagination"] = [$"La página debe ser positiva y page_size debe estar entre 1 y {MaximumPageSize}."] });
+        var errors = new Dictionary<string, string[]>();
+        if (page < 1 || pageSize is < 1 or > MaximumPageSize) errors["pagination"] = [$"La página debe ser positiva y page_size debe estar entre 1 y {MaximumPageSize}."];
+        status = status.Trim().ToLowerInvariant();
+        if (status is not ("active" or "inactive" or "all")) errors["status"] = ["El estado debe ser active, inactive o all."];
         var term = CustomerTextNormalizer.Search(search);
-        if (term.Length is < 2 or > 200) return Results.ValidationProblem(new Dictionary<string, string[]> { ["search"] = ["La búsqueda debe contener entre 2 y 200 caracteres."] });
+        if (term.Length == 1 || term.Length > 200) errors["search"] = ["La búsqueda debe estar vacía o contener entre 2 y 200 caracteres."];
+        if (errors.Count > 0) return Results.ValidationProblem(errors);
         var rutTerm = new string((search ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
-        var query = db.CustomerProfiles.AsNoTracking().Where(customer => customer.NormalizedBusinessName.Contains(term) || customer.NormalizedRut.Replace("-", "").Contains(rutTerm));
+        var query = db.CustomerProfiles.AsNoTracking().AsQueryable();
+        if (status == "active") query = query.Where(customer => customer.IsActive);
+        if (status == "inactive") query = query.Where(customer => !customer.IsActive);
+        if (term.Length > 0) query = query.Where(customer => customer.NormalizedBusinessName.Contains(term) || customer.NormalizedRut.Replace("-", "").Contains(rutTerm));
         var count = await query.CountAsync(ct);
         var values = await query.OrderBy(customer => customer.NormalizedBusinessName).ThenBy(customer => customer.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return Results.Ok(new CustomerProfileSearchResponse(values.Select(CustomerProfileResponse.FromEntity).ToList(), page, pageSize, count));
@@ -43,7 +52,7 @@ public static partial class AdminCustomerEndpoints
     private static async Task<IResult> GetAsync(int id, JemNexusDbContext db, CancellationToken ct)
     {
         var customer = await db.CustomerProfiles.AsNoTracking().FirstOrDefaultAsync(value => value.Id == id, ct);
-        return customer is null ? Results.NotFound() : Results.Ok(CustomerProfileResponse.FromEntity(customer));
+        return id <= 0 || customer is null ? Results.NotFound() : Results.Ok(CustomerProfileResponse.FromEntity(customer));
     }
 
     private static async Task<IResult> CreateAsync(CustomerProfileCreateRequest request, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
@@ -53,6 +62,7 @@ public static partial class AdminCustomerEndpoints
         if (await db.CustomerProfiles.AnyAsync(value => value.NormalizedRut == prepared.Rut, ct)) return Results.Conflict(new { Detail = DuplicateMessage });
         var customer = new CustomerProfile();
         Apply(customer, prepared);
+        customer.IsActive = true;
         customer.CreatedById = customer.UpdatedById = UserId(principal);
         db.CustomerProfiles.Add(customer);
         var conflict = await SaveAsync(db, ct);
@@ -70,6 +80,24 @@ public static partial class AdminCustomerEndpoints
         customer.UpdatedById = UserId(principal);
         var conflict = await SaveAsync(db, ct);
         return conflict ?? Results.Ok(CustomerProfileResponse.FromEntity(customer));
+    }
+
+    private static Task<IResult> DeactivateAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct) =>
+        SetActiveAsync(id, false, principal, db, ct);
+
+    private static Task<IResult> ReactivateAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct) =>
+        SetActiveAsync(id, true, principal, db, ct);
+
+    private static async Task<IResult> SetActiveAsync(int id, bool isActive, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    {
+        if (id <= 0) return Results.NotFound();
+        var customer = await db.CustomerProfiles.FirstOrDefaultAsync(value => value.Id == id, ct);
+        if (customer is null) return Results.NotFound();
+        customer.IsActive = isActive;
+        customer.UpdatedById = UserId(principal);
+        db.Entry(customer).Property(value => value.IsActive).IsModified = true;
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(CustomerProfileResponse.FromEntity(customer));
     }
 
     private static PreparedCustomer Prepare(string? businessName, string? rut, string? activity, string? address, string? phone, string? city, string? contact, string? email)

@@ -42,7 +42,25 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260822010000_AddRefreshTokenPasswordVersion", discoveredMigrationIds);
         Assert.Contains("20260822020000_AddCommercialQuoteIssueIdempotency", discoveredMigrationIds);
         Assert.Contains("20260824010000_AddSellerContactQuoteSnapshots", discoveredMigrationIds);
+        Assert.Contains("20260825010000_AddCustomerProfileStatus", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
+    }
+
+    [Fact]
+    public void CustomerStatusMigrationOnlyAddsAndRemovesRequiredActiveColumn()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_CustomerStatusScriptTests;Trusted_Connection=True;TrustServerCertificate=True").Options;
+        using var context = new JemNexusDbContext(options);
+        var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260824010000_AddSellerContactQuoteSnapshots", "20260825010000_AddCustomerProfileStatus");
+        Assert.Contains("ALTER TABLE [CustomerProfiles] ADD [IsActive] bit NOT NULL DEFAULT CAST(1 AS bit)", up);
+        Assert.DoesNotContain("CommercialQuotes", up);
+        Assert.DoesNotContain("CREATE INDEX", up);
+
+        var down = migrator.GenerateScript("20260825010000_AddCustomerProfileStatus", "20260824010000_AddSellerContactQuoteSnapshots");
+        Assert.Contains("ALTER TABLE [CustomerProfiles] DROP COLUMN [IsActive]", down);
+        Assert.DoesNotContain("CommercialQuotes", down);
     }
 
 
