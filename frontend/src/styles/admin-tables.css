@@ -5,6 +5,9 @@
   border-radius: var(--radius-card);
   border: 1px solid #e2e8f0;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  scrollbar-color: var(--admin-primary) #e2e8f0;
 }
 
 .admin-table {
@@ -20,6 +23,8 @@
   padding: 0.38rem 0.5rem;
   text-align: left;
   vertical-align: middle;
+  max-width: 24rem;
+  overflow-wrap: anywhere;
 }
 
 .admin-table th {
@@ -114,6 +119,9 @@
 @media (max-width: 768px) {
   .admin-table-wrapper {
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 3px;
+    background-image: linear-gradient(to right, transparent calc(100% - 18px), rgba(15, 76, 129, .14));
+    background-attachment: local;
   }
 
   .admin-table {

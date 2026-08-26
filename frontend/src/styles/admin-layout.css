@@ -47,6 +47,7 @@
   gap: 0.55rem;
   align-content: flex-start;
   overflow-x: visible;
+  min-width: 0;
 }
 
 .admin-content h1 { margin: 0; font-size: 1.28rem; line-height: 1.2; }
@@ -78,6 +79,8 @@
     top: 0.5rem;
     z-index: 1001;
     margin: 0.5rem;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0.45rem 0.7rem;
     border: 1px solid #1e293b;
     border-radius: 10px;
@@ -113,8 +116,8 @@
 
   .admin-sidebar__mobile-header h2 { margin: 0; font-size: 1rem; }
   .admin-sidebar__mobile-close {
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border-radius: 999px;
     border: 1px solid #334155;
     background: #1e293b;
@@ -126,6 +129,7 @@
   .admin-content {
     padding: 0 0.65rem 0.75rem;
     width: 100%;
+    box-sizing: border-box;
   }
 
   .admin-edit-layout,
@@ -134,6 +138,18 @@
   .admin-edit-layout__side {
     position: static;
   }
+}
+
+@media (max-width: 680px) {
+  .admin-content { padding-inline: 10px; }
+  .admin-content > *, .admin-main, .admin-shell { min-width: 0; max-width: 100%; }
+  .admin-shell .btn, .admin-shell .table-action { min-height: 44px; }
+  .admin-editor-header__actions, .admin-list-toolbar { width: 100%; margin-left: 0; }
+  .admin-editor-header__actions > .btn, .admin-editor-header__actions > a,
+  .admin-list-toolbar > .btn, .admin-list-toolbar > a { flex: 1 1 12rem; }
+  .admin-media-item { grid-template-columns: minmax(0, 1fr); }
+  .admin-media-item img { height: auto; max-height: 220px; }
+  .admin-image-mini-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); }
 }
 
 /* Compact administrative visual foundation (Prompt 081). */
@@ -177,8 +193,9 @@
 .admin-shell label { font-size: 13px; }
 .admin-shell .admin-block, .admin-shell .admin-card, .admin-shell .admin-table-wrapper { border-color: var(--admin-border); border-radius: var(--admin-radius); box-shadow: var(--admin-shadow); }
 @media (max-width: 992px) {
-  .admin-mobile-menu-trigger { gap: 7px; min-height: 36px; border-radius: var(--admin-radius); font: 600 13px var(--admin-font); }
+  .admin-mobile-menu-trigger { gap: 7px; min-height: 44px; border-radius: var(--admin-radius); font: 600 13px var(--admin-font); }
   .admin-sidebar { width: min(86vw, 280px); }
   .admin-sidebar__mobile-close { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--admin-radius); font-size: inherit; }
+  .admin-sidebar .admin-nav-link, .admin-sidebar .admin-logout-button { min-height: 44px; }
   .admin-content { padding: 0 12px 16px; }
 }
