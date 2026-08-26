@@ -331,7 +331,7 @@ export function AdminProductsPage() {
 
   return (
     <AdminLayout>
-      <main className="admin-products-list">
+      <div className="admin-products-list">
         <AdminPageHeader title="Productos" actions={<Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link>} />
         <div className="admin-products-list__messages" aria-live="polite">
           {loading ? <p className="ui-note">Cargando productos...</p> : null}
@@ -369,7 +369,7 @@ export function AdminProductsPage() {
             ) : null}
           </section>
         </div>
-      </main>
+      </div>
     </AdminLayout>
   );
 }

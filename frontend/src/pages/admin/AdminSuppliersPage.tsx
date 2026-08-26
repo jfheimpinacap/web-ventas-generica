@@ -91,12 +91,12 @@ export function AdminSuppliersPage() {
           <table className="admin-table admin-table--compact admin-table--suppliers">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Contacto</th>
-                <th>Teléfono</th>
-                <th>Email</th>
-                <th>Activo</th>
-                <th>Acciones</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Contacto</th>
+                <th scope="col">Teléfono</th>
+                <th scope="col">Email</th>
+                <th scope="col">Activo</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>

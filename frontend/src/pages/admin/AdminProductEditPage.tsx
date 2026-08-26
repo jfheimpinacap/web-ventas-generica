@@ -551,11 +551,11 @@ export function AdminProductEditPage() {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Nombre</th>
-                    <th>Valor</th>
-                    <th>Unidad</th>
-                    <th>Orden</th>
-                    <th>Acciones</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Valor</th>
+                    <th scope="col">Unidad</th>
+                    <th scope="col">Orden</th>
+                    <th scope="col">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>

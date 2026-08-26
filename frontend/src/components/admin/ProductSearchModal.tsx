@@ -101,7 +101,7 @@ export function ProductSearchModal({ onSelect, onManual, onClose }: { onSelect: 
         {items.length > 0 && state !== 'error' ? (
           <div className="product-search-modal__table-wrap">
             <table className="product-search-modal__table">
-              <thead><tr><th>Nombre</th><th>Marca</th><th>Modelo</th><th>Selección</th></tr></thead>
+              <thead><tr><th scope="col">Nombre</th><th scope="col">Marca</th><th scope="col">Modelo</th><th scope="col">Selección</th></tr></thead>
               <tbody>{items.map((product) => {
                 const service = product.product_type === 'service'
                 const isSelected = selected?.id === product.id

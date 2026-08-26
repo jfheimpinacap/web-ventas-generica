@@ -51,7 +51,9 @@ const usedMachineryConfig: CommercialCatalogConfig = {
 
 export function AppRouter() {
   return (
-    <Routes>
+    <>
+      <a className="skip-link" href="#main-content">Saltar al contenido</a>
+      <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/catalogo" element={<CatalogPage />} />
       <Route path="/maquinaria-nueva" element={<CatalogPage commercialConfig={newMachineryConfig} />} />
@@ -100,6 +102,7 @@ export function AppRouter() {
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   )
 }

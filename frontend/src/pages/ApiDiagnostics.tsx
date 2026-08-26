@@ -154,7 +154,7 @@ export function ApiDiagnostics() {
   }
 
   return (
-    <main className="diagnostics-page">
+    <main id="main-content" className="diagnostics-page" tabIndex={-1}>
       <Seo
         title="Diagnóstico API | JEM Nexus"
         description="Validación controlada de la API configurada por variables Vite."

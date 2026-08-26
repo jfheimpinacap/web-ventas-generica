@@ -18,7 +18,7 @@ export function Layout({ children }: LayoutProps) {
       <Topbar />
       <div className={`app-shell__body ${showSidebar ? "" : "app-shell__body--full"}`.trim()}>
         {showSidebar ? <Sidebar /> : null}
-        <main className="main-content">{children}</main>
+        <main id="main-content" className="main-content" tabIndex={-1}>{children}</main>
       </div>
       <Footer />
     </div>
