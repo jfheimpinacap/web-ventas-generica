@@ -15,8 +15,15 @@ export const MIN_LONG_SIDE = 640
 
 const ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MIME_TYPES_BY_EXTENSION: Record<string, ReadonlySet<string>> = {
+  jpg: new Set(['image/jpeg']),
+  jpeg: new Set(['image/jpeg']),
+  png: new Set(['image/png']),
+  webp: new Set(['image/webp']),
+}
 const WEBP_QUALITIES = [0.82, 0.74, 0.66, 0.58]
 const MAX_RESIZE_ATTEMPTS = 8
+const MAX_FILE_NAME_LENGTH = 80
 
 export class ProductImageOptimizationError extends Error {
   constructor(message: string) {
@@ -34,7 +41,7 @@ export function createSafeWebPFileName(originalName: string) {
   const withoutExtension = originalName.replace(/\.[^.]*$/, '')
   const base = withoutExtension
     .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+    .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, MAX_FILE_NAME_LENGTH - '.webp'.length)
   return `${base || 'producto'}.webp`
 }
 
@@ -42,7 +49,8 @@ function validateSource(file: File) {
   const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : ''
   if (file.size === 0) throw new ProductImageOptimizationError('El archivo está vacío.')
   if (file.size > MAX_SOURCE_SIZE) throw new ProductImageOptimizationError('El archivo original supera el máximo de 20 MB.')
-  if (!ALLOWED_EXTENSIONS.has(extension) || !ALLOWED_MIME_TYPES.has(file.type.toLowerCase())) {
+  const mimeType = file.type.toLowerCase()
+  if (!ALLOWED_EXTENSIONS.has(extension) || !ALLOWED_MIME_TYPES.has(mimeType) || !MIME_TYPES_BY_EXTENSION[extension]?.has(mimeType)) {
     throw new ProductImageOptimizationError('El archivo debe tener extensión y formato JPG, PNG o WebP válidos.')
   }
 }
