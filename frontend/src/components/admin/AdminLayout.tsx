@@ -12,6 +12,7 @@ const adminMenu: { to: string; label: string; icon: AdminIconName }[] = [
   { to: '/admin/categorias', label: 'Categorías', icon: 'folder' },
   { to: '/admin/marcas', label: 'Marcas', icon: 'tag' },
   { to: '/admin/proveedores', label: 'Proveedores', icon: 'truck' },
+  { to: '/admin/clientes', label: 'Clientes', icon: 'users' },
   { to: '/admin/cotizaciones', label: 'Cotizaciones', icon: 'clipboard' },
   { to: '/admin/promociones', label: 'Promociones', icon: 'megaphone' },
   { to: '/admin/ofertas-hero', label: 'Ofertas en Hero section', icon: 'star' },

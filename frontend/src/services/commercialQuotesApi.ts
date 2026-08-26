@@ -1,13 +1,15 @@
 import { authBlobFetch, authFetch } from './authApi'
-import type { CommercialQuoteDetail, CommercialQuoteIssueInput, CommercialQuotePage, CommercialQuoteValidityDays, CustomerProfile } from '../types/commercialQuote'
+import type { CommercialQuoteDetail, CommercialQuoteIssueInput, CommercialQuotePage, CommercialQuoteValidityDays } from '../types/commercialQuote'
+import { normalizeCustomerProfile, type CustomerProfileInput } from './customerProfilesApi'
 
 const json = (body: unknown) => ({ 'Content-Type': 'application/json', body: JSON.stringify(body) })
 
 export async function searchCustomers(search: string, signal?: AbortSignal) {
-  return authFetch<{ results: CustomerProfile[]; count: number }>('/api/admin/customers', { params: { search, page_size: 10 }, signal })
+  const response = await authFetch<{ results: unknown[]; count: number }>('/api/admin/customers', { params: { search, status: 'active', page_size: 10 }, signal })
+  return { ...response, results: response.results.map(normalizeCustomerProfile) }
 }
-export function saveCustomer(customer: Omit<CustomerProfile, 'id' | 'created_at' | 'updated_at'>, id?: number) {
-  return authFetch<CustomerProfile>(id ? `/api/admin/customers/${id}` : '/api/admin/customers', { method: id ? 'PUT' : 'POST', ...json(customer) })
+export async function saveCustomer(customer: CustomerProfileInput, id?: number) {
+  return normalizeCustomerProfile(await authFetch<unknown>(id ? `/api/admin/customers/${id}` : '/api/admin/customers', { method: id ? 'PUT' : 'POST', ...json(customer) }))
 }
 export function getCommercialQuotes({ search, page, pageSize = 20, signal }: { search?: string; page: number; pageSize?: number; signal?: AbortSignal }) {
   return authFetch<CommercialQuotePage>('/api/admin/commercial-quotes', { params: { search, page, page_size: pageSize }, signal })

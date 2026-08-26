@@ -69,6 +69,11 @@
   gap: 0.4rem;
 }
 
+.admin-table--customers { min-width: 980px; }
+.admin-table--customers th:nth-child(6), .admin-table--customers td:nth-child(6) { text-align: center; }
+.admin-table--customers th:last-child, .admin-table--customers td:last-child { width: 1%; text-align: right; white-space: nowrap; }
+.admin-table--customers .admin-table-actions { justify-content: flex-end; flex-wrap: nowrap; }
+
 .admin-category-selector {
   border: 0;
   padding: 0;
