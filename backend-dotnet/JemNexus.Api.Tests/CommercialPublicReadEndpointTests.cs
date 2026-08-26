@@ -37,7 +37,11 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
-            db.Products.Add(new Product { Id = 7, Name = "Sin Marca", Slug = "sin-marca", CategoryId = 1, Brand = null, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true });
+            db.Products.AddRange(
+                new Product { Id = 7, Name = "Sin Marca", Slug = "sin-marca", CategoryId = 1, Brand = null, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true },
+                new Product { Id = 8, Name = "Slug Especial", Slug = "seguro /?#", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true },
+                new Product { Id = 9, Name = "Slug Repetido", Slug = "sin-marca", CategoryId = 1, Brand = null, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.OnRequest, IsPublished = true },
+                new Product { Id = 10, Name = "Slug Vacío", Slug = "   ", CategoryId = 1, BrandId = 1, ProductType = ProductTypes.Machinery, Condition = ProductConditions.Used, StockStatus = StockStatuses.Available, IsPublished = true });
             await db.SaveChangesAsync();
         }
         using var client = _factory.CreateClient();
@@ -57,7 +61,19 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.Equal(sitemapNamespace, document.Root.Name.Namespace);
         Assert.Contains("https://jem-nexus.cl/producto/excavadora", locations);
         Assert.Contains("https://jem-nexus.cl/producto/sin-marca", locations);
+        Assert.Contains("https://jem-nexus.cl/producto/seguro%20%2F%3F%23", locations);
+        Assert.Equal(locations.Count, locations.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(locations.Order(StringComparer.Ordinal), locations);
+        Assert.All(locations, location =>
+        {
+            var uri = new Uri(location);
+            Assert.Equal(Uri.UriSchemeHttps, uri.Scheme);
+            Assert.Equal("jem-nexus.cl", uri.Host);
+            Assert.Empty(uri.Query);
+            Assert.Empty(uri.Fragment);
+        });
         Assert.DoesNotContain(locations, location => location.Contains("attacker.example", StringComparison.Ordinal));
+        Assert.DoesNotContain(locations, location => location.Contains("api.jem-nexus.cl", StringComparison.Ordinal));
         Assert.Equal("public, max-age=3600", response.Headers.CacheControl?.ToString());
         Assert.DoesNotContain("/admin", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("supplier", body, StringComparison.OrdinalIgnoreCase);

@@ -1,23 +1,14 @@
 # JEM Nexus
 
-> Sitio comercial chileno de maquinaria, repuestos y servicios industriales, con catálogo público de maquinaria nueva y usada, repuestos, servicios y canales de contacto comercial.
+> Sitio de JEM Nexus con un catálogo público de maquinaria, repuestos y servicios industriales y canales para solicitar información comercial.
 
-El contenido público está en español de Chile. La disponibilidad, condición, precio y características deben consultarse en la página vigente de cada producto. Este archivo orienta hacia las fuentes públicas del sitio y no sustituye el catálogo ni constituye una cotización comercial.
+## Secciones principales
 
-## Contenido principal
-
-- [Inicio](https://jem-nexus.cl/): Presentación general, promociones y productos destacados.
-- [Catálogo](https://jem-nexus.cl/catalogo): Catálogo público y herramientas de búsqueda y filtrado.
-- [Maquinaria nueva](https://jem-nexus.cl/maquinaria-nueva): Vista pública de maquinaria nueva.
-- [Maquinaria usada](https://jem-nexus.cl/maquinaria-usada): Vista pública de maquinaria usada.
-
-## Información y contacto
-
-- [Contacto](https://jem-nexus.cl/contacto): Canales públicos para consultas comerciales.
-- [Sobre JEM Nexus](https://jem-nexus.cl/sobre-nosotros): Presentación pública del negocio y sus servicios.
-- [Preguntas frecuentes](https://jem-nexus.cl/preguntas-frecuentes): Respuestas públicas a consultas habituales.
-
-## Descubrimiento de productos
-
-- [Sitemap público](https://jem-nexus.cl/sitemap.xml): Inventario de las principales páginas públicas.
-- [Sitemap de productos publicados](https://api.jem-nexus.cl/api/public/sitemap-products.xml): Inventario dinámico de las páginas de productos actualmente publicadas.
+- [Inicio](https://jem-nexus.cl/)
+- [Catálogo](https://jem-nexus.cl/catalogo)
+- [Maquinaria nueva](https://jem-nexus.cl/maquinaria-nueva)
+- [Maquinaria usada](https://jem-nexus.cl/maquinaria-usada)
+- [Solicitar cotización](https://jem-nexus.cl/cotizar)
+- [Contacto](https://jem-nexus.cl/contacto)
+- [Sobre nosotros](https://jem-nexus.cl/sobre-nosotros)
+- [Preguntas frecuentes](https://jem-nexus.cl/preguntas-frecuentes)

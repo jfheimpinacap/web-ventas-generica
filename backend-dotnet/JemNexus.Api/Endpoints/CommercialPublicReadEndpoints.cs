@@ -84,9 +84,15 @@ public static class CommercialPublicReadEndpoints
 
         XNamespace sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
         var urlset = new XElement(sitemapNamespace + "urlset");
+        var seenLocations = new HashSet<string>(StringComparer.Ordinal);
         foreach (var product in products.Where(product => !string.IsNullOrWhiteSpace(product.Slug)))
         {
             var productUri = new Uri(publicSiteUri, $"producto/{Uri.EscapeDataString(product.Slug)}");
+            if (!seenLocations.Add(productUri.AbsoluteUri))
+            {
+                continue;
+            }
+
             urlset.Add(new XElement(sitemapNamespace + "url",
                 new XElement(sitemapNamespace + "loc", productUri.AbsoluteUri),
                 new XElement(sitemapNamespace + "lastmod", product.UpdatedAt.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture))));
