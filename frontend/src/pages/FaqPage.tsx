@@ -1,7 +1,7 @@
 import { Layout } from '../components/layout/Layout'
 import { JsonLd } from '../components/common/JsonLd'
-import { Seo } from '../components/common/Seo'
-import { buildPublicUrl } from '../utils/seo'
+import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
+import { getStaticSeo } from '../utils/seo'
 
 const FAQS = [
   {
@@ -47,12 +47,9 @@ export function FaqPage() {
   return (
     <Layout>
       <Seo
-        title="Preguntas frecuentes | JEM Nexus"
-        description="Resuelve dudas sobre cotización de maquinaria, repuestos, servicios industriales, precios, disponibilidad y contacto con JEM Nexus."
-        canonical={buildPublicUrl('/preguntas-frecuentes')}
+        {...getStaticSeo('/preguntas-frecuentes')}
         ogType="website"
-        ogUrl={buildPublicUrl('/preguntas-frecuentes')}
-        robots="index,follow"
+        robots={INDEX_ROBOTS}
       />
       <JsonLd id="faq-page" data={faqJsonLd} />
 

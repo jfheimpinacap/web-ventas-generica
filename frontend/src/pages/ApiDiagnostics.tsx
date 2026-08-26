@@ -1,12 +1,11 @@
 import { FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { Seo } from '../components/common/Seo'
+import { NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { API_BASE_URL, API_PROVIDER, ApiError, buildApiUrl } from '../services/api'
 import { getMeWithAccessToken, loginWithoutPersistingSession } from '../services/authApi'
 import { getConfiguredApiHealth, getHealthEndpoint } from '../services/healthApi'
 import type { AuthUser } from '../types/catalog'
-import { buildPublicUrl } from '../utils/seo'
 
 type RequestStatus = 'idle' | 'loading' | 'success' | 'error'
 
@@ -158,10 +157,8 @@ export function ApiDiagnostics() {
       <Seo
         title="Diagnóstico API | JEM Nexus"
         description="Validación controlada de la API configurada por variables Vite."
-        canonical={buildPublicUrl('/diagnostico-api')}
         ogType="website"
-        ogUrl={buildPublicUrl('/diagnostico-api')}
-        robots="noindex,nofollow"
+        robots={NOINDEX_ROBOTS}
       />
 
       <section className="diagnostics-card">

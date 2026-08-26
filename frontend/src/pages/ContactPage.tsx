@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 
-import { Seo } from '../components/common/Seo'
+import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { JsonLd } from '../components/common/JsonLd'
 import { Layout } from '../components/layout/Layout'
 import { trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
-import { buildPublicUrl } from '../utils/seo'
+import { buildPublicUrl, getStaticSeo } from '../utils/seo'
 import { buildWhatsAppUrl } from '../utils/whatsapp'
 
 const CONTACT_EMAIL =
@@ -24,12 +24,9 @@ export function ContactPage() {
   return (
     <Layout>
       <Seo
-        title="Contacto | JEM Nexus"
-        description="Contacta a JEM Nexus para cotizar maquinaria, repuestos y servicios industriales con atención comercial personalizada."
-        canonical={buildPublicUrl('/contacto')}
+        {...getStaticSeo('/contacto')}
         ogType="website"
-        ogUrl={buildPublicUrl('/contacto')}
-        robots="index,follow"
+        robots={INDEX_ROBOTS}
       />
       <JsonLd id="contact-page" data={contactJsonLd} />
 

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-import { Seo } from '../components/common/Seo'
+import { NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 
 export function NotFoundPage() {
@@ -9,7 +9,7 @@ export function NotFoundPage() {
       <Seo
         title="Página no encontrada | JEM Nexus"
         description="La página solicitada no existe o ya no está disponible."
-        robots="noindex,nofollow"
+        robots={NOINDEX_ROBOTS}
         ogType="website"
       />
 

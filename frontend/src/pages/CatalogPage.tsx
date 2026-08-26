@@ -4,7 +4,7 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
-import { Seo } from '../components/common/Seo'
+import { INDEX_ROBOTS, NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
@@ -12,7 +12,7 @@ import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
 import { trackCategoryView } from '../utils/analytics'
 import { getRootCategory } from '../utils/formatters'
-import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPublicUrl } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildItemListJsonLd, getStaticSeo } from '../utils/seo'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -41,27 +41,21 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
 }
 
 
-const MAIN_CATEGORY_SEO_CONTENT: Record<'maquinaria' | 'repuestos' | 'servicios', { title: string; description: string; metaDescription: string }> = {
+const MAIN_CATEGORY_SEO_CONTENT: Record<'maquinaria' | 'repuestos' | 'servicios', { title: string; description: string }> = {
   maquinaria: {
     title: 'Maquinaria',
     description:
       'Encuentra maquinaria para trabajos en altura y operación industrial, incluyendo elevadores tipo tijera, brazos articulados y equipos seleccionados para cotización comercial. Revisa disponibilidad, características y solicita precio con atención personalizada.',
-    metaDescription:
-      'Cotiza maquinaria para trabajos en altura, elevadores tipo tijera y brazos articulados con atención comercial personalizada.',
   },
   repuestos: {
     title: 'Repuestos',
     description:
       'Cotiza repuestos industriales para equipos de elevación y maquinaria, como baterías, ruedas, controles, cargadores y componentes críticos. Te ayudamos a identificar disponibilidad y alternativas compatibles.',
-    metaDescription:
-      'Cotiza repuestos industriales para maquinaria de elevación: baterías, ruedas, controles, cargadores y componentes críticos.',
   },
   servicios: {
     title: 'Servicios',
     description:
       'Solicita servicios de reparación y mantención para componentes industriales, motores eléctricos, bombas y equipos asociados. Revisa opciones disponibles y envía una solicitud de cotización.',
-    metaDescription:
-      'Solicita servicios de reparación y mantención industrial para motores eléctricos, bombas y equipos asociados.',
   },
 }
 
@@ -199,27 +193,13 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const hasSearch = Boolean((query.search ?? '').trim())
   const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
   const searchOnlyView = hasSearch && !query.category && !query.product_type && !hasSpecificFilters
-  const seoTitle = effectiveRootCategory ? `${effectiveRootCategory.name} | JEM Nexus` : 'Productos industriales | JEM Nexus'
-  const seoDescription = mainCategorySeo
-    ? mainCategorySeo.metaDescription
-    : effectiveRootCategory
-      ? `Ver productos disponibles en ${effectiveRootCategory.name}. Cotiza maquinaria, repuestos y servicios industriales con atención comercial personalizada.`
-      : 'Explora maquinaria, repuestos y servicios industriales disponibles para cotización.'
   const parameterEntries = Array.from(searchParams.entries())
-  const categoryValues = searchParams.getAll('category')
-  const hasValidCategory = Boolean(explicitSelectedCategory && selectedRootCategory)
-  const isCleanCategoryView = !commercialConfig
-    && parameterEntries.length === 1
-    && categoryValues.length === 1
-    && hasValidCategory
   const isCleanCatalogView = !commercialConfig && parameterEntries.length === 0
   const isCleanCommercialView = Boolean(commercialConfig) && parameterEntries.length === 0
-  const isIndexableView = isCleanCatalogView || isCleanCategoryView || isCleanCommercialView
-  const canonicalPath = commercialConfig?.canonicalPath ?? (explicitSelectedCategory && selectedRootCategory
-    ? `/catalogo?category=${explicitSelectedCategory.id}`
-    : '/catalogo')
-  const seoRobots = isIndexableView ? 'index,follow' : 'noindex,follow'
-  const canonicalUrl = buildPublicUrl(canonicalPath)
+  const isIndexableView = isCleanCatalogView || isCleanCommercialView
+  const canonicalPath = commercialConfig?.canonicalPath ?? '/catalogo'
+  const seoRobots = isIndexableView ? INDEX_ROBOTS : NOINDEX_ROBOTS
+  const routeSeo = getStaticSeo(canonicalPath)
 
   const buildCatalogHref = (categoryId?: number) => {
     const next = new URLSearchParams(searchParams)
@@ -333,11 +313,8 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   return (
     <Layout>
       <Seo
-        title={seoTitle}
-        description={seoDescription}
-        canonical={canonicalUrl}
+        {...routeSeo}
         ogType="website"
-        ogUrl={canonicalUrl}
         robots={seoRobots}
       />
       <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} />

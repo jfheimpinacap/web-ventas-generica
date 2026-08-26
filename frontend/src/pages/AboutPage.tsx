@@ -1,19 +1,16 @@
 import { Link } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
-import { Seo } from '../components/common/Seo'
-import { buildPublicUrl } from '../utils/seo'
+import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
+import { getStaticSeo } from '../utils/seo'
 
 export function AboutPage() {
   return (
     <Layout>
       <Seo
-        title="Sobre JEM Nexus | Maquinaria, repuestos y servicios industriales"
-        description="Conoce JEM Nexus, plataforma comercial para cotizar maquinaria, repuestos y servicios industriales con atención personalizada."
-        canonical={buildPublicUrl('/sobre-nosotros')}
+        {...getStaticSeo('/sobre-nosotros')}
         ogType="website"
-        ogUrl={buildPublicUrl('/sobre-nosotros')}
-        robots="index,follow"
+        robots={INDEX_ROBOTS}
       />
 
       <section className="simple-page trust-page">
