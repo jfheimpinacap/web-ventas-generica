@@ -1,7 +1,8 @@
 import { Layout } from '../components/layout/Layout'
 import { JsonLd } from '../components/common/JsonLd'
+import { Breadcrumb } from '../components/common/Breadcrumb'
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
-import { getStaticSeo } from '../utils/seo'
+import { buildBreadcrumbJsonLd, getStaticSeo, ORGANIZATION_ID, WEBSITE_ID } from '../utils/seo'
 
 const FAQS = [
   {
@@ -31,9 +32,14 @@ const FAQS = [
 ]
 
 export function FaqPage() {
+  const seo = getStaticSeo('/preguntas-frecuentes')
+  const items = [{ label: 'Inicio', to: '/' }, { label: 'Preguntas frecuentes' }]
   const faqJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
+    '@id': `${seo.canonical}#webpage`, url: seo.canonical, name: seo.title, description: seo.description,
+    inLanguage: 'es-CL', isPartOf: { '@id': WEBSITE_ID }, about: { '@id': ORGANIZATION_ID },
+    breadcrumb: { '@id': `${seo.canonical}#breadcrumb` },
     mainEntity: FAQS.map((item) => ({
       '@type': 'Question',
       name: item.q,
@@ -52,8 +58,10 @@ export function FaqPage() {
         robots={INDEX_ROBOTS}
       />
       <JsonLd id="faq-page" data={faqJsonLd} />
+      <JsonLd id="faq-breadcrumb" data={buildBreadcrumbJsonLd(items, seo.canonical)!} />
 
       <section className="simple-page trust-page">
+        <Breadcrumb items={items} />
         <h1>Preguntas frecuentes</h1>
         <div className="trust-page__faq-list">
           {FAQS.map((item) => (

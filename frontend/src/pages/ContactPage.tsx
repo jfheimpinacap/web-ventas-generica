@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom'
 
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { JsonLd } from '../components/common/JsonLd'
+import { Breadcrumb } from '../components/common/Breadcrumb'
 import { Layout } from '../components/layout/Layout'
 import { trackQuoteClick, trackWhatsAppClick } from '../utils/analytics'
-import { buildPublicUrl, getStaticSeo } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 import { buildWhatsAppUrl } from '../utils/whatsapp'
 
 const CONTACT_EMAIL =
@@ -12,14 +13,10 @@ const CONTACT_EMAIL =
   'jmateluna@jem-nexus.cl'
 
 export function ContactPage() {
-  const contactJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'ContactPage',
-    name: 'Contacto | JEM Nexus',
-    url: buildPublicUrl('/contacto'),
-    description:
-      'Contacta a JEM Nexus para cotizar maquinaria, repuestos y servicios industriales con atención comercial personalizada.',
-  }
+  const seo = getStaticSeo('/contacto')
+  const items = [{ label: 'Inicio', to: '/' }, { label: 'Contacto' }]
+  const contactJsonLd = buildPageJsonLd('/contacto', 'ContactPage')
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(items, seo.canonical)
 
   return (
     <Layout>
@@ -29,8 +26,10 @@ export function ContactPage() {
         robots={INDEX_ROBOTS}
       />
       <JsonLd id="contact-page" data={contactJsonLd} />
+      {breadcrumbJsonLd ? <JsonLd id="contact-breadcrumb" data={breadcrumbJsonLd} /> : null}
 
       <section className="simple-page trust-page">
+        <Breadcrumb items={items} />
         <h1>Contacto</h1>
         <p>
           Comunícate con JEM Nexus para solicitar información sobre maquinaria, repuestos o servicios industriales. Un vendedor

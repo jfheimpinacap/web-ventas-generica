@@ -2,9 +2,14 @@ import { Link } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
-import { getStaticSeo } from '../utils/seo'
+import { Breadcrumb } from '../components/common/Breadcrumb'
+import { JsonLd } from '../components/common/JsonLd'
+import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
 export function AboutPage() {
+  const seo = getStaticSeo('/sobre-nosotros')
+  const items = [{ label: 'Inicio', to: '/' }, { label: 'Sobre JEM Nexus' }]
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(items, seo.canonical)
   return (
     <Layout>
       <Seo
@@ -12,8 +17,11 @@ export function AboutPage() {
         ogType="website"
         robots={INDEX_ROBOTS}
       />
+      <JsonLd id="about-page" data={buildPageJsonLd('/sobre-nosotros', 'AboutPage')} />
+      {breadcrumbJsonLd ? <JsonLd id="about-breadcrumb" data={breadcrumbJsonLd} /> : null}
 
       <section className="simple-page trust-page">
+        <Breadcrumb items={items} />
         <h1>Sobre JEM Nexus</h1>
         <p>
           JEM Nexus es una plataforma comercial enfocada en la cotización de maquinaria, repuestos y servicios industriales. Su

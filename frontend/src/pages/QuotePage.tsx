@@ -3,12 +3,14 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
+import { Breadcrumb } from '../components/common/Breadcrumb'
+import { JsonLd } from '../components/common/JsonLd'
 import { createQuoteRequest, getProducts } from '../services/catalogApi'
 import { resolveMediaUrl } from '../services/api'
 import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
 import { trackQuoteSubmit } from '../utils/analytics'
-import { getStaticSeo } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
 interface QuoteFormState {
   customer_name: string
@@ -46,6 +48,8 @@ const initialForm: QuoteFormState = {
 }
 
 export function QuotePage() {
+  const quoteSeo = getStaticSeo('/cotizar')
+  const breadcrumbItems = [{ label: 'Inicio', to: '/' }, { label: 'Cotizar' }]
   const [searchParams] = useSearchParams()
   const productFromQuery = useMemo(() => {
     const value = searchParams.get('product')
@@ -153,7 +157,10 @@ export function QuotePage() {
         ogType="website"
         robots={INDEX_ROBOTS}
       />
+      <JsonLd id="quote-page" data={buildPageJsonLd('/cotizar', 'WebPage')} />
+      <JsonLd id="quote-breadcrumb" data={buildBreadcrumbJsonLd(breadcrumbItems, quoteSeo.canonical)!} />
       <section className="simple-page quote-page">
+        <Breadcrumb items={breadcrumbItems} />
         <h1 className="quote-page__title">Cotizar</h1>
         <p className="quote-page__subtitle">Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>
 
