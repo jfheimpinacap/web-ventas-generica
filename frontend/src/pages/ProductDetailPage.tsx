@@ -8,9 +8,8 @@ import { JsonLd } from '../components/common/JsonLd'
 import { INDEX_ROBOTS, NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../services/catalogApi'
-import { useCategories } from '../hooks/useCategories'
 import { ApiError, resolveMediaUrl } from '../services/api'
-import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
+import type { ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatMachineWeightKg, formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductTerrainType, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl, getProductImageUrl, truncateSeoDescription } from '../utils/seo'
@@ -30,7 +29,6 @@ export function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [technicalSheetOpen, setTechnicalSheetOpen] = useState(false)
   const technicalSheetButtonRef = useRef<HTMLButtonElement>(null)
-  const { categories } = useCategories()
 
   useEffect(() => {
     setTechnicalSheetOpen(false)
@@ -73,25 +71,9 @@ export function ProductDetailPage() {
   const inlineTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url) : ''
   const downloadTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url, true) : ''
 
-  const categoryPath = useMemo(() => {
-    if (!product?.category) return [] as Category[]
-
-    const categoryById = new Map(categories.map((category) => [category.id, category]))
-    const path: Category[] = []
-    let current: Category | null = categoryById.get(product.category.id) ?? product.category
-
-    while (current) {
-      path.unshift(current)
-      current = current.parent ? categoryById.get(current.parent) ?? null : null
-    }
-
-    return path
-  }, [categories, product])
-
-  const rootCategory = categoryPath[0]?.parent === null ? categoryPath[0] : null
   const commercialPath = product?.product_type === 'machinery' && product.condition === 'new' ? '/maquinaria-nueva'
     : product?.product_type === 'machinery' && product.condition === 'used' ? '/maquinaria-usada' : null
-  const backHref = commercialPath ?? (rootCategory ? `/catalogo?category=${rootCategory.id}` : '/')
+  const backHref = commercialPath ?? '/catalogo'
 
   useEffect(() => {
     if (!product) return
@@ -109,14 +91,12 @@ export function ProductDetailPage() {
 
     return [
       { label: 'Inicio', to: '/' },
-      ...(commercialPath ? [{ label: product.condition === 'new' ? 'Venta de maquinaria nueva' : 'Venta de maquinaria usada', to: commercialPath }] : []),
-      ...categoryPath.map((category) => ({
-        label: category.name,
-        to: `/catalogo?category=${category.id}`,
-      })),
+      commercialPath
+        ? { label: product.condition === 'new' ? 'Venta de maquinaria nueva' : 'Venta de maquinaria usada', to: commercialPath }
+        : { label: 'Catálogo', to: '/catalogo' },
       { label: product.name },
     ]
-  }, [categoryPath, commercialPath, product])
+  }, [commercialPath, product])
 
   const galleryImages = useMemo<GalleryImage[]>(() => {
     if (!product) return []
@@ -154,12 +134,12 @@ export function ProductDetailPage() {
     : undefined
 
   const breadcrumbJsonLd = useMemo(
-    () => (product ? buildBreadcrumbJsonLd(breadcrumbItems) : null),
-    [breadcrumbItems, product],
+    () => (availableProduct && canonicalUrl && !loading && !error ? buildBreadcrumbJsonLd(breadcrumbItems, canonicalUrl) : null),
+    [availableProduct, breadcrumbItems, canonicalUrl, error, loading],
   )
   const productJsonLd = useMemo(
-    () => (availableProduct && canonicalUrl ? buildProductJsonLd(availableProduct, canonicalUrl) : null),
-    [availableProduct, canonicalUrl],
+    () => (availableProduct && canonicalUrl && !loading && !error ? buildProductJsonLd(availableProduct, canonicalUrl) : null),
+    [availableProduct, canonicalUrl, error, loading],
   )
 
   const isMachinery = product?.product_type === 'machinery'

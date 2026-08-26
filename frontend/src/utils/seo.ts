@@ -1,5 +1,9 @@
 import { resolveMediaUrl } from '../services/api'
-import type { ProductDetail, ProductListItem, StockStatus } from '../types/catalog'
+import type { ProductCondition, ProductDetail, ProductListItem, StockStatus } from '../types/catalog'
+
+export const PUBLIC_SITE_URL = 'https://jem-nexus.cl'
+export const ORGANIZATION_ID = `${PUBLIC_SITE_URL}/#organization`
+export const WEBSITE_ID = `${PUBLIC_SITE_URL}/#website`
 
 export const STATIC_PAGE_SEO = {
   '/': {
@@ -43,15 +47,7 @@ export function getStaticSeo(path: StaticSeoPath) {
 }
 
 export function getPublicSiteUrl() {
-  const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
-  if (envUrl) {
-    try {
-      return new URL(envUrl).origin
-    } catch {
-      // An invalid optional value must not prevent the document metadata from updating.
-    }
-  }
-  return window.location.origin
+  return PUBLIC_SITE_URL
 }
 
 export function buildPublicUrl(path: string) {
@@ -81,26 +77,27 @@ export function getProductImageUrl(product: Pick<ProductDetail, 'images' | 'main
 }
 
 export function getAvailabilitySchema(stockStatus: StockStatus) {
-  const mapping: Record<StockStatus, string> = {
+  const mapping: Partial<Record<StockStatus, string>> = {
     available: 'https://schema.org/InStock',
-    on_request: 'https://schema.org/PreOrder',
     reserved: 'https://schema.org/LimitedAvailability',
-    sold: 'https://schema.org/OutOfStock',
+    sold: 'https://schema.org/SoldOut',
   }
   return mapping[stockStatus]
 }
 
-export function buildBreadcrumbJsonLd(items: Array<{ label: string; to?: string }>) {
+export function buildBreadcrumbJsonLd(items: Array<{ label: string; to?: string }>, canonicalUrl: string) {
+  if (items.length < 2) return null
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
+    '@id': `${canonicalUrl}#breadcrumb`,
     itemListElement: items.map((item, index) => {
       const listItem: Record<string, unknown> = {
         '@type': 'ListItem',
         position: index + 1,
         name: item.label,
       }
-      if (item.to) listItem.item = buildAbsoluteUrl(item.to)
+      listItem.item = item.to ? buildPublicUrl(item.to) : canonicalUrl
       return listItem
     }),
   }
@@ -108,27 +105,66 @@ export function buildBreadcrumbJsonLd(items: Array<{ label: string; to?: string 
 
 export function buildProductJsonLd(product: ProductDetail, canonicalUrl: string) {
   const image = getProductImageUrl(product)
+  const isService = product.product_type === 'service'
+  const entityId = `${canonicalUrl}#${isService ? 'service' : 'product'}`
   const payload: Record<string, unknown> = {
     '@context': 'https://schema.org',
-    '@type': 'Product',
+    '@type': isService ? 'Service' : 'Product',
+    '@id': entityId,
     name: product.name,
-    description: product.description || product.short_description || product.name,
-    sku: product.sku || product.slug || String(product.id),
+    description: (product.description || product.short_description || product.name).replace(/\s+/g, ' ').trim(),
     url: canonicalUrl,
-    offers: {
-      '@type': 'Offer',
-      url: canonicalUrl,
-      availability: getAvailabilitySchema(product.stock_status),
-      priceCurrency: 'CLP',
-      ...(product.price_visible && product.price ? { price: product.price } : {}),
-    },
+    [isService ? 'provider' : 'seller']: { '@id': ORGANIZATION_ID },
   }
 
-  if (image) payload.image = [image]
+  if (image) payload.image = image
   if (product.brand?.name) payload.brand = { '@type': 'Brand', name: product.brand.name }
   if (product.category?.name) payload.category = product.category.name
+  if (product.model?.trim()) payload.model = product.model.trim()
+  if (product.sku?.trim()) payload.sku = product.sku.trim()
+
+  const condition = !isService ? getConditionSchema(product.condition) : undefined
+  if (condition) payload.itemCondition = condition
+
+  const price = product.price?.trim()
+  const numericPrice = price && /^\d+(?:\.\d+)?$/.test(price) ? Number(price) : 0
+  const currency = product.price_currency
+  if (product.price_visible === true && product.stock_status !== 'sold' && numericPrice > 0 && (currency === 'CLP' || currency === 'USD')) {
+    const offer: Record<string, unknown> = {
+      '@type': 'Offer', '@id': `${canonicalUrl}#offer`, url: canonicalUrl, price, priceCurrency: currency,
+      seller: { '@id': ORGANIZATION_ID },
+    }
+    if (condition && !isService) offer.itemCondition = condition
+    const availability = !isService ? getAvailabilitySchema(product.stock_status) : undefined
+    if (availability) offer.availability = availability
+    if (product.price_tax_mode === 'vat_included' || product.price_tax_mode === 'plus_vat') {
+      offer.priceSpecification = {
+        '@type': 'PriceSpecification', price, priceCurrency: currency,
+        valueAddedTaxIncluded: product.price_tax_mode === 'vat_included',
+      }
+    }
+    payload.offers = offer
+  }
 
   return payload
+}
+
+export function getConditionSchema(condition: ProductCondition) {
+  const mapping: Partial<Record<ProductCondition, string>> = {
+    new: 'https://schema.org/NewCondition', used: 'https://schema.org/UsedCondition',
+    refurbished: 'https://schema.org/RefurbishedCondition',
+  }
+  return mapping[condition]
+}
+
+export function buildPageJsonLd(path: StaticSeoPath, type: 'WebPage' | 'CollectionPage' | 'ContactPage' | 'AboutPage', breadcrumb = true) {
+  const seo = getStaticSeo(path)
+  return {
+    '@context': 'https://schema.org', '@type': type, '@id': `${seo.canonical}#webpage`, url: seo.canonical,
+    name: seo.title, description: seo.description, inLanguage: 'es-CL',
+    isPartOf: { '@id': WEBSITE_ID }, about: { '@id': ORGANIZATION_ID },
+    ...(breadcrumb ? { breadcrumb: { '@id': `${seo.canonical}#breadcrumb` } } : {}),
+  }
 }
 
 export function buildItemListJsonLd(products: ProductListItem[]) {

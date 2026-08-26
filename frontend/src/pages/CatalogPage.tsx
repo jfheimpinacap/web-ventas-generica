@@ -12,7 +12,7 @@ import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
 import { trackCategoryView } from '../utils/analytics'
 import { getRootCategory } from '../utils/formatters'
-import { buildBreadcrumbJsonLd, buildItemListJsonLd, getStaticSeo } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -216,7 +216,9 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => {
     const trail: BreadcrumbItem[] = [
       { label: 'Inicio', to: '/' },
-      ...(commercialConfig ? [{ label: commercialConfig.title, to: commercialConfig.canonicalPath }] : []),
+      ...(commercialConfig
+        ? [{ label: commercialConfig.title, to: commercialConfig.canonicalPath }]
+        : [{ label: 'Catálogo', to: '/catalogo' }]),
       ...categoryPath.map((category) => ({
         label: category.name,
         to: buildCatalogHref(category.id),
@@ -282,14 +284,22 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const totalPages = Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage))
   const paginatedProducts = displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  const shouldRenderItemList = isIndexableView
+  const shouldRenderStructuredData = isIndexableView && !loading && !error
   const visiblePublishedProducts = useMemo(
     () => paginatedProducts.filter((product) => product.is_published !== false),
     [paginatedProducts],
   )
 
-  const breadcrumbJsonLd = useMemo(() => buildBreadcrumbJsonLd(breadcrumbItems), [breadcrumbItems])
+  const structuredBreadcrumbItems = useMemo<BreadcrumbItem[]>(() => [
+    { label: 'Inicio', to: '/' },
+    { label: commercialConfig?.title ?? 'Catálogo' },
+  ], [commercialConfig])
+  const breadcrumbJsonLd = useMemo(
+    () => buildBreadcrumbJsonLd(structuredBreadcrumbItems, routeSeo.canonical),
+    [routeSeo.canonical, structuredBreadcrumbItems],
+  )
   const itemListJsonLd = useMemo(() => buildItemListJsonLd(visiblePublishedProducts), [visiblePublishedProducts])
+  const pageJsonLd = useMemo(() => buildPageJsonLd(canonicalPath, 'CollectionPage'), [canonicalPath])
 
 
   const paginationItems = useMemo(() => {
@@ -317,8 +327,9 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
         ogType="website"
         robots={seoRobots}
       />
-      <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} />
-      {shouldRenderItemList && visiblePublishedProducts.length > 0 ? <JsonLd id="catalog-itemlist" data={itemListJsonLd} /> : null}
+      {shouldRenderStructuredData && breadcrumbJsonLd ? <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} /> : null}
+      {shouldRenderStructuredData ? <JsonLd id="catalog-page" data={pageJsonLd} /> : null}
+      {shouldRenderStructuredData && visiblePublishedProducts.length > 0 ? <JsonLd id="catalog-itemlist" data={itemListJsonLd} /> : null}
       <section className="simple-page catalog-page">
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
