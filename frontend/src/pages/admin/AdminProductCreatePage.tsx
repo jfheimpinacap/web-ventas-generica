@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AdminLayout } from '../../components/admin/AdminLayout'
@@ -59,6 +59,7 @@ export function AdminProductCreatePage() {
   const pending = usePendingProductImages()
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null)
   const [imageStatus, setImageStatus] = useState<string | null>(null)
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     const load = async () => {
@@ -93,10 +94,12 @@ export function AdminProductCreatePage() {
   }, [pending.images, selectedPendingId])
 
   const handleSubmit = async (values: ProductFormValues) => {
+    if (submittingRef.current) return
     if (pending.isProcessing) {
       setError('Espera a que termine la optimización de imágenes antes de guardar el producto.')
       return
     }
+    submittingRef.current = true
     try {
       setIsSubmitting(true)
       setError(null)
@@ -130,6 +133,7 @@ export function AdminProductCreatePage() {
     } catch (submitError) {
       setError(getSafeApiErrorMessage(submitError, 'No se pudo crear el producto.'))
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useSystemDialog } from "../../context/SystemDialogContext";
@@ -115,6 +115,8 @@ export function AdminProductEditPage() {
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
   const [imageSaving, setImageSaving] = useState(false);
   const [imageStatus, setImageStatus] = useState<string | null>(null);
+  const submittingRef = useRef(false);
+  const imageSavingRef = useRef(false);
   const [imageError, setImageError] = useState<string | null>(() => {
     const state = location.state;
     return typeof state === "object" && state && "imageError" in state
@@ -205,11 +207,13 @@ export function AdminProductEditPage() {
   };
 
   const handleSubmit = async (values: ProductFormValues) => {
+    if (submittingRef.current) return;
     if (!slug || pending.isProcessing) {
       if (pending.isProcessing) setError("Espera a que termine la optimización de imágenes antes de guardar el producto.");
       return;
     }
 
+    submittingRef.current = true;
     try {
       setIsSubmitting(true);
       setError(null);
@@ -217,15 +221,17 @@ export function AdminProductEditPage() {
     } catch (submitError) {
       setError(getSafeApiErrorMessage(submitError, "No se pudo actualizar el producto."));
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleCreateImages = async () => {
-    if (!productId || imageSaving || pending.isProcessing || pending.images.length === 0) return;
+    if (!productId || imageSavingRef.current || pending.isProcessing || pending.images.length === 0) return;
     const queue = pending.images.filter((image) => image.status === "pending" || image.status === "error");
     const successfulIds = new Set<string>();
     let uploaded = 0;
+    imageSavingRef.current = true;
     setImageSaving(true);
     setImageError(null);
     setImageStatus(null);
@@ -257,12 +263,14 @@ export function AdminProductEditPage() {
     } catch {
       setImageError("Las imágenes se cargaron, pero la galería no pudo actualizarse. Recarga la página para consultarlas sin volver a subirlas.");
     } finally {
+      imageSavingRef.current = false;
       setImageSaving(false);
     }
   };
 
   const handleSetMainImage = async (imageId: number) => {
-    if (!productId) return;
+    if (!productId || imageSavingRef.current) return;
+    imageSavingRef.current = true;
     try {
       setImageSaving(true);
       setImageError(null);
@@ -274,14 +282,16 @@ export function AdminProductEditPage() {
     } catch {
       setImageError("No se pudo actualizar la imagen principal.");
     } finally {
+      imageSavingRef.current = false;
       setImageSaving(false);
     }
   };
 
   const handleDeleteImage = async (imageId: number) => {
-    if (!productId) return;
+    if (!productId || imageSavingRef.current) return;
     if (!await requestConfirmation({ title: "Eliminar imagen", message: "¿Eliminar esta imagen?", confirmLabel: "Eliminar", variant: "danger" })) return;
 
+    imageSavingRef.current = true;
     try {
       setImageSaving(true);
       setImageError(null);
@@ -292,6 +302,7 @@ export function AdminProductEditPage() {
     } catch {
       setImageError("No se pudo eliminar la imagen.");
     } finally {
+      imageSavingRef.current = false;
       setImageSaving(false);
     }
   };
