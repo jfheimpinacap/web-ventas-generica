@@ -403,6 +403,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
                     b.Property<int?>("CreatedById").HasColumnType("int");
                     b.Property<string>("Email").HasMaxLength(254).HasColumnType("nvarchar(254)");
+                    b.Property<bool>("IsActive").ValueGeneratedOnAdd().HasColumnType("bit").HasDefaultValue(true);
                     b.Property<string>("NormalizedBusinessName").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
                     b.Property<string>("NormalizedRut").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
                     b.Property<string>("Phone").IsRequired().HasMaxLength(30).HasColumnType("nvarchar(30)");
