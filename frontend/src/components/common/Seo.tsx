@@ -1,122 +1,88 @@
 import { useEffect } from 'react'
 
+import { buildAbsoluteUrl } from '../../utils/seo'
+
 type OgType = 'website' | 'product' | 'article'
 type TwitterCard = 'summary' | 'summary_large_image'
 
 interface SeoProps {
   title: string
-  description?: string
+  description: string
   canonical?: string
   robots?: string
   ogTitle?: string
   ogDescription?: string
   ogType?: OgType
-  ogUrl?: string
-  ogImage?: string
+  ogImage?: string | null
+  imageAlt?: string
   twitterCard?: TwitterCard
-  twitterTitle?: string
-  twitterDescription?: string
-  twitterImage?: string
 }
 
-const DEFAULT_TITLE = 'JEM Nexus | Maquinaria, repuestos y servicios industriales'
-const DEFAULT_DESCRIPTION =
-  'Cotiza maquinaria, repuestos y servicios industriales con atención comercial rápida.'
+export const INDEX_ROBOTS = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
+export const NOINDEX_ROBOTS = 'noindex,nofollow'
 
-function upsertMeta(selector: string, attrs: Record<string, string>) {
-  let meta = document.head.querySelector(selector) as HTMLMetaElement | null
-  if (!meta) {
-    meta = document.createElement('meta')
-    document.head.appendChild(meta)
-  }
-  Object.entries(attrs).forEach(([key, value]) => {
-    meta?.setAttribute(key, value)
-  })
+const MANAGED_ATTRIBUTE = 'data-jem-seo'
+
+function upsertHeadElement<T extends HTMLElement>(selector: string, tagName: string, attributes: Record<string, string>) {
+  const matches = Array.from(document.head.querySelectorAll<T>(selector))
+  const element = matches.shift() ?? document.createElement(tagName) as T
+  matches.forEach((duplicate) => duplicate.remove())
+  element.setAttribute(MANAGED_ATTRIBUTE, 'true')
+  Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value))
+  if (!element.isConnected) document.head.appendChild(element)
 }
 
-function upsertLink(selector: string, rel: string, href: string) {
-  let link = document.head.querySelector(selector) as HTMLLinkElement | null
-  if (!link) {
-    link = document.createElement('link')
-    document.head.appendChild(link)
-  }
-  link.setAttribute('rel', rel)
-  link.setAttribute('href', href)
-}
-
-function removeHeadElement(selector: string) {
-  document.head.querySelector(selector)?.remove()
+function removeHeadElements(selector: string) {
+  document.head.querySelectorAll(selector).forEach((element) => element.remove())
 }
 
 export function Seo({
   title,
-  description = DEFAULT_DESCRIPTION,
+  description,
   canonical,
-  robots = 'index,follow',
-  ogTitle,
-  ogDescription,
+  robots = INDEX_ROBOTS,
+  ogTitle = title,
+  ogDescription = description,
   ogType = 'website',
-  ogUrl,
   ogImage,
-  twitterCard = 'summary',
-  twitterTitle,
-  twitterDescription,
-  twitterImage,
+  imageAlt,
+  twitterCard = ogImage ? 'summary_large_image' : 'summary',
 }: SeoProps) {
   useEffect(() => {
-    document.title = title || DEFAULT_TITLE
+    document.title = title
 
-    upsertMeta('meta[name="description"]', { name: 'description', content: description })
-    upsertMeta('meta[name="robots"]', { name: 'robots', content: robots })
-
-    const normalizedOgTitle = ogTitle ?? title
-    const normalizedOgDescription = ogDescription ?? description
-    const normalizedTwitterTitle = twitterTitle ?? normalizedOgTitle
-    const normalizedTwitterDescription = twitterDescription ?? normalizedOgDescription
-
-    upsertMeta('meta[property="og:title"]', { property: 'og:title', content: normalizedOgTitle })
-    upsertMeta('meta[property="og:description"]', { property: 'og:description', content: normalizedOgDescription })
-    upsertMeta('meta[property="og:type"]', { property: 'og:type', content: ogType })
-    if (ogUrl) {
-      upsertMeta('meta[property="og:url"]', { property: 'og:url', content: ogUrl })
-    } else {
-      removeHeadElement('meta[property="og:url"]')
-    }
-    if (ogImage) {
-      upsertMeta('meta[property="og:image"]', { property: 'og:image', content: ogImage })
-    } else {
-      removeHeadElement('meta[property="og:image"]')
-    }
-
-    upsertMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: twitterCard })
-    upsertMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: normalizedTwitterTitle })
-    upsertMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: normalizedTwitterDescription })
-    if (twitterImage) {
-      upsertMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: twitterImage })
-    } else {
-      removeHeadElement('meta[name="twitter:image"]')
-    }
+    upsertHeadElement<HTMLMetaElement>('meta[name="description"]', 'meta', { name: 'description', content: description })
+    upsertHeadElement<HTMLMetaElement>('meta[name="robots"]', 'meta', { name: 'robots', content: robots })
+    upsertHeadElement<HTMLMetaElement>('meta[property="og:title"]', 'meta', { property: 'og:title', content: ogTitle })
+    upsertHeadElement<HTMLMetaElement>('meta[property="og:description"]', 'meta', { property: 'og:description', content: ogDescription })
+    upsertHeadElement<HTMLMetaElement>('meta[property="og:type"]', 'meta', { property: 'og:type', content: ogType })
+    upsertHeadElement<HTMLMetaElement>('meta[property="og:site_name"]', 'meta', { property: 'og:site_name', content: 'JEM Nexus' })
+    upsertHeadElement<HTMLMetaElement>('meta[property="og:locale"]', 'meta', { property: 'og:locale', content: 'es_CL' })
+    upsertHeadElement<HTMLMetaElement>('meta[name="twitter:card"]', 'meta', { name: 'twitter:card', content: twitterCard })
+    upsertHeadElement<HTMLMetaElement>('meta[name="twitter:title"]', 'meta', { name: 'twitter:title', content: ogTitle })
+    upsertHeadElement<HTMLMetaElement>('meta[name="twitter:description"]', 'meta', { name: 'twitter:description', content: ogDescription })
 
     if (canonical) {
-      upsertLink('link[rel="canonical"]', 'canonical', canonical)
+      upsertHeadElement<HTMLLinkElement>('link[rel="canonical"]', 'link', { rel: 'canonical', href: canonical })
+      upsertHeadElement<HTMLMetaElement>('meta[property="og:url"]', 'meta', { property: 'og:url', content: canonical })
     } else {
-      removeHeadElement('link[rel="canonical"]')
+      removeHeadElements('link[rel="canonical"], meta[property="og:url"]')
     }
-  }, [
-    canonical,
-    description,
-    ogDescription,
-    ogImage,
-    ogTitle,
-    ogType,
-    ogUrl,
-    robots,
-    title,
-    twitterCard,
-    twitterDescription,
-    twitterImage,
-    twitterTitle,
-  ])
+
+    const absoluteImage = ogImage?.trim() ? buildAbsoluteUrl(ogImage) : null
+    if (absoluteImage) {
+      upsertHeadElement<HTMLMetaElement>('meta[property="og:image"]', 'meta', { property: 'og:image', content: absoluteImage })
+      upsertHeadElement<HTMLMetaElement>('meta[name="twitter:image"]', 'meta', { name: 'twitter:image', content: absoluteImage })
+      if (imageAlt?.trim()) {
+        upsertHeadElement<HTMLMetaElement>('meta[property="og:image:alt"]', 'meta', { property: 'og:image:alt', content: imageAlt.trim() })
+        upsertHeadElement<HTMLMetaElement>('meta[name="twitter:image:alt"]', 'meta', { name: 'twitter:image:alt', content: imageAlt.trim() })
+      } else {
+        removeHeadElements('meta[property="og:image:alt"], meta[name="twitter:image:alt"]')
+      }
+    } else {
+      removeHeadElements('meta[property="og:image"], meta[property="og:image:alt"], meta[name="twitter:image"], meta[name="twitter:image:alt"]')
+    }
+  }, [canonical, description, imageAlt, ogDescription, ogImage, ogTitle, ogType, robots, title, twitterCard])
 
   return null
 }

@@ -5,7 +5,7 @@ import { ProductCard } from '../components/catalog/ProductCard'
 import { ProductTechnicalSheetModal } from '../components/catalog/ProductTechnicalSheetModal'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
-import { Seo } from '../components/common/Seo'
+import { INDEX_ROBOTS, NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../services/catalogApi'
 import { useCategories } from '../hooks/useCategories'
@@ -13,7 +13,7 @@ import { ApiError, resolveMediaUrl } from '../services/api'
 import type { Category, ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
 import { formatMachineWeightKg, formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductTerrainType, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView } from '../utils/analytics'
-import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl } from '../utils/seo'
+import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl, getProductImageUrl, truncateSeoDescription } from '../utils/seo'
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/900x700/111827/F3F4F6?text=Producto'
 
@@ -141,23 +141,25 @@ export function ProductDetailPage() {
     return galleryImages.find((image) => image.id === selectedImageId) ?? galleryImages[0]
   }, [galleryImages, selectedImageId])
 
-  const seoTitle = product ? `${product.name} | JEM Nexus` : 'Producto | JEM Nexus'
-  const seoDescription = product
-    ? product.brand?.name
-      ? `Cotiza ${product.name} de marca ${product.brand.name} para operaciones industriales. Revisa precio, disponibilidad y especificaciones técnicas.`
-      : `Cotiza ${product.name} para operaciones industriales. Revisa precio, disponibilidad y especificaciones técnicas.`
-    : 'Cotiza maquinaria, repuestos y servicios industriales.'
-  const canonicalUrl = buildPublicUrl(`/producto/${slug}`)
-  const robots = !loading && (!product || error) ? 'noindex,nofollow' : 'index,follow'
-  const ogImage = selectedImage?.url
+  const availableProduct = product?.slug === slug && product.is_published !== false ? product : null
+  const seoTitle = availableProduct ? `${availableProduct.name} | JEM Nexus` : 'Detalle de producto | JEM Nexus'
+  const seoDescription = availableProduct
+    ? truncateSeoDescription(availableProduct.short_description || availableProduct.description || `Información comercial de ${availableProduct.name} en JEM Nexus.`)
+    : 'Consulta información pública de productos de JEM Nexus.'
+  const canonicalUrl = availableProduct ? buildPublicUrl(`/producto/${availableProduct.slug}`) : undefined
+  const robots = availableProduct && !loading && !error ? INDEX_ROBOTS : NOINDEX_ROBOTS
+  const ogImage = availableProduct ? getProductImageUrl(availableProduct) : null
+  const imageAlt = availableProduct
+    ? (availableProduct.images.find((image) => image.is_main) ?? availableProduct.images[0] ?? availableProduct.main_image)?.alt_text?.trim() || availableProduct.name
+    : undefined
 
   const breadcrumbJsonLd = useMemo(
     () => (product ? buildBreadcrumbJsonLd(breadcrumbItems) : null),
     [breadcrumbItems, product],
   )
   const productJsonLd = useMemo(
-    () => (product ? buildProductJsonLd(product, canonicalUrl) : null),
-    [canonicalUrl, product],
+    () => (availableProduct && canonicalUrl ? buildProductJsonLd(availableProduct, canonicalUrl) : null),
+    [availableProduct, canonicalUrl],
   )
 
   const isMachinery = product?.product_type === 'machinery'
@@ -183,10 +185,9 @@ export function ProductDetailPage() {
         description={seoDescription}
         canonical={canonicalUrl}
         ogType="product"
-        ogUrl={canonicalUrl}
         ogImage={ogImage}
+        imageAlt={imageAlt}
         twitterCard={ogImage ? 'summary_large_image' : 'summary'}
-        twitterImage={ogImage}
         robots={robots}
       />
       {breadcrumbJsonLd ? <JsonLd id="product-breadcrumb" data={breadcrumbJsonLd} /> : null}
