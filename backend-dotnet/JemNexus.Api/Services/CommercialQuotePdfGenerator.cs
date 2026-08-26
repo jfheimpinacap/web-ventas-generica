@@ -157,6 +157,8 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         var taxRow = table.AddRow(); rows.Add(taxRow);
         AddTotal(taxRow, $"IVA ({quote.TaxRatePercent.ToString("N0", ChileanCulture)}%)", Money(quote.TaxAmount, quote.Currency), false);
         var totalRow = table.AddRow(); rows.Add(totalRow);
+        totalRow.TopPadding = Unit.FromPoint(3);
+        totalRow.BottomPadding = Unit.FromPoint(3);
         AddTotal(totalRow, "TOTAL", Money(quote.TotalAmount, quote.Currency), true);
         ApplyOuterBorder(rows);
         table.Format.SpaceAfter = 8;
@@ -273,10 +275,8 @@ public sealed class CommercialQuotePdfGenerator : ICommercialQuotePdfGenerator
         {
             cell.Shading.Color = Color.Parse("#EAF4F8");
             cell.VerticalAlignment = VerticalAlignment.Center;
-            cell.TopPadding = 3;
-            cell.BottomPadding = 3;
-            cell.Paragraphs[0].Format.SpaceBefore = 0;
-            cell.Paragraphs[0].Format.SpaceAfter = 0;
+            cell.Format.SpaceBefore = Unit.Zero;
+            cell.Format.SpaceAfter = Unit.Zero;
         }
         row.Format.Font.Size = 10;
         row.Format.Font.Color = Color.Parse("#042149");
