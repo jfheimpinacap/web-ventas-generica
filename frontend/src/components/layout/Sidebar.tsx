@@ -40,7 +40,7 @@ export function Sidebar() {
   const { categories, error } = useCategories()
   const { brands } = useBrands()
 
-  const isCatalogPage = location.pathname.startsWith('/catalogo')
+  const isCatalogPage = ['/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios'].includes(location.pathname)
 
   const menuItems = useMemo(() => {
     if (categories.length === 0 || error) return sidebarMenu

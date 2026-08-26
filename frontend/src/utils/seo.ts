@@ -22,6 +22,14 @@ export const STATIC_PAGE_SEO = {
     title: 'Maquinaria usada para cotización | JEM Nexus',
     description: 'Consulta maquinaria usada publicada por JEM Nexus, revisa su información comercial y solicita una cotización.',
   },
+  '/repuestos': {
+    title: 'Repuestos para maquinaria industrial | JEM Nexus',
+    description: 'Revisa repuestos industriales publicados, consulta la información de cada producto y envía una solicitud de cotización.',
+  },
+  '/servicios': {
+    title: 'Servicios de reparación y mantención | JEM Nexus',
+    description: 'Consulta servicios publicados de reparación y mantención industrial y solicita información mediante el flujo de cotización.',
+  },
   '/cotizar': {
     title: 'Solicitar una cotización | JEM Nexus',
     description: 'Envía una solicitud de cotización de maquinaria, repuestos o servicios industriales al equipo comercial de JEM Nexus.',

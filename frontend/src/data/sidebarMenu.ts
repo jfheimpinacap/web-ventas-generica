@@ -3,14 +3,14 @@ import type { SidebarMenuItem } from '../types/catalog'
 export const sidebarMenu: SidebarMenuItem[] = [
   {
     label: 'Maquinaria',
-    to: '/catalogo?product_type=machinery',
+    to: '/catalogo',
   },
   {
     label: 'Repuestos',
-    to: '/catalogo?product_type=spare_part',
+    to: '/repuestos',
   },
   {
     label: 'Servicios',
-    to: '/catalogo?product_type=service',
+    to: '/servicios',
   },
 ]

@@ -11,7 +11,7 @@ interface LayoutProps extends PropsWithChildren {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
-  const showSidebar = location.pathname.startsWith('/catalogo')
+  const showSidebar = ['/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios'].includes(location.pathname)
 
   return (
     <div className="app-shell">

@@ -181,8 +181,8 @@ export function FeaturedProducts() {
         </div>
 
         <div className="home-section__more">
-          <Link className="btn btn--outline" to="/catalogo?product_type=machinery">
-            Ver más
+          <Link className="btn btn--outline" to="/maquinaria-nueva">
+            Ver maquinaria nueva
           </Link>
         </div>
       </section>
@@ -215,8 +215,8 @@ export function FeaturedProducts() {
           })}
         </div>
         <div className="home-section__more">
-          <Link className="btn btn--outline" to="/catalogo?product_type=spare_part">
-            Ver más
+          <Link className="btn btn--outline" to="/repuestos">
+            Ver repuestos
           </Link>
         </div>
       </section>
@@ -250,8 +250,8 @@ export function FeaturedProducts() {
           })}
         </div>
         <div className="home-section__more">
-          <Link className="btn btn--outline" to="/catalogo?product_type=service">
-            Ver más
+          <Link className="btn btn--outline" to="/servicios">
+            Ver servicios
           </Link>
         </div>
       </section>

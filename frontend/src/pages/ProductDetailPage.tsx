@@ -72,7 +72,9 @@ export function ProductDetailPage() {
   const downloadTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url, true) : ''
 
   const commercialPath = product?.product_type === 'machinery' && product.condition === 'new' ? '/maquinaria-nueva'
-    : product?.product_type === 'machinery' && product.condition === 'used' ? '/maquinaria-usada' : null
+    : product?.product_type === 'machinery' && product.condition === 'used' ? '/maquinaria-usada'
+      : product?.product_type === 'spare_part' ? '/repuestos'
+        : product?.product_type === 'service' ? '/servicios' : null
   const backHref = commercialPath ?? '/catalogo'
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export function ProductDetailPage() {
     return [
       { label: 'Inicio', to: '/' },
       commercialPath
-        ? { label: product.condition === 'new' ? 'Venta de maquinaria nueva' : 'Venta de maquinaria usada', to: commercialPath }
+        ? { label: product.product_type === 'spare_part' ? 'Repuestos' : product.product_type === 'service' ? 'Servicios' : product.condition === 'new' ? 'Maquinaria nueva' : 'Maquinaria usada', to: commercialPath }
         : { label: 'Catálogo', to: '/catalogo' },
       { label: product.name },
     ]

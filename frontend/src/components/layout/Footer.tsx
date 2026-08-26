@@ -1,20 +1,12 @@
 import { Link } from 'react-router-dom'
 
-import { useCategories } from '../../hooks/useCategories'
-
 const CATEGORY_FALLBACKS = {
-  maquinaria: '/catalogo?product_type=machinery',
-  repuestos: '/catalogo?product_type=spare_part',
-  servicios: '/catalogo?product_type=service',
+  maquinaria: '/catalogo',
+  repuestos: '/repuestos',
+  servicios: '/servicios',
 }
 
 export function Footer() {
-  const { categories } = useCategories()
-  const getCategoryHref = (name: keyof typeof CATEGORY_FALLBACKS) => {
-    const category = categories.find((item) => item.parent === null && item.name.trim().toLowerCase() === name)
-    return category ? `/catalogo?category=${category.id}` : CATEGORY_FALLBACKS[name]
-  }
-
   return (
     <footer className="footer">
       <div id="contacto">
@@ -44,13 +36,13 @@ export function Footer() {
             <Link to="/">Inicio</Link>
           </li>
           <li>
-            <Link to={getCategoryHref('maquinaria')}>Maquinaria</Link>
+            <Link to={CATEGORY_FALLBACKS.maquinaria}>Catálogo de maquinaria</Link>
           </li>
           <li>
-            <Link to={getCategoryHref('repuestos')}>Repuestos</Link>
+            <Link to={CATEGORY_FALLBACKS.repuestos}>Repuestos</Link>
           </li>
           <li>
-            <Link to={getCategoryHref('servicios')}>Servicios</Link>
+            <Link to={CATEGORY_FALLBACKS.servicios}>Servicios</Link>
           </li>
           <li>
             <Link to="/cotizar">Cotizar</Link>
