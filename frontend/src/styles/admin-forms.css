@@ -82,10 +82,13 @@
   width: min(520px, 100%);
 }
 
-.admin-customer-filters { display: flex; align-items: end; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; padding: .75rem; }
+.admin-customer-filters { box-sizing: border-box; display: flex; align-items: end; flex-wrap: wrap; gap: .75rem; width: fit-content; max-width: 100%; margin-bottom: 1rem; padding: .75rem; }
 .admin-customer-filters label { display: grid; gap: .3rem; font-weight: 600; }
 .admin-customer-filters .admin-inline-search { align-items: end; }
+.admin-customer-filters input.admin-search { width: 280px; max-width: 100%; }
+.admin-customer-filters .admin-customer-status { width: 8.5rem; }
 .admin-customer-form { display: grid; gap: .75rem; }
+.admin-customer-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
 .admin-field-error { color: var(--admin-danger); font-size: .8rem; font-weight: 500; }
 .admin-pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: 1rem; }
 
@@ -94,6 +97,7 @@
   .admin-customer-form .admin-form-panel--columns-4 { grid-template-columns: 1fr; }
   .admin-customer-filters, .admin-customer-filters > *, .admin-customer-filters label { width: 100%; }
   .admin-customer-filters .admin-inline-search { flex-wrap: nowrap; }
+  .admin-customer-filters .admin-customer-status { width: 100%; }
   .admin-customer-form .btn, .admin-pagination .btn { min-height: 44px; }
 }
 
