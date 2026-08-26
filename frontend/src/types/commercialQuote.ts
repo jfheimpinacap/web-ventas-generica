@@ -20,9 +20,9 @@ export const COMMERCIAL_QUOTE_VALIDITY_OPTIONS: ReadonlyArray<{ value: Commercia
 export type QuoteItemSource = 'Catalog' | 'FreeText'
 
 export interface CustomerProfile {
-  id: number; business_name: string; rut: string; business_activity: string; address: string
-  phone: string; city_or_commune: string; contact_name: string; email: string | null
-  created_at: string; updated_at: string
+  id: number; businessName: string; rut: string; businessActivity: string; address: string
+  phone: string; cityOrCommune: string; contactName: string; email: string | null; isActive: boolean
+  createdAt: string; updatedAt: string
 }
 
 export interface CustomerSnapshot {
