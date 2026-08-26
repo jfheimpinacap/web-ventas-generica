@@ -199,10 +199,14 @@ export function QuotePage() {
             )}
           </aside>
 
-          <form className="quote-form" onSubmit={onSubmit}>
+          <form className="quote-form" onSubmit={onSubmit} aria-busy={loading}>
           <label>
             Nombre
             <input
+              type="text"
+              autoComplete="name"
+              aria-invalid={Boolean(error && !form.customer_name.trim())}
+              aria-describedby={error ? 'quote-form-message' : undefined}
               value={form.customer_name}
               onChange={(event) => setForm((prev) => ({ ...prev, customer_name: event.target.value }))}
             />
@@ -210,6 +214,11 @@ export function QuotePage() {
           <label>
             Teléfono
             <input
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              aria-invalid={Boolean(error && !form.customer_phone.trim())}
+              aria-describedby={error ? 'quote-form-message' : undefined}
               value={form.customer_phone}
               onChange={(event) => setForm((prev) => ({ ...prev, customer_phone: event.target.value }))}
             />
@@ -218,6 +227,7 @@ export function QuotePage() {
             Email
             <input
               type="email"
+              autoComplete="email"
               value={form.customer_email}
               onChange={(event) => setForm((prev) => ({ ...prev, customer_email: event.target.value }))}
             />
@@ -225,13 +235,15 @@ export function QuotePage() {
           <label>
             Empresa (opcional)
             <input
+              type="text"
+              autoComplete="organization"
               value={form.company_name}
               onChange={(event) => setForm((prev) => ({ ...prev, company_name: event.target.value }))}
             />
           </label>
           <label>
             Ciudad / comuna (opcional)
-            <input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} />
+            <input type="text" autoComplete="address-level2" value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} />
           </label>
           <label>
             Método de contacto preferido (opcional)
@@ -254,11 +266,13 @@ export function QuotePage() {
               value={form.message}
               onChange={(event) => setForm((prev) => ({ ...prev, message: event.target.value }))}
               placeholder="Cuéntanos qué necesitas, plazos de entrega, ubicación o datos técnicos adicionales."
+              aria-invalid={Boolean(error && !form.message.trim())}
+              aria-describedby={error ? 'quote-form-message' : undefined}
             />
           </label>
 
-          {error ? <p className="ui-note ui-note--error">{error}</p> : null}
-          {success ? <p className="ui-note ui-note--success">{success}</p> : null}
+          {error ? <p id="quote-form-message" className="ui-note ui-note--error" role="alert">{error}</p> : null}
+          {success ? <p className="ui-note ui-note--success" role="status">{success}</p> : null}
 
             <button className="btn btn--accent" type="submit" disabled={loading}>
               {loading ? 'Enviando...' : 'Enviar'}

@@ -17,6 +17,8 @@ export function Topbar() {
   useEffect(() => {
     if (!isCategoriesOpen) return
 
+    const previousOverflow = document.body.style.overflow
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsCategoriesOpen(false)
@@ -27,7 +29,7 @@ export function Topbar() {
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
-      document.body.style.overflow = ''
+      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [isCategoriesOpen])
@@ -49,7 +51,7 @@ export function Topbar() {
           className="topbar__categories-btn"
           type="button"
           aria-expanded={isCategoriesOpen}
-          aria-label="Abrir categorías"
+          aria-label={isCategoriesOpen ? 'Cerrar categorías' : 'Abrir categorías'}
           onClick={() => setIsCategoriesOpen((prev) => !prev)}
           aria-controls="categories-mega-menu"
         >

@@ -23,6 +23,20 @@
   white-space: nowrap;
 }
 
+.app-shell .btn,
+.login-page .btn {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .app-shell .btn,
+  .login-page .btn {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 .btn:focus-visible,
 .search-box button:focus-visible,
 .table-action--button:focus-visible {
@@ -160,7 +174,7 @@
   .product-card__actions .btn {
     font-size: 0.8rem;
     padding: 0.42rem 0.5rem;
-    min-height: 34px;
+    min-height: 44px;
   }
 
 
@@ -170,7 +184,7 @@
   .promo-product-card__content .btn {
     font-size: 0.8rem;
     padding: 0.42rem 0.5rem;
-    min-height: 34px;
+    min-height: 44px;
   }
 
 .btn--danger {

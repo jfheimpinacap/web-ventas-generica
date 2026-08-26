@@ -62,7 +62,7 @@
   gap: 0.35rem;
   width: max-content;
   min-width: max-content;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.42rem 0.72rem;
   border-radius: var(--radius-button);
   border: 1px solid var(--color-accent-soft);
@@ -86,7 +86,8 @@
 }
 
 .topbar__search button {
-  min-height: 38px;
+  min-width: 44px;
+  min-height: 44px;
   flex: 0 0 auto;
   border-radius: var(--radius-button);
   border: 1px solid var(--color-accent-soft);
@@ -241,8 +242,8 @@
   border: 1px solid #d1d5db;
   background: #f9fafb;
   border-radius: var(--radius-button);
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   line-height: 1;
@@ -404,8 +405,8 @@
 
   .topbar__whatsapp-contact {
     grid-area: whatsapp;
-    min-height: 40px;
-    min-width: 40px;
+    min-height: 44px;
+    min-width: 44px;
     padding: 0;
     justify-content: center;
     border-radius: var(--radius-button);
@@ -441,9 +442,9 @@
 
   .topbar__categories-btn {
     grid-area: categories;
-    min-height: 40px;
-    width: 40px;
-    min-width: 40px;
+    min-height: 44px;
+    width: 44px;
+    min-width: 44px;
     padding: 0;
     justify-content: center;
     border-radius: var(--radius-button);

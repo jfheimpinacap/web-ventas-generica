@@ -511,7 +511,22 @@
 .quote-form textarea,
 .quote-form select {
   width: 100%;
+  min-width: 0;
+  min-height: 44px;
   font-weight: 400;
+}
+
+.quote-preview,
+.quote-preview__meta,
+.quote-form {
+  min-width: 0;
+}
+
+.quote-preview__meta h3,
+.quote-preview__meta p,
+.quote-page__title,
+.quote-page__subtitle {
+  overflow-wrap: anywhere;
 }
 
 .quote-form input::placeholder,
@@ -553,6 +568,17 @@
 
   .quote-form {
     order: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .quote-preview,
+  .quote-form {
+    padding: 0.75rem;
+  }
+
+  .quote-form .btn--accent {
+    width: 100%;
   }
 }
 
