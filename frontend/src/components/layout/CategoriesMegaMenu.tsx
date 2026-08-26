@@ -164,6 +164,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
                       className="categories-modal__mobile-toggle"
                       aria-expanded={isExpanded}
                       aria-controls={`mobile-subs-${category.id}`}
+                      aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} subcategorías de ${category.name}`}
                       onClick={() => toggleMobileCategory(category.id)}
                     >
                       <span aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>

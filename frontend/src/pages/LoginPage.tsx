@@ -59,18 +59,20 @@ export function LoginPage() {
         <h1>Panel de administración</h1>
         <p>Ingresa con tu cuenta para administrar catálogo, cotizaciones y promociones.</p>
 
-        {idleMessage ? <p className="ui-note ui-note--success">{idleMessage}</p> : null}
+        {idleMessage ? <p className="ui-note ui-note--success" role="status">{idleMessage}</p> : null}
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" aria-busy={loading}>
           <label>
             Usuario
-            <input value={username} onChange={(event) => setUsername(event.target.value)} required />
+            <input type="text" autoComplete="username" aria-describedby={error ? 'login-error' : undefined} value={username} onChange={(event) => setUsername(event.target.value)} required />
           </label>
           <label>
             Contraseña
             <span className="login-password-field">
               <input
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                aria-describedby={error ? 'login-error' : undefined}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
@@ -81,7 +83,7 @@ export function LoginPage() {
             </span>
           </label>
 
-          {error ? <p className="ui-note ui-note--error">{error}</p> : null}
+          {error ? <p id="login-error" className="ui-note ui-note--error" role="alert">{error}</p> : null}
 
           <button type="submit" className="btn btn--accent" disabled={loading}>
             {loading ? 'Ingresando…' : 'Ingresar'}
