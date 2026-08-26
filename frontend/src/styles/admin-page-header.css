@@ -7,6 +7,7 @@
 }
 
 .admin-page-header__title { margin: 0; }
+.admin-page-header__title { max-width: 100%; overflow-wrap: anywhere; }
 .admin-page-header__description { max-width: 70rem; color: var(--admin-muted); }
 .admin-page-header__description > * { margin: 0; }
 
@@ -49,8 +50,11 @@
 .admin-page-header--section .admin-page-header__title { font-size: 1.05rem; }
 
 @media (max-width: 480px) {
+  .admin-page-header__actions { align-items: stretch; flex-direction: column; }
   .admin-page-header__actions > *,
   .admin-page-header__toolbar > * { max-width: 100%; }
+  .admin-page-header__actions > .btn,
+  .admin-page-header__actions > a { width: 100%; }
   .admin-page-header__toolbar > label { flex: 1 1 100%; }
   .admin-page-header__toolbar .admin-search { width: 100%; }
   .admin-inline-search { width: 100%; }
