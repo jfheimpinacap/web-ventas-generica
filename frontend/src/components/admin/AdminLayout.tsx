@@ -119,7 +119,7 @@ export function AdminLayout({ children }: PropsWithChildren) {
           </button>
         </div>
         <h2 className="admin-sidebar__title">Panel de administración</h2>
-        <nav>
+        <nav aria-label="Navegación del panel de administración">
           {adminMenu.map((item) => (
             <NavLink key={item.to} to={item.to} className="admin-nav-link" onClick={closeMobileMenu}>
               <AdminIcon name={item.icon} /><span>{item.label}</span>
@@ -143,7 +143,7 @@ export function AdminLayout({ children }: PropsWithChildren) {
       </aside>
 
       <section className="admin-main">
-        <main className="admin-content">{children}</main>
+        <main id="main-content" className="admin-content" tabIndex={-1}>{children}</main>
       </section>
     </div>
   )

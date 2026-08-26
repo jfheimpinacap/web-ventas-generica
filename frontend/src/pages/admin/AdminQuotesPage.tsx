@@ -166,13 +166,13 @@ function QuoteRequestsView() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Folio</th>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Producto / asunto</th>
-                <th>Email / teléfono</th>
-                <th>Estado</th>
-                <th>Cambiar estado</th>
+                <th scope="col">Folio</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Producto / asunto</th>
+                <th scope="col">Email / teléfono</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Cambiar estado</th>
               </tr>
             </thead>
             <tbody>
@@ -290,7 +290,7 @@ function GeneratedQuotesView() {
       {downloadError ? <p className="ui-note ui-note--error" role="alert">{downloadError}</p> : null}
       {!loading && !error ? <div className="generated-quotes-table-wrapper" tabIndex={0} aria-label="Tabla de cotizaciones generadas con desplazamiento horizontal">
         <table className="admin-table commercial-quotes-table">
-          <thead><tr><th>Folio</th><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Total</th><th>Acción</th></tr></thead>
+          <thead><tr><th scope="col">Folio</th><th scope="col">Cliente</th><th scope="col">Estado</th><th scope="col">Vendedor</th><th scope="col">Total</th><th scope="col">Acción</th></tr></thead>
           <tbody>
             {items.length === 0 ? <tr><td colSpan={6}><p className="ui-note">{search ? 'No se encontraron cotizaciones para la búsqueda ingresada.' : 'Aún no hay cotizaciones generadas.'}</p></td></tr> : null}
             {items.map((quote) => (

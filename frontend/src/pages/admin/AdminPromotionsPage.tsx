@@ -98,13 +98,13 @@ export function AdminPromotionsPage() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Título</th>
-                <th>Producto</th>
-                <th>Activa</th>
-                <th>Orden</th>
-                <th>Inicio</th>
-                <th>Fin</th>
-                <th>Acciones</th>
+                <th scope="col">Título</th>
+                <th scope="col">Producto</th>
+                <th scope="col">Activa</th>
+                <th scope="col">Orden</th>
+                <th scope="col">Inicio</th>
+                <th scope="col">Fin</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>

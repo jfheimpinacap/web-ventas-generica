@@ -85,9 +85,9 @@ export function AdminBrandsPage() {
           <table className="admin-table admin-table--compact">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Activa</th>
-                <th>Acciones</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Activa</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>

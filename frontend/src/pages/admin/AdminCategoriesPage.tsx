@@ -92,7 +92,7 @@ export function AdminCategoriesPage() {
             {rootCategories.length === 0 ? <p className="ui-note">Sin categorías principales.</p> : null}
             <div className="admin-table-wrapper admin-table-wrapper--compact">
               <table className="admin-table admin-table--compact">
-                <thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <thead><tr><th scope="col">Nombre</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead>
                 <tbody>{rootCategories.map((item) => (
                   <tr key={item.id} className={item.id === selectedRootId ? 'admin-table__row--selected' : ''}>
                     <td><button type="button" className="admin-category-selector" onClick={() => setSelectedRootId(item.id)}>{item.name}</button></td>
@@ -109,7 +109,7 @@ export function AdminCategoriesPage() {
             {!selectedRoot ? <p className="ui-note">Selecciona una categoría principal para administrar sus subcategorías.</p> : null}
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (
-              <div className="admin-table-wrapper admin-table-wrapper--compact"><table className="admin-table admin-table--compact"><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
+              <div className="admin-table-wrapper admin-table-wrapper--compact"><table className="admin-table admin-table--compact"><thead><tr><th scope="col">Nombre</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
                 <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><div className="admin-table-actions"><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button></div></td></tr>
               ))}</tbody></table></div>
             ) : null}

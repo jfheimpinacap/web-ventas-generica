@@ -184,6 +184,10 @@
 .admin-shell .btn--ghost, .admin-shell .btn--secondary { border-color: var(--admin-border); color: var(--admin-text); font-family: var(--admin-font); }
 .admin-shell .btn--danger { border-color: var(--admin-danger); color: var(--admin-danger); }
 .admin-shell .btn:disabled, .admin-shell .btn--disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar { transition: none; }
+}
 .admin-shell .btn:focus-visible, .admin-shell input:focus-visible, .admin-shell select:focus-visible, .admin-shell textarea:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
 .admin-shell input:not([type=checkbox]):not([type=radio]):not([type=file]), .admin-shell select { min-height: var(--admin-control-height); }
 .admin-shell input, .admin-shell select, .admin-shell textarea { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: #fff; color: var(--admin-text); font: 13px var(--admin-font); }

@@ -3,6 +3,12 @@
   gap: 1rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .machinery-carousel__track {
+    transition: none;
+  }
+}
+
 
 
 .featured-products {
@@ -368,7 +374,8 @@
 .product-detail__thumb:focus-visible {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
-  outline: none;
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .product-detail__thumb img {

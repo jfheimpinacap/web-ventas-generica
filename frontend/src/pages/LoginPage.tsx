@@ -46,7 +46,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="login-page">
+    <main id="main-content" className="login-page" tabIndex={-1}>
       <Seo
         title="Panel de administración | JEM Nexus"
         description="Acceso al panel interno de gestión comercial y soporte."
