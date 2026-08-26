@@ -34,19 +34,39 @@ import { AdminCustomersPage } from '../pages/admin/AdminCustomersPage'
 import { AdminCustomerFormPage } from '../pages/admin/AdminCustomerFormPage'
 
 const newMachineryConfig: CommercialCatalogConfig = {
-  title: 'Venta de maquinaria nueva',
-  description: 'Equipos nuevos para operaciones industriales, disponibles para revisar y cotizar con atención comercial especializada.',
+  title: 'Maquinaria nueva para operaciones industriales',
+  description: 'Revisa equipos publicados como nuevos, consulta su información técnica y prepara una solicitud de cotización.',
   canonicalPath: '/maquinaria-nueva',
   fixedProductType: 'machinery',
   fixedCondition: 'new',
+  keyPoints: ['Equipos identificados con condición nueva.', 'Información comercial y técnica disponible en cada ficha.', 'Solicitud de cotización desde el producto o formulario general.'],
+  relatedLinks: [{ label: 'Ver maquinaria usada', to: '/maquinaria-usada' }],
 }
 
 const usedMachineryConfig: CommercialCatalogConfig = {
-  title: 'Venta de maquinaria usada',
-  description: 'Equipos usados seleccionados y disponibles para cotización, con información comercial clara para tu operación.',
+  title: 'Maquinaria usada disponible para cotización',
+  description: 'Compara los equipos publicados como usados y revisa los antecedentes disponibles antes de solicitar una cotización.',
   canonicalPath: '/maquinaria-usada',
   fixedProductType: 'machinery',
   fixedCondition: 'used',
+  keyPoints: ['Equipos identificados con condición usada.', 'Características y antecedentes visibles en cada ficha.', 'Cotización disponible para el equipo que selecciones.'],
+  relatedLinks: [{ label: 'Ver maquinaria nueva', to: '/maquinaria-nueva' }],
+}
+
+const sparePartsConfig: CommercialCatalogConfig = {
+  title: 'Repuestos para maquinaria y equipos industriales',
+  description: 'Encuentra repuestos publicados y revisa sus datos antes de enviar una consulta o solicitud de cotización.',
+  canonicalPath: '/repuestos', fixedProductType: 'spare_part',
+  keyPoints: ['Repuestos publicados en un listado específico.', 'Búsqueda por nombre, categoría o marca.', 'Consulta del requerimiento mediante el flujo de cotización.'],
+  relatedLinks: [{ label: 'Revisar servicios publicados', to: '/servicios' }],
+}
+
+const servicesConfig: CommercialCatalogConfig = {
+  title: 'Servicios de reparación y mantención industrial',
+  description: 'Revisa los servicios publicados de reparación o mantención y consulta la información de cada ficha.',
+  canonicalPath: '/servicios', fixedProductType: 'service',
+  keyPoints: ['Servicios organizados en un listado propio.', 'Descripción visible para evaluar cada publicación.', 'Solicitud de información mediante el formulario de cotización.'],
+  relatedLinks: [{ label: 'Revisar repuestos publicados', to: '/repuestos' }],
 }
 
 export function AppRouter() {
@@ -58,6 +78,8 @@ export function AppRouter() {
       <Route path="/catalogo" element={<CatalogPage />} />
       <Route path="/maquinaria-nueva" element={<CatalogPage commercialConfig={newMachineryConfig} />} />
       <Route path="/maquinaria-usada" element={<CatalogPage commercialConfig={usedMachineryConfig} />} />
+      <Route path="/repuestos" element={<CatalogPage commercialConfig={sparePartsConfig} />} />
+      <Route path="/servicios" element={<CatalogPage commercialConfig={servicesConfig} />} />
       <Route path="/producto/:slug" element={<ProductDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
       {import.meta.env.DEV ? <Route path="/diagnostico-api" element={<ApiDiagnostics />} /> : null}

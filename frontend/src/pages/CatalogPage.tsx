@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
@@ -76,9 +76,11 @@ function getNumericPrice(product: ProductListItem) {
 export interface CommercialCatalogConfig {
   title: string
   description: string
-  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada'
-  fixedProductType: 'machinery'
-  fixedCondition: 'new' | 'used'
+  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada' | '/repuestos' | '/servicios'
+  fixedProductType: 'machinery' | 'spare_part' | 'service'
+  fixedCondition?: 'new' | 'used'
+  keyPoints: string[]
+  relatedLinks: Array<{ label: string; to: string }>
 }
 
 export function CatalogPage({ commercialConfig }: { commercialConfig?: CommercialCatalogConfig }) {
@@ -236,7 +238,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     if (effectiveRootCategory) return effectiveRootCategory.name
     if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
     if (query.search) return 'Resultados de búsqueda'
-    return 'Productos'
+    return 'Catálogo de maquinaria, repuestos y servicios industriales'
   }, [commercialConfig, effectiveRootCategory, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
@@ -338,13 +340,42 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
           {commercialConfig ? (
             <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${commercialConfig.title}`}>
               <p>{commercialConfig.description}</p>
+              <h2>En pocas palabras</h2>
+              <ul>{commercialConfig.keyPoints.map((point) => <li key={point}>{point}</li>)}</ul>
+              <div className="catalog-intro__actions">
+                <Link className="btn btn--accent" to="/cotizar">Solicitar cotización</Link>
+                <Link className="btn btn--ghost" to="/catalogo">Ver catálogo completo</Link>
+                {commercialConfig.relatedLinks.map((link) => <Link key={link.to} to={link.to}>{link.label}</Link>)}
+              </div>
             </div>
           ) : mainCategorySeo ? (
             <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${mainCategorySeo.title}`}>
               <p>{mainCategorySeo.description}</p>
             </div>
+          ) : !searchOnlyView ? (
+            <div className="catalog-seo-intro">
+              <p>Explora las publicaciones disponibles y distingue entre maquinaria nueva, maquinaria usada, repuestos y servicios antes de cotizar.</p>
+              <h2>Puntos clave</h2>
+              <ul><li>Compara los tipos de solución en rutas específicas.</li><li>Usa filtros para acotar el listado cuando lo necesites.</li><li>Solicita información desde una ficha o el formulario de cotización.</li></ul>
+              <div className="catalog-intro__actions"><Link className="btn btn--accent" to="/cotizar">Solicitar cotización</Link></div>
+            </div>
           ) : null}
         </div>
+
+        {isCleanCatalogView ? (
+          <div className="catalog-clusters-table" tabIndex={0} role="region" aria-label="Comparación de soluciones del catálogo">
+            <table>
+              <caption>Opciones para explorar el catálogo</caption>
+              <thead><tr><th scope="col">Solución</th><th scope="col">Qué puedes revisar</th><th scope="col">Próximo paso</th></tr></thead>
+              <tbody>
+                <tr><td>Maquinaria nueva</td><td>Equipos publicados como nuevos</td><td><Link to="/maquinaria-nueva">Ver maquinaria nueva</Link></td></tr>
+                <tr><td>Maquinaria usada</td><td>Equipos publicados como usados</td><td><Link to="/maquinaria-usada">Ver maquinaria usada</Link></td></tr>
+                <tr><td>Repuestos</td><td>Repuestos publicados en el catálogo</td><td><Link to="/repuestos">Ver repuestos</Link></td></tr>
+                <tr><td>Servicios</td><td>Servicios publicados de reparación o mantención</td><td><Link to="/servicios">Ver servicios</Link></td></tr>
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         <div className="catalog-toolbar">
           {totalPages > 1 ? (

@@ -8,6 +8,8 @@
 - [Catálogo](https://jem-nexus.cl/catalogo)
 - [Maquinaria nueva](https://jem-nexus.cl/maquinaria-nueva)
 - [Maquinaria usada](https://jem-nexus.cl/maquinaria-usada)
+- [Repuestos publicados](https://jem-nexus.cl/repuestos)
+- [Servicios de reparación y mantención](https://jem-nexus.cl/servicios)
 - [Solicitar cotización](https://jem-nexus.cl/cotizar)
 - [Contacto](https://jem-nexus.cl/contacto)
 - [Sobre nosotros](https://jem-nexus.cl/sobre-nosotros)
