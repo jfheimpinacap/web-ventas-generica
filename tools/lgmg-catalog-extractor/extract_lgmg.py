@@ -16,13 +16,14 @@ import sys
 import tempfile
 import time
 import urllib.robotparser
+import unicodedata
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -30,8 +31,10 @@ MAX_HTML_BYTES = 5 * 1024 * 1024
 MAX_ASSET_BYTES = 15 * 1024 * 1024
 DETAIL_RE = re.compile(r"^/es/product/pro-detail-[0-9A-Za-z_-]+\.htm$")
 LIST_RE = re.compile(r"^/es/product/pro-list-[0-9A-Za-z_-]+\.htm$")
-MODEL_RE = re.compile(r"\b[A-Z]{1,5}[0-9][A-Z0-9-]*\b")
-PAIR_RE = re.compile(r"\b([A-Z]{1,5}[0-9][A-Z0-9-]*)\s*\(\s*([A-Z]{1,5}[0-9][A-Z0-9-]*)\s*\)")
+MODEL_TOKEN = r"[A-Z]{1,5}[0-9][A-Z0-9\-ⅠⅡⅢⅣ]*"
+MODEL_RE = re.compile(rf"(?<![A-Z0-9])({MODEL_TOKEN})(?![A-Z0-9])")
+PAIR_RE = re.compile(rf"(?<![A-Z0-9])({MODEL_TOKEN})\s*\(\s*({MODEL_TOKEN})\s*\)")
+INVALID_MODEL_WORDS = ("ELEVADOR", "ELEVADORES", "PRODUCTOS", "LGMG")
 
 SPEC_KEYS = {
     "altura máxima de trabajo": "maximum_working_height", "maximum working height": "maximum_working_height",
@@ -50,6 +53,10 @@ SPEC_KEYS = {
 
 def clean_text(value: str) -> str:
     return " ".join(html.unescape(value).replace("\ufffd", "�").split())
+
+
+def strip_accents(value: str) -> str:
+    return "".join(char for char in unicodedata.normalize("NFD", value) if unicodedata.category(char) != "Mn")
 
 
 def canonical_url(url: str, *, page: bool = True) -> str:
@@ -84,62 +91,99 @@ def validate_output_dir(raw: str, repo_root: Path | None = None) -> Path:
     return path
 
 
+class Node:
+    def __init__(self, tag="document", attrs=None, parent=None):
+        self.tag, self.attrs, self.parent = tag, dict(attrs or ()), parent
+        self.children, self.data = [], []
+
+    @property
+    def classes(self): return set(self.attrs.get("class", "").split())
+    @property
+    def text(self):
+        return clean_text(" ".join(self.data + [child.text for child in self.children]))
+
+    def descendants(self, tag=None):
+        for child in self.children:
+            if tag is None or child.tag == tag: yield child
+            yield from child.descendants(tag)
+
+    def has_ancestor(self, classes):
+        node = self.parent
+        while node:
+            if classes <= node.classes: return True
+            node = node.parent
+        return False
+
+
 class CatalogueParser(HTMLParser):
-    """Small structural parser; it deliberately excludes long marketing copy."""
+    """Context-aware, minimal DOM parser built solely on HTMLParser."""
     def __init__(self, base_url: str):
         super().__init__(convert_charrefs=True)
         self.base_url = base_url
-        self.links: list[str] = []
-        self.images: list[dict] = []
-        self.datasheets: list[dict] = []
-        self.title = ""
-        self.canonical = ""
-        self.breadcrumbs: list[str] = []
-        self.rows: list[list[str]] = []
-        self._tag = ""
-        self._text: list[str] = []
-        self._row: list[str] | None = None
-        self._crumb_depth = 0
+        self.root = Node(); self.stack = [self.root]
+        self.links, self.images, self.datasheets, self.rows = [], [], [], []
+        self.source_page_title = self.source_product_title = self.canonical = ""
+        self.breadcrumb_span = self.source_category = ""
 
     def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs); self._tag = tag
-        classes = attrs.get("class", "").lower()
-        if "breadcrumb" in classes: self._crumb_depth += 1
-        if tag == "tr": self._row = []
-        if tag in ("th", "td", "h1", "title"): self._text = []
-        if tag == "link" and attrs.get("rel", "").lower() == "canonical":
-            self.canonical = urljoin(self.base_url, attrs.get("href", ""))
-        if tag == "a" and attrs.get("href"):
-            target = urljoin(self.base_url, attrs["href"])
-            path = urlsplit(target).path
-            if DETAIL_RE.fullmatch(path): self.links.append(target)
-            if path.lower().endswith(".pdf"):
-                try: target = canonical_url(target, page=False)
-                except ValueError: return
-                self.datasheets.append({"url": target, "name": clean_text(attrs.get("title", "")) or Path(path).name,
-                                        "format": "pdf", "language": "es" if "/es/" in path else None, "needs_review": True})
-        if tag == "img":
-            src = attrs.get("data-src") or attrs.get("data-original") or attrs.get("src")
-            if src:
-                target = urljoin(self.base_url, src)
-                try: target = canonical_url(target, page=False)
-                except ValueError: return
-                ext = Path(urlsplit(target).path).suffix.lower().lstrip(".")
-                self.images.append({"url": target, "order": len(self.images) + 1,
-                                    "alt_original": clean_text(attrs.get("alt", "")), "extension": ext or None})
+        attrs = [(key.lower(), value or "") for key, value in attrs]
+        node = Node(tag.lower(), attrs, self.stack[-1]); self.stack[-1].children.append(node)
+        if tag.lower() not in ("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "wbr"):
+            self.stack.append(node)
 
     def handle_endtag(self, tag):
-        value = clean_text(" ".join(self._text))
-        if tag in ("h1", "title") and value and not self.title: self.title = value
-        if tag in ("th", "td") and self._row is not None: self._row.append(value)
-        if tag == "tr" and self._row is not None:
-            if any(self._row): self.rows.append(self._row)
-            self._row = None
-        self._tag = ""
+        for index in range(len(self.stack) - 1, 0, -1):
+            if self.stack[index].tag == tag.lower(): self.stack = self.stack[:index]; break
 
     def handle_data(self, data):
-        if self._tag in ("th", "td", "h1", "title"): self._text.append(data)
-        if self._crumb_depth and clean_text(data): self.breadcrumbs.append(clean_text(data))
+        self.stack[-1].data.append(data)
+
+    def feed(self, data):
+        super().feed(data); self._extract()
+
+    def _extract(self):
+        nodes = list(self.root.descendants())
+        title = next((n for n in nodes if n.tag == "title"), None)
+        self.source_page_title = title.text if title else ""
+        canonical = next((n for n in nodes if n.tag == "link" and "canonical" in n.attrs.get("rel", "").lower()), None)
+        if canonical: self.canonical = urljoin(self.base_url, canonical.attrs.get("href", ""))
+        crumbs = next((n for n in nodes if "crumbs" in n.classes), None)
+        if crumbs:
+            spans = list(crumbs.descendants("span")); self.breadcrumb_span = spans[-1].text if spans else ""
+            categories = [a.text for a in crumbs.descendants("a") if LIST_RE.fullmatch(urlsplit(urljoin(self.base_url, a.attrs.get("href", ""))).path) and a.text.casefold() != "productos"]
+            self.source_category = categories[-1] if categories else ""
+        candidates = [n for n in nodes if "tit" in n.classes and n.has_ancestor({"infor"}) and n.has_ancestor({"pro_detail01"})]
+        self.source_product_title = candidates[0].text if candidates else ""
+        for table in (n for n in nodes if n.tag == "table" and "datalist" in n.classes and n.has_ancestor({"pro_detail"})):
+            for tr in table.descendants("tr"):
+                cells = [cell.text for cell in tr.children if cell.tag in ("th", "td")]
+                if any(cells): self.rows.append(cells)
+        listing = next((n for n in nodes if n.tag == "section" and {"channel_content", "pro_list"} <= n.classes), None)
+        if listing:
+            for anchor in listing.descendants("a"):
+                target = urljoin(self.base_url, anchor.attrs.get("href", ""))
+                if DETAIL_RE.fullmatch(urlsplit(target).path): self.links.append(target)
+        allowed_ext = {"jpg", "jpeg", "png", "gif", "webp"}
+        for img in (n for n in nodes if n.tag == "img"):
+            gallery = (img.has_ancestor({"ul_box"}) and img.has_ancestor({"right_r"}) and img.has_ancestor({"pro_detail01"})) or (img.has_ancestor({"right_b", "imgZoom"}) and img.has_ancestor({"pro_detail02"}))
+            if not gallery: continue
+            src = next((img.attrs.get(k) for k in ("bigsrc", "data-original", "data-src", "src") if img.attrs.get(k)), "")
+            try: target = canonical_url(urljoin(self.base_url, src), page=False)
+            except ValueError: continue
+            ext = Path(urlsplit(target).path).suffix.lower().lstrip(".")
+            if ext in allowed_ext: self.images.append({"url": target, "order": len(self.images) + 1, "alt_original": clean_text(img.attrs.get("alt", "")), "extension": ext})
+        for box in (n for n in nodes if "new_box" in n.classes):
+            heading = next((n.text for n in box.children if "tit" in n.classes), "")
+            normalized = re.sub(r"[^a-z ]", "", strip_accents(heading).casefold()).strip()
+            if normalized != "ficha tecnica": continue
+            for anchor in box.descendants("a"):
+                target = urljoin(self.base_url, anchor.attrs.get("href", "")); path = urlsplit(target).path
+                if not path.lower().endswith(".pdf"): continue
+                try: target = canonical_url(target, page=False)
+                except ValueError: continue
+                language = next((span.text for span in anchor.descendants("span") if span.text), None)
+                self.datasheets.append({"url": target, "name": Path(path).name, "format": "pdf", "language": language,
+                                        "provenance": "Ficha técnica", "needs_review": not bool(language)})
 
 
 def dedupe(items, key=lambda item: item):
@@ -150,30 +194,31 @@ def dedupe(items, key=lambda item: item):
     return result
 
 
-def normalize_models(title: str, rows: list[list[str]]) -> dict:
+def _models(value: str):
+    pair = PAIR_RE.search(value.upper())
+    values = pair.groups() if pair else ((MODEL_RE.search(value.upper()).group(1), None) if MODEL_RE.search(value.upper()) else (None, None))
+    if any(word in (token or "") for token in values for word in INVALID_MODEL_WORDS): return None, None
+    return values
+
+
+def normalize_models(product_title: str, rows: list[list[str]], breadcrumb: str = "") -> dict:
+    sources = [("source_product_title", product_title)]
+    identifier = next((" ".join(row) for row in rows if any(key in " ".join(row).casefold() for key in ("modelo", "metric", "métric", "imperial"))), "")
+    if identifier: sources.append(("technical_table", identifier))
+    if breadcrumb: sources.append(("breadcrumb_span", breadcrumb))
+    parsed = [(name, _models(value)) for name, value in sources]
+    chosen = next(((name, pair) for name, pair in parsed if pair[0]), (None, (None, None)))
+    conflicts = [(name, pair) for name, pair in parsed if pair[0] and pair != chosen[1]]
     warnings = []
-    pair = PAIR_RE.search(title)
-    metric = imperial = source = None
-    evidence = "title"
-    for row in rows:
-        joined = " ".join(row)
-        row_pair = PAIR_RE.search(joined)
-        if row_pair and any(word in joined.lower() for word in ("metric", "imperial", "métric", "modelo")):
-            if pair and pair.groups() != row_pair.groups(): warnings.append("Conflicto entre el título y la tabla para el par de modelos")
-            pair, evidence = row_pair, "technical_table"
-            break
-    if pair:
-        source = pair.group(0).replace(" ", ""); metric, imperial = pair.group(1), pair.group(2)
-        ambiguous = evidence == "title"
-        if ambiguous: warnings.append("El orden métrico/imperial solo aparece en el encabezado y requiere confirmación estructurada")
-    else:
-        models = MODEL_RE.findall(title.upper())
-        metric = models[0] if models else None
-        ambiguous = metric is None
-        if ambiguous: warnings.append("No se pudo identificar un modelo sin usar el ID de la URL")
+    if conflicts: warnings.append("Conflicto entre fuentes estructuradas para el modelo")
+    if not chosen[1][0]: warnings.append("No se pudo identificar un modelo válido sin usar el ID de la URL")
+    weak = chosen[0] == "breadcrumb_span"
+    if weak: warnings.append("Se utilizó el breadcrumb como fallback débil para el modelo")
+    metric, imperial = chosen[1]
     return {"manufacturer": "LGMG", "metric_model": metric, "imperial_model": imperial,
-            "model_aliases": [imperial] if imperial else [], "model_pair_source": source,
-            "model_evidence": evidence if metric else None, "needs_review": ambiguous or bool(warnings), "warnings": warnings}
+            "model_aliases": [imperial] if imperial else [], "model_pair_source": f"{metric}({imperial})" if imperial else metric,
+            "model_evidence": [{"source": name, "metric_model": pair[0], "imperial_model": pair[1]} for name, pair in parsed],
+            "needs_review": not metric or bool(conflicts) or weak, "warnings": warnings}
 
 
 def parse_specs(rows: list[list[str]]) -> list[dict]:
@@ -185,7 +230,7 @@ def parse_specs(rows: list[list[str]]) -> list[dict]:
         key = SPEC_KEYS.get(name.casefold().rstrip(":"))
         result.append({"name_original": name, "value_metric": values[0],
                        "value_imperial": values[1] if len(values) > 1 else None,
-                       "normalized_key": key, "needs_review": len(values) > 2})
+                       "normalized_key": key, "evidence": list(row), "needs_review": len(values) > 2})
     return result
 
 
@@ -200,24 +245,42 @@ def classify_electric(category: str | None, specs: list[dict], title: str = "") 
     return (True, dedupe(evidence)) if evidence else (None, [])
 
 
+NAME_TEMPLATES = {
+    "elevadores de tijera": "Elevador de tijera {electric}LGMG {model}",
+    "elevador electrico rt de tijera": "Elevador de tijera {electric}para terreno irregular LGMG {model}",
+    "elevadores de brazo articulado": "Elevador de brazo articulado {electric}LGMG {model}",
+    "elevadores de brazo telescopico": "Elevador de brazo telescópico {electric}LGMG {model}",
+    "elevador mastil vertical": "Elevador de mástil vertical {electric}LGMG {model}",
+    "elevador de tijera sobre orugas": "Elevador de tijera sobre orugas {electric}LGMG {model}",
+    "manipuladores telescopicos": "Manipulador telescópico LGMG {model}",
+}
+
+
 def parse_product(document: str, source_url: str) -> dict:
     parser = CatalogueParser(source_url); parser.feed(document)
-    models = normalize_models(parser.title, parser.rows)
+    models = normalize_models(parser.source_product_title, parser.rows, parser.breadcrumb_span)
     specs = parse_specs(parser.rows)
-    category = parser.breadcrumbs[-2] if len(parser.breadcrumbs) > 1 else None
-    electric, evidence = classify_electric(category, specs, parser.title)
+    category = parser.source_category or None
+    electric, evidence = classify_electric(category, specs, parser.source_product_title)
     warnings = list(models.pop("warnings"))
+    missing_fields = [key for key, value in (("metric_model", models["metric_model"]), ("source_category", category)) if not value]
+    if not category: warnings.append("Falta la categoría fuente estructurada en crumbs")
     if electric is None: warnings.append("Evidencia eléctrica insuficiente; clasificación pendiente")
     model = models["metric_model"] or models["imperial_model"] or "modelo por revisar"
-    name = f"Elevador de tijera eléctrico LGMG {model}" if electric else f"Equipo LGMG {model}"
+    category_key = strip_accents(category or "").casefold()
+    template = NAME_TEMPLATES.get(category_key)
+    if template: name = template.format(electric="eléctrico " if electric else "", model=model)
+    else: name = f"Equipo LGMG {model}"; warnings.append("Categoría sin mapeo conocido para nombre sugerido")
     images = dedupe(parser.images, lambda x: x["url"])
-    for image in images: image["alt_suggested"] = name
-    needs_review = models["needs_review"] or electric is None or bool(warnings)
+    for order, image in enumerate(images, 1): image["order"] = order; image["alt_suggested"] = name
+    datasheets = dedupe(parser.datasheets, lambda x: x["url"])
+    needs_review = models["needs_review"] or electric is None or not category or not template or any(a.get("needs_review", False) for a in images + datasheets)
     return {"source_url": source_url, "canonical_url": parser.canonical or source_url,
+            "source_page_title": parser.source_page_title, "source_product_title": parser.source_product_title,
             "source_category": category, **models, "specifications": specs, "images": images,
-            "datasheets": dedupe(parser.datasheets, lambda x: x["url"]), "is_electric": electric,
+            "datasheets": datasheets, "is_electric": electric,
             "electric_evidence": evidence, "warnings": warnings, "translation_issues": [],
-            "needs_review": needs_review, "display_name_suggestion": name,
+            "missing_fields": missing_fields, "needs_review": needs_review, "display_name_suggestion": name,
             "jem_nexus_draft": {"name": name, "brand": "LGMG", "model": model,
                 "product_type": "machinery", "condition": "new", "stock_status": "on_request",
                 "show_price": False, "published": False, "featured": False, "price": None}}
@@ -343,12 +406,14 @@ def main(argv=None):
             if robots_data: robots_status = "fetched_and_allowed"
         except RuntimeError as exc:
             raise ValueError(f"No fue posible verificar robots.txt; ejecución de red detenida: {exc}") from exc
+        discovery_status = "seed_file"
         if args.start_url:
             start = canonical_url(args.start_url)
             index = fetcher.fetch(start).decode("utf-8", "replace")
             discovery = CatalogueParser(start); discovery.feed(index)
             urls = dedupe([canonical_url(url) for url in discovery.links])
-            if not urls: errors.append({"stage": "discovery", "url": start, "message": "No se hallaron enlaces estáticos; puede requerir JavaScript. Use --seed-file."})
+            discovery_status = "static_listing" if urls else "dynamic_listing_requires_seed"
+            if not urls: errors.append({"stage": "discovery", "url": start, "message": "El listado es dinámico y no contiene productos estáticos confiables. Use --seed-file."})
         else:
             start = None; seed = Path(args.seed_file).resolve(strict=True)
             urls = dedupe([canonical_url(line.strip()) for line in seed.read_text(encoding="utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")])
@@ -394,14 +459,14 @@ def main(argv=None):
                    "warnings": " | ".join(p["warnings"]), "missing_fields": " | ".join(k for k in ("metric_model", "source_category") if not p.get(k)),
                    "translation_issues": " | ".join(p["translation_issues"]), "suggested_action": "Revisar evidencia oficial antes de importar"} for p in products]
         write_csv(output / "review.csv", "metric_model imperial_model source_url needs_review warnings missing_fields translation_issues suggested_action".split(), review)
-        manifest = {"tool": "lgmg-catalog-extractor", "version": TOOL_VERSION, "start_url": start, "user_agent": args.user_agent,
+        manifest = {"tool": "lgmg-catalog-extractor", "version": TOOL_VERSION, "start_url": start, "discovery_status": discovery_status, "user_agent": args.user_agent,
             "extracted_at_utc": datetime.now(timezone.utc).isoformat(), "requested_count": args.max_products, "discovered_count": discovered,
             "processed_count": len(products), "skipped_count": skipped, "failed_pages": [e for e in errors if e.get("stage") == "detail"],
             "robots_status": robots_status, "delay_seconds": args.delay_seconds, "timeout_seconds": args.timeout_seconds,
             "images_downloaded": downloaded, "hashes": hashes, "jem_nexus_called": False, "content_published": False}
         write_json(output / "manifest.json", manifest)
         print(f"Procesados: {len(products)}; omitidos: {skipped}; errores: {len(errors)}; salida: {output}")
-        return 0
+        return 2 if discovery_status == "dynamic_listing_requires_seed" else 0
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
 
