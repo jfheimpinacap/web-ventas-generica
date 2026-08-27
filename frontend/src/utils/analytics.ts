@@ -1,4 +1,4 @@
-export type AnalyticsParams = Partial<Record<'source' | 'location' | 'product_id' | 'product_name' | 'product_type' | 'preferred_contact_method' | 'method' | 'content_type' | 'category' | 'brand' | 'price' | 'technical_sheet_id', string | number | boolean | null>>
+export type AnalyticsParams = Partial<Record<'source' | 'location' | 'product_id' | 'product_name' | 'product_type' | 'preferred_contact_method' | 'method' | 'content_type' | 'category' | 'category_id' | 'brand' | 'price' | 'technical_sheet_id' | 'promotion_id', string | number | boolean | null>>
 
 declare global {
   interface Window {
