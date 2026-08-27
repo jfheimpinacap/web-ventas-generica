@@ -1,4 +1,4 @@
-export type AnalyticsParams = Record<string, string | number | boolean | null | undefined>
+export type AnalyticsParams = Partial<Record<'source' | 'location' | 'product_id' | 'product_name' | 'product_type' | 'preferred_contact_method' | 'method' | 'content_type' | 'category' | 'brand' | 'price' | 'technical_sheet_id', string | number | boolean | null>>
 
 declare global {
   interface Window {
@@ -19,19 +19,17 @@ export function trackEvent(eventName: string, params?: AnalyticsParams) {
   if (Array.isArray(window.dataLayer)) {
     window.dataLayer.push(payload)
   }
-
-  if (import.meta.env.DEV) {
-    console.debug('[analytics]', payload)
-  }
 }
 
 export function trackQuoteClick(params?: AnalyticsParams) {
   trackEvent('quote_click', params)
 }
 
-export function trackQuoteSubmit(params?: AnalyticsParams) {
-  trackEvent('quote_submit', { source: 'quote_form', ...params })
+export function trackGenerateLead(params?: AnalyticsParams) {
+  trackEvent('generate_lead', { source: 'quote_form', ...params })
 }
+
+export function trackShare(params?: AnalyticsParams) { trackEvent('share', params) }
 
 export function trackWhatsAppClick(params?: AnalyticsParams) {
   trackEvent('whatsapp_click', params)

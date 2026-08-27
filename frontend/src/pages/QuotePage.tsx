@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { Layout } from '../components/layout/Layout'
@@ -9,7 +9,7 @@ import { createQuoteRequest, getProducts } from '../services/catalogApi'
 import { resolveMediaUrl } from '../services/api'
 import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
-import { trackQuoteSubmit } from '../utils/analytics'
+import { trackGenerateLead } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
 interface QuoteFormState {
@@ -54,16 +54,26 @@ export function QuotePage() {
   const productFromQuery = useMemo(() => {
     const value = searchParams.get('product')
     if (!value) return undefined
+    if (!/^[1-9]\d*$/.test(value)) return null
     const id = Number(value)
-    return Number.isFinite(id) ? id : undefined
+    return Number.isSafeInteger(id) ? id : null
   }, [searchParams])
 
   const [selectedProduct, setSelectedProduct] = useState<ProductListItem | null>(null)
   const [form, setForm] = useState(initialForm)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [submittedContactMethod, setSubmittedContactMethod] = useState<PreferredContactMethod | ''>('')
+  const [productSelectionError, setProductSelectionError] = useState(false)
   const [imageLoadFailed, setImageLoadFailed] = useState(false)
+  const inFlightRef = useRef(false)
+  const mountedRef = useRef(true)
+  const confirmationHeadingRef = useRef<HTMLHeadingElement>(null)
+  const formHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
+  useEffect(() => { if (submitted) confirmationHeadingRef.current?.focus() }, [submitted])
 
   const selectedProductImageUrl = useMemo(
     () => resolveMediaUrl(selectedProduct?.main_image?.image),
@@ -77,19 +87,22 @@ export function QuotePage() {
   useEffect(() => {
     let active = true
 
-    if (!productFromQuery) {
-      setSelectedProduct(null)
+    setSelectedProduct(null)
+    setProductSelectionError(false)
+    if (productFromQuery === undefined) {
       return () => {
         active = false
       }
     }
 
+    if (productFromQuery === null) { setProductSelectionError(true); return () => { active = false } }
+
     const run = async () => {
       try {
         const products = await getProducts()
-        if (active) setSelectedProduct(products.find((product) => product.id === productFromQuery) ?? null)
+        if (active) { const match = products.find((product) => product.id === productFromQuery) ?? null; setSelectedProduct(match); setProductSelectionError(!match) }
       } catch {
-        if (active) setSelectedProduct(null)
+        if (active) { setSelectedProduct(null); setProductSelectionError(true) }
       }
     }
 
@@ -114,7 +127,7 @@ export function QuotePage() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
-    setSuccess(null)
+    if (inFlightRef.current || submitted) return
 
     const validationError = validate()
     if (validationError) {
@@ -133,20 +146,24 @@ export function QuotePage() {
       ...(selectedProduct ? { product: selectedProduct.id } : {}),
     }
 
+    inFlightRef.current = true
     try {
       setLoading(true)
       await createQuoteRequest(payload)
-      trackQuoteSubmit({
+      if (!mountedRef.current) return
+      trackGenerateLead({
         product_id: selectedProduct?.id,
         product_name: selectedProduct?.name,
         preferred_contact_method: form.preferred_contact_method || undefined,
       })
-      setSuccess('Solicitud enviada correctamente. Un vendedor se contactará contigo pronto.')
+      setSubmittedContactMethod(form.preferred_contact_method)
       setForm(initialForm)
+      setSubmitted(true)
     } catch {
-      setError('No se pudo enviar la solicitud en este momento. Intenta nuevamente o contáctanos por WhatsApp.')
+      if (mountedRef.current) setError('No se pudo enviar la solicitud en este momento. Conservamos los datos ingresados para que puedas intentarlo nuevamente.')
     } finally {
-      setLoading(false)
+      inFlightRef.current = false
+      if (mountedRef.current) setLoading(false)
     }
   }
 
@@ -161,8 +178,8 @@ export function QuotePage() {
       <JsonLd id="quote-breadcrumb" data={buildBreadcrumbJsonLd(breadcrumbItems, quoteSeo.canonical)!} />
       <section className="simple-page quote-page">
         <Breadcrumb items={breadcrumbItems} />
-        <h1 className="quote-page__title">Cotizar</h1>
-        <p className="quote-page__subtitle">Completa el formulario y nuestro equipo comercial responderá a la brevedad.</p>
+        <h1 ref={formHeadingRef} className="quote-page__title" tabIndex={-1}>Cotizar</h1>
+        <p className="quote-page__subtitle">Completa el formulario para que el equipo comercial revise los antecedentes de tu solicitud.</p>
 
         <div className="quote-layout">
           <aside className="quote-preview" aria-label="Resumen del producto a cotizar">
@@ -188,7 +205,6 @@ export function QuotePage() {
                   <p><strong>Categoría:</strong> {selectedProduct.category?.name ?? 'Sin categoría'}</p>
                   <p><strong>Condición:</strong> {CONDITION_LABELS[selectedProduct.condition]}</p>
                   <p><strong>Disponibilidad:</strong> {STOCK_LABELS[selectedProduct.stock_status]}</p>
-                  <p><strong>Modelo / SKU:</strong> Consultar</p>
                   <p><strong>Precio:</strong> {selectedProduct.price_visible ? formatPrice(selectedProduct) : 'Consultar'}</p>
                   <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
                     Ver detalle
@@ -197,12 +213,26 @@ export function QuotePage() {
               </>
             ) : (
               <div className="quote-preview__empty">
+                {productSelectionError ? <p className="ui-note ui-note--error" role="alert">No fue posible cargar el producto seleccionado. Puedes continuar con una solicitud general.</p> : null}
                 <p><strong>No hay producto seleccionado.</strong></p>
                 <p>Puedes enviar una solicitud general de cotización.</p>
+                {productSelectionError ? <Link to="/catalogo">Volver al catálogo</Link> : null}
               </div>
             )}
           </aside>
 
+          {submitted ? (
+            <section className="quote-confirmation" role="status" aria-labelledby="quote-confirmation-title">
+              <h2 id="quote-confirmation-title" ref={confirmationHeadingRef} tabIndex={-1}>Solicitud recibida</h2>
+              <p>Recibimos tu solicitud de cotización. El equipo comercial revisará los antecedentes enviados{submittedContactMethod ? ' y utilizará el medio de contacto indicado' : ''}.</p>
+              {selectedProduct ? <p>Producto solicitado: <strong>{selectedProduct.name}</strong></p> : null}
+              <div className="quote-confirmation__actions">
+                <Link className="btn btn--ghost" to="/catalogo">Volver al catálogo</Link>
+                {selectedProduct ? <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>Volver al producto</Link> : null}
+                <button className="btn btn--accent" type="button" onClick={() => { setSubmitted(false); setSubmittedContactMethod(''); setError(null); setForm(initialForm); requestAnimationFrame(() => formHeadingRef.current?.focus()) }}>Enviar otra solicitud</button>
+              </div>
+            </section>
+          ) : (
           <form className="quote-form" onSubmit={onSubmit} aria-busy={loading}>
           <label>
             Nombre
@@ -276,12 +306,12 @@ export function QuotePage() {
           </label>
 
           {error ? <p id="quote-form-message" className="ui-note ui-note--error" role="alert">{error}</p> : null}
-          {success ? <p className="ui-note ui-note--success" role="status">{success}</p> : null}
 
             <button className="btn btn--accent" type="submit" disabled={loading}>
               {loading ? 'Enviando...' : 'Enviar'}
             </button>
           </form>
+          )}
         </div>
       </section>
     </Layout>

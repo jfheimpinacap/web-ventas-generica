@@ -10,7 +10,7 @@ import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
-import { trackCategoryView } from '../utils/analytics'
+import { trackQuoteClick, trackCategoryView } from '../utils/analytics'
 import { getRootCategory } from '../utils/formatters'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
@@ -343,7 +343,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
               <h2>En pocas palabras</h2>
               <ul>{commercialConfig.keyPoints.map((point) => <li key={point}>{point}</li>)}</ul>
               <div className="catalog-intro__actions">
-                <Link className="btn btn--accent" to="/cotizar">Solicitar cotización</Link>
+                <Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'catalog_intro' })}>Solicitar cotización</Link>
                 <Link className="btn btn--ghost" to="/catalogo">Ver catálogo completo</Link>
                 {commercialConfig.relatedLinks.map((link) => <Link key={link.to} to={link.to}>{link.label}</Link>)}
               </div>
@@ -357,7 +357,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
               <p>Explora las publicaciones disponibles y distingue entre maquinaria nueva, maquinaria usada, repuestos y servicios antes de cotizar.</p>
               <h2>Puntos clave</h2>
               <ul><li>Compara los tipos de solución en rutas específicas.</li><li>Usa filtros para acotar el listado cuando lo necesites.</li><li>Solicita información desde una ficha o el formulario de cotización.</li></ul>
-              <div className="catalog-intro__actions"><Link className="btn btn--accent" to="/cotizar">Solicitar cotización</Link></div>
+              <div className="catalog-intro__actions"><Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'catalog_intro' })}>Solicitar cotización</Link></div>
             </div>
           ) : null}
         </div>

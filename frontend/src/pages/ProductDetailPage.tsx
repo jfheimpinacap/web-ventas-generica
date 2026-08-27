@@ -5,6 +5,7 @@ import { ProductCard } from '../components/catalog/ProductCard'
 import { ProductTechnicalSheetModal } from '../components/catalog/ProductTechnicalSheetModal'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
+import { ShareButton } from '../components/common/ShareButton'
 import { INDEX_ROBOTS, NOINDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Layout } from '../components/layout/Layout'
 import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../services/catalogApi'
@@ -31,7 +32,10 @@ export function ProductDetailPage() {
   const technicalSheetButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
+    let active = true
     setTechnicalSheetOpen(false)
+    setProduct(null)
+    setRelatedProducts([])
     if (!slug) {
       setError('Slug inválido de producto.')
       setLoading(false)
@@ -43,6 +47,7 @@ export function ProductDetailPage() {
       setError(null)
       try {
         const detail = await getProductBySlug(slug)
+        if (!active) return
         setProduct(detail)
         setSelectedImageId(null)
         if (detail.category?.id) {
@@ -50,20 +55,19 @@ export function ProductDetailPage() {
             category: String(detail.category.id), ordering: '-created_at',
             ...(detail.product_type === 'machinery' ? { product_type: 'machinery', condition: detail.condition } : {}),
           })
-          setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
+          if (active) setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
         } else {
           setRelatedProducts([])
         }
       } catch (error) {
-        setProduct(null)
-        setRelatedProducts([])
-        setError(error instanceof ApiError && error.status === 404 ? 'Producto no disponible.' : 'Producto no disponible.')
+        if (active) { setProduct(null); setRelatedProducts([]); setError(error instanceof ApiError && error.status === 404 ? 'Producto no disponible.' : 'Producto no disponible.') }
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     }
 
     void run()
+    return () => { active = false }
   }, [slug])
 
   const technicalSheet = product?.technical_sheet
@@ -161,7 +165,7 @@ export function ProductDetailPage() {
 
 
   return (
-    <Layout>
+    <Layout mobileProduct={!loading && !error && product ? product : null} suppressMobileConversion={technicalSheetOpen}>
       <Seo
         title={seoTitle}
         description={seoDescription}
@@ -285,6 +289,7 @@ export function ProductDetailPage() {
                   >
                     Cotizar
                   </Link>
+                  <ShareButton slug={product.slug} title={product.name} text={product.short_description} productType={product.product_type} />
                 </div>
 
                 {product.supplier?.name ? (
