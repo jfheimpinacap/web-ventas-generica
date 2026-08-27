@@ -287,10 +287,16 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const totalPages = Math.max(1, Math.ceil(displayedProducts.length / itemsPerPage))
   const paginatedProducts = displayedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  const shouldRenderStructuredData = isIndexableView && !loading && !error
   const visiblePublishedProducts = useMemo(
     () => paginatedProducts.filter((product) => product.is_published !== false),
     [paginatedProducts],
+  )
+  const shouldRenderStaticStructuredData = isIndexableView
+  const shouldRenderItemListStructuredData = (
+    isIndexableView
+    && !loading
+    && !error
+    && visiblePublishedProducts.length > 0
   )
 
   const structuredBreadcrumbItems = useMemo<BreadcrumbItem[]>(() => [
@@ -330,9 +336,9 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
         ogType="website"
         robots={seoRobots}
       />
-      {shouldRenderStructuredData && breadcrumbJsonLd ? <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} /> : null}
-      {shouldRenderStructuredData ? <JsonLd id="catalog-page" data={pageJsonLd} /> : null}
-      {shouldRenderStructuredData && visiblePublishedProducts.length > 0 ? <JsonLd id="catalog-itemlist" data={itemListJsonLd} /> : null}
+      {shouldRenderStaticStructuredData && breadcrumbJsonLd ? <JsonLd id="catalog-breadcrumb" data={breadcrumbJsonLd} /> : null}
+      {shouldRenderStaticStructuredData ? <JsonLd id="catalog-page" data={pageJsonLd} /> : null}
+      {shouldRenderItemListStructuredData ? <JsonLd id="catalog-itemlist" data={itemListJsonLd} /> : null}
       <section className="simple-page catalog-page">
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
