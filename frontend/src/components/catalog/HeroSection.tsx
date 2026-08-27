@@ -111,7 +111,7 @@ export function HeroSection() {
               trackHeroOfferClick({
                 promotion_id: currentSlide.id,
                 product_id: currentSlide.product?.id,
-                category_name: currentSlide.product?.category?.name,
+                category: currentSlide.product?.category?.name,
               })
             }
           >

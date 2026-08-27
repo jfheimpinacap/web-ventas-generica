@@ -248,7 +248,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     if (!root || root.parent !== null) return
     const normalized = normalizeLabel(root.name)
     if (!['maquinaria', 'repuestos', 'servicios'].includes(normalized)) return
-    trackCategoryView({ category_id: root.id, category_name: root.name })
+    trackCategoryView({ category_id: root.id, category: root.name })
   }, [effectiveRootCategory])
 
   useEffect(() => {
