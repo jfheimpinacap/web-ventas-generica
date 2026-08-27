@@ -13,6 +13,7 @@ import type { Category, ProductListItem, ProductQueryParams } from '../types/cat
 import { trackQuoteClick, trackCategoryView } from '../utils/analytics'
 import { getRootCategory } from '../utils/formatters'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
+import { CATALOG_FILTER_PARAMS } from '../config/prerenderRoutes'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -195,9 +196,9 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const hasSearch = Boolean((query.search ?? '').trim())
   const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
   const searchOnlyView = hasSearch && !query.category && !query.product_type && !hasSpecificFilters
-  const parameterEntries = Array.from(searchParams.entries())
-  const isCleanCatalogView = !commercialConfig && parameterEntries.length === 0
-  const isCleanCommercialView = Boolean(commercialConfig) && parameterEntries.length === 0
+  const hasCatalogParameters = CATALOG_FILTER_PARAMS.some((parameter) => searchParams.has(parameter))
+  const isCleanCatalogView = !commercialConfig && !hasCatalogParameters
+  const isCleanCommercialView = Boolean(commercialConfig) && !hasCatalogParameters
   const isIndexableView = isCleanCatalogView || isCleanCommercialView
   const canonicalPath = commercialConfig?.canonicalPath ?? '/catalogo'
   const seoRobots = isIndexableView ? INDEX_ROBOTS : NOINDEX_ROBOTS
