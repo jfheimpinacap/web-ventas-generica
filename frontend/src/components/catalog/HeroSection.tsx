@@ -15,7 +15,7 @@ const fallbackSlides: Promotion[] = [
     id: 0,
     title: 'Maquinaria y repuestos para operación continua',
     subtitle:
-      'Revisa equipos, repuestos y servicios publicados y envía una solicitud de cotización.',
+      'Conecta con un vendedor especializado para cotizar equipos, repuestos y soluciones en altura de forma rápida.',
     product: null,
     image: null,
     button_text: '',
@@ -91,9 +91,9 @@ export function HeroSection() {
   return (
     <section className="hero-section" aria-label="Promociones destacadas">
       <div className="hero-section__content">
-        <h2 className="hero-section__title">{currentSlide.title}</h2>
+        <h1>{currentSlide.title}</h1>
         <p className="hero-section__subtitle">
-          {currentSlide.subtitle || 'Consulta la información publicada y envía tu requerimiento al equipo comercial.'}
+          {currentSlide.subtitle || 'Consulta disponibilidad y tiempos de entrega con nuestro equipo comercial.'}
         </p>
         {currentSlide.product ? (
           <p className="hero-section__product">Producto asociado: {currentSlide.product.name}</p>

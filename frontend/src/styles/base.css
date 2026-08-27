@@ -286,8 +286,3 @@ a {
 .contact-page__action { align-self: center; margin-top: auto; max-width: 100%; text-align: center; }
 .contact-page__email { overflow-wrap: anywhere; }
 .contact-page__email:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; border-radius: 2px; }
-.home-introduction { display: grid; gap: 0.75rem; padding: 1rem; border-radius: var(--radius-block); background: #fff; }
-.home-introduction h1, .home-introduction h2, .home-introduction p, .home-introduction ul { margin: 0; }
-.home-introduction h1 { color: #0f172a; font-size: clamp(1.5rem, 3vw, 2.2rem); }
-.home-introduction h2 { font-size: 1.1rem; }
-.home-introduction__actions, .home-introduction__links { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
