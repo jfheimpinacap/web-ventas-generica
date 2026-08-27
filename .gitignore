@@ -19,3 +19,5 @@ frontend/.env
 
 # .NET local publish artifacts
 backend-dotnet/publish/
+# Generated LGMG catalogue extractor results
+tools/lgmg-catalog-extractor/output/
