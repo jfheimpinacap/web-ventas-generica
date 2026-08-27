@@ -10,31 +10,36 @@ Herramienta aislada en Python 3 (solo biblioteca estándar) para preparar una mu
 - Cada ejecución registra que el operador debe verificar `robots.txt`. Si robots no está disponible por timeout/5xx, trabaje offline; ante 401/403 o una prohibición de `/es/product/`, no rastree.
 - La falla de robots **no** concede autorización para reutilizar imágenes.
 
-## Ejecución inicial en Windows PowerShell (solo metadatos)
+## Validación local en Windows PowerShell (solo metadatos)
+
+El listado público depende de JavaScript. `--start-url` solo acepta enlaces dentro de la sección estructural `section.channel_content.pro_list` y nunca sustituye un listado vacío con enlaces globales, de navegación o relacionados. Si el contenedor estático está vacío, la ejecución registra `dynamic_listing_requires_seed`, recomienda `--seed-file` y termina con código distinto de cero. Mientras no exista descubrimiento estático confiable, use semillas revisadas manualmente:
 
 ```powershell
 Set-Location "C:\Users\Franz\Desktop\web-ventas-generica"
 
-$OutputPath = Join-Path $env:TEMP "jem-nexus-lgmg-sample"
+$SeedPath = Join-Path $env:TEMP "jem-nexus-lgmg-seeds.txt"
+
+@(
+    "https://www.lgmglifts.com/es/product/pro-detail-2818.htm"
+    "https://www.lgmglifts.com/es/product/pro-detail-1941.htm"
+    "https://www.lgmglifts.com/es/product/pro-detail-4870.htm"
+    "https://www.lgmglifts.com/es/product/pro-detail-5038.htm"
+) | Set-Content -LiteralPath $SeedPath -Encoding utf8
+
+$OutputPath = Join-Path $env:TEMP (
+    "jem-nexus-lgmg-corrected-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+)
 
 py -3 ".\tools\lgmg-catalog-extractor\extract_lgmg.py" `
-  --start-url "https://www.lgmglifts.com/es/product/pro-list-377.htm" `
-  --output-dir $OutputPath `
-  --max-products 5 `
-  --electric-only
+    --seed-file $SeedPath `
+    --output-dir $OutputPath `
+    --max-products 4 `
+    --electric-only
 
 Write-Host "Resultados: $OutputPath"
 ```
 
-El modo predeterminado descubre URLs de imágenes y PDFs, pero no descarga esos recursos. Si la lista depende de JavaScript y no expone enlaces estáticos, cree manualmente un archivo UTF-8 con una URL oficial de detalle por línea:
-
-```powershell
-py -3 ".\tools\lgmg-catalog-extractor\extract_lgmg.py" `
-  --seed-file "$env:TEMP\lgmg-seeds.txt" `
-  --output-dir $OutputPath `
-  --max-products 5 `
-  --electric-only
-```
+Este ejemplo no descarga imágenes ni PDFs. La validación real de las cuatro fichas queda pendiente de ejecución local en Windows 11.
 
 ## Imágenes y fichas
 
@@ -54,9 +59,11 @@ Se verifica firma del archivo, límite de 15 MiB, SHA-256, duplicados, nombre sa
 
 ## Parsing, nomenclatura y clasificación
 
-`HTMLParser` recoge encabezado, breadcrumb, filas de tabla, canonical, imágenes (`src`, `data-src`, `data-original`) y PDFs. Los pares de modelos se conservan como una sola entidad. Solo una tabla o etiqueta estructurada permite confirmar el orden métrico/imperial; un par presente únicamente en el título se marca para revisión. Nunca se usa el identificador numérico de la URL como modelo.
+`HTMLParser` mantiene una pila estructural. Separa el `<title>` documental del título visible `.pro_detail01 .infor .tit`; contrasta este último con `table.datalist` y el `span` final de `crumbs`. La categoría procede exclusivamente del último enlace `pro-list-*` válido del breadcrumb. Los pares métrico/imperial, incluidos números romanos Unicode, se conservan como una sola entidad y cualquier discrepancia estructurada exige revisión. Solo recoge imágenes de `.pro_detail01 .right_r .ul_box` y `.pro_detail02 .right_b.imgZoom`, y PDFs del bloque `new_box` titulado `Ficha técnica`. Nunca se usa el identificador numérico de la URL como modelo.
 
 La clasificación eléctrica requiere texto o estructura sobre electricidad, batería, voltaje o fuente de potencia; el sufijo `E` por sí solo no sirve. Las especificaciones conservan nombre y valores fuente, y solo reciben una de las claves controladas documentadas en el código. No se convierten unidades ni se copian descripciones comerciales largas.
+
+Las imágenes siguen sin descargarse por defecto. No existe integración con JEM Nexus y ningún resultado debe importarse sin revisión humana.
 
 El borrador JEM Nexus siempre usa `published=false`, `featured=false`, `show_price=false`, `price=null` y `stock_status=on_request`. No incluye categoría interna, proveedor, año, SKU, capacidad inferida ni certificaciones no confirmadas. **Está prohibido importar estos resultados directamente a producción.**
 
