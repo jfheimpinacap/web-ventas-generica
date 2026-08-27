@@ -4,6 +4,7 @@ import { Layout } from '../components/layout/Layout'
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Breadcrumb } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
+import { trackQuoteClick } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 
 export function AboutPage() {
@@ -38,7 +39,7 @@ export function AboutPage() {
 
         <div className="trust-page__actions">
           <Link className="btn btn--ghost" to="/catalogo">Ver productos</Link>
-          <Link className="btn btn--accent" to="/cotizar">Cotizar ahora</Link>
+          <Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'about' })}>Cotizar ahora</Link>
         </div>
       </section>
     </Layout>
