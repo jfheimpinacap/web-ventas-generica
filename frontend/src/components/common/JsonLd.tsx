@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { useHeadCollector } from './HeadCollector'
 
 interface JsonLdProps {
   id: string
@@ -16,6 +17,8 @@ export function safeJsonStringify(value: unknown) {
 
 export function JsonLd({ id, data }: JsonLdProps) {
   const serialized = useMemo(() => safeJsonStringify(data), [data])
+  const collector = useHeadCollector()
+  if (collector && /^[a-z0-9-]+$/.test(id)) collector.jsonLd.set(id, { id, serialized })
 
   useEffect(() => {
     if (!/^[a-z0-9-]+$/.test(id)) return

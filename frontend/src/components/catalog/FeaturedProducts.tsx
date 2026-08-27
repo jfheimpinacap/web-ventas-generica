@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { ProductCard } from './ProductCard'
-import { mockProducts } from '../../data/mockProducts'
 import { useProducts } from '../../hooks/useProducts'
 import { getHomeSectionItems } from '../../services/catalogApi'
 import { resolveMediaUrl } from '../../services/api'
-import type { HomeSectionItem, ProductListItem, ProductType } from '../../types/catalog'
+import type { HomeSectionItem } from '../../types/catalog'
 import { formatPrice } from '../../utils/formatters'
 import { trackProductDetailClick } from '../../utils/analytics'
 
@@ -14,41 +13,6 @@ const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Produ
 const DESKTOP_CAROUSEL_GROUP_SIZE = 4
 const MOBILE_CAROUSEL_GROUP_SIZE = 2
 const MOBILE_BREAKPOINT = 768
-
-function buildFallbackProducts(type: ProductType, count: number, titleBase: string): ProductListItem[] {
-  return Array.from({ length: count }, (_, index) => {
-    const template = mockProducts[index % mockProducts.length]
-
-    return {
-      ...template,
-      id: 9000 + index,
-      slug: `${titleBase.toLowerCase().replace(/\s+/g, '-')}-${index + 1}`,
-      name: `${titleBase} ${index + 1}`,
-      product_type: type,
-      category: {
-        ...template.category,
-        id: 8000 + index,
-      },
-      brand: template.brand
-        ? {
-            ...template.brand,
-            id: 7000 + index,
-          }
-        : null,
-    }
-  })
-}
-
-function pickProducts(source: ProductListItem[], type: ProductType, count: number, titleBase: string) {
-  const filtered = source.filter((product) => product.product_type === type)
-
-  if (filtered.length >= count) {
-    return filtered.slice(0, count)
-  }
-
-  const fallback = buildFallbackProducts(type, count - filtered.length, titleBase)
-  return [...filtered, ...fallback]
-}
 
 function fromSection(items: HomeSectionItem[], section: HomeSectionItem['section']) {
   return items.filter((item) => item.section === section).sort((a, b) => a.position - b.position).map((item) => item.product)
@@ -59,7 +23,7 @@ export function FeaturedProducts() {
   const [homeItems, setHomeItems] = useState<HomeSectionItem[]>([])
   const [homeConfigError, setHomeConfigError] = useState(false)
   const [carouselIndex, setCarouselIndex] = useState(0)
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     const run = async () => {
@@ -73,13 +37,14 @@ export function FeaturedProducts() {
     void run()
   }, [])
 
-  const sourceProducts = !loading && !error && products.length > 0 ? products : mockProducts
+  const sourceProducts = !loading && !error ? products : []
 
   const carouselGroupSize = isMobile ? MOBILE_CAROUSEL_GROUP_SIZE : DESKTOP_CAROUSEL_GROUP_SIZE
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
 
+    onResize()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -90,13 +55,13 @@ export function FeaturedProducts() {
   const servicesConfigured = useMemo(() => fromSection(homeItems, 'repair_services'), [homeItems])
 
   const machineryProducts = useMemo(
-    () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 12) : pickProducts(sourceProducts, 'machinery', 12, 'Maquinaria promocional')),
+    () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 12) : sourceProducts.filter((product) => product.product_type === 'machinery').slice(0, 12)),
     [machineryConfigured, sourceProducts],
   )
   const sparePartsDisplayCount = isMobile ? 4 : 6
 
   const sparePartProducts = useMemo(() => {
-    const automaticProducts = pickProducts(sourceProducts, 'spare_part', sparePartsDisplayCount, 'Repuesto en oferta')
+    const automaticProducts = sourceProducts.filter((product) => product.product_type === 'spare_part').slice(0, sparePartsDisplayCount)
 
     if (sparePartsConfigured.length === 0) {
       return automaticProducts
@@ -109,7 +74,7 @@ export function FeaturedProducts() {
   }, [sparePartsConfigured, sourceProducts, sparePartsDisplayCount])
 
   const serviceProducts = useMemo(
-    () => (servicesConfigured.length > 0 ? servicesConfigured.slice(0, 4) : pickProducts(sourceProducts, 'service', 4, 'Servicio de reparación')),
+    () => (servicesConfigured.length > 0 ? servicesConfigured.slice(0, 4) : sourceProducts.filter((product) => product.product_type === 'service').slice(0, 4)),
     [servicesConfigured, sourceProducts],
   )
 
@@ -150,7 +115,7 @@ export function FeaturedProducts() {
         </div>
 
         {loading ? <p className="ui-note">Cargando productos...</p> : null}
-        {!loading && error ? <p className="ui-note ui-note--error">{error} Mostrando respaldo local.</p> : null}
+        {!loading && error ? <p className="ui-note ui-note--error">{error}</p> : null}
         {homeConfigError ? <p className="ui-note">Usando selección automática para la Home.</p> : null}
 
         <div className="machinery-carousel" aria-label="Carrusel manual de maquinarias en promoción">

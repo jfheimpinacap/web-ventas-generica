@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /_spa.html
+Disallow: /_noindex.html
 
 Sitemap: https://jem-nexus.cl/sitemap.xml
 Sitemap: https://api.jem-nexus.cl/api/public/sitemap-products.xml

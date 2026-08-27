@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { buildAbsoluteUrl } from '../../utils/seo'
+import { useHeadCollector } from './HeadCollector'
 
 type OgType = 'website' | 'product' | 'article'
 type TwitterCard = 'summary' | 'summary_large_image'
@@ -48,6 +49,12 @@ export function Seo({
   imageAlt,
   twitterCard = ogImage ? 'summary_large_image' : 'summary',
 }: SeoProps) {
+  const collector = useHeadCollector()
+  const absoluteImage = ogImage?.trim() ? buildAbsoluteUrl(ogImage) : undefined
+  if (collector) {
+    collector.seo = { title, description, robots, canonical, ogTitle, ogDescription, ogType, ogImage: absoluteImage, imageAlt: imageAlt?.trim() || undefined, twitterCard }
+  }
+
   useEffect(() => {
     document.title = title
 
@@ -69,7 +76,6 @@ export function Seo({
       removeHeadElements('link[rel="canonical"], meta[property="og:url"]')
     }
 
-    const absoluteImage = ogImage?.trim() ? buildAbsoluteUrl(ogImage) : null
     if (absoluteImage) {
       upsertHeadElement<HTMLMetaElement>('meta[property="og:image"]', 'meta', { property: 'og:image', content: absoluteImage })
       upsertHeadElement<HTMLMetaElement>('meta[name="twitter:image"]', 'meta', { name: 'twitter:image', content: absoluteImage })
