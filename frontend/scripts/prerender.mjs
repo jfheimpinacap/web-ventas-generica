@@ -32,6 +32,7 @@ const template = await readFile(templatePath, 'utf8')
 if (count(template, EMPTY_ROOT) !== 1) throw new Error('No existe exactamente un #root controlado.')
 if (count(template, HEAD_START) !== 1 || count(template, HEAD_END) !== 1) throw new Error('La plantilla no contiene un bloque fallback único.')
 
+process.env.NODE_ENV = 'production'
 const server = await import(pathToFileURL(serverEntry).href)
 const routes = server.PRERENDER_ROUTES
 if (!Array.isArray(routes) || routes.length !== 10 || new Set(routes).size !== routes.length) throw new Error('Allowlist de prerender inválida.')
