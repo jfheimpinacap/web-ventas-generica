@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
 import { Breadcrumb, type BreadcrumbItem } from '../components/common/Breadcrumb'
@@ -10,7 +10,7 @@ import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
 import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
-import { trackQuoteClick, trackCategoryView } from '../utils/analytics'
+import { trackCategoryView } from '../utils/analytics'
 import { getRootCategory } from '../utils/formatters'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 import { CATALOG_FILTER_PARAMS } from '../config/prerenderRoutes'
@@ -42,24 +42,6 @@ const FILTER_LABELS: Record<string, Record<string, string>> = {
 }
 
 
-const MAIN_CATEGORY_SEO_CONTENT: Record<'maquinaria' | 'repuestos' | 'servicios', { title: string; description: string }> = {
-  maquinaria: {
-    title: 'Maquinaria',
-    description:
-      'Encuentra maquinaria para trabajos en altura y operación industrial, incluyendo elevadores tipo tijera, brazos articulados y equipos seleccionados para cotización comercial. Revisa disponibilidad, características y solicita precio con atención personalizada.',
-  },
-  repuestos: {
-    title: 'Repuestos',
-    description:
-      'Cotiza repuestos industriales para equipos de elevación y maquinaria, como baterías, ruedas, controles, cargadores y componentes críticos. Te ayudamos a identificar disponibilidad y alternativas compatibles.',
-  },
-  servicios: {
-    title: 'Servicios',
-    description:
-      'Solicita servicios de reparación y mantención para componentes industriales, motores eléctricos, bombas y equipos asociados. Revisa opciones disponibles y envía una solicitud de cotización.',
-  },
-}
-
 function normalizeLabel(value: string) {
   return value
     .normalize('NFD')
@@ -80,8 +62,6 @@ export interface CommercialCatalogConfig {
   canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada' | '/repuestos' | '/servicios'
   fixedProductType: 'machinery' | 'spare_part' | 'service'
   fixedCondition?: 'new' | 'used'
-  keyPoints: string[]
-  relatedLinks: Array<{ label: string; to: string }>
 }
 
 export function CatalogPage({ commercialConfig }: { commercialConfig?: CommercialCatalogConfig }) {
@@ -177,22 +157,6 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     return trail
   }, [query])
 
-
-  const mainCategorySeo = useMemo(() => {
-    const rootCategory = categoryPath[0]
-    const normalizedRoot = rootCategory ? normalizeLabel(rootCategory.name) : ''
-
-    if (normalizedRoot === 'maquinaria') return MAIN_CATEGORY_SEO_CONTENT.maquinaria
-    if (normalizedRoot === 'repuestos') return MAIN_CATEGORY_SEO_CONTENT.repuestos
-    if (normalizedRoot === 'servicios') return MAIN_CATEGORY_SEO_CONTENT.servicios
-
-    if (query.product_type === 'machinery') return MAIN_CATEGORY_SEO_CONTENT.maquinaria
-    if (query.product_type === 'spare_part') return MAIN_CATEGORY_SEO_CONTENT.repuestos
-    if (query.product_type === 'service') return MAIN_CATEGORY_SEO_CONTENT.servicios
-
-    return null
-  }, [categoryPath, query.product_type])
-
   const hasSearch = Boolean((query.search ?? '').trim())
   const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
   const searchOnlyView = hasSearch && !query.category && !query.product_type && !hasSpecificFilters
@@ -239,7 +203,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     if (effectiveRootCategory) return effectiveRootCategory.name
     if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
     if (query.search) return 'Resultados de búsqueda'
-    return 'Catálogo de maquinaria, repuestos y servicios industriales'
+    return 'Catálogo'
   }, [commercialConfig, effectiveRootCategory, query.product_type, query.search])
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
@@ -344,45 +308,10 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{searchOnlyView ? 'Resultados de búsqueda' : pageTitle}</h1>
-          {commercialConfig ? (
-            <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${commercialConfig.title}`}>
-              <p>{commercialConfig.description}</p>
-              <h2>En pocas palabras</h2>
-              <ul>{commercialConfig.keyPoints.map((point) => <li key={point}>{point}</li>)}</ul>
-              <div className="catalog-intro__actions">
-                <Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'catalog_intro' })}>Solicitar cotización</Link>
-                <Link className="btn btn--ghost" to="/catalogo">Ver catálogo completo</Link>
-                {commercialConfig.relatedLinks.map((link) => <Link key={link.to} to={link.to}>{link.label}</Link>)}
-              </div>
-            </div>
-          ) : mainCategorySeo ? (
-            <div className="catalog-seo-intro" aria-label={`Resumen comercial de ${mainCategorySeo.title}`}>
-              <p>{mainCategorySeo.description}</p>
-            </div>
-          ) : !searchOnlyView ? (
-            <div className="catalog-seo-intro">
-              <p>Explora las publicaciones disponibles y distingue entre maquinaria nueva, maquinaria usada, repuestos y servicios antes de cotizar.</p>
-              <h2>Puntos clave</h2>
-              <ul><li>Compara los tipos de solución en rutas específicas.</li><li>Usa filtros para acotar el listado cuando lo necesites.</li><li>Solicita información desde una ficha o el formulario de cotización.</li></ul>
-              <div className="catalog-intro__actions"><Link className="btn btn--accent" to="/cotizar" onClick={() => trackQuoteClick({ location: 'catalog_intro' })}>Solicitar cotización</Link></div>
-            </div>
+          {commercialConfig ? <p className="catalog-page__description">{commercialConfig.description}</p> : !searchOnlyView ? (
+            <p className="catalog-page__description">Explora las publicaciones disponibles de maquinaria, repuestos y servicios.</p>
           ) : null}
         </div>
-
-        {isCleanCatalogView ? (
-          <div className="catalog-clusters-table" tabIndex={0} role="region" aria-label="Comparación de soluciones del catálogo">
-            <table>
-              <caption>Opciones para explorar el catálogo</caption>
-              <thead><tr><th scope="col">Solución</th><th scope="col">Qué puedes revisar</th><th scope="col">Próximo paso</th></tr></thead>
-              <tbody>
-                <tr><td>Maquinaria nueva</td><td>Equipos publicados como nuevos</td><td><Link to="/maquinaria-nueva">Ver maquinaria nueva</Link></td></tr>
-                <tr><td>Maquinaria usada</td><td>Equipos publicados como usados</td><td><Link to="/maquinaria-usada">Ver maquinaria usada</Link></td></tr>
-                <tr><td>Repuestos</td><td>Repuestos publicados en el catálogo</td><td><Link to="/repuestos">Ver repuestos</Link></td></tr>
-                <tr><td>Servicios</td><td>Servicios publicados de reparación o mantención</td><td><Link to="/servicios">Ver servicios</Link></td></tr>
-              </tbody>
-            </table>
-          </div>
-        ) : null}
 
         <div className="catalog-toolbar">
           {totalPages > 1 ? (

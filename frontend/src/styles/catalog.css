@@ -512,16 +512,7 @@
   color: #111827;
 }
 
-.catalog-seo-intro { display: grid; gap: 0.65rem; max-width: 78ch; }
-.catalog-seo-intro p, .catalog-seo-intro h2, .catalog-seo-intro ul { margin: 0; }
-.catalog-seo-intro h2 { font-size: 1.1rem; }
-.catalog-intro__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; }
-.catalog-clusters-table { max-width: 100%; overflow-x: auto; border-radius: var(--radius-block); }
-.catalog-clusters-table:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
-.catalog-clusters-table table { width: 100%; min-width: 650px; border-collapse: collapse; background: #fff; }
-.catalog-clusters-table caption { padding: 0.75rem; font-weight: 700; text-align: left; color: #0f172a; }
-.catalog-clusters-table th, .catalog-clusters-table td { padding: 0.75rem; border: 1px solid #dbe3ec; text-align: left; }
-.catalog-clusters-table th { background: #f1f5f9; color: #0f172a; }
+.catalog-page__description { max-width: 78ch; margin: 0; }
 
 
 
@@ -824,31 +815,6 @@
 
   .catalog-page .featured-products__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-
-.catalog-seo-intro {
-  margin-top: 0.45rem;
-  max-width: 900px;
-}
-
-.catalog-seo-intro p {
-  margin: 0;
-  font-family: "Ubuntu", system-ui, sans-serif;
-  font-size: 0.92rem;
-  line-height: 1.45;
-  color: #4b5563;
-}
-
-@media (max-width: 640px) {
-  .catalog-seo-intro {
-    margin-top: 0.35rem;
-  }
-
-  .catalog-seo-intro p {
-    font-size: 0.86rem;
-    line-height: 1.35;
-  }
-}
-
 
 @media (min-width: 901px) {
   .app-shell__body:not(.app-shell__body--full) {

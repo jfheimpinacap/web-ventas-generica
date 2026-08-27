@@ -215,11 +215,11 @@
 .technical-sheet-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
 .technical-sheet-form__filename { max-width: 100%; overflow-wrap: anywhere; }
 
-.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: max-content; max-width: 100%; align-self: flex-start; }
-.admin-technical-sheets-table { width: max-content; min-width: 980px; table-layout: fixed; }
-.admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 12rem; white-space: nowrap; }
-.admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 14rem; white-space: nowrap; }
-.admin-technical-sheets-table th:nth-child(3), .admin-technical-sheets-table td:nth-child(3) { width: 5rem; white-space: nowrap; }
-.admin-technical-sheets-table th:nth-child(4), .admin-technical-sheets-table td:nth-child(4) { width: 6.5rem; white-space: nowrap; }
-.admin-technical-sheets-table th:nth-child(5), .admin-technical-sheets-table td:nth-child(5) { width: 22rem; }
-.admin-technical-sheets-table .admin-table-actions { flex-wrap: nowrap; white-space: nowrap; }
+.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: 100%; max-width: 100%; overflow: visible; }
+.admin-technical-sheets-table { width: 100%; min-width: 0; table-layout: fixed; }
+.admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 20%; overflow-wrap: anywhere; }
+.admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 22%; overflow-wrap: anywhere; }
+.admin-technical-sheets-table th:nth-child(3), .admin-technical-sheets-table td:nth-child(3) { width: 10%; }
+.admin-technical-sheets-table th:nth-child(4), .admin-technical-sheets-table td:nth-child(4) { width: 12%; }
+.admin-technical-sheets-table th:nth-child(5), .admin-technical-sheets-table td:nth-child(5) { width: 36%; }
+.admin-technical-sheets-table .admin-table-actions { flex-wrap: wrap; white-space: normal; }

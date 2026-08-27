@@ -1209,7 +1209,11 @@
 }
 
 .admin-home-preview--machinery .promo-product-card img {
-  height: 74px;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  background: #f8fafc;
 }
 
 .admin-home-preview--machinery .promo-product-card__content {
@@ -1268,7 +1272,11 @@
 
 .admin-home-preview--spares .home-preview-spares__compact-card img,
 .admin-home-preview--spares .spare-offer-card img {
-  height: 54px;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  background: #f8fafc;
   border-radius: 8px;
 }
 
@@ -1309,7 +1317,11 @@
 }
 
 .admin-home-preview--services .repair-service-card img {
-  height: 72px;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  background: #f8fafc;
 }
 
 .admin-home-preview--services .repair-service-card div {
