@@ -62,6 +62,14 @@ TARGETS = (
     "Manipuladores telescópicos",
 )
 ALIAS = "Elevador tipo tijera electrico"
+PRODUCT_FIELDS = {
+    "source_key", "proposed_name", "metric_model", "imperial_model",
+    "target_power_source", "maximum_load_capacity_kg", "product_type",
+    "condition", "stock_status", "price", "currency", "show_price",
+    "is_published", "is_featured", "ready_for_import",
+    "target_root_category", "target_subcategory", "target_brand",
+}
+MISSING_DATASHEET_MODELS = {"AR24JE", "T38JE"}
 
 
 class PreflightError(ValueError):
@@ -218,16 +226,29 @@ def validate_inputs(plan_root, media_root):
     if any(pm.get(k) != v for k, v in {"ready_for_import":False,"content_published":False,"network_used":False}.items()):
         raise PreflightError("Estado conservador del plan incumplido")
     rows = {name: csv_rows(plan_raw[name], name) for name in PLAN_FILES if name.endswith(".csv")}
-    expected = {"import-products.csv":57,"import-specifications.csv":1635,"import-images.csv":127,"import-datasheets.csv":55,
+    expected = {"import-products.csv":57,"import-specifications.csv":1635,"import-images.csv":127,"import-datasheets.csv":57,
                 "import-categories.csv":7,"import-brand.csv":1,"import-warnings.csv":44,"manual-actions.csv":7}
     if any(len(rows[name]) != count for name,count in expected.items()): raise PreflightError("Conteos aprobados del plan incumplidos")
     products = rows["import-products.csv"]
-    if sum(r.get("power_source") == "electric_24v" for r in products) != 13 or sum(r.get("power_source") == "electric_lithium" for r in products) != 2:
+    if not products or not PRODUCT_FIELDS.issubset(products[0]):
+        raise PreflightError("Esquema canónico de productos incompleto")
+    if sum(r.get("target_power_source") == "electric_24v" for r in products) != 13 or sum(r.get("target_power_source") == "electric_lithium" for r in products) != 2:
         raise PreflightError("Conteos de energía del plan incumplidos")
-    if sum(not r.get("power_source") for r in products) != 42 or sum(bool(r.get("maximum_load_capacity_kg")) for r in products) != 57:
+    if sum(not r.get("target_power_source") for r in products) != 42 or sum(bool(r.get("maximum_load_capacity_kg")) for r in products) != 57:
         raise PreflightError("Fuentes o capacidades aprobadas incumplidas")
-    if any(r.get("ready_for_import", "").casefold() != "false" or r.get("published", "").casefold() != "false" for r in products):
-        raise PreflightError("Producto listo o publicado en el plan")
+    if any(r.get("ready_for_import", "").casefold() != "false" or r.get("is_published", "").casefold() != "false" or
+           r.get("is_featured", "").casefold() != "false" or r.get("show_price", "").casefold() != "false" or
+           r.get("price") or r.get("currency") for r in products):
+        raise PreflightError("Estado comercial conservador del producto incumplido")
+    datasheets = rows["import-datasheets.csv"]
+    available = [r for r in datasheets if r.get("datasheet_status") == "available_at_source"]
+    missing = [r for r in datasheets if r.get("datasheet_status") == "missing_at_source"]
+    if len(available) != 55 or len(missing) != 2 or {r.get("metric_model") for r in missing} != MISSING_DATASHEET_MODELS:
+        raise PreflightError("Conteos o ausencias de fichas técnicas incumplidos")
+    if any(r.get("local_file") or r.get("sha256") or r.get("size_bytes") or r.get("mime_type") for r in missing):
+        raise PreflightError("Una ficha ausente contiene referencias físicas")
+    if len({r.get("local_file") for r in available}) != 53:
+        raise PreflightError("Conteo de PDF físicos únicos incumplido")
     media_raw = read_closed_package(media_root, MEDIA_REPORTS, "media-manifest.json")
     mm = json_value(media_raw["media-manifest.json"], "media-manifest.json")
     if mm.get("tool") != MEDIA_TOOL or mm.get("version") != "1.0.0": raise PreflightError("Manifest de medios no admitido")
@@ -303,7 +324,10 @@ def nested_name(value):
 def resolve_products(plan_products, local_products):
     rows=[]; blockers=[]; proposed={}
     for p in plan_products:
-        model=normalized(p.get("metric_model")); imperial=normalized(p.get("imperial_model")); name=normalized(p.get("suggested_name")); proposed_slug=slugify(p.get("suggested_name"))
+        proposed_name=p.get("proposed_name", "")
+        model=normalized(p.get("metric_model")); imperial=normalized(p.get("imperial_model")); name=normalized(proposed_name); proposed_slug=slugify(proposed_name)
+        if not name or not proposed_slug:
+            blockers.append("empty_proposed_name_or_slug:"+p.get("source_key", ""))
         proposed.setdefault(proposed_slug,[]).append(p.get("source_key"))
         model_hits=[x for x in local_products if normalized(x.get("model")) in {model,imperial}-{''}]
         lgmg=[x for x in model_hits if normalized(nested_name(x.get("brand")))=="lgmg"]
@@ -319,7 +343,7 @@ def resolve_products(plan_products, local_products):
         if block: blockers.append(status+":"+p.get("source_key",""))
         hit=next(iter(candidates.values()),{})
         rows.append({"source_key":p.get("source_key"),"metric_model":p.get("metric_model"),"imperial_model":p.get("imperial_model"),
-            "proposed_name":p.get("suggested_name"),"proposed_slug":proposed_slug,"classification":status,"local_id":hit.get("id",""),
+            "proposed_name":proposed_name,"proposed_slug":proposed_slug,"classification":status,"local_id":hit.get("id",""),
             "local_brand":nested_name(hit.get("brand")),"local_category":nested_name(hit.get("category")),"local_published":hit.get("is_published",""),"blocking":block})
     for slug,keys in proposed.items():
         if slug and len(keys)>1: blockers.append("planned_slug_collision:"+slug)
@@ -341,9 +365,13 @@ def validate_contracts(plan, media, media_root, local_sheets):
     blockers=[]; spec_rows=[]; media_rows=[]
     products={p["source_key"]:p for p in plan["rows"]["import-products.csv"]}
     for p in products.values():
-        valid=(0<len(p.get("suggested_name", ""))<=220 and len(p.get("metric_model",""))<=120 and p.get("product_type")=="machinery" and
-               p.get("condition")=="new" and p.get("stock_status")=="on_request" and p.get("power_source") in ("","diesel","electric_24v","electric_lithium") and
-               p.get("price")=="" and p.get("currency")=="" and p.get("featured","").casefold()=="false" and float(p.get("maximum_load_capacity_kg") or 0)>0)
+        valid=(PRODUCT_FIELDS.issubset(p) and 0<len(p.get("proposed_name", ""))<=220 and bool(slugify(p.get("proposed_name"))) and
+               len(p.get("metric_model",""))<=120 and p.get("product_type")=="machinery" and p.get("condition")=="new" and
+               p.get("stock_status")=="on_request" and p.get("target_power_source") in ("","diesel","electric_24v","electric_lithium") and
+               p.get("price")=="" and p.get("currency")=="" and p.get("target_root_category")=="Maquinarias" and
+               p.get("target_subcategory") in TARGETS and p.get("target_brand")=="LGMG" and
+               all(p.get(field,"").casefold()=="false" for field in ("is_featured","is_published","show_price","ready_for_import")) and
+               float(p.get("maximum_load_capacity_kg") or 0)>0)
         if not valid: blockers.append("product_contract:"+p["source_key"])
     seen=set()
     for row in plan["rows"]["import-specifications.csv"]:
@@ -357,6 +385,10 @@ def validate_contracts(plan, media, media_root, local_sheets):
     for kind,name in (("image","import-images.csv"),("datasheet","import-datasheets.csv")):
         primary={}
         for row in plan["rows"][name]:
+            if kind=="datasheet" and row.get("datasheet_status")=="missing_at_source":
+                media_rows.append({"media_type":kind,"source_key":row.get("source_key"),"order":"","local_file":"","sha256":"",
+                    "size_bytes":"","mime_type":"","compatible":True,"reuse_status":"missing_at_source","blocking":False})
+                continue
             rel=safe_relative(row.get("local_file","")); physical=file_map.get(rel,{}); data=(media_root/rel).read_bytes()
             ext=Path(rel).suffix.casefold(); mime=row.get("mime_type",""); size=len(data)
             signature=((ext in (".jpg",".jpeg") and data[:3]==b"\xff\xd8\xff") or (ext==".png" and data[:8]==b"\x89PNG\r\n\x1a\n") or
@@ -433,7 +465,8 @@ def run(plan_root,media_root,base_url,output,token,client_factory=LocalJsonClien
     actions += jlg or [{"action":"review_example_product_removal","candidate_count":0,"reason":"No se encontró candidato exacto; revisar manualmente"}]
     counts={"categories_to_create":sum(r["proposed_action"]=="create_required" for r in categories),"categories_to_rename":sum(r["proposed_action"]=="rename_and_reuse" for r in categories),
         "products_to_create":sum(r["classification"]=="new_candidate" for r in products),"specifications_to_create":len(specs),"image_associations":127,
-        "unique_datasheets_to_create":len({r["sha256"] for r in media_rows if r["media_type"]=="datasheet" and r["reuse_status"]=="create_candidate"}),"datasheet_associations":55,
+        "datasheet_rows_total":57,"datasheet_associations":55,"physical_datasheet_files":53,"missing_datasheets":2,
+        "unique_datasheets_to_create":len({r["sha256"] for r in media_rows if r["media_type"]=="datasheet" and r["reuse_status"]=="create_candidate"}),
         "products_existing_or_review":sum(r["classification"]!="new_candidate" for r in products)}
     if counts["specifications_to_create"]>60 or counts["image_associations"]>20:
         actions.append({"action":"batching_and_resume_required","subject":"future_importer","human_review":True,"description":"Requiere throttling, checkpoints e idempotencia"})

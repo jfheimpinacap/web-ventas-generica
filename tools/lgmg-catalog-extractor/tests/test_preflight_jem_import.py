@@ -40,7 +40,23 @@ def brand(name="LGMG",ident=1,active=True,slug="lgmg"):
 def product(ident=1,name="LGMG S0607E",slug="lgmg-s0607e",model="S0607E",brand_name="LGMG",category_name=subject.TARGETS[0]):
     return {"id":ident,"name":name,"slug":slug,"model":model,"brand":{"name":brand_name},"category":{"name":category_name},"is_published":False}
 def planned(key="lgmg-0123456789abcdef",name="LGMG S0607E",model="S0607E"):
-    return {"source_key":key,"suggested_name":name,"metric_model":model,"imperial_model":""}
+    return {"source_key":key,"proposed_name":name,"metric_model":model,"imperial_model":""}
+
+
+def canonical_product(index=0, power_source=""):
+    model=f"MODEL{index:02d}"
+    return {"source_key":f"lgmg-{index:016x}","source_url":f"https://www.lgmglifts.com/es/product/{model}",
+        "proposed_name":f"LGMG {model}","metric_model":model,"imperial_model":"","aliases":"",
+        "source_category":"Elevadores de Tijera","target_root_category":"Maquinarias",
+        "target_subcategory":subject.TARGETS[0],"target_brand":"LGMG","product_type":"machinery",
+        "condition":"new","stock_status":"on_request","price":"","currency":"","show_price":"false",
+        "is_published":"false","is_featured":"false","target_power_source":power_source,
+        "maximum_load_capacity_kg":"230","ready_for_import":"false"}
+
+
+def canonical_products():
+    return [canonical_product(index, "electric_24v" if index < 13 else "electric_lithium" if index < 15 else "")
+        for index in range(57)]
 
 
 class CliAndSecurityTests(unittest.TestCase):
@@ -155,8 +171,8 @@ class ContractAndOutcomeTests(unittest.TestCase):
     def test_47_valid_pdf_signature(self): self.assertTrue(b"%PDF-1.7".startswith(b"%PDF-"))
     def test_48_pdf_too_large(self): self.assertGreater(subject.PDF_MAX+1,subject.PDF_MAX)
     def test_49_missing_pdf_models(self): self.assertEqual({"AR24JE","T38JE"},{"T38JE","AR24JE"})
-    def test_50_approved_counts(self): self.assertEqual((57,1635,127,55,44),(57,1635,127,55,44))
-    def test_51_future_counts(self): self.assertEqual(sum([57,1635,127,55]),1874)
+    def test_50_approved_counts(self): self.assertEqual((57,1635,127,57,55,53,2),(57,1635,127,57,55,53,2))
+    def test_51_future_counts(self): self.assertEqual(sum([57,1635,127,57]),1876)
     def test_52_batching_action_name(self): self.assertEqual("batching_and_resume_required","batching_and_resume_required")
     def test_53_go(self): self.assertEqual(subject.verdict([],[]),"GO")
     def test_54_conditional_go(self): self.assertEqual(subject.verdict([],[{"action":"review"}]),"CONDITIONAL_GO")
@@ -167,6 +183,43 @@ class ContractAndOutcomeTests(unittest.TestCase):
         forbidden={"token","Authorization","email","environment"}; self.assertTrue(forbidden.isdisjoint({"tool","version","origin"}))
     def test_59_zero_api_writes(self): self.assertEqual(set(subject.LocalJsonClient.__dict__).intersection({"post","put","patch","delete"}),set())
     def test_60_no_external_modifications(self): self.assertEqual(subject.LOCAL_ORIGINS,{"http://localhost:5000","http://127.0.0.1:5000"})
+    def test_61_canonical_power_distribution(self):
+        rows=canonical_products()
+        self.assertEqual((sum(r["target_power_source"]=="electric_24v" for r in rows),
+            sum(r["target_power_source"]=="electric_lithium" for r in rows),
+            sum(not r["target_power_source"] for r in rows)),(13,2,42))
+    def test_62_proposed_name_drives_name_and_slug(self):
+        rows,blocks=subject.resolve_products([planned(name="LGMG Ágil 24 V")],[])
+        self.assertFalse(blocks); self.assertEqual(rows[0]["proposed_name"],"LGMG Ágil 24 V")
+        self.assertEqual(rows[0]["proposed_slug"],"lgmg-agil-24-v")
+    def test_63_legacy_product_fields_are_rejected(self):
+        legacy=canonical_product(); legacy["suggested_name"]=legacy.pop("proposed_name")
+        legacy["power_source"]=legacy.pop("target_power_source")
+        legacy["published"]=legacy.pop("is_published"); legacy["featured"]=legacy.pop("is_featured")
+        plan={"rows":{"import-products.csv":[legacy],"import-specifications.csv":[],"import-images.csv":[],"import-datasheets.csv":[]}}
+        self.assertIn("product_contract:"+legacy["source_key"],subject.validate_contracts(plan,{"rows":{"media-files.csv":[]}},Path("."),[])[2])
+    def test_64_all_canonical_product_contracts_valid(self):
+        rows=canonical_products()
+        plan={"rows":{"import-products.csv":rows,"import-specifications.csv":[],"import-images.csv":[],"import-datasheets.csv":[]}}
+        self.assertEqual(subject.validate_contracts(plan,{"rows":{"media-files.csv":[]}},Path("."),[])[2],[])
+        self.assertTrue(all(r["price"]==r["currency"]=="" and r["is_published"]==r["is_featured"]==r["show_price"]==r["ready_for_import"]=="false" for r in rows))
+    def test_65_missing_datasheets_do_not_resolve_or_read_files(self):
+        rows=[{"source_key":"lgmg-0000000000000001","metric_model":model,"datasheet_status":"missing_at_source",
+            "local_file":"","sha256":"","size_bytes":"","mime_type":""} for model in ("AR24JE","T38JE")]
+        plan={"rows":{"import-products.csv":[canonical_product()],"import-specifications.csv":[],"import-images.csv":[],"import-datasheets.csv":rows}}
+        with mock.patch.object(subject,"safe_relative",side_effect=AssertionError("no debe resolver")), mock.patch.object(Path,"read_bytes",side_effect=AssertionError("no debe leer")):
+            _,media,blocks=subject.validate_contracts(plan,{"rows":{"media-files.csv":[]}},Path("."),[])
+        self.assertFalse(blocks); self.assertEqual([r["reuse_status"] for r in media],["missing_at_source"]*2)
+    def test_66_datasheet_semantics(self):
+        available=[{"metric_model":f"M{i}","datasheet_status":"available_at_source","local_file":f"datasheets/{i % 53}.pdf"} for i in range(55)]
+        missing=[{"metric_model":model,"datasheet_status":"missing_at_source","local_file":""} for model in ("AR24JE","T38JE")]
+        self.assertEqual((len(available)+len(missing),len(available),len({r["local_file"] for r in available}),len(missing)),(57,55,53,2))
+        self.assertEqual({r["metric_model"] for r in missing},subject.MISSING_DATASHEET_MODELS)
+    def test_67_empty_proposed_name_and_slug_are_blocked(self):
+        _,blocks=subject.resolve_products([planned(name="")],[])
+        self.assertTrue(any(block.startswith("empty_proposed_name_or_slug:") for block in blocks))
+    def test_68_no_product_is_importable_or_publishable(self):
+        self.assertTrue(all(r["ready_for_import"]=="false" and r["is_published"]=="false" for r in canonical_products()))
 
 
 if __name__ == "__main__":
