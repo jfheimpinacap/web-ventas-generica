@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.2.1"
+TOOL_VERSION = "1.2.2"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -386,7 +386,66 @@ def validate_javascript(document: str, content_type: str = "application/javascri
         raise DiscoveryError("El supuesto JavaScript es una página HTML")
 
 
-def _literal_object(source: str, name: str) -> dict[str, str]:
+def _strip_javascript_comments(source: str) -> str:
+    """Remove comments without changing quoted text or executing JavaScript."""
+    output, state, index = [], "normal", 0
+    while index < len(source):
+        char = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+        if state == "normal":
+            if char == "`":
+                raise DiscoveryError("Configuración SeaJS contiene un template literal")
+            if char in "'\"":
+                state = "single" if char == "'" else "double"
+                output.append(char)
+            elif char == "/" and following == "/":
+                state = "line_comment"; index += 1
+            elif char == "/" and following == "*":
+                state = "block_comment"; index += 1
+            else:
+                output.append(char)
+        elif state in ("single", "double"):
+            output.append(char)
+            if char == "\\" and following:
+                output.append(following); index += 1
+            elif (state == "single" and char == "'") or (state == "double" and char == '"'):
+                state = "normal"
+        elif state == "line_comment":
+            if char in "\r\n":
+                output.append(char); state = "normal"
+        elif char == "*" and following == "/":
+            state = "normal"; index += 1
+        elif char in "\r\n":
+            output.append(char)
+        index += 1
+    if state == "block_comment":
+        raise DiscoveryError("Configuración SeaJS contiene un comentario de bloque sin cerrar")
+    if state in ("single", "double"):
+        raise DiscoveryError("Configuración SeaJS contiene una cadena sin cerrar")
+    return "".join(output)
+
+
+def _safe_root_suffix(suffix: str) -> str:
+    parts = urlsplit(suffix)
+    segments = parts.path.split("/")
+    if (not suffix.startswith("/resources/") or parts.scheme or parts.netloc or parts.query or parts.fragment
+            or "\\" in suffix or any(ord(char) < 32 or ord(char) == 127 for char in suffix)
+            or "//" in suffix or any(segment in (".", "..") for segment in segments)):
+        raise DiscoveryError("Sufijo de seajs.root fuera de /resources/ o no seguro")
+    return suffix
+
+
+def _static_seajs_value(raw: str, seajs_root: str, *, allow_root: bool) -> str:
+    literal = re.fullmatch(r"\s*(['\"])([^'\"\\\x00-\x1f]*)\1\s*", raw)
+    if literal:
+        return literal.group(2)
+    rooted = re.fullmatch(r"\s*seajs\s*\.\s*root\s*\+\s*(['\"])([^'\"\\\x00-\x1f]*)\1\s*", raw)
+    if allow_root and rooted:
+        return seajs_root.rstrip("/") + _safe_root_suffix(rooted.group(2))
+    raise DiscoveryError("Configuración SeaJS contiene un valor dinámico no permitido")
+
+
+def _literal_object(source: str, name: str, seajs_root: str = SEAJ_DOMAIN, *, allow_root: bool = False) -> dict[str, str]:
     match = re.search(rf"\b{name}\s*:\s*\{{([^{{}}]*)\}}", source, re.S)
     if not match:
         return {}
@@ -394,22 +453,29 @@ def _literal_object(source: str, name: str) -> dict[str, str]:
     whitespace = r"[ \t\r\n]*"
     identifier = r"[A-Za-z_$][A-Za-z0-9_$]*"
     module_key = r"[A-Za-z_$][A-Za-z0-9_$.-]*(?:/[A-Za-z_$][A-Za-z0-9_$.-]*)*"
-    pair = re.compile(
+    key_pair = re.compile(
         rf"{whitespace}(?:(?P<bare>{identifier})|'(?P<single>{module_key})'|\"(?P<double>{module_key})\")"
-        rf"{whitespace}:{whitespace}(?P<quote>['\"])(?P<value>[^'\"\\\x00-\x1f]*)"
-        rf"(?P=quote){whitespace}"
+        rf"{whitespace}:{whitespace}"
     )
     result: dict[str, str] = {}
     position = 0
     if re.fullmatch(whitespace, body):
         return result
     while position < len(body):
-        item = pair.match(body, position)
+        item = key_pair.match(body, position)
         if not item:
             raise DiscoveryError(f"Configuración SeaJS {name} no es completamente literal")
         key = item.group("bare") or item.group("single") or item.group("double")
-        result[key] = item.group("value")
-        position = item.end()
+        value_start = item.end(); position = value_start; quote = None
+        while position < len(body):
+            char = body[position]
+            if quote:
+                if char == "\\": position += 1
+                elif char == quote: quote = None
+            elif char in "'\"": quote = char
+            elif char == ",": break
+            position += 1
+        result[key] = _static_seajs_value(body[value_start:position], seajs_root, allow_root=allow_root)
         if position == len(body):
             break
         if body[position] != ",":
@@ -421,22 +487,24 @@ def _literal_object(source: str, name: str) -> dict[str, str]:
     return result
 
 
-def resolve_seajs_module(config_source: str, module: str = EXPECTED_MODULE) -> str:
+def resolve_seajs_module(config_source: str, module: str = EXPECTED_MODULE, seajs_root: str = SEAJ_DOMAIN) -> str:
     validate_javascript(config_source)
-    config = re.search(r"\bseajs\s*\.\s*config\s*\(", config_source, re.S)
-    if not config:
-        raise DiscoveryError("No se encontró una configuración SeaJS literal")
-    body = config_source[config.end():]
-    base_match = re.search(r"\bbase\s*:\s*(['\"])([^'\"]+)\1", body)
-    base = base_match.group(2) if base_match else RESOURCE_PREFIX
-    paths, alias = _literal_object(body, "paths"), _literal_object(body, "alias")
+    source = _strip_javascript_comments(config_source)
+    configs = list(re.finditer(r"\bseajs\s*\.\s*config\s*\(", source))
+    if len(configs) != 1:
+        raise DiscoveryError("La configuración SeaJS es ausente o ambigua")
+    body = source[configs[0].end():]
+    base_match = re.search(r"\bbase\s*:\s*(.*?)(?=,\s*(?:paths|alias)\s*:|\s*})", body, re.S)
+    base = _static_seajs_value(base_match.group(1), seajs_root, allow_root=True) if base_match else RESOURCE_PREFIX
+    paths = _literal_object(body, "paths", seajs_root, allow_root=True)
+    alias = _literal_object(body, "alias", seajs_root, allow_root=False)
     resolved = alias.get(module, module)
     first, slash, rest = resolved.partition("/")
     if first in paths:
         resolved = paths[first].rstrip("/") + ("/" + rest if slash else "")
     if not resolved.endswith(".js"):
         resolved += ".js"
-    absolute = urljoin(urljoin("https://www.lgmglifts.com/es/", base.rstrip("/") + "/"), resolved)
+    absolute = urljoin(urljoin(seajs_root.rstrip("/") + "/", base.rstrip("/") + "/"), resolved)
     return _strict_url(absolute, "module")
 
 
@@ -737,7 +805,7 @@ def main(argv=None):
                 error_url = config_url
                 config_bytes, config_type = fetcher.fetch_controlled(config_url, "config", max_bytes=512 * 1024)
                 config_source = config_bytes.decode("utf-8", "strict"); validate_javascript(config_source, config_type)
-                module_url = resolve_seajs_module(config_source, module); report["module_url"] = module_url
+                module_url = resolve_seajs_module(config_source, module, SEAJ_DOMAIN); report["module_url"] = module_url
                 error_url = module_url
                 module_bytes, module_type = fetcher.fetch_controlled(module_url, "module", max_bytes=1024 * 1024)
                 module_source = module_bytes.decode("utf-8", "strict"); validate_javascript(module_source, module_type)
