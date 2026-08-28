@@ -10,7 +10,7 @@ Herramienta local e independiente en Python 3 (solo biblioteca estándar). No fo
 
 La solicitud inicial usa POST `application/x-www-form-urlencoded` y el conjunto cerrado `flag`, `min1`, `max1`, `min2`, `max2`, `min3`, `max3`, `min4`, `max4`, `catId`, `key`, `nowPage` y `gmzhi`. Los filtros y `key` se envían vacíos, `gmzhi=1`, `catId` recibe la familia actual y `nowPage` la página actual; no se envía tamaño de página. El callback se comprueba únicamente como estructura balanceada y nunca se ejecuta.
 
-`--discovery-only` resuelve y enumera URLs y escribe los reportes, pero no visita fichas ni extrae productos y no admite descargas. Es obligatoriamente la primera ejecución real recomendada. `--inventory-all` habilita hasta 250 fichas solo junto con descubrimiento dinámico; no se activa por defecto. Sin ese flag se conserva el máximo normal de 25. El máximo duro es 50 páginas y 250 fichas únicas.
+`--discovery-only` resuelve y enumera URLs y escribe los reportes, pero no visita fichas ni extrae productos y no admite descargas. Es obligatoriamente la primera ejecución real recomendada. `--max-products` es un límite estricto de URLs canónicas únicas aceptadas: las repeticiones no consumen cupo y, si una página contiene más resultados de los necesarios, el sobrante se descarta antes de construir los reportes. `--inventory-all` habilita valores solicitados de hasta 250 fichas solo junto con descubrimiento dinámico, pero no elimina ni relaja el valor indicado en `--max-products`; no se activa por defecto. Sin ese flag se conserva el máximo normal de 25. El máximo duro es 50 páginas y 250 fichas únicas.
 
 ## Fallo seguro, familias y paginación
 
@@ -36,7 +36,7 @@ El directorio validado contiene:
 - `catalog.json`, `catalog.csv`, `review.csv`, `errors.json` y `manifest.json`;
 - `cache/` e `images/` (esta última puede permanecer vacía).
 
-Las escrituras son atómicas y confinadas al output. El manifest 1.2.3 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
+Las escrituras son atómicas y confinadas al output. El manifest 1.2.4 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
 
 ## Códigos de salida
 
