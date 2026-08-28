@@ -118,4 +118,101 @@ class SafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             self.assertEqual(lgmg.validate_output_dir(str(Path(temp) / "sample")), Path(temp).resolve() / "sample")
 
+
+CONFIG = """seajs.config({base:'/es/resources/web/', paths:{js:'js'}, alias:{'js/pro_list':'js/pro_list'}});"""
+GET_MODULE = """$.ajax({url:'/es/product/load-list.htm', method:'GET', data:{channelId:category, page:page, pageSize:12}, dataType:'html'});"""
+POST_MODULE = """$.ajax({url:'/es/product/search-list.htm', type:'POST', contentType:'application/json', data:{familyId:family, pageNo:page, size:20}, dataType:'json'});"""
+
+
+class DynamicInspectionTests(unittest.TestCase):
+    def test_detects_only_expected_seajs_module(self):
+        self.assertEqual(lgmg.detect_seajs_module("<script>seajs.use('js/pro_list')</script>"), "js/pro_list")
+        for source in ("", "seajs.use('js/other')", "seajs.use('js/pro_list');seajs.use('js/other')"):
+            with self.assertRaises(lgmg.DiscoveryError): lgmg.detect_seajs_module(source)
+
+    def test_resolves_literal_config(self):
+        self.assertEqual(lgmg.resolve_seajs_module(CONFIG), "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
+
+    def test_module_scope_rejects_cross_origin_and_traversal(self):
+        for source in (
+            "seajs.config({base:'https://evil.example/es/resources/',alias:{'js/pro_list':'js/pro_list'}})",
+            "seajs.config({base:'/es/resources/web/',alias:{'js/pro_list':'../pro_list'}})",
+        ):
+            with self.assertRaises(lgmg.DiscoveryError): lgmg.resolve_seajs_module(source)
+
+    def test_html_cannot_pose_as_javascript(self):
+        with self.assertRaises(lgmg.DiscoveryError): lgmg.validate_javascript("<!doctype html><title>Error</title>")
+
+    def test_literal_get_and_post_operations(self):
+        get = lgmg.parse_listing_module(GET_MODULE)
+        self.assertEqual((get["method"], get["category_parameter"], get["page_parameter"]), ("GET", "channelId", "page"))
+        post = lgmg.parse_listing_module(POST_MODULE)
+        self.assertEqual((post["method"], post["body_format"]), ("POST", "application/json"))
+
+    def test_ambiguous_external_authenticated_and_unknown_methods_fail(self):
+        cases = (
+            GET_MODULE + GET_MODULE,
+            GET_MODULE.replace("/es/product/load-list.htm", "https://evil.example/product/load-list.htm"),
+            GET_MODULE.replace("$.ajax", "token='secret';$.ajax"),
+            GET_MODULE.replace("method:'GET',", ""),
+            GET_MODULE.replace("category", "makeCategory()"),
+        )
+        for source in cases:
+            with self.assertRaises(lgmg.DiscoveryError): lgmg.parse_listing_module(source)
+
+    def test_html_json_html_and_structured_json_responses(self):
+        family = {"id": "7", "name": "Tijeras"}; base = "https://www.lgmglifts.com/es/product/pro-list-377.htm"
+        payloads = (
+            ("<a href='/es/product/pro-detail-10.htm'>Uno</a>", "text/html"),
+            ('{"html":"<a href=\\"/es/product/pro-detail-11.htm\\">Dos</a>"}', "application/json"),
+            ('{"records":[{"detailUrl":"/es/product/pro-detail-12.htm"}]}', "application/json"),
+        )
+        for payload, content_type in payloads:
+            accepted, rejected = lgmg.parse_dynamic_response(payload, content_type, base, family, 1)
+            self.assertEqual(len(accepted), 1); self.assertEqual(rejected, [])
+
+    def test_detail_filter_is_strict_and_global_links_are_rejected(self):
+        payload = "<a href='/es/'>Inicio</a><a href='/es/product/pro-list-1.htm'>Lista</a><a href='/es/product/pro-detail-ABC_1.htm?q=bad'>Query</a><a href='/es/product/pro-detail-9.htm'>Ficha</a>"
+        accepted, rejected = lgmg.parse_dynamic_response(payload, "text/html", "https://www.lgmglifts.com/es/product/pro-list-377.htm", {"id":"1","name":"A"}, 1)
+        self.assertEqual([row["url"] for row in accepted], ["https://www.lgmglifts.com/es/product/pro-detail-9.htm"])
+        self.assertEqual(len(rejected), 3)
+
+    def test_deduplication_is_stable_across_pages_and_families(self):
+        rows = [{"url":"https://www.lgmglifts.com/es/product/pro-detail-1.htm", "family":"A"},
+                {"url":"https://www.lgmglifts.com/es/product/pro-detail-1.htm", "family":"A"},
+                {"url":"https://www.lgmglifts.com/es/product/pro-detail-1.htm", "family":"B"}]
+        unique = lgmg.deduplicate_discovery(rows)
+        self.assertEqual(len(unique), 1); self.assertEqual([r["duplicate"] for r in rows], [False, True, True])
+
+    def test_hard_limits_and_inventory_flag(self):
+        self.assertEqual((lgmg.HARD_MAX_PAGES, lgmg.HARD_MAX_PRODUCTS), (50, 250))
+        parser = lgmg.build_parser()
+        args = parser.parse_args(["--start-url", "https://www.lgmglifts.com/es/product/pro-list-377.htm", "--output-dir", "/tmp/safe/out", "--inventory-all"])
+        self.assertTrue(args.inventory_all); self.assertEqual(args.discovery_mode, "static")
+
+    def test_family_name_alone_is_not_electric_evidence(self):
+        electric, evidence = lgmg.classify_electric("Elevadores eléctricos", [], "Modelo ABC10")
+        self.assertIsNone(electric); self.assertEqual(evidence, [])
+
+    def test_uncertain_product_remains_reviewable(self):
+        product = lgmg.parse_product(detail("ABC10E(ABC30E)", "Elevadores eléctricos").replace("<tr><th>Fuente de potencia</th><td>48V batería</td></tr>", ""), "https://www.lgmglifts.com/es/product/pro-detail-8.htm")
+        self.assertIsNone(product["is_electric"]); self.assertTrue(product["needs_review"])
+
+    def test_output_writers_cover_discovery_files_and_safe_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            lgmg.write_json(root / "discovery.json", {"status":"dynamic_inspection_required"})
+            lgmg.write_csv(root / "discovery.csv", ["url"], [{"url":"x"}])
+            lgmg.write_csv(root / "families.csv", ["id"], [{"id":"1"}])
+            manifest = {"discovery_status":"dynamic_listing", "images_downloaded":0, "datasheets_downloaded":0,
+                        "jem_nexus_called":False, "content_published":False}
+            lgmg.write_json(root / "manifest.json", manifest)
+            self.assertTrue(all((root / name).is_file() for name in ("discovery.json","discovery.csv","families.csv","manifest.json")))
+            self.assertFalse(manifest["jem_nexus_called"] or manifest["content_published"])
+
+    def test_discovery_only_cli_is_explicit(self):
+        args = lgmg.build_parser().parse_args(["--start-url", "https://www.lgmglifts.com/es/product/pro-list-377.htm",
+            "--output-dir", "/tmp/safe/out", "--discovery-mode", "dynamic", "--discovery-only"])
+        self.assertTrue(args.discovery_only); self.assertFalse(args.download_images or args.download_datasheets)
+
 if __name__ == "__main__": unittest.main()
