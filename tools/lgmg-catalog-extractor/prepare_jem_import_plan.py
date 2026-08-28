@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
+import unicodedata
 import zipfile
 
 TOOL_NAME = "lgmg-jem-import-plan-generator"
@@ -299,33 +300,91 @@ def validate_media(root: Path, raw: dict[str, bytes], review: dict) -> dict:
         "summary": summary, "fingerprint": _sha(raw["media-manifest.json"])}
 
 
-def map_power(evidence) -> tuple[str, str]:
-    text = " | ".join(str(x) for x in (evidence or []))
-    normalized = text.casefold()
-    if not text: return "", "Fuente de energía eléctrica sin evidencia representable"
-    ambiguous = any(token in normalized for token in ("/", " o ", " or ", "opcional", "option"))
-    voltages = set(re.findall(r"(?<!\d)(\d+(?:[.,]\d+)?)\s*v\b", normalized))
-    lithium = bool(re.search(r"\b(litio|lithium)\b", normalized))
-    if ambiguous or len(voltages) > 1: return "", "Fuente de energía con varias configuraciones"
-    if lithium and not voltages: return "electric_lithium", ""
-    if voltages == {"24"} and not lithium: return "electric_24v", ""
-    return "", "Fuente de energía no representable por el contrato actual"
+def normalize_label(value: str) -> str:
+    """Normalize a structural label without altering its preserved source text."""
+    decomposed = unicodedata.normalize("NFKD", value or "")
+    plain = "".join(character for character in decomposed
+        if unicodedata.category(character) != "Mn")
+    return " ".join(plain.casefold().split())
+
+
+POWER_LABELS = {
+    "fuente de potencia", "fuente de alimentacion", "power source",
+    "bateria de plomo-acido", "lead-acid battery", "bateria de litio",
+    "lithium battery", "tecnologia de la bateria", "battery technology",
+    "voltaje nominal de la bateria", "battery nominal voltage",
+    "capacidad de la bateria", "battery capacity",
+}
+PRIMARY_POWER_LABELS = {"fuente de potencia", "fuente de alimentacion", "power source"}
+
+
+def power_evidence(specs: list[dict]) -> list[str]:
+    """Return energy rows in their original order and wording."""
+    return [f'{row.get("source_label", "")}: {row.get("source_value", "")}'
+        for row in specs if normalize_label(row.get("source_label") or "") in POWER_LABELS]
+
+
+def map_power(specs: list[dict]) -> tuple[str, str, list[str]]:
+    rows = [row for row in specs
+        if normalize_label(row.get("source_label") or "") in POWER_LABELS]
+    evidence = power_evidence(specs)
+    if not evidence:
+        return "", "Fuente de energía eléctrica sin evidencia representable", evidence
+    normalized = [(normalize_label(row.get("source_label") or ""),
+        normalize_label(row.get("source_value") or "")) for row in rows]
+    primary = [value for label, value in normalized if label in PRIMARY_POWER_LABELS]
+    text = " | ".join(f"{label}: {value}" for label, value in normalized)
+    lithium = bool(re.search(r"\b(litio|lithium)\b", text))
+    lead = bool(re.search(r"\b(plomo-acido|lead-acid)\b", text))
+    alternatives = (lead and lithium) or len(primary) > 1 or any(
+        token in value for value in primary for token in (" o ", " or ", "opcional", "option", "-li"))
+    if alternatives:
+        return "", "Fuente de energía con varias configuraciones", evidence
+    # The first voltage in each row is the system voltage; parenthesized values
+    # such as 2x12V describe components of that declared system.
+    voltages = set()
+    for _, value in normalized:
+        match = re.search(r"(?<!\d)(\d+(?:[.,]\d+)?)\s*v\b", value)
+        if match:
+            voltages.add(Decimal(match.group(1).replace(",", ".")))
+    if len(voltages) > 1:
+        return "", "Fuente de energía con varias configuraciones", evidence
+    if lithium:
+        return "electric_lithium", "", evidence
+    if voltages == {Decimal("24")}:
+        return "electric_24v", "", evidence
+    if voltages:
+        displayed = ", ".join(format(value, "f").rstrip("0").rstrip(".")
+            if "." in format(value, "f") else format(value, "f") for value in sorted(voltages))
+        return "", f"Voltaje eléctrico confirmado ({displayed} V), sin opción equivalente en el contrato actual", evidence
+    return "", "Fuente de energía no representable por el contrato actual", evidence
 
 
 def map_capacity(specs: list[dict]) -> tuple[str, str]:
     values = []
     for row in specs:
-        label = (row.get("source_label") or "").casefold()
-        if "capacidad de plataforma" not in label and "platform capacity" not in label: continue
-        match = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*kg\s*", row.get("source_value", ""), re.I)
+        label = normalize_label(row.get("source_label") or "").replace("-", " ")
+        excluded = any(word in label for word in ("aceite", "oil", "tanque", "tank", "combustible", "fuel", "bateria", "battery"))
+        capacity_label = ("capacidad" in label and "plataforma" in label) or "platform capacity" in label \
+            or bool(re.fullmatch(r"max\.? capacidad(?: \([^)]*\))?(?: kg(?:/lbs|/libras)?)?", label)) \
+            or bool(re.fullmatch(r"capacidad (?:con|sin) restricciones(?: kg(?:/lbs|/libras)?)?", label))
+        if excluded or not capacity_label: continue
+        source_value = (row.get("source_value") or "").strip()
+        metric_in_label = bool(re.search(r"\bkg(?:/lbs|/libras)?\b", label))
+        match = re.fullmatch(r"(\d+(?:[.,]\d+)?)\s*(kg)?", source_value, re.I)
+        if not match or (not match.group(2) and not metric_in_label): continue
+        number = match.group(1)
+        if "," in number:
+            whole, fraction = number.split(",", 1)
+            number = whole + fraction if len(fraction) == 3 else whole + "." + fraction
         if match:
-            try: value = Decimal(match.group(1).replace(",", "."))
+            try: value = Decimal(number)
             except InvalidOperation: continue
             if value > 0: values.append(value)
-    unique = set(values)
-    if len(unique) == 1:
-        value = unique.pop(); return format(value, "f").rstrip("0").rstrip(".") if "." in format(value, "f") else str(value), ""
-    return "", "Capacidad máxima ausente o ambigua; no se convirtieron unidades"
+    if values:
+        value = max(values); rendered = format(value, "f")
+        return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered, ""
+    return "", "Capacidad máxima ausente o ambigua; no se convirtieron libras ni otras unidades"
 
 
 def manual_actions() -> list[dict]:
@@ -347,12 +406,11 @@ def build_plan(review: dict, media: dict) -> dict:
     images_by = {key: [] for key in specs_by}; sheets_by = {key: [] for key in specs_by}
     for row in media["images"]: images_by[row["source_key"]].append(row)
     for row in media["datasheets"]: sheets_by[row["source_key"]].append(row)
-    draft_by = {d["source_key"]: d for d in review["drafts"]}
     products=[]; warnings=[]; out_specs=[]; out_images=[]; out_sheets=[]
     missing_keys={r["source_key"] for r in review["missing"]}
     for product in review["products"]:
-        key=product["source_key"]; draft=draft_by[key]; source=draft.get("source") or {}
-        power,power_warning=map_power(source.get("electric_evidence") or [])
+        key=product["source_key"]
+        power,power_warning,electric_evidence=map_power(specs_by[key])
         capacity,capacity_warning=map_capacity(specs_by[key])
         messages=[x for x in (power_warning,capacity_warning) if x]
         if key in missing_keys: messages.append("Ficha técnica ausente en la fuente; revisión humana requerida")
@@ -365,7 +423,7 @@ def build_plan(review: dict, media: dict) -> dict:
             "target_brand":"LGMG","product_type":"machinery","condition":"new","stock_status":"on_request",
             "price":"","currency":"","show_price":False,"is_published":False,"is_featured":False,
             "includes_technical_review":False,"includes_commercial_technical_advice":False,"includes_coordinated_delivery":False,
-            "target_power_source":power,"electric_evidence":source.get("electric_evidence") or [],
+            "target_power_source":power,"electric_evidence":electric_evidence,
             "maximum_load_capacity_kg":capacity,"datasheet_status":"missing_at_source" if key in missing_keys else "available_at_source",
             "image_count":len(images_by[key]),"warnings":messages,"eligible_for_local_preflight":True,"ready_for_import":False})
         for row in specs_by[key]: out_specs.append({**row,"maximum_load_capacity_candidate_kg":capacity if row is specs_by[key][0] else ""})

@@ -46,7 +46,7 @@ def review_raw(category="Elevadores de Tijera", model="AR24JE", with_sheet=False
         "rights_status":"pending_confirmation","download_status":"not_downloaded","local_file":"","review_decision":""}
     missing = [] if with_sheet else [{"source_key":key,"metric_model":model,"imperial_model":"","suggested_name":"","source_category":category,"source_url":product["source_url"],"reason":"missing"}]
     uncertain_rows = [{"metric_model":f"U{i}"} for i in range(uncertain)]
-    draft = {"source_key":key,"ready_for_import":False,"source":{"electric_evidence":["Fuente de potencia: 24 V 200 Ah"]},"product_draft":{"published":False}}
+    draft = {"source_key":key,"ready_for_import":False,"source":{},"product_draft":{"published":False}}
     raw = {
         "review-products.csv":csv_bytes(product.keys(),[product]),
         "review-specifications.csv":csv_bytes(specs[0].keys(),specs),
@@ -187,15 +187,51 @@ class ImportPlanTests(unittest.TestCase):
 
     def test_23_conservative_commercial_values(self):
         review,media=built_fixture(); product=plan.build_plan(review,media)["products"][0]
-        self.assertEqual((product["price"],product["currency"],product["stock_status"],product["ready_for_import"]),("","","on_request",False))
+        self.assertEqual((product["price"],product["currency"],product["stock_status"]),("","","on_request"))
+        self.assertEqual((product["target_power_source"],product["electric_evidence"]),
+            ("electric_24v",["Fuente de potencia: 24 V 200 Ah"]))
+        self.assertEqual(product["maximum_load_capacity_kg"],"230")
+        self.assertEqual((product["is_published"],product["ready_for_import"]),(False,False))
 
     def test_24_ambiguous_power_source_warns(self):
-        self.assertEqual(plan.map_power(["24 V o 48 V lithium"])[0],"")
+        cases = [
+            ("24 V", [("Fuente de potencia","24 V 200 Ah")], "electric_24v", "", "Fuente de potencia: 24 V 200 Ah"),
+            ("2x12V", [("Fuente de potencia","24V (2x12V), 102Ah")], "electric_24v", "", "2x12V"),
+            ("4x6V", [("Fuente de Alimentación","24V (4x6V), 220Ah")], "electric_24v", "", "4x6V"),
+            ("litio", [("Batería de litio","80 V 271 Ah")], "electric_lithium", "", "Batería de litio"),
+            ("tecnología", [("Tecnología de la batería","Batería de litio"),("Voltaje nominal de la batería","76,8 V"),("Capacidad de la batería","304 Ah")], "electric_lithium", "", "304 Ah"),
+            ("plomo y litio", [("Batería de plomo-ácido","48 V 390 Ah"),("Batería de litio","80 V 271 Ah")], "", "varias configuraciones", "plomo-ácido"),
+            ("base y -Li", [("Fuente de potencia","24 V 200 Ah"),("Fuente de potencia","24 V 200 Ah -Li")], "", "varias configuraciones", "-Li"),
+            ("48 V", [("Fuente de potencia","48 V DC 315Ah")], "", "Voltaje eléctrico confirmado", "48 V"),
+            ("72 V", [("Fuente de potencia","72 V DC 300Ah")], "", "Voltaje eléctrico confirmado", "72 V"),
+            ("80 V", [("Fuente de potencia","80 V DC 271Ah")], "", "Voltaje eléctrico confirmado", "80 V"),
+            ("sin evidencia", [("Altura máxima","10 m")], "", "sin evidencia representable", None),
+            ("sufijo", [], "", "sin evidencia representable", None),
+        ]
+        for name, entries, expected, warning_text, preserved in cases:
+            with self.subTest(name=name):
+                specs=[{"source_label":label,"source_value":value} for label,value in entries]
+                mapped,warning,evidence=plan.map_power(specs)
+                self.assertEqual(mapped,expected); self.assertIn(warning_text,warning)
+                if preserved is not None: self.assertTrue(any(preserved in item for item in evidence))
+                else: self.assertEqual(evidence,[])
 
-    def test_25_explicit_and_ambiguous_capacity(self):
-        one=[{"source_label":"Capacidad de plataforma","source_value":"230.5 kg"}]
-        two=one+[{"source_label":"Platform capacity","source_value":"450 kg"}]
-        self.assertEqual((plan.map_capacity(one)[0],plan.map_capacity(two)[0]),("230.5",""))
+    def test_25_maximum_metric_platform_capacity(self):
+        cases = [
+            ("decimal", [("Capacidad de plataforma","230.5 kg")], "230.5"),
+            ("principal", [("Capacidad de la plataforma","230 kg"),("Capacidad-Extensión de la plataforma","120 kg")], "230"),
+            ("restricciones", [("Capacidad de la plataforma (sin restricciones)","300 kg"),("Capacidad de la plataforma (con restricciones)","450 kg")], "450"),
+            ("kg/lbs en etiqueta", [("Capacidad de Plataforma (sin restricciones) kg/lbs","300"),("Capacidad de Plataforma (restricciones) (kg/libras)","450")], "450"),
+            ("miles", [("Máx. Capacidad","2,500 kg")], "2500"),
+            ("coma decimal", [("Máx. Capacidad","230,5 kg")], "230.5"),
+            ("exclusiones", [("Capacidad de aceite hidráulico","230 kg"),("Capacidad del tanque","450 kg")], ""),
+            ("solo libras", [("Capacidad de plataforma","500 lbs")], ""),
+            ("ausente", [("Altura máxima","10 m")], ""),
+        ]
+        for name, entries, expected in cases:
+            with self.subTest(name=name):
+                specs=[{"source_label":label,"source_value":value} for label,value in entries]
+                self.assertEqual(plan.map_capacity(specs)[0],expected)
 
     def test_26_image_order_and_single_primary(self):
         review,media=built_fixture(); second=dict(media["images"][0],image_order="2",local_file="media/images/b.jpg")
