@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.2.3"
+TOOL_VERSION = "1.2.4"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -916,10 +916,13 @@ def main(argv=None):
                         for row in rows:
                             row["endpoint"] = operation["endpoint"]; row["rejection_reason"] = ""
                             discovery_rows.append(row)
-                            if row["url"] not in unique_urls: unique_urls.add(row["url"]); new_count += 1
+                            if row["url"] not in unique_urls:
+                                unique_urls.add(row["url"]); new_count += 1
+                                if len(unique_urls) == args.max_products:
+                                    family_status = "stopped_by_limit"; discovery_status = "stopped_by_limit"; stop_all = True
+                                    break
+                        if stop_all: break
                         if new_count == 0: family_status = "stopped_no_new_details"; break
-                        if len(unique_urls) >= args.max_products:
-                            family_status = "stopped_by_limit"; discovery_status = "stopped_by_limit"; stop_all = True; break
                     else: family_status = "stopped_by_page_limit"; warning = "Se alcanzó el máximo duro de 50 páginas"
                     family_rows.append({"order": family_order, "id": family["id"], "name": family["name"],
                         "found": len(discovery_rows) - found_before, "unique": len(unique_urls) - unique_before,
@@ -927,7 +930,8 @@ def main(argv=None):
                         "method": "listing_html"})
                     if stop_all: break
                 if discovery_status != "stopped_by_limit": discovery_status = "dynamic_listing"
-                urls = [row["url"] for row in deduplicate_discovery(discovery_rows)]
+                if len(unique_urls) > args.max_products:
+                    raise DiscoveryError("Inconsistencia interna: el descubrimiento excedió --max-products")
             except (DiscoveryError, UnicodeError, RuntimeError) as exc:
                 discovery_status = "dynamic_inspection_required"; report["stop_reason"] = str(exc)
                 errors.append({"stage": "dynamic_discovery", "url": error_url, "message": str(exc)})
@@ -946,11 +950,20 @@ def main(argv=None):
             start = None; seed = Path(args.seed_file).resolve(strict=True)
             urls = dedupe([canonical_url(line.strip()) for line in seed.read_text(encoding="utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")])
             discovery_rows = [{"family_id": "", "family": "", "url": url, "page": 1, "endpoint": "seed_file", "rejection_reason": ""} for url in urls]
-        discovery_rows = deduplicate_discovery(discovery_rows)
+        final_rows = deduplicate_discovery(discovery_rows)
+        if args.discovery_mode == "dynamic" and len(final_rows) > args.max_products:
+            raise DiscoveryError("Inconsistencia interna: las filas dinámicas exceden --max-products")
+        discovery_rows = final_rows[:args.max_products]
+        urls = [row["url"] for row in discovery_rows]
+        unique_count = len({row["url"] for row in discovery_rows})
+        if len(discovery_rows) > args.max_products or unique_count > args.max_products or len(urls) > args.max_products:
+            raise DiscoveryError("Inconsistencia interna: los resultados finales exceden --max-products")
+        if discovery_status == "stopped_by_limit" and unique_count != args.max_products:
+            raise DiscoveryError("Inconsistencia interna: stopped_by_limit sin alcanzar --max-products")
         report.update({"families": family_rows, "pages_requested": pages_requested,
-            "details_found": len(discovery_rows), "details_unique": len({r["url"] for r in discovery_rows}), "status": discovery_status})
+            "details_found": len(discovery_rows), "details_unique": unique_count, "status": discovery_status})
         if not report["stop_reason"] and discovery_status == "stopped_by_limit": report["stop_reason"] = "maximum_products"
-        discovered = len(urls); urls = urls[:args.max_products]; products = []; reviewed_products = []
+        discovered = len(discovery_rows); products = []; reviewed_products = []
         for url in ([] if args.discovery_only else urls):
             try:
                 product = parse_product(fetcher.fetch(url).decode("utf-8", "replace"), url)
@@ -999,7 +1012,7 @@ def main(argv=None):
         manifest = {"tool": "lgmg-catalog-extractor", "version": TOOL_VERSION, "start_url": start, "discovery_mode": args.discovery_mode,
             "discovery_status": discovery_status, "discovery_module": report["module_url"], "listing_endpoint": report["endpoint"], "listing_method": report["method"],
             "families_discovered": len(family_rows), "pages_requested": pages_requested, "detail_urls_discovered": len(discovery_rows),
-            "detail_urls_unique": len({r["url"] for r in discovery_rows}), "user_agent": args.user_agent,
+            "detail_urls_unique": unique_count, "user_agent": args.user_agent,
             "extracted_at_utc": datetime.now(timezone.utc).isoformat(), "requested_count": args.max_products, "discovered_count": discovered,
             "processed_count": len(products), "skipped_count": skipped, "failed_pages": [e for e in errors if e.get("stage") == "detail"],
             "robots_status": robots_status, "delay_seconds": args.delay_seconds, "timeout_seconds": args.timeout_seconds,

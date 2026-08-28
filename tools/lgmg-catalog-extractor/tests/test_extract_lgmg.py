@@ -1,4 +1,5 @@
 """Synthetic unit tests. Run explicitly on Windows; no network is used."""
+import csv
 import importlib.util
 from io import BytesIO
 from pathlib import Path
@@ -137,7 +138,88 @@ function searchPro(){ $.post(seajs.root + "/ext/ajax_proList.jsp", {%s}, functio
 """ % PRODUCT_DATA
 
 
+def run_dynamic_discovery(families, pages, max_products):
+    boxes = "".join(f"<div class='box' data-id='{key}'>{name}</div>" for key, name in families)
+    index = (f"<script id='seajsConfig' src='/es/resources/web/seajs.config.js' domain='{lgmg.SEAJ_DOMAIN}'></script>"
+             "<script>seajs.use('js/pro_list')</script>"
+             f"<section class='channel_content pro_list'><div class='type_box'>{boxes}</div></section>").encode()
+    endpoint_calls = []
+
+    def controlled(url, kind, **kwargs):
+        if kind == "listing": return index, "text/html"
+        if kind == "config": return CONFIG.encode(), "application/javascript"
+        if kind == "module": return OFFICIAL_MODULE.encode(), "application/javascript"
+        params = kwargs["parameters"]
+        marker = (str(params["catId"]), int(params["nowPage"])); endpoint_calls.append(marker)
+        links = "".join(f"<a href='/es/product/pro-detail-{value}.htm'>Ficha</a>" for value in pages.get(marker, ()))
+        return links.encode(), "text/html"
+
+    with tempfile.TemporaryDirectory() as temp:
+        output = Path(temp) / "output"
+        arguments = ["--start-url", "https://www.lgmglifts.com/es/product/pro-list-377.htm",
+                     "--output-dir", str(output), "--discovery-mode", "dynamic", "--discovery-only",
+                     "--max-products", str(max_products)]
+        with mock.patch.object(lgmg.Fetcher, "fetch", return_value=b"User-agent: *\nAllow: /\n") as fetch, \
+             mock.patch.object(lgmg.Fetcher, "fetch_controlled", side_effect=controlled):
+            exit_code = lgmg.main(arguments)
+        result = {
+            "exit_code": exit_code,
+            "fetch_calls": fetch.call_count,
+            "endpoint_calls": endpoint_calls,
+            "report": lgmg.json.loads((output / "discovery.json").read_text(encoding="utf-8")),
+            "manifest": lgmg.json.loads((output / "manifest.json").read_text(encoding="utf-8")),
+        }
+        with (output / "discovery.csv").open(encoding="utf-8-sig", newline="") as stream:
+            result["rows"] = list(csv.DictReader(stream))
+        return result
+
+
 class DynamicInspectionTests(unittest.TestCase):
+    def test_strict_limit_stops_within_first_page(self):
+        result = run_dynamic_discovery(
+            (("377", "Tijeras"),),
+            {("377", 1): ("1", "2", "3", "4", "5")},
+            3,
+        )
+        self.assertEqual([row["url"].rsplit("-", 1)[-1] for row in result["rows"]], ["1.htm", "2.htm", "3.htm"])
+        self.assertEqual(result["endpoint_calls"], [("377", 1)])
+        self.assertEqual(result["fetch_calls"], 1)
+        self.assertEqual(result["report"]["families"][0]["status"], "stopped_by_limit")
+        self.assertEqual((result["report"]["details_found"], result["report"]["details_unique"]), (3, 3))
+        self.assertEqual((result["manifest"]["discovered_count"], result["manifest"]["detail_urls_discovered"],
+                          result["manifest"]["detail_urls_unique"]), (3, 3, 3))
+
+    def test_strict_limit_across_families_ignores_duplicates(self):
+        first = tuple(str(value) for value in range(1, 22)); second = tuple(str(value) for value in range(22, 31))
+        result = run_dynamic_discovery(
+            (("377", "Familia A"), ("378", "Familia B"), ("379", "Familia C")),
+            {("377", 1): first + first, ("378", 1): second + second, ("379", 1): ("31",)},
+            25,
+        )
+        families = result["report"]["families"]
+        self.assertEqual([(row["id"], row["unique"], row["status"]) for row in families],
+                         [("377", 21, "complete_empty_page"), ("378", 4, "stopped_by_limit")])
+        self.assertEqual(len(result["rows"]), 25)
+        self.assertTrue(result["rows"][-1]["url"].endswith("pro-detail-25.htm"))
+        self.assertNotIn(("379", 1), result["endpoint_calls"])
+        self.assertEqual((result["report"]["details_found"], result["report"]["details_unique"]), (25, 25))
+        self.assertEqual((result["manifest"]["requested_count"], result["manifest"]["discovered_count"],
+                          result["manifest"]["detail_urls_discovered"], result["manifest"]["detail_urls_unique"]),
+                         (25, 25, 25, 25))
+
+    def test_natural_exhaustion_below_limit_remains_dynamic_listing(self):
+        result = run_dynamic_discovery(
+            (("377", "Familia A"), ("378", "Familia B")),
+            {("377", 1): ("1", "2", "2"), ("378", 1): ("3", "4")},
+            10,
+        )
+        self.assertEqual(len(result["rows"]), 4)
+        self.assertEqual(result["report"]["status"], "dynamic_listing")
+        self.assertNotIn("stopped_by_limit", [family["status"] for family in result["report"]["families"]])
+        self.assertEqual((result["report"]["details_found"], result["report"]["details_unique"]), (4, 4))
+        self.assertEqual((result["manifest"]["discovered_count"], result["manifest"]["detail_urls_discovered"],
+                          result["manifest"]["detail_urls_unique"]), (4, 4, 4))
+
     def test_detects_official_seajs_config_structurally(self):
         documents = (
             '''<script src="/es/resources/web/seajs.config.js" id="seajsConfig"
