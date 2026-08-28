@@ -6,13 +6,13 @@ Herramienta local e independiente en Python 3 (solo biblioteca estándar). No fo
 
 `--discovery-mode static` conserva el comportamiento anterior: `--start-url` acepta únicamente fichas del contenedor estructural `section.channel_content.pro_list`, y `--seed-file` procesa URLs previamente revisadas. El HTML inicial puede contener el contenedor vacío porque el sitio carga el catálogo mediante JavaScript; en ese caso el modo estático termina con código 2 y recomienda el modo dinámico o un seed.
 
-`--discovery-mode dynamic` se limita al listado exacto `/es/product/pro-list-377.htm`. Detecta únicamente `seajs.use('js/pro_list')`, obtiene la configuración SeaJS exacta del mismo host, interpreta solo literales estáticos de `base`, `paths` y `alias`, resuelve un único módulo bajo `/es/resources/` y lo analiza como texto. **Nunca ejecuta JavaScript.** Solo acepta una operación AJAX inequívoca GET o POST del mismo origen, con parámetros cerrados de familia/página/tamaño y constantes públicas. POST se limita a JSON o `application/x-www-form-urlencoded`.
+`--discovery-mode dynamic` se limita al listado exacto `/es/product/pro-list-377.htm`. Detecta el único `script#seajsConfig` oficial, valida sus atributos `src` y `domain`, y detecta únicamente `seajs.use('js/pro_list')`; después obtiene la configuración SeaJS exacta del mismo host, interpreta solo literales estáticos de `base`, `paths` y `alias`, resuelve un único módulo bajo `/es/resources/` y lo analiza como texto. **Nunca ejecuta JavaScript.** Solo acepta una operación AJAX inequívoca GET o POST del mismo origen, con parámetros cerrados de familia/página/tamaño y constantes públicas. POST se limita a JSON o `application/x-www-form-urlencoded`.
 
 `--discovery-only` resuelve y enumera URLs y escribe los reportes, pero no visita fichas ni extrae productos y no admite descargas. Es obligatoriamente la primera ejecución real recomendada. `--inventory-all` habilita hasta 250 fichas solo junto con descubrimiento dinámico; no se activa por defecto. Sin ese flag se conserva el máximo normal de 25. El máximo duro es 50 páginas y 250 fichas únicas.
 
 ## Fallo seguro, familias y paginación
 
-La resolución rechaza host distinto, HTTP, credenciales, puerto alternativo, query inesperada, fragmento, traversal, HTML disfrazado de JavaScript, varios endpoints, método incierto, parámetros no literales/no controlados, autenticación, tokens, CSRF, cookies, WebSocket y JSONP. Una inspección incompleta produce diagnóstico, estado `dynamic_inspection_required` y código 3 antes de consultar un endpoint candidato.
+La resolución rechaza host distinto, HTTP, credenciales, puerto alternativo, query inesperada, fragmento, traversal, HTML disfrazado de JavaScript, varios endpoints, método incierto, parámetros no literales/no controlados, autenticación, tokens, CSRF, cookies, WebSocket y JSONP. Una inspección incompleta, incluidos los errores HTTP o de red de recursos dinámicos controlados, produce diagnóstico, estado `dynamic_inspection_required` y código 3 antes de consultar un endpoint candidato.
 
 Las familias se leen de la estructura pública del listado, sin allowlist rígido, y conservan ID, nombre, origen, orden, método, conteos, páginas, estado y advertencias. Las respuestas admitidas son HTML, fragmentos HTML, JSON estructurado o JSON con un campo HTML explícito. Los enlaces deben cumplir exactamente `/es/product/pro-detail-*.htm`; se eliminan query/hash, se excluye navegación global, se conserva orden y familia, y se deduplica entre páginas y familias.
 
@@ -34,7 +34,7 @@ El directorio validado contiene:
 - `catalog.json`, `catalog.csv`, `review.csv`, `errors.json` y `manifest.json`;
 - `cache/` e `images/` (esta última puede permanecer vacía).
 
-Las escrituras son atómicas y confinadas al output. El manifest 1.2.0 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
+Las escrituras son atómicas y confinadas al output. El manifest 1.2.1 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
 
 ## Códigos de salida
 

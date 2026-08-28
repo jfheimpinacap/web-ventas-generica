@@ -23,13 +23,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.2.0"
+TOOL_VERSION = "1.2.1"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
 HARD_MAX_PRODUCTS = 250
 HARD_MAX_PAGES = 50
-SEAJ_CONFIG_URL = "https://www.lgmglifts.com/es/resources/web/js/seajs.config.js"
+SEAJ_CONFIG_URL = "https://www.lgmglifts.com/es/resources/web/seajs.config.js"
+SEAJ_DOMAIN = "https://www.lgmglifts.com/es"
 EXPECTED_MODULE = "js/pro_list"
 RESOURCE_PREFIX = "/es/resources/"
 MAX_HTML_BYTES = 5 * 1024 * 1024
@@ -360,6 +361,24 @@ def detect_seajs_module(document: str) -> str:
     return modules[0]
 
 
+def detect_seajs_config(document: str, listing_url: str) -> str:
+    """Find and validate the single official SeaJS bootstrap element."""
+    parser = CatalogueParser(listing_url)
+    parser.feed(document)
+    matches = [node for node in parser.root.descendants() if node.attrs.get("id") == "seajsConfig"]
+    if len(matches) != 1 or matches[0].tag != "script":
+        raise DiscoveryError("Se exige un único elemento script#seajsConfig")
+    src = matches[0].attrs.get("src", "").strip()
+    domain = matches[0].attrs.get("domain", "").strip()
+    if not src or not domain:
+        raise DiscoveryError("script#seajsConfig exige src y domain no vacíos")
+    if domain != SEAJ_DOMAIN:
+        raise DiscoveryError("script#seajsConfig contiene un domain no oficial")
+    if ".." in urlsplit(src).path.split("/"):
+        raise DiscoveryError("script#seajsConfig contiene traversal en src")
+    return _strict_url(urljoin(listing_url, src), "config")
+
+
 def validate_javascript(document: str, content_type: str = "application/javascript") -> None:
     if "javascript" not in content_type.casefold() and "text/plain" not in content_type.casefold():
         raise DiscoveryError("Content-Type incompatible con JavaScript")
@@ -605,13 +624,18 @@ class Fetcher:
         if data is not None: headers["Content-Type"] = body_format
         request = Request(url, data=data, headers=headers, method=method)
         handler = SafeRedirectHandler(); self.last_request = time.monotonic()
-        with build_opener(handler).open(request, timeout=self.timeout) as response:
-            _strict_url(response.url.split("?", 1)[0], kind)
-            content = response.read(max_bytes + 1)
-            if len(content) > max_bytes: raise DiscoveryError("Recurso controlado excede el tamaño máximo")
-            content_type = response.headers.get_content_type()
-            atomic_write(cache, content); write_json(meta, {"content_type": content_type})
-            return content, content_type
+        try:
+            with build_opener(handler).open(request, timeout=self.timeout) as response:
+                _strict_url(response.url.split("?", 1)[0], kind)
+                content = response.read(max_bytes + 1)
+                if len(content) > max_bytes: raise DiscoveryError("Recurso controlado excede el tamaño máximo")
+                content_type = response.headers.get_content_type()
+                atomic_write(cache, content); write_json(meta, {"content_type": content_type})
+                return content, content_type
+        except HTTPError as exc:
+            raise DiscoveryError(f"{kind}: HTTP {exc.code} al solicitar recurso controlado") from None
+        except (URLError, TimeoutError):
+            raise DiscoveryError(f"{kind}: fallo de red al solicitar recurso controlado") from None
 
 
 def atomic_write(path: Path, data: bytes):
@@ -702,16 +726,19 @@ def main(argv=None):
         exit_code = 0
         if args.start_url and args.discovery_mode == "dynamic":
             start = _strict_url(args.start_url, "listing"); report["start_url"] = start
+            error_url = start
             try:
                 index_bytes, index_type = fetcher.fetch_controlled(start, "listing")
                 if "html" not in index_type: raise DiscoveryError("El listado inicial no es HTML")
                 index = index_bytes.decode("utf-8", "strict")
                 listing = CatalogueParser(start); listing.feed(index)
+                config_url = detect_seajs_config(index, start); report["config_url"] = config_url
                 module = detect_seajs_module(index); report["seajs_module"] = module
-                report["config_url"] = SEAJ_CONFIG_URL
-                config_bytes, config_type = fetcher.fetch_controlled(SEAJ_CONFIG_URL, "config", max_bytes=512 * 1024)
+                error_url = config_url
+                config_bytes, config_type = fetcher.fetch_controlled(config_url, "config", max_bytes=512 * 1024)
                 config_source = config_bytes.decode("utf-8", "strict"); validate_javascript(config_source, config_type)
                 module_url = resolve_seajs_module(config_source, module); report["module_url"] = module_url
+                error_url = module_url
                 module_bytes, module_type = fetcher.fetch_controlled(module_url, "module", max_bytes=1024 * 1024)
                 module_source = module_bytes.decode("utf-8", "strict"); validate_javascript(module_source, module_type)
                 operation = parse_listing_module(module_source)
@@ -733,6 +760,7 @@ def main(argv=None):
                                 if operation["page_size_parameter"] == key: params[key] = min(args.max_products, HARD_MAX_PRODUCTS)
                                 else: raise DiscoveryError("Variable pública no asignable de forma cerrada")
                             else: params[key] = value
+                        error_url = operation["endpoint"]
                         payload, content_type = fetcher.fetch_controlled(operation["endpoint"], "endpoint", method=operation["method"],
                             parameters=params, body_format=operation["body_format"])
                         pages_requested += 1; family_pages += 1
@@ -763,7 +791,7 @@ def main(argv=None):
                 urls = [row["url"] for row in deduplicate_discovery(discovery_rows)]
             except (DiscoveryError, UnicodeError, RuntimeError) as exc:
                 discovery_status = "dynamic_inspection_required"; report["stop_reason"] = str(exc)
-                errors.append({"stage": "dynamic_discovery", "url": start, "message": str(exc)})
+                errors.append({"stage": "dynamic_discovery", "url": error_url, "message": str(exc)})
                 urls = []; exit_code = 3
         elif args.start_url:
             start = canonical_url(args.start_url)
