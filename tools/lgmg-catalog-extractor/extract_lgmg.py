@@ -20,13 +20,18 @@ import unicodedata
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.1.1"
+TOOL_VERSION = "1.2.0"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
+HARD_MAX_PRODUCTS = 250
+HARD_MAX_PAGES = 50
+SEAJ_CONFIG_URL = "https://www.lgmglifts.com/es/resources/web/js/seajs.config.js"
+EXPECTED_MODULE = "js/pro_list"
+RESOURCE_PREFIX = "/es/resources/"
 MAX_HTML_BYTES = 5 * 1024 * 1024
 MAX_ASSET_BYTES = 15 * 1024 * 1024
 DETAIL_RE = re.compile(r"^/es/product/pro-detail-[0-9A-Za-z_-]+\.htm$")
@@ -127,6 +132,7 @@ class CatalogueParser(HTMLParser):
         self.links, self.images, self.datasheets, self.rows = [], [], [], []
         self.source_page_title = self.source_product_title = self.canonical = ""
         self.breadcrumb_span = self.source_category = ""
+        self.scripts, self.families = [], []
 
     def handle_starttag(self, tag, attrs):
         attrs = [(key.lower(), value or "") for key, value in attrs]
@@ -147,6 +153,7 @@ class CatalogueParser(HTMLParser):
 
     def _extract(self):
         nodes = list(self.root.descendants())
+        self.scripts = [n.text for n in nodes if n.tag == "script" and n.text]
         title = next((n for n in nodes if n.tag == "title"), None)
         self.source_page_title = title.text if title else ""
         canonical = next((n for n in nodes if n.tag == "link" and "canonical" in n.attrs.get("rel", "").lower()), None)
@@ -167,6 +174,12 @@ class CatalogueParser(HTMLParser):
             for anchor in listing.descendants("a"):
                 target = urljoin(self.base_url, anchor.attrs.get("href", ""))
                 if DETAIL_RE.fullmatch(urlsplit(target).path): self.links.append(target)
+            for node in listing.descendants():
+                family_id = next((node.attrs.get(key) for key in ("data-channel", "data-category", "data-id", "value") if node.attrs.get(key)), "")
+                if family_id and re.fullmatch(r"[0-9A-Za-z_-]+", family_id) and node.text:
+                    marker = (family_id, node.text)
+                    if marker not in {(f["id"], f["name"]) for f in self.families}:
+                        self.families.append({"id": family_id, "name": node.text})
         allowed_ext = {"jpg", "jpeg", "png", "gif", "webp"}
         for img in (n for n in nodes if n.tag == "img"):
             gallery = (img.has_ancestor({"ul_box"}) and img.has_ancestor({"right_r"}) and img.has_ancestor({"pro_detail01"})) or (img.has_ancestor({"right_b", "imgZoom"}) and img.has_ancestor({"pro_detail02"}))
@@ -260,13 +273,19 @@ def parse_specs(rows: list[list[str]]) -> list[dict]:
 
 def classify_electric(category: str | None, specs: list[dict], title: str = "") -> tuple[bool | None, list[str]]:
     evidence = []
+    non_electric = []
     for spec in specs:
         combined = f"{spec['name_original']}: {spec['value_metric']}"
         if spec["normalized_key"] == "power_source" or re.search(r"\b(bater[ií]a|battery|electric(?:al)?|eléctric[oa]|\d+\s*v)\b", combined, re.I):
-            evidence.append(combined)
-    if re.search(r"\b(electric(?:al)?|eléctric[oa])\b", " ".join((category or "", title)), re.I):
-        evidence.insert(0, f"Categoría/título: {clean_text(' '.join((category or '', title)))}")
-    return (True, dedupe(evidence)) if evidence else (None, [])
+            if re.search(r"\b(di[eé]sel|diesel|gasolina|petrol|combusti(?:ble|ón))\b", combined, re.I): non_electric.append(combined)
+            else: evidence.append(combined)
+    # A family label is provenance, never product-level electrical evidence.
+    if re.search(r"\b(electric(?:al)?|eléctric[oa])\b", title, re.I):
+        evidence.insert(0, f"Título de ficha: {clean_text(title)}")
+    if evidence and non_electric: return None, dedupe(evidence + non_electric)
+    if evidence: return True, dedupe(evidence)
+    if non_electric: return False, dedupe(non_electric)
+    return None, []
 
 
 NAME_TEMPLATES = {
@@ -308,6 +327,186 @@ def parse_product(document: str, source_url: str) -> dict:
             "jem_nexus_draft": {"name": name, "brand": "LGMG", "model": model,
                 "product_type": "machinery", "condition": "new", "stock_status": "on_request",
                 "show_price": False, "published": False, "featured": False, "price": None}}
+
+
+class DiscoveryError(ValueError):
+    """A fail-closed dynamic inspection error safe to include in diagnostics."""
+
+
+def _strict_url(url: str, kind: str) -> str:
+    """Validate one narrowly scoped public LGMG resource."""
+    parts = urlsplit(url)
+    if (parts.scheme, (parts.hostname or "").lower(), parts.port) not in (("https", ALLOWED_HOST, None), ("https", ALLOWED_HOST, 443)):
+        raise DiscoveryError(f"{kind}: se exige HTTPS, host exacto y puerto estándar")
+    if parts.username or parts.password or parts.query or parts.fragment or ".." in parts.path.split("/"):
+        raise DiscoveryError(f"{kind}: credenciales, query, fragment o traversal rechazado")
+    rules = {
+        "listing": lambda p: p == "/es/product/pro-list-377.htm",
+        "config": lambda p: p == urlsplit(SEAJ_CONFIG_URL).path,
+        "module": lambda p: p.startswith(RESOURCE_PREFIX) and p.endswith("/js/pro_list.js"),
+        "detail": lambda p: bool(DETAIL_RE.fullmatch(p)),
+        "endpoint": lambda p: p.startswith("/es/") and bool(re.search(r"(?:list|load|search|product)", p, re.I)),
+    }
+    if kind not in rules or not rules[kind](parts.path):
+        raise DiscoveryError(f"Ruta {kind} fuera del alcance permitido")
+    return urlunsplit(("https", ALLOWED_HOST, parts.path, "", ""))
+
+
+def detect_seajs_module(document: str) -> str:
+    matches = re.findall(r"\bseajs\s*\.\s*use\s*\(\s*(['\"])([^'\"]+)\1\s*\)", document)
+    modules = dedupe([value for _, value in matches])
+    if modules != [EXPECTED_MODULE]:
+        raise DiscoveryError("La declaración seajs.use es ausente, ambigua o no corresponde a js/pro_list")
+    return modules[0]
+
+
+def validate_javascript(document: str, content_type: str = "application/javascript") -> None:
+    if "javascript" not in content_type.casefold() and "text/plain" not in content_type.casefold():
+        raise DiscoveryError("Content-Type incompatible con JavaScript")
+    if document.lstrip().casefold().startswith(("<html", "<!doctype", "<body")):
+        raise DiscoveryError("El supuesto JavaScript es una página HTML")
+
+
+def _literal_object(source: str, name: str) -> dict[str, str]:
+    match = re.search(rf"\b{name}\s*:\s*\{{([^{{}}]*)\}}", source, re.S)
+    if not match:
+        return {}
+    pairs = re.findall(r"(?:^|,)\s*(['\"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(['\"])([^'\"]*)\3\s*(?=,|$)", match.group(1))
+    residue = re.sub(r"(?:^|,)\s*(['\"]?)[A-Za-z_$][\w$]*\1\s*:\s*(['\"])[^'\"]*\2\s*(?=,|$)", "", match.group(1)).strip(" ,\n\t")
+    if residue:
+        raise DiscoveryError(f"Configuración SeaJS {name} no es completamente literal")
+    return {key: value for _, key, _, value in pairs}
+
+
+def resolve_seajs_module(config_source: str, module: str = EXPECTED_MODULE) -> str:
+    validate_javascript(config_source)
+    config = re.search(r"\bseajs\s*\.\s*config\s*\(", config_source, re.S)
+    if not config:
+        raise DiscoveryError("No se encontró una configuración SeaJS literal")
+    body = config_source[config.end():]
+    base_match = re.search(r"\bbase\s*:\s*(['\"])([^'\"]+)\1", body)
+    base = base_match.group(2) if base_match else RESOURCE_PREFIX
+    paths, alias = _literal_object(body, "paths"), _literal_object(body, "alias")
+    resolved = alias.get(module, module)
+    first, slash, rest = resolved.partition("/")
+    if first in paths:
+        resolved = paths[first].rstrip("/") + ("/" + rest if slash else "")
+    if not resolved.endswith(".js"):
+        resolved += ".js"
+    absolute = urljoin(urljoin("https://www.lgmglifts.com/es/", base.rstrip("/") + "/"), resolved)
+    return _strict_url(absolute, "module")
+
+
+def _parse_data_literals(source: str) -> tuple[dict[str, object], set[str]]:
+    match = re.search(r"\bdata\s*:\s*\{([^{}]*)\}", source, re.S)
+    if not match:
+        return {}, set()
+    values, dynamic = {}, set()
+    for item in match.group(1).split(","):
+        pair = item.split(":", 1)
+        if len(pair) != 2:
+            raise DiscoveryError("Parámetros de solicitud ambiguos")
+        key, raw = pair[0].strip().strip("'\""), pair[1].strip()
+        if not re.fullmatch(r"[A-Za-z_$][\w$]*", key):
+            raise DiscoveryError("Clave de parámetro no permitida")
+        literal = re.fullmatch(r"(['\"])(.*?)\1|(-?\d+)|\b(true|false|null)\b", raw, re.S)
+        if literal:
+            value = literal.group(2) if literal.group(1) else (int(literal.group(3)) if literal.group(3) else {"true": True, "false": False, "null": None}[literal.group(4)])
+            values[key] = value
+        elif re.fullmatch(r"(?:category|channel|family|page|pageSize|size|limit|cursor)(?:Id)?", raw, re.I):
+            values[key] = "{" + raw + "}"; dynamic.add(raw)
+        else:
+            raise DiscoveryError("Parámetro dinámico no interpretable de forma segura")
+    return values, dynamic
+
+
+def _ajax_objects(source: str) -> list[str]:
+    results = []
+    for match in re.finditer(r"(?:\$\s*\.\s*ajax|\bajax)\s*\(\s*\{", source):
+        start = match.end() - 1; depth = 0; quote = None; escaped = False
+        for index in range(start, len(source)):
+            char = source[index]
+            if quote:
+                if escaped: escaped = False
+                elif char == "\\": escaped = True
+                elif char == quote: quote = None
+                continue
+            if char in "'\"": quote = char
+            elif char == "{": depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    if not re.match(r"\s*\)", source[index + 1:]):
+                        raise DiscoveryError("Cierre AJAX ambiguo")
+                    results.append(source[start + 1:index]); break
+        else: raise DiscoveryError("Objeto AJAX incompleto")
+    return results
+
+
+def parse_listing_module(source: str) -> dict:
+    validate_javascript(source)
+    if re.search(r"\b(?:WebSocket|jsonp|csrf|token|Authorization|Cookie)\b", source, re.I):
+        raise DiscoveryError("El módulo requiere un protocolo, token o credencial no admitido")
+    calls = _ajax_objects(source)
+    if len(calls) != 1:
+        raise DiscoveryError("No existe exactamente una operación AJAX de listado")
+    block = calls[0]
+    urls = re.findall(r"\burl\s*:\s*(['\"])([^'\"]+)\1", block)
+    methods = re.findall(r"\b(?:type|method)\s*:\s*(['\"])(GET|POST)\1", block, re.I)
+    if len(urls) != 1 or len(methods) != 1:
+        raise DiscoveryError("Endpoint o método ausente/ambiguo")
+    endpoint = _strict_url(urljoin("https://www.lgmglifts.com/es/", urls[0][1]), "endpoint")
+    params, variables = _parse_data_literals(block)
+    names = {key.casefold(): key for key in params}
+    category = next((names[k] for k in names if re.search(r"category|channel|family", k)), None)
+    page = next((names[k] for k in names if re.fullmatch(r"(?:page|pageindex|pageno|cursor)", k)), None)
+    size = next((names[k] for k in names if re.search(r"pagesize|size|limit", k)), None)
+    if not category or not page:
+        raise DiscoveryError("Los parámetros de familia y paginación no son inequívocos")
+    method = methods[0][1].upper()
+    content_type = "application/json" if re.search(r"contentType\s*:\s*['\"]application/json", block, re.I) else "application/x-www-form-urlencoded"
+    return {"endpoint": endpoint, "method": method, "body_format": content_type, "parameters": params,
+            "category_parameter": category, "page_parameter": page, "page_size_parameter": size,
+            "initial_page": int(params.get(page, 1)) if isinstance(params.get(page, 1), int) else 1,
+            "response_container": (re.search(r"\b(?:dataType|responseField)\s*:\s*['\"]([\w.]+)", block, re.I) or [None, "html"])[1],
+            "termination": "empty_or_repeated_or_no_new", "variables": sorted(variables)}
+
+
+def parse_dynamic_response(payload: bytes | str, content_type: str, base_url: str, family: dict, page: int) -> tuple[list[dict], list[dict]]:
+    raw = payload.decode("utf-8", "strict") if isinstance(payload, bytes) else payload
+    if len(raw.encode("utf-8")) > MAX_HTML_BYTES or "\x00" in raw:
+        raise DiscoveryError("Respuesta dinámica binaria o demasiado grande")
+    if "json" in content_type.casefold():
+        try: value = json.loads(raw)
+        except json.JSONDecodeError as exc: raise DiscoveryError("JSON de listado inválido") from exc
+        if isinstance(value, dict):
+            html_value = next((value[k] for k in ("html", "content", "data") if isinstance(value.get(k), str)), None)
+            records = next((value[k] for k in ("items", "records", "products", "data") if isinstance(value.get(k), list)), [])
+            candidates = re.findall(r"href\s*=\s*['\"]([^'\"]+)", html_value or "", re.I)
+            for record in records:
+                if isinstance(record, dict):
+                    candidate = next((record.get(k) for k in ("url", "href", "link", "detailUrl") if isinstance(record.get(k), str)), None)
+                    if candidate: candidates.append(candidate)
+        else: raise DiscoveryError("El JSON no contiene un listado estructurado")
+    elif "html" in content_type.casefold() or "text/plain" in content_type.casefold():
+        candidates = re.findall(r"href\s*=\s*['\"]([^'\"]+)", raw, re.I)
+    else: raise DiscoveryError("Content-Type de listado no admitido")
+    accepted, rejected = [], []
+    for candidate in candidates:
+        try: target = _strict_url(urljoin(base_url, candidate), "detail")
+        except DiscoveryError as exc:
+            rejected.append({"url": clean_text(candidate)[:200], "reason": str(exc)}); continue
+        accepted.append({"family_id": family["id"], "family": family["name"], "url": target, "page": page})
+    return accepted, rejected
+
+
+def deduplicate_discovery(rows: list[dict]) -> list[dict]:
+    first = {}
+    for order, row in enumerate(rows, 1):
+        row["order"] = order; row["duplicate"] = row["url"] in first
+        row["status"] = "duplicate" if row["duplicate"] else "accepted"
+        first.setdefault(row["url"], row)
+    return list(first.values())
 
 
 class SafeRedirectHandler(HTTPRedirectHandler):
@@ -358,6 +557,38 @@ class Fetcher:
             except URLError as exc: error = exc; time.sleep(min(4.0, 2.0 ** attempt))
         raise RuntimeError(f"Solicitud fallida para {url}: {error}")
 
+    def fetch_controlled(self, url: str, kind: str, *, method="GET", parameters=None,
+                         body_format="application/x-www-form-urlencoded", max_bytes=MAX_HTML_BYTES) -> tuple[bytes, str]:
+        url = _strict_url(url, kind)
+        parameters = parameters or {}
+        if method not in ("GET", "POST"):
+            raise DiscoveryError("Método de listado no permitido")
+        data = None
+        if method == "GET" and parameters:
+            url += "?" + urlencode(parameters)
+        elif method == "POST":
+            if body_format == "application/json": data = json.dumps(parameters, separators=(",", ":")).encode()
+            elif body_format == "application/x-www-form-urlencoded": data = urlencode(parameters).encode()
+            else: raise DiscoveryError("Formato POST no permitido")
+        cache_key = f"{method}\n{url}\n{data!r}"
+        cache = self.cache_dir / (hashlib.sha256(cache_key.encode()).hexdigest() + ".bin")
+        meta = cache.with_suffix(".json")
+        if cache.exists() and meta.exists() and not self.refresh:
+            return cache.read_bytes(), json.loads(meta.read_text(encoding="utf-8"))["content_type"]
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        time.sleep(max(0, self.delay - (time.monotonic() - self.last_request)))
+        headers = {"User-Agent": self.user_agent, "Accept": "application/json,text/html,application/javascript;q=0.9"}
+        if data is not None: headers["Content-Type"] = body_format
+        request = Request(url, data=data, headers=headers, method=method)
+        handler = SafeRedirectHandler(); self.last_request = time.monotonic()
+        with build_opener(handler).open(request, timeout=self.timeout) as response:
+            _strict_url(response.url.split("?", 1)[0], kind)
+            content = response.read(max_bytes + 1)
+            if len(content) > max_bytes: raise DiscoveryError("Recurso controlado excede el tamaño máximo")
+            content_type = response.headers.get_content_type()
+            atomic_write(cache, content); write_json(meta, {"content_type": content_type})
+            return content, content_type
+
 
 def atomic_write(path: Path, data: bytes):
     if path.exists() and path.is_symlink(): raise ValueError(f"No se escribe sobre symlink: {path}")
@@ -393,6 +624,9 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Extractor seguro y revisable del catálogo público LGMG")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--start-url"); source.add_argument("--seed-file")
+    parser.add_argument("--discovery-mode", choices=("static", "dynamic"), default="static")
+    parser.add_argument("--discovery-only", action="store_true")
+    parser.add_argument("--inventory-all", action="store_true")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-products", type=int, default=5)
     parser.add_argument("--electric-only", action="store_true")
@@ -409,7 +643,11 @@ def build_parser():
 def main(argv=None):
     parser = build_parser(); args = parser.parse_args(argv)
     try:
-        if not 1 <= args.max_products <= MAX_PRODUCTS: raise ValueError(f"--max-products debe estar entre 1 y {MAX_PRODUCTS}")
+        maximum = HARD_MAX_PRODUCTS if args.inventory_all else MAX_PRODUCTS
+        if not 1 <= args.max_products <= maximum: raise ValueError(f"--max-products debe estar entre 1 y {maximum}")
+        if args.inventory_all and args.discovery_mode != "dynamic": raise ValueError("--inventory-all exige --discovery-mode dynamic")
+        if args.discovery_mode == "dynamic" and not args.start_url: raise ValueError("El modo dinámico exige --start-url")
+        if args.discovery_only and (args.download_images or args.download_datasheets): raise ValueError("--discovery-only no admite descargas")
         if args.delay_seconds < 1.0: raise ValueError("--delay-seconds no puede ser inferior a 1.0")
         if not 5 <= args.timeout_seconds <= 60: raise ValueError("--timeout-seconds debe estar entre 5 y 60")
         validate_download_flags(args)
@@ -417,7 +655,7 @@ def main(argv=None):
         output = validate_output_dir(args.output_dir, repo_root); output.mkdir(parents=True, exist_ok=True)
         (output / "cache").mkdir(exist_ok=True); (output / "images").mkdir(exist_ok=True)
         fetcher = Fetcher(output / "cache", args.delay_seconds, args.timeout_seconds, args.user_agent, args.refresh_cache)
-        errors = []; skipped = 0
+        errors = []; skipped = 0; uncertain = 0; pages_requested = 0
         robots_url = "https://www.lgmglifts.com/robots.txt"
         try:
             robots_data = fetcher.fetch(robots_url, page=False, max_bytes=512 * 1024, allow_404=True).decode("utf-8", "replace")
@@ -431,21 +669,103 @@ def main(argv=None):
         except RuntimeError as exc:
             raise ValueError(f"No fue posible verificar robots.txt; ejecución de red detenida: {exc}") from exc
         discovery_status = "seed_file"
-        if args.start_url:
+        report = {"start_url": None, "mode": args.discovery_mode, "seajs_module": None,
+            "config_url": None, "module_url": None, "endpoint": None, "method": None,
+            "parameters": {}, "response_format": None, "families": [], "pages_requested": 0,
+            "details_found": 0, "details_unique": 0, "rejected_links": [], "status": discovery_status,
+            "warnings": [], "stop_reason": None}
+        discovery_rows = []; family_rows = []
+        exit_code = 0
+        if args.start_url and args.discovery_mode == "dynamic":
+            start = _strict_url(args.start_url, "listing"); report["start_url"] = start
+            try:
+                index_bytes, index_type = fetcher.fetch_controlled(start, "listing")
+                if "html" not in index_type: raise DiscoveryError("El listado inicial no es HTML")
+                index = index_bytes.decode("utf-8", "strict")
+                listing = CatalogueParser(start); listing.feed(index)
+                module = detect_seajs_module(index); report["seajs_module"] = module
+                report["config_url"] = SEAJ_CONFIG_URL
+                config_bytes, config_type = fetcher.fetch_controlled(SEAJ_CONFIG_URL, "config", max_bytes=512 * 1024)
+                config_source = config_bytes.decode("utf-8", "strict"); validate_javascript(config_source, config_type)
+                module_url = resolve_seajs_module(config_source, module); report["module_url"] = module_url
+                module_bytes, module_type = fetcher.fetch_controlled(module_url, "module", max_bytes=1024 * 1024)
+                module_source = module_bytes.decode("utf-8", "strict"); validate_javascript(module_source, module_type)
+                operation = parse_listing_module(module_source)
+                report.update({"endpoint": operation["endpoint"], "method": operation["method"],
+                    "parameters": operation["parameters"], "response_format": operation["response_container"]})
+                families = listing.families
+                if not families: raise DiscoveryError("No se identificaron familias públicas estructuradas")
+                seen_responses = set(); unique_urls = set(); stop_all = False
+                for family_order, family in enumerate(families, 1):
+                    found_before = len(discovery_rows); unique_before = len(unique_urls); family_pages = 0; family_seen = set()
+                    family_status = "complete"; warning = ""
+                    for offset in range(HARD_MAX_PAGES):
+                        page = operation["initial_page"] + offset
+                        params = {}
+                        for key, value in operation["parameters"].items():
+                            if key == operation["category_parameter"]: params[key] = family["id"]
+                            elif key == operation["page_parameter"]: params[key] = page
+                            elif isinstance(value, str) and value.startswith("{"):
+                                if operation["page_size_parameter"] == key: params[key] = min(args.max_products, HARD_MAX_PRODUCTS)
+                                else: raise DiscoveryError("Variable pública no asignable de forma cerrada")
+                            else: params[key] = value
+                        payload, content_type = fetcher.fetch_controlled(operation["endpoint"], "endpoint", method=operation["method"],
+                            parameters=params, body_format=operation["body_format"])
+                        pages_requested += 1; family_pages += 1
+                        digest = hashlib.sha256(payload).hexdigest()
+                        if digest in seen_responses: family_status = "stopped_repeated_response"; break
+                        seen_responses.add(digest)
+                        rows, rejected = parse_dynamic_response(payload, content_type, start, family, page)
+                        report["rejected_links"].extend(rejected)
+                        if not rows: family_status = "complete_empty_page"; break
+                        page_urls = tuple(row["url"] for row in rows)
+                        if page_urls in family_seen: family_status = "stopped_repeated_page"; break
+                        family_seen.add(page_urls)
+                        new_count = 0
+                        for row in rows:
+                            row["endpoint"] = operation["endpoint"]; row["rejection_reason"] = ""
+                            discovery_rows.append(row)
+                            if row["url"] not in unique_urls: unique_urls.add(row["url"]); new_count += 1
+                        if new_count == 0: family_status = "stopped_no_new_details"; break
+                        if len(unique_urls) >= args.max_products:
+                            family_status = "stopped_by_limit"; discovery_status = "stopped_by_limit"; stop_all = True; break
+                    else: family_status = "stopped_by_page_limit"; warning = "Se alcanzó el máximo duro de 50 páginas"
+                    family_rows.append({"order": family_order, "id": family["id"], "name": family["name"],
+                        "found": len(discovery_rows) - found_before, "unique": len(unique_urls) - unique_before,
+                        "pages": family_pages, "status": family_status, "warnings": warning, "source_url": start,
+                        "method": "listing_html"})
+                    if stop_all: break
+                if discovery_status != "stopped_by_limit": discovery_status = "dynamic_listing"
+                urls = [row["url"] for row in deduplicate_discovery(discovery_rows)]
+            except (DiscoveryError, UnicodeError, RuntimeError) as exc:
+                discovery_status = "dynamic_inspection_required"; report["stop_reason"] = str(exc)
+                errors.append({"stage": "dynamic_discovery", "url": start, "message": str(exc)})
+                urls = []; exit_code = 3
+        elif args.start_url:
             start = canonical_url(args.start_url)
+            report["start_url"] = start
             index = fetcher.fetch(start).decode("utf-8", "replace")
             discovery = CatalogueParser(start); discovery.feed(index)
             urls = dedupe([canonical_url(url) for url in discovery.links])
-            discovery_status = "static_listing" if urls else "dynamic_listing_requires_seed"
-            if not urls: errors.append({"stage": "discovery", "url": start, "message": "El listado es dinámico y no contiene productos estáticos confiables. Use --seed-file."})
+            discovery_status = "static_listing" if urls else "dynamic_inspection_required"
+            discovery_rows = [{"family_id": "", "family": "", "url": url, "page": 1, "endpoint": start, "rejection_reason": ""} for url in urls]
+            if not urls:
+                errors.append({"stage": "discovery", "url": start, "message": "El listado dinámico requiere --discovery-mode dynamic o --seed-file."}); exit_code = 2
         else:
             start = None; seed = Path(args.seed_file).resolve(strict=True)
             urls = dedupe([canonical_url(line.strip()) for line in seed.read_text(encoding="utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")])
-        discovered = len(urls); urls = urls[:args.max_products]; products = []
-        for url in urls:
+            discovery_rows = [{"family_id": "", "family": "", "url": url, "page": 1, "endpoint": "seed_file", "rejection_reason": ""} for url in urls]
+        discovery_rows = deduplicate_discovery(discovery_rows)
+        report.update({"families": family_rows, "pages_requested": pages_requested,
+            "details_found": len(discovery_rows), "details_unique": len({r["url"] for r in discovery_rows}), "status": discovery_status})
+        if not report["stop_reason"] and discovery_status == "stopped_by_limit": report["stop_reason"] = "maximum_products"
+        discovered = len(urls); urls = urls[:args.max_products]; products = []; reviewed_products = []
+        for url in ([] if args.discovery_only else urls):
             try:
                 product = parse_product(fetcher.fetch(url).decode("utf-8", "replace"), url)
-                if args.electric_only and product["is_electric"] is not True: skipped += 1; continue
+                reviewed_products.append(product)
+                if args.electric_only and product["is_electric"] is False: skipped += 1; continue
+                if args.electric_only and product["is_electric"] is None: uncertain += 1; continue
                 products.append(product)
             except (RuntimeError, ValueError) as exc: errors.append({"stage": "detail", "url": url, "message": str(exc)})
         # Asset download is deliberately explicit; datasheets remain metadata-only in v1.
@@ -469,7 +789,9 @@ def main(argv=None):
                         if target.exists(): raise ValueError("El archivo de imagen ya existe")
                         atomic_write(target, data); downloaded += 1; hashes.append({"path": str(target.relative_to(output)), "sha256": digest})
                     except (RuntimeError, ValueError) as exc: errors.append({"stage": "image", "url": image["url"], "message": str(exc)})
-        write_json(output / "catalog.json", products); write_json(output / "errors.json", errors)
+        write_json(output / "catalog.json", products); write_json(output / "errors.json", errors); write_json(output / "discovery.json", report)
+        write_csv(output / "discovery.csv", "order family family_id url page endpoint status duplicate rejection_reason".split(), discovery_rows)
+        write_csv(output / "families.csv", "order id name found unique pages status warnings".split(), family_rows)
         flat = []
         for p in products:
             sm = {s["normalized_key"]: s["value_metric"] for s in p["specifications"] if s["normalized_key"]}
@@ -481,16 +803,21 @@ def main(argv=None):
         write_csv(output / "catalog.csv", catalog_cols, flat)
         review = [{"metric_model": p["metric_model"], "imperial_model": p["imperial_model"], "source_url": p["source_url"], "needs_review": p["needs_review"],
                    "warnings": " | ".join(p["warnings"]), "missing_fields": " | ".join(k for k in ("metric_model", "source_category") if not p.get(k)),
-                   "translation_issues": " | ".join(p["translation_issues"]), "suggested_action": "Revisar evidencia oficial antes de importar"} for p in products]
+                   "translation_issues": " | ".join(p["translation_issues"]), "suggested_action": "Revisar evidencia oficial antes de importar"} for p in reviewed_products if p["needs_review"] or p["is_electric"] is None]
         write_csv(output / "review.csv", "metric_model imperial_model source_url needs_review warnings missing_fields translation_issues suggested_action".split(), review)
-        manifest = {"tool": "lgmg-catalog-extractor", "version": TOOL_VERSION, "start_url": start, "discovery_status": discovery_status, "user_agent": args.user_agent,
+        manifest = {"tool": "lgmg-catalog-extractor", "version": TOOL_VERSION, "start_url": start, "discovery_mode": args.discovery_mode,
+            "discovery_status": discovery_status, "discovery_module": report["module_url"], "listing_endpoint": report["endpoint"], "listing_method": report["method"],
+            "families_discovered": len(family_rows), "pages_requested": pages_requested, "detail_urls_discovered": len(discovery_rows),
+            "detail_urls_unique": len({r["url"] for r in discovery_rows}), "user_agent": args.user_agent,
             "extracted_at_utc": datetime.now(timezone.utc).isoformat(), "requested_count": args.max_products, "discovered_count": discovered,
             "processed_count": len(products), "skipped_count": skipped, "failed_pages": [e for e in errors if e.get("stage") == "detail"],
             "robots_status": robots_status, "delay_seconds": args.delay_seconds, "timeout_seconds": args.timeout_seconds,
-            "images_downloaded": downloaded, "hashes": hashes, "jem_nexus_called": False, "content_published": False}
+            "electric_confirmed": sum(p["is_electric"] is True for p in reviewed_products), "non_electric_skipped": skipped,
+            "classification_uncertain": uncertain, "needs_review_count": len(review), "images_downloaded": downloaded,
+            "datasheets_downloaded": 0, "hashes": hashes, "jem_nexus_called": False, "content_published": False}
         write_json(output / "manifest.json", manifest)
         print(f"Procesados: {len(products)}; omitidos: {skipped}; errores: {len(errors)}; salida: {output}")
-        return 2 if discovery_status == "dynamic_listing_requires_seed" else 0
+        return exit_code
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
 
