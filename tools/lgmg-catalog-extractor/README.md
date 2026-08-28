@@ -171,3 +171,73 @@ py -3 ".\tools\lgmg-catalog-extractor\download_jem_review_media.py" `
 ```
 
 Para reanudar esa misma salida parcial, repita el comando y agregue `--resume`.
+
+## Plan offline de importación LGMG
+
+`prepare_jem_import_plan.py` 1.0.0 combina el `review-package` validado con el
+`media-package` completo para crear un **plan** auditable. El plan no es el
+preflight: este último resolverá IDs y compatibilidad contra la API local en una
+etapa posterior. Tampoco es una importación y no aplica, sube ni publica nada.
+Solo usa la biblioteca estándar y no tiene opciones de red, autenticación,
+`apply` o `publish`.
+
+La entrada de revisión puede ser una carpeta `review-package`, su carpeta de
+sesión con exactamente un paquete o un ZIP seguro leído directamente con
+`ZipFile`, sin extracción. Los medios deben proporcionarse como carpeta
+`media-package` o como su carpeta de sesión; no se admite un ZIP de medios. El
+plan conserva rutas relativas, tamaños, MIME, URLs y SHA-256 validados, pero no
+copia ni renombra imágenes o PDF.
+
+Las decisiones confirmadas fijan la raíz **Maquinarias**, la marca **LGMG**, la
+condición `new`, el stock `on_request`, precio y moneda ausentes, precio oculto,
+producto no publicado ni destacado y todos los servicios incluidos en `false`.
+Cada fila queda `eligible_for_local_preflight=true` y
+`ready_for_import=false`. Se conservan los nombres sugeridos, modelos métricos,
+equivalencias imperiales, aliases, números romanos Unicode, evidencia y todas
+las especificaciones en orden; no se crean slugs, IDs, SKU, años, capacidades,
+fuentes de energía ni descripciones sin evidencia inequívoca.
+
+El mapeo cerrado de categorías es:
+
+| Categoría fuente | Subcategoría objetivo |
+| --- | --- |
+| `Elevadores de Tijera` | `Elevadores tipo tijera eléctricos` |
+| `Elevador Eléctrico RT de Tijera` | `Elevadores tipo tijera todoterreno` |
+| `Elevadores de Brazo Articulado` | `Elevadores tipo brazo articulado` |
+| `Elevadores de Brazo Telescópico` | `Elevadores tipo brazo telescópico` |
+| `Elevador Mástil Vertical` | `Elevadores tipo mástil vertical` |
+| `Elevador de Tijera Sobre Orugas` | `Elevadores tipo tijera sobre orugas` |
+| `Manipuladores Telescópicos` | `Manipuladores telescópicos` |
+
+El preflight debe intentar reutilizar y renombrar `Elevador tipo tijera
+electrico` como `Elevadores tipo tijera eléctricos` antes de considerar una
+creación. Otra acción manual pide revisar únicamente el producto JLG usado como
+ejemplo mediante el panel de vendedor; no selecciona la marca ni otros productos
+JLG para eliminación. También debe resolver o crear la marca LGMG, sin inventar
+ID, logo o descripción. `AR24JE` y `T38JE` permanecen incluidos con ficha
+`missing_at_source`, advertencia no bloqueante y revisión humana. Los nueve
+productos de clasificación incierta permanecen excluidos.
+
+Se generan exactamente `import-products.csv`, `import-specifications.csv`,
+`import-images.csv`, `import-datasheets.csv`, `import-categories.csv`,
+`import-brand.csv`, `import-warnings.csv`, `manual-actions.csv`,
+`import-plan.json`, `import-summary.json`, `import-summary.txt`,
+`import-manifest.json` y `README-import-plan.txt`. Los CSV usan UTF-8 con BOM,
+CRLF y protección contra fórmulas. JSON y CSV preservan Unicode y orden fuente.
+El manifest registra hashes, tamaños, fingerprints, conteos derivados y las
+garantías de cero efectos externos.
+
+La herramienta rechaza paquetes, fingerprints, hashes, asociaciones, MIME,
+conteos y rutas incoherentes; traversal, rutas absolutas o con `\`, letras de
+unidad, duplicados normalizados, symlinks, tipos especiales, archivos físicos
+ausentes/no declarados y relaciones peligrosas entre entrada y salida. Construye
+primero en staging y solo promueve el conjunto completo. No modifica entradas.
+
+Ejemplo PowerShell, exclusivamente bajo la carpeta temporal controlada:
+
+```powershell
+py -3 ".\tools\lgmg-catalog-extractor\prepare_jem_import_plan.py" `
+  --review-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Review-Validation-AAAAMMDD-HHMMSS\review-package" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Media-Download-AAAAMMDD-HHMMSS\media-package" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Import-Plan-AAAAMMDD-HHMMSS"
+```
