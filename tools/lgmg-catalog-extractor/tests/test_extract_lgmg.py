@@ -123,8 +123,18 @@ class SafetyTests(unittest.TestCase):
 
 
 CONFIG = """seajs.config({base:'/es/resources/web/', paths:{js:'js'}, alias:{'js/pro_list':'js/pro_list'}});"""
-GET_MODULE = """$.ajax({url:'/es/product/load-list.htm', method:'GET', data:{channelId:category, page:page, pageSize:12}, dataType:'html'});"""
-POST_MODULE = """$.ajax({url:'/es/product/search-list.htm', type:'POST', contentType:'application/json', data:{familyId:family, pageNo:page, size:20}, dataType:'json'});"""
+PRODUCT_DATA = """flag:'pro', min1:data1, max1:data2, min2:data3, max2:data4,
+min3:data5, max3:data6, min4:data7, max4:data8, catId:catId, key:key,
+nowPage:nowPage, gmzhi:gmzhi"""
+OFFICIAL_MODULE = """
+var catId='', data1='', data2='', data3='', data4='', data5='', data6='', data7='', data8='', key='';
+var gmzhi=1, nowPage=1;
+function searchParam(){ $.ajax({url:seajs.root + '/ext/ajax_proList.jsp', type:'get', dataType:'html',
+  data:{flag:'param', catId:catId, gmzhi:gmzhi}}); }
+function searchPro(){ $.post(seajs.root + "/ext/ajax_proList.jsp", {%s}, function(data){
+  if(nowPage == 1){ $("#container").html(data); } else { $("#container").append(data); }
+}); }
+""" % PRODUCT_DATA
 
 
 class DynamicInspectionTests(unittest.TestCase):
@@ -345,22 +355,66 @@ class DynamicInspectionTests(unittest.TestCase):
     def test_html_cannot_pose_as_javascript(self):
         with self.assertRaises(lgmg.DiscoveryError): lgmg.validate_javascript("<!doctype html><title>Error</title>")
 
-    def test_literal_get_and_post_operations(self):
-        get = lgmg.parse_listing_module(GET_MODULE)
-        self.assertEqual((get["method"], get["category_parameter"], get["page_parameter"]), ("GET", "channelId", "page"))
-        post = lgmg.parse_listing_module(POST_MODULE)
-        self.assertEqual((post["method"], post["body_format"]), ("POST", "application/json"))
+    def test_official_parameter_ajax_is_excluded_and_product_post_selected(self):
+        operation = lgmg.parse_listing_module(OFFICIAL_MODULE)
+        self.assertEqual(operation["endpoint"], lgmg.LISTING_ENDPOINT_URL)
+        self.assertEqual((operation["method"], operation["body_format"], operation["response_container"]),
+                         ("POST", "application/x-www-form-urlencoded", "html"))
+        self.assertEqual((operation["category_parameter"], operation["page_parameter"]), ("catId", "nowPage"))
+        self.assertEqual((operation["initial_page"], operation["page_size_parameter"]), (1, None))
+        self.assertEqual(operation["parameters"]["flag"], "pro")
+        self.assertEqual(operation["parameters"]["gmzhi"], 1)
+        self.assertTrue(all(operation["parameters"][key] == "" for key in
+                            ("min1", "max1", "min2", "max2", "min3", "max3", "min4", "max4", "key")))
 
     def test_ambiguous_external_authenticated_and_unknown_methods_fail(self):
         cases = (
-            GET_MODULE + GET_MODULE,
-            GET_MODULE.replace("/es/product/load-list.htm", "https://evil.example/product/load-list.htm"),
-            GET_MODULE.replace("$.ajax", "token='secret';$.ajax"),
-            GET_MODULE.replace("method:'GET',", ""),
-            GET_MODULE.replace("category", "makeCategory()"),
+            OFFICIAL_MODULE + OFFICIAL_MODULE,
+            OFFICIAL_MODULE.replace("seajs.root + \"/ext/ajax_proList.jsp\"", "'https://evil.example/ext/ajax_proList.jsp'"),
+            OFFICIAL_MODULE.replace("/ext/ajax_proList.jsp\"", "/ext/alternate.jsp\""),
+            OFFICIAL_MODULE.replace("function searchParam", "token='secret'; function searchParam"),
+            OFFICIAL_MODULE.replace("$.post", "$.get"),
+            OFFICIAL_MODULE.replace("catId:catId", "catId:makeCategory()"),
         )
         for source in cases:
             with self.assertRaises(lgmg.DiscoveryError): lgmg.parse_listing_module(source)
+
+    def test_product_schema_is_closed_and_order_independent(self):
+        reordered = OFFICIAL_MODULE.replace("{%s}" % PRODUCT_DATA, "{%s}" % ",".join(reversed(PRODUCT_DATA.split(","))))
+        self.assertEqual(set(lgmg.parse_listing_module(reordered)["parameters"]),
+                         set(lgmg.parse_listing_module(OFFICIAL_MODULE)["parameters"]))
+        for source in (OFFICIAL_MODULE.replace("gmzhi:gmzhi", "gmzhi:gmzhi, extra:''"),
+                       OFFICIAL_MODULE.replace(", gmzhi:gmzhi", ""),
+                       OFFICIAL_MODULE.replace("key:key", "key:key, key:key")):
+            with self.assertRaises(lgmg.DiscoveryError): lgmg.parse_listing_module(source)
+
+    def test_post_comments_whitespace_and_balanced_callback_are_safe(self):
+        source = OFFICIAL_MODULE.replace("$.post(", "/* product */ $ . post (\n").replace(
+            "if(nowPage == 1)", "if(nowPage == 1 /* comma, brace } */)")
+        operation = lgmg.parse_listing_module(source)
+        self.assertEqual(operation["method"], "POST")
+        incomplete = OFFICIAL_MODULE.replace("}); }\n", " }\n")
+        with self.assertRaises(lgmg.DiscoveryError): lgmg.parse_listing_module(incomplete)
+
+    def test_dynamic_endpoint_and_initializers_are_rejected(self):
+        cases = (OFFICIAL_MODULE.replace('seajs.root + "/ext/ajax_proList.jsp"', "seajs.root + endpoint"),
+                 OFFICIAL_MODULE.replace("var gmzhi=1", "var gmzhi=getMetric()"),
+                 OFFICIAL_MODULE.replace("var gmzhi=1", "var gmzhi=`1`"),
+                 OFFICIAL_MODULE.replace("var gmzhi=1", "var gmzhi=localStorage.metric"))
+        for source in cases:
+            with self.assertRaises(lgmg.DiscoveryError): lgmg.parse_listing_module(source)
+
+    def test_family_extraction_requires_type_box_box_and_preserves_order(self):
+        names = (("377", "Elevadores de Tijera"), ("378", "Elevador Eléctrico RT de Tijera"),
+                 ("379", "Elevadores de Brazo Articulado"), ("380", "Elevadores de Brazo Telescópico"),
+                 ("735", "Elevador Mástil Vertical"), ("736", "Elevador de Tijera Sobre Orugas"),
+                 ("739", "Manipuladores Telescópicos"), ("999", "Familia futura"))
+        boxes = "".join(f"<div class='box box1' data-id='{key}'>{name}</div>" for key, name in names)
+        document = ("<section class='channel_content pro_list'><div class='left'><div data-id='1'>Métrico</div>"
+                    "<div data-id='2'>Imperial</div></div><div class='type_box'>" + boxes +
+                    "</div><div class='box' data-id='888'>Fuera</div></section><div class='type_box'><div class='box' data-id='777'>Global</div></div>")
+        parser = lgmg.CatalogueParser("https://www.lgmglifts.com/es/product/pro-list-377.htm"); parser.feed(document)
+        self.assertEqual([(family["id"], family["name"]) for family in parser.families], list(names))
 
     def test_html_json_html_and_structured_json_responses(self):
         family = {"id": "7", "name": "Tijeras"}; base = "https://www.lgmglifts.com/es/product/pro-list-377.htm"

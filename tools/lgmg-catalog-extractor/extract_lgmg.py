@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.2.2"
+TOOL_VERSION = "1.2.3"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -31,6 +31,7 @@ HARD_MAX_PRODUCTS = 250
 HARD_MAX_PAGES = 50
 SEAJ_CONFIG_URL = "https://www.lgmglifts.com/es/resources/web/seajs.config.js"
 SEAJ_DOMAIN = "https://www.lgmglifts.com/es"
+LISTING_ENDPOINT_URL = "https://www.lgmglifts.com/es/ext/ajax_proList.jsp"
 EXPECTED_MODULE = "js/pro_list"
 RESOURCE_PREFIX = "/es/resources/"
 MAX_HTML_BYTES = 5 * 1024 * 1024
@@ -176,7 +177,9 @@ class CatalogueParser(HTMLParser):
                 target = urljoin(self.base_url, anchor.attrs.get("href", ""))
                 if DETAIL_RE.fullmatch(urlsplit(target).path): self.links.append(target)
             for node in listing.descendants():
-                family_id = next((node.attrs.get(key) for key in ("data-channel", "data-category", "data-id", "value") if node.attrs.get(key)), "")
+                if "box" not in node.classes or not node.has_ancestor({"type_box"}):
+                    continue
+                family_id = node.attrs.get("data-id", "")
                 if family_id and re.fullmatch(r"[0-9A-Za-z_-]+", family_id) and node.text:
                     marker = (family_id, node.text)
                     if marker not in {(f["id"], f["name"]) for f in self.families}:
@@ -346,7 +349,7 @@ def _strict_url(url: str, kind: str) -> str:
         "config": lambda p: p == urlsplit(SEAJ_CONFIG_URL).path,
         "module": lambda p: p.startswith(RESOURCE_PREFIX) and p.endswith("/js/pro_list.js"),
         "detail": lambda p: bool(DETAIL_RE.fullmatch(p)),
-        "endpoint": lambda p: p.startswith("/es/") and bool(re.search(r"(?:list|load|search|product)", p, re.I)),
+        "endpoint": lambda p: p == urlsplit(LISTING_ENDPOINT_URL).path,
     }
     if kind not in rules or not rules[kind](parts.path):
         raise DiscoveryError(f"Ruta {kind} fuera del alcance permitido")
@@ -508,27 +511,54 @@ def resolve_seajs_module(config_source: str, module: str = EXPECTED_MODULE, seaj
     return _strict_url(absolute, "module")
 
 
-def _parse_data_literals(source: str) -> tuple[dict[str, object], set[str]]:
-    match = re.search(r"\bdata\s*:\s*\{([^{}]*)\}", source, re.S)
-    if not match:
-        return {}, set()
-    values, dynamic = {}, set()
-    for item in match.group(1).split(","):
+def _split_balanced(source: str, separator: str = ",") -> list[str]:
+    """Split a small JavaScript argument/object list without evaluating it."""
+    parts, start, stack, quote, escaped = [], 0, [], None, False
+    pairs = {")": "(", "}": "{", "]": "["}
+    for index, char in enumerate(source):
+        if quote:
+            if escaped: escaped = False
+            elif char == "\\": escaped = True
+            elif char == quote: quote = None
+            continue
+        if char in "'\"": quote = char
+        elif char in "({[": stack.append(char)
+        elif char in ")} ]".replace(" ", ""):
+            if not stack or stack.pop() != pairs[char]: raise DiscoveryError("Expresión JavaScript desbalanceada")
+        elif char == separator and not stack:
+            parts.append(source[start:index].strip()); start = index + 1
+    if quote or stack: raise DiscoveryError("Expresión JavaScript incompleta")
+    parts.append(source[start:].strip())
+    return parts
+
+
+def _literal_initializers(source: str) -> dict[str, object]:
+    values = {}
+    for declaration in re.finditer(r"\bvar\s+([^;]+);", source, re.S):
+        for item in _split_balanced(declaration.group(1)):
+            pair = item.split("=", 1)
+            if len(pair) != 2 or not re.fullmatch(r"[A-Za-z_$][\w$]*", pair[0].strip()): continue
+            name, raw = pair[0].strip(), pair[1].strip()
+            literal = re.fullmatch(r"(['\"])([^'\"\\]*)\1|(-?\d+)", raw)
+            if literal and name not in values:
+                values[name] = literal.group(2) if literal.group(1) else int(literal.group(3))
+    return values
+
+
+def _parse_data_object(body: str, initializers: dict[str, object]) -> tuple[dict[str, object], dict[str, str]]:
+    values, references = {}, {}
+    for item in _split_balanced(body):
         pair = item.split(":", 1)
-        if len(pair) != 2:
-            raise DiscoveryError("Parámetros de solicitud ambiguos")
+        if len(pair) != 2: raise DiscoveryError("Parámetros de solicitud ambiguos")
         key, raw = pair[0].strip().strip("'\""), pair[1].strip()
-        if not re.fullmatch(r"[A-Za-z_$][\w$]*", key):
-            raise DiscoveryError("Clave de parámetro no permitida")
-        literal = re.fullmatch(r"(['\"])(.*?)\1|(-?\d+)|\b(true|false|null)\b", raw, re.S)
-        if literal:
-            value = literal.group(2) if literal.group(1) else (int(literal.group(3)) if literal.group(3) else {"true": True, "false": False, "null": None}[literal.group(4)])
-            values[key] = value
-        elif re.fullmatch(r"(?:category|channel|family|page|pageSize|size|limit|cursor)(?:Id)?", raw, re.I):
-            values[key] = "{" + raw + "}"; dynamic.add(raw)
-        else:
-            raise DiscoveryError("Parámetro dinámico no interpretable de forma segura")
-    return values, dynamic
+        if not re.fullmatch(r"[A-Za-z_$][\w$]*", key) or key in values:
+            raise DiscoveryError("Clave de parámetro repetida o no permitida")
+        literal = re.fullmatch(r"(['\"])([^'\"\\]*)\1|(-?\d+)", raw)
+        if literal: values[key] = literal.group(2) if literal.group(1) else int(literal.group(3))
+        elif re.fullmatch(r"[A-Za-z_$][\w$]*", raw) and raw in initializers:
+            values[key], references[key] = initializers[raw], raw
+        else: raise DiscoveryError("Variable sin inicialización literal controlada")
+    return values, references
 
 
 def _ajax_objects(source: str) -> list[str]:
@@ -554,33 +584,74 @@ def _ajax_objects(source: str) -> list[str]:
     return results
 
 
+def _post_calls(source: str) -> list[tuple[str, str, str]]:
+    results = []
+    for match in re.finditer(r"\$\s*\.\s*post\s*\(", source):
+        start, depth, quote, escaped = match.end(), 1, None, False
+        for index in range(start, len(source)):
+            char = source[index]
+            if quote:
+                if escaped: escaped = False
+                elif char == "\\": escaped = True
+                elif char == quote: quote = None
+                continue
+            if char in "'\"": quote = char
+            elif char == "(": depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    args = _split_balanced(source[start:index])
+                    if len(args) != 3: raise DiscoveryError("$.post exige exactamente URL, datos y callback")
+                    callback = args[2].strip()
+                    if not re.fullmatch(r"function\s*\([^)]*\)\s*\{[\s\S]*\}", callback):
+                        raise DiscoveryError("Callback $.post incompleto o ambiguo")
+                    results.append((args[0], args[1], callback)); break
+        else: raise DiscoveryError("Llamada $.post incompleta")
+    return results
+
+
+def _endpoint_expression(raw: str) -> str:
+    match = re.fullmatch(r"\s*seajs\s*\.\s*root\s*\+\s*(['\"])/ext/ajax_proList\.jsp\1\s*", raw)
+    if not match: raise DiscoveryError("Expresión del endpoint oficial ausente o ambigua")
+    return _strict_url(SEAJ_DOMAIN + "/ext/ajax_proList.jsp", "endpoint")
+
+
 def parse_listing_module(source: str) -> dict:
     validate_javascript(source)
     if re.search(r"\b(?:WebSocket|jsonp|csrf|token|Authorization|Cookie)\b", source, re.I):
         raise DiscoveryError("El módulo requiere un protocolo, token o credencial no admitido")
-    calls = _ajax_objects(source)
-    if len(calls) != 1:
-        raise DiscoveryError("No existe exactamente una operación AJAX de listado")
-    block = calls[0]
-    urls = re.findall(r"\burl\s*:\s*(['\"])([^'\"]+)\1", block)
-    methods = re.findall(r"\b(?:type|method)\s*:\s*(['\"])(GET|POST)\1", block, re.I)
-    if len(urls) != 1 or len(methods) != 1:
-        raise DiscoveryError("Endpoint o método ausente/ambiguo")
-    endpoint = _strict_url(urljoin("https://www.lgmglifts.com/es/", urls[0][1]), "endpoint")
-    params, variables = _parse_data_literals(block)
-    names = {key.casefold(): key for key in params}
-    category = next((names[k] for k in names if re.search(r"category|channel|family", k)), None)
-    page = next((names[k] for k in names if re.fullmatch(r"(?:page|pageindex|pageno|cursor)", k)), None)
-    size = next((names[k] for k in names if re.search(r"pagesize|size|limit", k)), None)
-    if not category or not page:
-        raise DiscoveryError("Los parámetros de familia y paginación no son inequívocos")
-    method = methods[0][1].upper()
-    content_type = "application/json" if re.search(r"contentType\s*:\s*['\"]application/json", block, re.I) else "application/x-www-form-urlencoded"
-    return {"endpoint": endpoint, "method": method, "body_format": content_type, "parameters": params,
-            "category_parameter": category, "page_parameter": page, "page_size_parameter": size,
-            "initial_page": int(params.get(page, 1)) if isinstance(params.get(page, 1), int) else 1,
-            "response_container": (re.search(r"\b(?:dataType|responseField)\s*:\s*['\"]([\w.]+)", block, re.I) or [None, "html"])[1],
-            "termination": "empty_or_repeated_or_no_new", "variables": sorted(variables)}
+    clean = _strip_javascript_comments(source)
+    initializers = _literal_initializers(clean)
+    candidates = []
+    for block in _ajax_objects(clean):
+        data = re.search(r"\bdata\s*:\s*\{([^{}]*)\}", block, re.S)
+        if data:
+            params, refs = _parse_data_object(data.group(1), initializers)
+            candidates.append({"method": (re.search(r"\b(?:type|method)\s*:\s*(['\"])(GET|POST)\1", block, re.I) or [None, None, ""])[2].upper(), "params": params, "refs": refs})
+    for url_raw, data_raw, callback in _post_calls(clean):
+        object_match = re.fullmatch(r"\s*\{([\s\S]*)\}\s*", data_raw)
+        if not object_match: raise DiscoveryError("El segundo argumento de $.post debe ser un objeto literal")
+        params, refs = _parse_data_object(object_match.group(1), initializers)
+        candidates.append({"method": "POST", "endpoint": _endpoint_expression(url_raw), "params": params,
+                           "refs": refs, "html_callback": bool(re.search(r"\$\s*\(\s*['\"]#container['\"]\s*\)\s*\.\s*(?:html|append)\s*\(", callback))})
+    product_calls = [candidate for candidate in candidates if candidate["params"].get("flag") == "pro"]
+    expected = {"flag", "min1", "max1", "min2", "max2", "min3", "max3", "min4", "max4", "catId", "key", "nowPage", "gmzhi"}
+    valid = [candidate for candidate in product_calls if candidate["method"] == "POST" and candidate.get("endpoint") == LISTING_ENDPOINT_URL and candidate.get("html_callback") and set(candidate["params"]) == expected]
+    if len(valid) != 1: raise DiscoveryError("Operación flag:'pro' oficial ausente o ambigua")
+    operation = valid[0]; params, refs = operation["params"], operation["refs"]
+    constants = {"flag": "pro", "min1": "", "max1": "", "min2": "", "max2": "", "min3": "", "max3": "", "min4": "", "max4": "", "key": "", "gmzhi": 1}
+    expected_refs = {"min1": "data1", "max1": "data2", "min2": "data3", "max2": "data4",
+                     "min3": "data5", "max3": "data6", "min4": "data7", "max4": "data8",
+                     "catId": "catId", "key": "key", "nowPage": "nowPage", "gmzhi": "gmzhi"}
+    expected_initializers = {"catId": "", "data1": "", "data2": "", "data3": "", "data4": "", "data5": "",
+                             "data6": "", "data7": "", "data8": "", "key": "", "gmzhi": 1, "nowPage": 1}
+    if (any(params.get(key) != value for key, value in constants.items()) or refs != expected_refs
+            or any(initializers.get(key) != value for key, value in expected_initializers.items())):
+        raise DiscoveryError("Valores iniciales de la operación de productos no permitidos")
+    return {"endpoint": LISTING_ENDPOINT_URL, "method": "POST", "body_format": "application/x-www-form-urlencoded",
+            "parameters": params, "category_parameter": "catId", "page_parameter": "nowPage", "page_size_parameter": None,
+            "initial_page": 1, "response_container": "html", "termination": "empty_or_repeated_or_no_new",
+            "variables": sorted(set(refs.values()))}
 
 
 def parse_dynamic_response(payload: bytes | str, content_type: str, base_url: str, family: dict, page: int) -> tuple[list[dict], list[dict]]:
