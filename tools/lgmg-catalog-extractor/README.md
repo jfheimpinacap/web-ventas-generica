@@ -98,3 +98,51 @@ Compress-Archive -LiteralPath $OutputPath -DestinationPath "$OutputPath.zip"
 ```
 
 No se incluyen flags de descarga; tampoco existe ninguna opción de importación, publicación o llamada a JEM Nexus.
+
+## Preparación offline para revisión en JEM Nexus
+
+`prepare_jem_review.py` 1.0.0 transforma una extracción ya validada y ejecutada con
+`--electric-only` en un paquete de revisión humana. Es una herramienta separada del
+extractor: requiere Python 3, usa solamente la biblioteca estándar y no descubre ni
+consulta contenido remoto.
+
+Uso con la carpeta `resultado` (también se admite su carpeta de sesión contenedora):
+
+```powershell
+py -3 ".\tools\lgmg-catalog-extractor\prepare_jem_review.py" `
+  --input "C:\Users\Franz\Desktop\jem docs\temp\resultado" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\revision-lgmg"
+```
+
+Uso con un ZIP de validación:
+
+```powershell
+py -3 ".\tools\lgmg-catalog-extractor\prepare_jem_review.py" `
+  --input "C:\Users\Franz\Desktop\jem docs\temp\validacion-lgmg.zip" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\revision-lgmg"
+```
+
+El ZIP se lee directamente mediante su directorio central, tanto si usa `/` como
+si fue creado por `Compress-Archive` con `\`; no se descomprime. Solo se leen los
+ocho reportes obligatorios bajo un único `resultado`. Se ignoran `cache/` e
+`images/`, se rechazan traversal, rutas absolutas, letras de unidad, duplicados
+normalizados, cifrado, symlinks, tipos especiales y tamaños excesivos. La entrada
+no se modifica, la salida debe ser nueva o estar vacía y no existe `--force`.
+
+El paquete contiene `review-products.csv`, `review-specifications.csv`,
+`review-images.csv`, `review-datasheets.csv`,
+`review-missing-datasheets.csv`, `review-categories.csv`,
+`review-uncertain.csv`, `jem-review-drafts.json`, `review-summary.json`,
+`review-summary.txt`, `review-manifest.json` y `README-review.txt`. Los CSV usan
+UTF-8 con BOM y protección contra fórmulas para su revisión en Excel. Una persona
+debe completar las selecciones, nombres y categorías aprobados, mapeos/IDs de
+categoría y decisiones de medios o fichas; los registros inciertos se revisan por
+separado.
+
+La preparación valida contadores, clasificación, procedencia, unicidad y URLs
+oficiales antes de escribir. Conserva el orden fuente, modelos métricos e
+imperiales, aliases, evidencia y advertencias; no completa datos faltantes. Las
+imágenes y PDF permanecen como referencias remotas con derechos pendientes. La
+herramienta no usa red, no descarga medios, no llama la API de JEM Nexus, no crea
+ni importa productos y no publica contenido. Todos los borradores permanecen
+pendientes, bloqueados, sin precio, sin categoría resuelta y no publicables.
