@@ -1,8 +1,11 @@
 """Synthetic unit tests. Run explicitly on Windows; no network is used."""
 import importlib.util
+from io import BytesIO
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
+from urllib.error import HTTPError, URLError
 
 MODULE = Path(__file__).parents[1] / "extract_lgmg.py"
 spec = importlib.util.spec_from_file_location("extract_lgmg", MODULE)
@@ -125,6 +128,53 @@ POST_MODULE = """$.ajax({url:'/es/product/search-list.htm', type:'POST', content
 
 
 class DynamicInspectionTests(unittest.TestCase):
+    def test_detects_official_seajs_config_structurally(self):
+        documents = (
+            '''<script src="/es/resources/web/seajs.config.js" id="seajsConfig"
+                       domain="https://www.lgmglifts.com/es"></script>''',
+            "<SCRIPT DOMAIN='https://www.lgmglifts.com/es' ID='seajsConfig' SRC='/es/resources/web/seajs.config.js'></SCRIPT>",
+        )
+        for document in documents:
+            with self.subTest(document=document):
+                self.assertEqual(
+                    lgmg.detect_seajs_config(document, "https://www.lgmglifts.com/es/product/pro-list-377.htm"),
+                    "https://www.lgmglifts.com/es/resources/web/seajs.config.js",
+                )
+
+    def test_seajs_config_requires_exactly_one_script(self):
+        valid = "<script id='seajsConfig' src='/es/resources/web/seajs.config.js' domain='https://www.lgmglifts.com/es'></script>"
+        for document in ("", valid + valid, valid.replace("script", "link")):
+            with self.subTest(document=document), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.detect_seajs_config(document, "https://www.lgmglifts.com/es/product/pro-list-377.htm")
+
+    def test_seajs_config_rejects_missing_attributes_and_unofficial_domain(self):
+        template = "<script id='seajsConfig' src='{src}' domain='{domain}'></script>"
+        cases = (("", lgmg.SEAJ_DOMAIN), ("/es/resources/web/seajs.config.js", ""),
+                 ("/es/resources/web/seajs.config.js", "https://evil.example/es"),
+                 ("/es/resources/web/seajs.config.js", "http://www.lgmglifts.com/es"),
+                 ("/es/resources/web/seajs.config.js", "https://www.lgmglifts.com:444/es"),
+                 ("/es/resources/web/seajs.config.js", "https://user@www.lgmglifts.com/es"),
+                 ("/es/resources/web/seajs.config.js", "https://www.lgmglifts.com/es?x=1"),
+                 ("/es/resources/web/seajs.config.js", "https://www.lgmglifts.com/es#x"))
+        for src, domain in cases:
+            with self.subTest(src=src, domain=domain), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.detect_seajs_config(template.format(src=src, domain=domain), "https://www.lgmglifts.com/es/product/pro-list-377.htm")
+
+    def test_seajs_config_rejects_unsafe_or_old_sources(self):
+        sources = (
+            "http://www.lgmglifts.com/es/resources/web/seajs.config.js",
+            "https://www.lgmglifts.com:444/es/resources/web/seajs.config.js",
+            "https://user:pass@www.lgmglifts.com/es/resources/web/seajs.config.js",
+            "https://evil.example/es/resources/web/seajs.config.js",
+            "/es/resources/web/seajs.config.js?x=1", "/es/resources/web/seajs.config.js#x",
+            "/es/resources/../resources/web/seajs.config.js",
+            "/es/resources/web/js/seajs.config.js",
+        )
+        for src in sources:
+            document = f"<script id='seajsConfig' src='{src}' domain='{lgmg.SEAJ_DOMAIN}'></script>"
+            with self.subTest(src=src), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.detect_seajs_config(document, "https://www.lgmglifts.com/es/product/pro-list-377.htm")
+
     def test_detects_only_expected_seajs_module(self):
         self.assertEqual(lgmg.detect_seajs_module("<script>seajs.use('js/pro_list')</script>"), "js/pro_list")
         for source in ("", "seajs.use('js/other')", "seajs.use('js/pro_list');seajs.use('js/other')"):
@@ -132,6 +182,52 @@ class DynamicInspectionTests(unittest.TestCase):
 
     def test_resolves_literal_config(self):
         self.assertEqual(lgmg.resolve_seajs_module(CONFIG), "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
+
+    def test_controlled_http_and_network_errors_are_sanitized_and_not_cached(self):
+        errors = (
+            HTTPError(lgmg.SEAJ_CONFIG_URL, 404, "Not Found", {}, BytesIO(b"secret body")),
+            HTTPError(lgmg.SEAJ_CONFIG_URL, 403, "Forbidden", {}, BytesIO(b"secret body")),
+            URLError("credential-bearing server detail"),
+            TimeoutError("timed out with server detail"),
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp) / "cache"
+            fetcher = lgmg.Fetcher(cache, 0, 5, "test")
+            for error in errors:
+                opener = mock.Mock(); opener.open.side_effect = error
+                with self.subTest(error=type(error).__name__), mock.patch.object(lgmg, "build_opener", return_value=opener):
+                    with self.assertRaises(lgmg.DiscoveryError) as raised:
+                        fetcher.fetch_controlled(lgmg.SEAJ_CONFIG_URL, "config")
+                    message = str(raised.exception)
+                    self.assertIn("config:", message)
+                    self.assertNotIn("secret", message)
+            self.assertEqual(list(cache.glob("*")), [])
+
+    def test_dynamic_config_failure_writes_diagnostics_and_returns_three(self):
+        index = b"""<script id='seajsConfig' src='/es/resources/web/seajs.config.js'
+            domain='https://www.lgmglifts.com/es'></script><script>seajs.use('js/pro_list')</script>"""
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "output"
+            controlled = mock.Mock(side_effect=[(index, "text/html"), lgmg.DiscoveryError("config: HTTP 404 al solicitar recurso controlado")])
+            arguments = ["--start-url", "https://www.lgmglifts.com/es/product/pro-list-377.htm",
+                         "--output-dir", str(output), "--discovery-mode", "dynamic", "--discovery-only"]
+            with mock.patch.object(lgmg.Fetcher, "fetch", return_value=b"User-agent: *\nAllow: /\n"), \
+                 mock.patch.object(lgmg.Fetcher, "fetch_controlled", controlled):
+                self.assertEqual(lgmg.main(arguments), 3)
+            manifest = lgmg.json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            discovery = lgmg.json.loads((output / "discovery.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["discovery_status"], "dynamic_inspection_required")
+            self.assertEqual(discovery["config_url"], lgmg.SEAJ_CONFIG_URL)
+            self.assertEqual((manifest["images_downloaded"], manifest["datasheets_downloaded"]), (0, 0))
+            self.assertFalse(manifest["jem_nexus_called"] or manifest["content_published"])
+            expected = ("manifest.json", "discovery.json", "discovery.csv", "families.csv",
+                        "catalog.json", "catalog.csv", "review.csv", "errors.json")
+            self.assertTrue(all((output / name).is_file() for name in expected))
+
+    def test_invalid_cli_arguments_keep_argparse_exit_code(self):
+        with self.assertRaises(SystemExit) as raised:
+            lgmg.build_parser().parse_args([])
+        self.assertEqual(raised.exception.code, 2)
 
     def test_literal_object_accepts_safe_key_forms_and_layout(self):
         source = """paths: {
