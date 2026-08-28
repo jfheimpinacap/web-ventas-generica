@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.2.4"
+TOOL_VERSION = "1.2.5"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -275,20 +275,35 @@ def parse_specs(rows: list[list[str]]) -> list[dict]:
     return result
 
 
-def classify_electric(category: str | None, specs: list[dict], title: str = "") -> tuple[bool | None, list[str]]:
-    evidence = []
-    non_electric = []
+def _electric_evidence(specs: list[dict], title: str = "") -> tuple[list[str], list[str]]:
+    """Return strong electrical and combustion evidence without model/family inference."""
+    evidence, non_electric = [], []
+    electric_terms = re.compile(
+        r"\b(electric(?:al)?|electric[oa]|bateria|battery|litio|lithium|plomo[ -]acido|lead[ -]acid)\b",
+        re.I,
+    )
+    combustion_terms = re.compile(r"\b(diesel|gasolina|petrol|combustible|combustion|kubota|deutz)\b", re.I)
+    voltage = re.compile(r"(?<![A-Za-z0-9])\d+(?:[.,]\d+)?\s*V\b", re.I)
+    capacity = re.compile(r"(?<![A-Za-z0-9])\d+(?:[.,]\d+)?\s*Ah\b", re.I)
     for spec in specs:
         combined = f"{spec['name_original']}: {spec['value_metric']}"
-        if spec["normalized_key"] == "power_source" or re.search(r"\b(bater[ií]a|battery|electric(?:al)?|eléctric[oa]|\d+\s*v)\b", combined, re.I):
-            if re.search(r"\b(di[eé]sel|diesel|gasolina|petrol|combusti(?:ble|ón))\b", combined, re.I): non_electric.append(combined)
-            else: evidence.append(combined)
-    # A family label is provenance, never product-level electrical evidence.
-    if re.search(r"\b(electric(?:al)?|eléctric[oa])\b", title, re.I):
+        normalized = strip_accents(combined).casefold()
+        if electric_terms.search(normalized) or (voltage.search(combined) and capacity.search(combined)):
+            evidence.append(combined)
+        if spec["normalized_key"] == "power_source" and combustion_terms.search(normalized):
+            non_electric.append(combined)
+    normalized_title = strip_accents(title).casefold()
+    if re.search(r"\b(electric(?:al)?|electric[oa])\b", normalized_title, re.I):
         evidence.insert(0, f"Título de ficha: {clean_text(title)}")
+    return dedupe(evidence), dedupe(non_electric)
+
+
+def classify_electric(category: str | None, specs: list[dict], title: str = "") -> tuple[bool | None, list[str]]:
+    # category is provenance only; power_source is an evidence location, not a conclusion.
+    evidence, non_electric = _electric_evidence(specs, title)
     if evidence and non_electric: return None, dedupe(evidence + non_electric)
-    if evidence: return True, dedupe(evidence)
-    if non_electric: return False, dedupe(non_electric)
+    if evidence: return True, evidence
+    if non_electric: return False, non_electric
     return None, []
 
 
@@ -308,11 +323,15 @@ def parse_product(document: str, source_url: str) -> dict:
     models = normalize_models(parser.source_product_title, parser.rows, parser.breadcrumb_span)
     specs = parse_specs(parser.rows)
     category = parser.source_category or None
+    electric_evidence, combustion_evidence = _electric_evidence(specs, parser.source_product_title)
     electric, evidence = classify_electric(category, specs, parser.source_product_title)
     warnings = list(models.pop("warnings"))
     missing_fields = [key for key, value in (("metric_model", models["metric_model"]), ("source_category", category)) if not value]
     if not category: warnings.append("Falta la categoría fuente estructurada en crumbs")
-    if electric is None: warnings.append("Evidencia eléctrica insuficiente; clasificación pendiente")
+    if electric_evidence and combustion_evidence:
+        warnings.append("Conflicto entre evidencia eléctrica y de combustión; clasificación pendiente")
+    elif electric is None:
+        warnings.append("Evidencia eléctrica insuficiente; clasificación pendiente")
     model = models["metric_model"] or models["imperial_model"] or "modelo por revisar"
     category_key = strip_accents(category or "").casefold()
     template = NAME_TEMPLATES.get(category_key)
