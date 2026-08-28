@@ -200,8 +200,14 @@ class ImportPlanTests(unittest.TestCase):
             ("4x6V", [("Fuente de Alimentación","24V (4x6V), 220Ah")], "electric_24v", "", "4x6V"),
             ("litio", [("Batería de litio","80 V 271 Ah")], "electric_lithium", "", "Batería de litio"),
             ("tecnología", [("Tecnología de la batería","Batería de litio"),("Voltaje nominal de la batería","76,8 V"),("Capacidad de la batería","304 Ah")], "electric_lithium", "", "304 Ah"),
-            ("plomo y litio", [("Batería de plomo-ácido","48 V 390 Ah"),("Batería de litio","80 V 271 Ah")], "", "varias configuraciones", "plomo-ácido"),
-            ("base y -Li", [("Fuente de potencia","24 V 200 Ah"),("Fuente de potencia","24 V 200 Ah -Li")], "", "varias configuraciones", "-Li"),
+            ("plomo y litio", [("Batería de plomo-ácido","48 V 330 Ah"),("Batería de litio (A13JE-Li)","48 V 250 Ah")], "", "varias configuraciones", "Batería de litio (A13JE-Li)"),
+            ("base y -Li", [("Fuente de potencia","24 V 200 Ah"),("Fuente de potencia (S0607EII-Li)","24 V 160 Ah")], "", "varias configuraciones", "Fuente de potencia (S0607EII-Li)"),
+            ("calificada única", [("Fuente de Alimentación (configuración alternativa)","24 V 200 Ah")], "electric_24v", "", "configuración alternativa"),
+            ("calificador vacío", [("Fuente de potencia ()","24 V 200 Ah")], "", "sin evidencia representable", None),
+            ("paréntesis anidados", [("Fuente de potencia ((modelo))","24 V 200 Ah")], "", "sin evidencia representable", None),
+            ("texto posterior", [("Fuente de potencia (modelo) texto adicional","24 V 200 Ah")], "", "sin evidencia representable", None),
+            ("prefijo no controlado", [("Datos de fuente de potencia (modelo)","24 V 200 Ah")], "", "sin evidencia representable", None),
+            ("exacta preexistente", [("Power source","24 V 200 Ah")], "electric_24v", "", "Power source"),
             ("48 V", [("Fuente de potencia","48 V DC 315Ah")], "", "Voltaje eléctrico confirmado", "48 V"),
             ("72 V", [("Fuente de potencia","72 V DC 300Ah")], "", "Voltaje eléctrico confirmado", "72 V"),
             ("80 V", [("Fuente de potencia","80 V DC 271Ah")], "", "Voltaje eléctrico confirmado", "80 V"),
@@ -215,6 +221,15 @@ class ImportPlanTests(unittest.TestCase):
                 self.assertEqual(mapped,expected); self.assertIn(warning_text,warning)
                 if preserved is not None: self.assertTrue(any(preserved in item for item in evidence))
                 else: self.assertEqual(evidence,[])
+                if name == "base y -Li":
+                    self.assertEqual(evidence, [
+                        "Fuente de potencia: 24 V 200 Ah",
+                        "Fuente de potencia (S0607EII-Li): 24 V 160 Ah",
+                    ])
+                if name == "plomo y litio":
+                    self.assertEqual(len(evidence), 2)
+                    self.assertIn("Batería de plomo-ácido", evidence[0])
+                    self.assertIn("Batería de litio", evidence[1])
 
     def test_25_maximum_metric_platform_capacity(self):
         cases = [
