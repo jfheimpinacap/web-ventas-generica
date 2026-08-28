@@ -26,11 +26,47 @@ def detail(model="SR1218E(SR4069E)", category="Elevador Eléctrico RT de Tijera"
 
 
 class ParsingTests(unittest.TestCase):
+    def test_node_text_preserves_document_order_without_artificial_spaces(self):
+        parser = lgmg.CatalogueParser("https://www.lgmglifts.com/es/product/pro-detail-1.htm")
+        parser.feed("<div>antes<strong>S1413</strong>Ⅱ<span>después</span></div>")
+        node = next(parser.root.descendants("div"))
+        self.assertEqual(node.text, "antesS1413Ⅱdespués")
+
+    def test_model_rows_are_identified_by_the_first_cell(self):
+        cases = (
+            ("<tr><td>Modelos</td><td><span>SR1218E</span></td><td><strong>SR4069E</strong></td></tr>", ("SR1218E", "SR4069E")),
+            ("<tr><td>Modelo métrico (imperial)</td><td>SR1218E(SR4069E)</td></tr>", ("SR1218E", "SR4069E")),
+            ("<tr><td>MODELOS</td><td><strong>S1413</strong>Ⅱ</td><td><strong>S4650Ⅱ</strong></td></tr>", ("S1413Ⅱ", "S4650Ⅱ")),
+            ("<tr><td>MODÈLE:</td><td>M0407TE</td><td>M1230TE</td></tr>", ("M0407TE", "M1230TE")),
+        )
+        for row, expected in cases:
+            parser = lgmg.CatalogueParser("https://www.lgmglifts.com/es/product/pro-detail-1.htm")
+            parser.feed(f"<section class='pro_detail'><table class='datalist'>{row}</table></section>")
+            evidence = lgmg.normalize_models("", parser.rows)["model_evidence"]
+            self.assertEqual((evidence[-1]["metric_model"], evidence[-1]["imperial_model"]), expected)
+
+        result = lgmg.normalize_models("SR1218E(SR4069E)", [["Medidas", "Métrique", "Impériale"]])
+        self.assertEqual([item["source"] for item in result["model_evidence"]], ["source_product_title"])
+
+    def test_partial_and_complete_model_evidence_conflicts_only_on_present_values(self):
+        matching = (
+            [["Modelos", "SR1218E"]],
+            [["Modelos", "SR1218E", "SR4069E"]],
+        )
+        for rows in matching:
+            result = lgmg.normalize_models("SR1218E(SR4069E)", rows)
+            self.assertFalse(result["needs_review"]); self.assertEqual(result["warnings"], [])
+        for rows in ([["Modelos", "SR1323E"]], [["Modelos", "SR1323E", "SR4390E"]]):
+            result = lgmg.normalize_models("SR1218E(SR4069E)", rows)
+            self.assertTrue(result["needs_review"])
+            self.assertIn("Conflicto entre fuentes estructuradas para el modelo", result["warnings"])
+
     def test_known_pairs_and_unicode_roman_numerals(self):
         for pair in ("S1413Ⅱ(S4650Ⅱ)", "SR1218E(SR4069E)", "T20JE(T65JE)", "M0407TE(M1230TE)"):
             product = lgmg.parse_product(detail(pair), "https://www.lgmglifts.com/es/product/pro-detail-1.htm")
             expected = pair.replace(")", "").split("(")
             self.assertEqual((product["metric_model"], product["imperial_model"]), tuple(expected))
+            self.assertFalse(product["needs_review"]); self.assertEqual(product["warnings"], [])
 
     def test_document_title_never_supplies_translated_model(self):
         product = lgmg.parse_product(detail(), "https://www.lgmglifts.com/es/product/pro-detail-1.htm")

@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-TOOL_VERSION = "1.1.0"
+TOOL_VERSION = "1.1.1"
 ALLOWED_HOST = "www.lgmglifts.com"
 DEFAULT_UA = "JemNexusCatalogResearch/1.0 (+https://jem-nexus.cl/contacto)"
 MAX_PRODUCTS = 25
@@ -94,13 +94,16 @@ def validate_output_dir(raw: str, repo_root: Path | None = None) -> Path:
 class Node:
     def __init__(self, tag="document", attrs=None, parent=None):
         self.tag, self.attrs, self.parent = tag, dict(attrs or ()), parent
-        self.children, self.data = [], []
+        self.children, self.contents = [], []
 
     @property
     def classes(self): return set(self.attrs.get("class", "").split())
     @property
     def text(self):
-        return clean_text(" ".join(self.data + [child.text for child in self.children]))
+        return clean_text(self._text_content())
+
+    def _text_content(self):
+        return "".join(item._text_content() if isinstance(item, Node) else item for item in self.contents)
 
     def descendants(self, tag=None):
         for child in self.children:
@@ -127,7 +130,8 @@ class CatalogueParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = [(key.lower(), value or "") for key, value in attrs]
-        node = Node(tag.lower(), attrs, self.stack[-1]); self.stack[-1].children.append(node)
+        node = Node(tag.lower(), attrs, self.stack[-1])
+        self.stack[-1].children.append(node); self.stack[-1].contents.append(node)
         if tag.lower() not in ("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "wbr"):
             self.stack.append(node)
 
@@ -136,7 +140,7 @@ class CatalogueParser(HTMLParser):
             if self.stack[index].tag == tag.lower(): self.stack = self.stack[:index]; break
 
     def handle_data(self, data):
-        self.stack[-1].data.append(data)
+        self.stack[-1].contents.append(data)
 
     def feed(self, data):
         super().feed(data); self._extract()
@@ -201,14 +205,34 @@ def _models(value: str):
     return values
 
 
+def _model_row_evidence(row: list[str]):
+    if len(row) < 2:
+        return None
+    label = clean_text(strip_accents(row[0]).casefold()).rstrip(":").strip()
+    labels = {"modelo", "modelos", "model", "models", "modele", "modelo metrico (imperial)"}
+    if label not in labels:
+        return None
+    values = [value for value in row[1:] if clean_text(value)]
+    if not values:
+        return None
+    metric, imperial = _models(values[0])
+    if imperial or len(values) == 1:
+        return metric, imperial
+    second_metric, second_imperial = _models(values[1])
+    return metric, second_metric or second_imperial
+
+
+def _model_evidence_conflicts(reference, candidate):
+    return any(left and right and left != right for left, right in zip(reference, candidate))
+
+
 def normalize_models(product_title: str, rows: list[list[str]], breadcrumb: str = "") -> dict:
-    sources = [("source_product_title", product_title)]
-    identifier = next((" ".join(row) for row in rows if any(key in " ".join(row).casefold() for key in ("modelo", "metric", "métric", "imperial"))), "")
-    if identifier: sources.append(("technical_table", identifier))
-    if breadcrumb: sources.append(("breadcrumb_span", breadcrumb))
-    parsed = [(name, _models(value)) for name, value in sources]
+    parsed = [("source_product_title", _models(product_title))]
+    table_pair = next((pair for row in rows if (pair := _model_row_evidence(row)) is not None), None)
+    if table_pair is not None: parsed.append(("technical_table", table_pair))
+    if breadcrumb: parsed.append(("breadcrumb_span", _models(breadcrumb)))
     chosen = next(((name, pair) for name, pair in parsed if pair[0]), (None, (None, None)))
-    conflicts = [(name, pair) for name, pair in parsed if pair[0] and pair != chosen[1]]
+    conflicts = [(name, pair) for name, pair in parsed if pair[0] and _model_evidence_conflicts(chosen[1], pair)]
     warnings = []
     if conflicts: warnings.append("Conflicto entre fuentes estructuradas para el modelo")
     if not chosen[1][0]: warnings.append("No se pudo identificar un modelo válido sin usar el ID de la URL")
