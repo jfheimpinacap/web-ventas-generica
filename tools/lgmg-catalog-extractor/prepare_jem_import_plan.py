@@ -316,24 +316,49 @@ POWER_LABELS = {
     "capacidad de la bateria", "battery capacity",
 }
 PRIMARY_POWER_LABELS = {"fuente de potencia", "fuente de alimentacion", "power source"}
+BATTERY_TECHNOLOGY_LABELS = {
+    "bateria de plomo-acido", "lead-acid battery", "bateria de litio",
+    "lithium battery", "tecnologia de la bateria", "battery technology",
+}
+SUPPORTING_POWER_LABELS = POWER_LABELS - PRIMARY_POWER_LABELS - BATTERY_TECHNOLOGY_LABELS
+QUALIFIED_POWER_LABELS = PRIMARY_POWER_LABELS | {
+    "bateria de plomo-acido", "lead-acid battery", "bateria de litio", "lithium battery",
+}
+
+
+def classify_power_label(normalized_label: str) -> str:
+    """Classify an exact energy label or one controlled trailing qualifier."""
+    if normalized_label in PRIMARY_POWER_LABELS:
+        return "primary"
+    if normalized_label in BATTERY_TECHNOLOGY_LABELS:
+        return "battery_technology"
+    if normalized_label in SUPPORTING_POWER_LABELS:
+        return "supporting"
+    qualified = re.fullmatch(r"([^()]*) \(([^()]+)\)", normalized_label)
+    if qualified and qualified.group(1) in QUALIFIED_POWER_LABELS and qualified.group(2).strip():
+        return "primary" if qualified.group(1) in PRIMARY_POWER_LABELS else "battery_technology"
+    return "not_energy"
 
 
 def power_evidence(specs: list[dict]) -> list[str]:
     """Return energy rows in their original order and wording."""
     return [f'{row.get("source_label", "")}: {row.get("source_value", "")}'
-        for row in specs if normalize_label(row.get("source_label") or "") in POWER_LABELS]
+        for row in specs
+        if classify_power_label(normalize_label(row.get("source_label") or "")) != "not_energy"]
 
 
 def map_power(specs: list[dict]) -> tuple[str, str, list[str]]:
-    rows = [row for row in specs
-        if normalize_label(row.get("source_label") or "") in POWER_LABELS]
+    rows = [(row, classify_power_label(normalize_label(row.get("source_label") or "")))
+        for row in specs]
+    rows = [(row, classification) for row, classification in rows if classification != "not_energy"]
     evidence = power_evidence(specs)
     if not evidence:
         return "", "Fuente de energía eléctrica sin evidencia representable", evidence
     normalized = [(normalize_label(row.get("source_label") or ""),
-        normalize_label(row.get("source_value") or "")) for row in rows]
-    primary = [value for label, value in normalized if label in PRIMARY_POWER_LABELS]
-    text = " | ".join(f"{label}: {value}" for label, value in normalized)
+        normalize_label(row.get("source_value") or ""), classification)
+        for row, classification in rows]
+    primary = [value for _, value, classification in normalized if classification == "primary"]
+    text = " | ".join(f"{label}: {value}" for label, value, _ in normalized)
     lithium = bool(re.search(r"\b(litio|lithium)\b", text))
     lead = bool(re.search(r"\b(plomo-acido|lead-acid)\b", text))
     alternatives = (lead and lithium) or len(primary) > 1 or any(
@@ -343,7 +368,7 @@ def map_power(specs: list[dict]) -> tuple[str, str, list[str]]:
     # The first voltage in each row is the system voltage; parenthesized values
     # such as 2x12V describe components of that declared system.
     voltages = set()
-    for _, value in normalized:
+    for _, value, _ in normalized:
         match = re.search(r"(?<!\d)(\d+(?:[.,]\d+)?)\s*v\b", value)
         if match:
             voltages.add(Decimal(match.group(1).replace(",", ".")))
