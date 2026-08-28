@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,8 +122,20 @@ class ImportPlanTests(unittest.TestCase):
 
     def test_09_symlink_review_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp); package=write_review(root); link=root/"linked"; link.symlink_to(package,True)
-            with self.assertRaises(plan.PlanError): plan.read_review(link)
+            root=Path(tmp); package=write_review(root); output=root/"import-plan"
+            original_is_symlink=Path.is_symlink
+            before={item.name:item.read_bytes() for item in package.iterdir()}
+
+            def simulated_is_symlink(path):
+                return path == package or original_is_symlink(path)
+
+            with mock.patch.object(Path,"is_symlink",autospec=True,side_effect=simulated_is_symlink) as is_symlink:
+                with self.assertRaisesRegex(plan.PlanError,"symlink"):
+                    plan.read_review(package)
+
+            self.assertIn(mock.call(package),is_symlink.call_args_list)
+            self.assertEqual({item.name:item.read_bytes() for item in package.iterdir()},before)
+            self.assertFalse(output.exists())
 
     def test_10_output_inside_input_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
