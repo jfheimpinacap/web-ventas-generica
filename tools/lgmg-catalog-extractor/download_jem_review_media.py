@@ -44,8 +44,10 @@ MAX_IMAGE_URLS = 500
 MAX_PDF_URLS = 200
 MAX_REDIRECTS = 5
 MAX_ROBOTS = 512 * 1024
-ROMANS = str.maketrans({"Ⅰ":"I", "Ⅱ":"II", "Ⅲ":"III", "Ⅳ":"IV", "Ⅴ":"V", "Ⅵ":"VI",
-                        "Ⅶ":"VII", "Ⅷ":"VIII", "Ⅸ":"IX", "Ⅹ":"X", "Ⅺ":"XI", "Ⅻ":"XII"})
+ROMANS = {
+    **dict(zip("ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ", ("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"))),
+    **dict(zip("ⅰⅱⅲⅳⅴⅵⅶⅷⅸⅹⅺⅻ", ("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"))),
+}
 
 
 class MediaError(ValueError):
@@ -276,7 +278,8 @@ def detect_content(head: bytes, content_type: str, url: str, kind: str):
 
 
 def slug(value, fallback):
-    value = unicodedata.normalize("NFKD", str(value).translate(ROMANS)).encode("ascii", "ignore").decode().casefold()
+    value = "".join(f" {ROMANS[char]} " if char in ROMANS else char for char in str(value))
+    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().casefold()
     value = re.sub(r"[^a-z0-9]+", "-", value).strip("-"); value = re.sub("-+", "-", value)[:64].strip("-")
     if not value:
         value = re.sub(r"[^a-z0-9]+", "-", fallback.casefold()).strip("-")[:64]

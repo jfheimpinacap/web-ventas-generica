@@ -190,8 +190,26 @@ class MediaDownloaderTests(unittest.TestCase):
             with self.assertRaises(media.RemoteError): media.stream_download(FakeFetcher([Response(b"\xff\xd8\xff","image/jpeg")]),IMAGE,"image",Path(tmp)/"x",media.MAX_IMAGE_TOTAL)
 
     def test_34_filename_sanitized_and_roman(self):
+        roman_tokens=("i","ii","iii","iv","v","vi","vii","viii","ix","x","xi","xii")
+        cases=[("SRⅡ 10 E","sr-ii-10-e"),("S1413Ⅱ","s1413-ii"),("ⅡSR","ii-sr"),
+            ("SR1218E","sr1218e"), *( (f"A{roman}B",f"a-{token}-b")
+                for roman_set in ("ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ","ⅰⅱⅲⅳⅴⅵⅶⅷⅸⅹⅺⅻ")
+                for roman,token in zip(roman_set,roman_tokens) )]
+        for model,expected in cases:
+            with self.subTest(model=model):
+                self.assertEqual(media.slug(model,"fallback"),expected)
+                self.assertNotIn("--",media.slug(f"/{model}\\","fallback"))
+
         row={"metric_model":"SRⅡ 10/E","source_key":"lgmg-0123456789abcdef","image_order":"1"}
-        self.assertIn("sr-ii-10-e-01",media.local_name(row,"image",IMAGE,".jpg"))
+        short=hashlib.sha256(IMAGE.encode()).hexdigest()[:10]
+        self.assertEqual(media.local_name(row,"image",IMAGE,".jpg"),f"media/images/lgmg-sr-ii-10-e-01-{short}.jpg")
+        self.assertEqual(media.local_name(row,"datasheet",PDF,".pdf"),
+            f"media/datasheets/lgmg-sr-ii-10-e-ficha-tecnica-{hashlib.sha256(PDF.encode()).hexdigest()[:10]}.pdf")
+        for unsafe in ("../Ⅱ/..", "\\Ⅱ\\", "///", ""):
+            with self.subTest(unsafe=unsafe):
+                name=media.local_name({**row,"metric_model":unsafe},"image",IMAGE,".jpg")
+                self.assertNotIn("..",name); self.assertNotIn("\\",name)
+                self.assertNotIn("",name.split("/")); self.assertTrue(name.rsplit("/",1)[-1])
 
     def test_35_filename_collision_avoided(self):
         row={"metric_model":"X","source_key":"lgmg-0123456789abcdef","image_order":"1"}
