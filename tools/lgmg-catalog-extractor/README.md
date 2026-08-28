@@ -22,7 +22,11 @@ La paginación usa exclusivamente los parámetros observados en el módulo y se 
 
 ## Clasificación eléctrica y revisión
 
-La familia, una traducción sugerente y el sufijo del modelo no bastan. La clasificación usa evidencia estructural de cada ficha (por ejemplo, fuente de potencia, batería o voltaje). Primero se descubren las fichas y después se analizan individualmente. Con `--electric-only`, los eléctricos confirmados quedan en catálogo, los no eléctricos se contabilizan aparte y los inciertos permanecen en `review.csv` con `needs_review=true`. No se inventan equivalencias métricas/imperiales.
+La clasificación es ternaria y *fail-closed*: `true` exige evidencia eléctrica positiva suficiente, `false` exige evidencia inequívoca de combustión y `null` representa evidencia ausente, débil o conflictiva. Una especificación de batería se considera positiva si contiene términos explícitos (eléctrico/electric, batería/battery, litio/lithium o plomo-ácido/lead-acid), o si combina voltaje en V y capacidad en Ah dentro de la misma especificación. Un voltaje aislado, o potencia en kW/hp sin contexto, no basta. En una fuente de potencia, diesel/diésel, gasolina/petrol, combustible/combustión y los fabricantes de motor confirmados Kubota y Deutz constituyen evidencia de combustión.
+
+La fuente de potencia es solo una ubicación donde buscar evidencia; su mera presencia no confirma electricidad. Si coexisten señales eléctricas y de combustión, ninguna invalida silenciosamente a la otra: el resultado queda `null`, conserva ambos lados en `electric_evidence` y recibe una advertencia de conflicto. Los casos sin evidencia suficiente también quedan pendientes. La familia, una traducción sugerente y cualquier sufijo o letra del modelo (`E`, `D`, `J` o `JE`) son únicamente procedencia/nomenclatura y nunca deciden la clasificación.
+
+Con `--electric-only`, solo los `true` quedan en `catalog.json` y `catalog.csv` y cuentan como procesados/confirmados; los `false` se omiten y cuentan como no eléctricos y omitidos; los `null` se excluyen del catálogo, cuentan como inciertos y permanecen en `review.csv` con `needs_review=true`. Esta heurística conservadora no es una certificación técnica del fabricante. Todos los resultados deben revisarse antes de importar o publicar; no se inventan equivalencias métricas/imperiales.
 
 Antes de cualquier carga manual, el usuario debe revisar modelos, pares métrico/imperial, familias, especificaciones, clasificación y derechos. Los borradores conservan `published=false`, `featured=false`, `show_price=false` y `price=null`; no deben importarse directamente.
 
@@ -36,7 +40,7 @@ El directorio validado contiene:
 - `catalog.json`, `catalog.csv`, `review.csv`, `errors.json` y `manifest.json`;
 - `cache/` e `images/` (esta última puede permanecer vacía).
 
-Las escrituras son atómicas y confinadas al output. El manifest 1.2.4 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
+Las escrituras son atómicas y confinadas al output. El manifest 1.2.5 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
 
 ## Códigos de salida
 

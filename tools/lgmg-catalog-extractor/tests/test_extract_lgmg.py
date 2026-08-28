@@ -95,6 +95,68 @@ class ParsingTests(unittest.TestCase):
         product = lgmg.parse_product(html, "https://www.lgmglifts.com/es/product/pro-detail-4.htm")
         self.assertIsNone(product["is_electric"]); self.assertNotIn("eléctrico", product["display_name_suggestion"])
 
+    def test_strong_electric_and_weak_power_evidence(self):
+        positive = ("24V 145Ah", "48 V DC 315 Ah", "80 V CC 375 Ah", "Batería de litio", "Batería de plomo-ácido")
+        weak = ("24 V", "Fuente de potencia genérica", "25kW/33.5hp")
+        for value in positive:
+            specs = lgmg.parse_specs([["Fuente de potencia", value]])
+            self.assertIs(lgmg.classify_electric(None, specs)[0], True, value)
+        for value in weak:
+            specs = lgmg.parse_specs([["Fuente de potencia", value]])
+            self.assertIsNone(lgmg.classify_electric(None, specs)[0], value)
+
+    def test_combustion_conflicts_and_evidence_are_preserved(self):
+        for value in ("Kubota 18.2kW/24.4hp", "Deutz D2.9L4 / Kubota V2403", "Motor diesel", "Motor diésel"):
+            specs = lgmg.parse_specs([["Fuente de potencia", value]])
+            self.assertIs(lgmg.classify_electric(None, specs)[0], False, value)
+        suffix_product = lgmg.parse_product(
+            detail("ABC10E(ABC30E)").replace("48V batería", "Kubota 18.2kW/24.4hp"),
+            "https://www.lgmglifts.com/es/product/pro-detail-40.htm",
+        )
+        self.assertIs(suffix_product["is_electric"], False)
+        conflicts = (
+            detail().replace("<div class='tit'>SR1218E(SR4069E)</div>",
+                             "<div class='tit'>Equipo eléctrico SR1218E(SR4069E)</div>").replace("48V batería", "Kubota V2403"),
+            detail().replace("48V batería", "Batería 48 V 260 Ah</td></tr><tr><th>Fuente de potencia</th><td>Deutz D2.9L4"),
+        )
+        for document in conflicts:
+            product = lgmg.parse_product(document, "https://www.lgmglifts.com/es/product/pro-detail-41.htm")
+            self.assertIsNone(product["is_electric"])
+            self.assertIn("Conflicto entre evidencia eléctrica y de combustión; clasificación pendiente", product["warnings"])
+            self.assertTrue(any("bater" in item.casefold() or "eléctr" in item.casefold() for item in product["electric_evidence"]))
+            self.assertTrue(any("kubota" in item.casefold() or "deutz" in item.casefold() for item in product["electric_evidence"]))
+
+    def test_electric_only_flow_separates_confirmed_combustion_and_uncertain(self):
+        urls = [f"https://www.lgmglifts.com/es/product/pro-detail-{number}.htm" for number in (51, 52, 53)]
+        documents = (
+            detail("BAT10E(BAT30E)"),
+            detail("ENG10E(ENG30E)").replace("48V batería", "Kubota 18.2kW/24.4hp"),
+            detail("UNK10E(UNK30E)").replace("<tr><th>Fuente de potencia</th><td>48V batería</td></tr>", ""),
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); seed = root / "seed.txt"; seed.write_text("\n".join(urls), encoding="utf-8")
+            output = root / "output"
+            fetched = mock.Mock(side_effect=[b"User-agent: *\nAllow: /\n", *(item.encode() for item in documents)])
+            with mock.patch.object(lgmg.Fetcher, "fetch", fetched):
+                self.assertEqual(lgmg.main(["--seed-file", str(seed), "--output-dir", str(output),
+                                            "--max-products", "3", "--electric-only"]), 0)
+            catalog = lgmg.json.loads((output / "catalog.json").read_text(encoding="utf-8"))
+            manifest = lgmg.json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            errors = lgmg.json.loads((output / "errors.json").read_text(encoding="utf-8"))
+            with (output / "catalog.csv").open(encoding="utf-8-sig", newline="") as stream:
+                catalog_rows = list(csv.DictReader(stream))
+            with (output / "review.csv").open(encoding="utf-8-sig", newline="") as stream:
+                review_rows = list(csv.DictReader(stream))
+            self.assertEqual([item["metric_model"] for item in catalog], ["BAT10E"])
+            self.assertEqual([item["metric_model"] for item in catalog_rows], ["BAT10E"])
+            self.assertEqual([item["metric_model"] for item in review_rows], ["UNK10E"])
+            self.assertEqual({key: manifest[key] for key in ("processed_count", "electric_confirmed", "non_electric_skipped",
+                "skipped_count", "classification_uncertain", "images_downloaded", "datasheets_downloaded")},
+                {"processed_count": 1, "electric_confirmed": 1, "non_electric_skipped": 1, "skipped_count": 1,
+                 "classification_uncertain": 1, "images_downloaded": 0, "datasheets_downloaded": 0})
+            self.assertEqual(errors, []); self.assertFalse(manifest["jem_nexus_called"] or manifest["content_published"])
+            self.assertEqual(fetched.call_count, 4)
+
     def test_listing_scope_dynamic_and_static(self):
         parser = lgmg.CatalogueParser("https://www.lgmglifts.com/es/product/pro-list-377.htm")
         parser.feed("<a href='/es/product/pro-detail-1.htm'>Global</a><section class='pro_list channel_content'><ul id='container'></ul></section>")
