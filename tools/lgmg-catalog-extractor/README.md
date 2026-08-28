@@ -258,3 +258,30 @@ py -3 ".\tools\lgmg-catalog-extractor\prepare_jem_import_plan.py" `
   --media-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Media-Download-AAAAMMDD-HHMMSS\media-package" `
   --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Import-Plan-AAAAMMDD-HHMMSS"
 ```
+
+## Preflight local de importación LGMG (solo lectura)
+
+`preflight_jem_import.py` contrasta el plan offline aprobado y su `media-package` con el inventario real de una instalación **local** de JEM Nexus. El backend debe estar levantado previamente. La herramienta no inicia sesión: requiere un access token ya existente en `JEM_NEXUS_ACCESS_TOKEN`, no acepta el token en la CLI y no lo persiste. Nunca debe apuntarse a producción.
+
+Solo admite `http://localhost:5000` y `http://127.0.0.1:5000`. Consulta únicamente por `GET`: `/api/health`, `/api/auth/me`, `/api/categories?include_inactive=true`, `/api/brands?include_inactive=true`, `/api/products?include_unpublished=true&ordering=name` y `/api/technical-sheets`. Rechaza redirecciones y cualquier ruta u origen fuera de esa allowlist; no usa login, refresh, logout, endpoints de archivos ni escrituras.
+
+Ejemplo para Windows (PowerShell), usando exclusivamente el área temporal local:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = (Get-Content -Raw "C:\Users\Franz\Desktop\jem docs\temp\access-token.txt").Trim()
+python "C:\Users\Franz\Desktop\jem docs\temp\preflight_jem_import.py" `
+  --plan-input "C:\Users\Franz\Desktop\jem docs\temp\import-plan" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\media-package" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\preflight-report"
+```
+
+La salida nueva y vacía recibe `preflight-categories.csv`, `preflight-brand.csv`, `preflight-products.csv`, `preflight-specifications.csv`, `preflight-media.csv`, `preflight-warnings.csv`, `preflight-actions.csv`, `preflight-snapshot.json`, `preflight-summary.json`, `preflight-summary.txt`, `README-preflight.txt` y `preflight-manifest.json`. Se generan mediante staging y promoción final.
+
+El informe valida hashes, tamaños, MIME, firmas, rutas, asociaciones y conteos del plan y los medios; comprueba los límites de productos y especificaciones, el máximo configurado de 5 MiB para imágenes y el máximo de 10 MiB para fichas. Los PDF ausentes de AR24JE y T38JE permanecen `missing_at_source`. Las fichas locales solo se comparan por metadatos y una coincidencia es un `reuse_candidate`, nunca una igualdad de contenido.
+
+La resolución conserva la raíz `Maquinarias`, sus siete categorías y la marca LGMG. Reconoce de forma controlada el alias `Elevador tipo tijera electrico`, detecta duplicados y colisiones por modelo, nombre y slug —incluidos productos sin publicar—, y registra candidatos conservadores para revisar la eliminación manual del producto JLG de ejemplo, sin eliminarlo. También calcula las operaciones futuras y advierte cuando serán necesarios batching, throttling, checkpoints e idempotencia por los límites de escritura y subida.
+
+El snapshot comercial canónico se toma al principio y se repite al final. Un cambio concurrente produce `NO_GO`; la herramienta no lo reconcilia ni atribuye. Los veredictos son: `GO` cuando todo ya está resuelto y no quedan acciones; `CONDITIONAL_GO` cuando solo quedan acciones explícitas o revisiones humanas; y `NO_GO` ante bloqueos, conflictos, incompatibilidades o cambios concurrentes. Los códigos de salida son `0` para `GO`/`CONDITIONAL_GO`, `3` para un preflight completado con `NO_GO` y `2` para errores de entrada, autenticación, red local, formato o escritura.
+
+El preflight es estrictamente declarativo: realiza cero solicitudes API de escritura, no modifica la base de datos, no copia ni sube medios, no importa, no elimina y no publica. Incluso con `GO`, `ready_for_import`, `content_published` y `apply_performed` permanecen en `false`; las acciones propuestas siguen siendo manuales y requieren revisión posterior.
