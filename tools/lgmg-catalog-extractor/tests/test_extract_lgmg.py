@@ -183,6 +183,79 @@ class DynamicInspectionTests(unittest.TestCase):
     def test_resolves_literal_config(self):
         self.assertEqual(lgmg.resolve_seajs_module(CONFIG), "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
 
+    def test_resolves_official_root_config_with_comments(self):
+        source = '''seajs.config({
+          base: seajs.root + "/resources/modules",
+          paths: {"js": seajs.root + "/resources/web/js", "lib": seajs.root + "/resources/web/lib",},
+          alias: {"audio": "audio/audio", // comentario
+                  "seajs-localcache": "seajs/seajs-localcache",},
+        });'''
+        self.assertEqual(
+            lgmg.resolve_seajs_module(source, "js/pro_list", lgmg.SEAJ_DOMAIN),
+            "https://www.lgmglifts.com/es/resources/web/js/pro_list.js",
+        )
+        reordered = '''seajs.config({alias:{}, paths:{js : seajs.root+"/resources/web/js"},
+                                     base : seajs.root + "/resources/modules"});'''
+        self.assertEqual(lgmg.resolve_seajs_module(reordered),
+                         "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
+
+    def test_comment_stripper_preserves_strings_and_newlines(self):
+        source = "alias:{url:'https://example.test/a//b',/* block\ncomment */name:'ok'}// end\n"
+        stripped = lgmg._strip_javascript_comments(source)
+        self.assertIn("'https://example.test/a//b'", stripped)
+        self.assertEqual(stripped.count("\n"), source.count("\n"))
+        self.assertNotIn("block", stripped)
+
+    def test_comment_stripper_rejects_unterminated_content_and_templates(self):
+        for source in ("/* unterminated", "'unterminated", '"unterminated', "`template`"):
+            with self.subTest(source=source), self.assertRaises(lgmg.DiscoveryError):
+                lgmg._strip_javascript_comments(source)
+
+    def test_root_value_accepts_only_official_shape(self):
+        invalid = (
+            'window.location.origin + "/resources/web/js"',
+            'domain + "/resources/web/js"',
+            'getRoot() + "/resources/web/js"',
+            'seajs.root + variable',
+            'seajs.root + "/resources/web" + variable',
+            'seajs.root || "/resources/web/js"',
+        )
+        for value in invalid:
+            source = f"seajs.config({{paths:{{js:{value}}},alias:{{}}}})"
+            with self.subTest(value=value), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.resolve_seajs_module(source)
+
+    def test_root_suffix_validation_rejects_unsafe_paths(self):
+        suffixes = (
+            "/other/web/js", "https://evil.example/resources/web/js", "/resources/web/js?x=1",
+            "/resources/web/js#x", "/resources/../web/js", "/resources//web/js",
+            "/resources/web\\js", "/resources/web/\x01js",
+        )
+        for suffix in suffixes:
+            source = f'''seajs.config({{paths:{{js:seajs.root + "{suffix}"}},alias:{{}}}})'''
+            with self.subTest(suffix=suffix), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.resolve_seajs_module(source)
+
+    def test_alias_remains_literal_only(self):
+        source = '''seajs.config({paths:{js:seajs.root + "/resources/web/js"},
+                    alias:{"js/pro_list":seajs.root + "/resources/web/js/pro_list"}})'''
+        with self.assertRaises(lgmg.DiscoveryError):
+            lgmg.resolve_seajs_module(source)
+
+    def test_ambiguous_or_residual_config_is_rejected(self):
+        duplicate = CONFIG + CONFIG
+        residue = "seajs.config({paths:{js:'js' hidden},alias:{}})"
+        for source in (duplicate, residue):
+            with self.subTest(source=source), self.assertRaises(lgmg.DiscoveryError):
+                lgmg.resolve_seajs_module(source)
+
+    def test_validated_domain_is_the_only_root_source(self):
+        source = '''seajs.config({paths:{js:seajs.root + "/resources/web/js"},alias:{}})'''
+        self.assertEqual(lgmg.resolve_seajs_module(source, seajs_root=lgmg.SEAJ_DOMAIN),
+                         "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
+        with self.assertRaises(lgmg.DiscoveryError):
+            lgmg.resolve_seajs_module(source, seajs_root="https://evil.example/es")
+
     def test_controlled_http_and_network_errors_are_sanitized_and_not_cached(self):
         errors = (
             HTTPError(lgmg.SEAJ_CONFIG_URL, 404, "Not Found", {}, BytesIO(b"secret body")),

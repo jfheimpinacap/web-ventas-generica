@@ -6,7 +6,7 @@ Herramienta local e independiente en Python 3 (solo biblioteca estándar). No fo
 
 `--discovery-mode static` conserva el comportamiento anterior: `--start-url` acepta únicamente fichas del contenedor estructural `section.channel_content.pro_list`, y `--seed-file` procesa URLs previamente revisadas. El HTML inicial puede contener el contenedor vacío porque el sitio carga el catálogo mediante JavaScript; en ese caso el modo estático termina con código 2 y recomienda el modo dinámico o un seed.
 
-`--discovery-mode dynamic` se limita al listado exacto `/es/product/pro-list-377.htm`. Detecta el único `script#seajsConfig` oficial, valida sus atributos `src` y `domain`, y detecta únicamente `seajs.use('js/pro_list')`; después obtiene la configuración SeaJS exacta del mismo host, interpreta solo literales estáticos de `base`, `paths` y `alias`, resuelve un único módulo bajo `/es/resources/` y lo analiza como texto. **Nunca ejecuta JavaScript.** Solo acepta una operación AJAX inequívoca GET o POST del mismo origen, con parámetros cerrados de familia/página/tamaño y constantes públicas. POST se limita a JSON o `application/x-www-form-urlencoded`.
+`--discovery-mode dynamic` se limita al listado exacto `/es/product/pro-list-377.htm`. Detecta el único `script#seajsConfig` oficial, valida sus atributos `src` y `domain`, y detecta únicamente `seajs.use('js/pro_list')`; después obtiene la configuración SeaJS exacta del mismo host, interpreta solo literales estáticos de `base`, `paths` y `alias`, resuelve un único módulo bajo `/es/resources/` y lo analiza como texto. `seajs.root` se sustituye exclusivamente por el dominio oficial validado desde ese HTML y solo se admite su concatenación con un sufijo literal seguro bajo `/resources/`. **Nunca ejecuta JavaScript.** Solo acepta una operación AJAX inequívoca GET o POST del mismo origen, con parámetros cerrados de familia/página/tamaño y constantes públicas. POST se limita a JSON o `application/x-www-form-urlencoded`.
 
 `--discovery-only` resuelve y enumera URLs y escribe los reportes, pero no visita fichas ni extrae productos y no admite descargas. Es obligatoriamente la primera ejecución real recomendada. `--inventory-all` habilita hasta 250 fichas solo junto con descubrimiento dinámico; no se activa por defecto. Sin ese flag se conserva el máximo normal de 25. El máximo duro es 50 páginas y 250 fichas únicas.
 
@@ -34,7 +34,7 @@ El directorio validado contiene:
 - `catalog.json`, `catalog.csv`, `review.csv`, `errors.json` y `manifest.json`;
 - `cache/` e `images/` (esta última puede permanecer vacía).
 
-Las escrituras son atómicas y confinadas al output. El manifest 1.2.1 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
+Las escrituras son atómicas y confinadas al output. El manifest 1.2.2 registra descubrimiento, clasificación y contadores; `jem_nexus_called=false` y `content_published=false` siempre. Las imágenes no se descargan por defecto. `--download-images` y `--download-datasheets` continúan separados del descubrimiento y requieren `--confirm-image-rights`; las fichas técnicas permanecen solo como metadatos.
 
 ## Códigos de salida
 
