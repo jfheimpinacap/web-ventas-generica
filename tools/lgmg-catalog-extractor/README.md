@@ -194,8 +194,25 @@ producto no publicado ni destacado y todos los servicios incluidos en `false`.
 Cada fila queda `eligible_for_local_preflight=true` y
 `ready_for_import=false`. Se conservan los nombres sugeridos, modelos métricos,
 equivalencias imperiales, aliases, números romanos Unicode, evidencia y todas
-las especificaciones en orden; no se crean slugs, IDs, SKU, años, capacidades,
-fuentes de energía ni descripciones sin evidencia inequívoca.
+las especificaciones en orden; no se crean slugs, IDs, SKU, años ni
+descripciones sin evidencia inequívoca. La fuente de energía y la capacidad
+máxima se derivan exclusivamente de esas especificaciones preservadas. El
+mapeo energético es conservador: solo produce `electric_24v` para una única
+configuración total de 24 V sin conflicto, y `electric_lithium` cuando la
+tecnología de litio consta de forma explícita e inequívoca. Las configuraciones
+alternativas quedan pendientes; los voltajes confirmados de 48 V, 72 V, 76,8 V
+u 80 V que no sean litio inequívoco también quedan vacíos porque el contrato
+actual no dispone de una opción equivalente. En todos esos casos se conserva la
+evidencia original y se agrega una advertencia.
+
+La capacidad estructurada es la mayor capacidad de carga o plataforma declarada
+de forma segura en kilogramos, incluidas sus variantes con y sin restricciones
+o de extensión. Se excluyen capacidades de aceite, tanques, combustible y
+baterías. No se convierten libras; una etiqueta conjunta `kg/lbs` solo admite el
+único valor métrico ya preservado por la fuente. Si no existe un valor métrico
+seguro, el campo queda vacío y requiere revisión. Estas derivaciones no cambian
+la naturaleza del paquete: continúa siendo un plan offline que no importa ni
+publica productos.
 
 El mapeo cerrado de categorías es:
 
