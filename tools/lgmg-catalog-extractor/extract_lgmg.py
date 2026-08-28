@@ -371,11 +371,35 @@ def _literal_object(source: str, name: str) -> dict[str, str]:
     match = re.search(rf"\b{name}\s*:\s*\{{([^{{}}]*)\}}", source, re.S)
     if not match:
         return {}
-    pairs = re.findall(r"(?:^|,)\s*(['\"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(['\"])([^'\"]*)\3\s*(?=,|$)", match.group(1))
-    residue = re.sub(r"(?:^|,)\s*(['\"]?)[A-Za-z_$][\w$]*\1\s*:\s*(['\"])[^'\"]*\2\s*(?=,|$)", "", match.group(1)).strip(" ,\n\t")
-    if residue:
-        raise DiscoveryError(f"Configuración SeaJS {name} no es completamente literal")
-    return {key: value for _, key, _, value in pairs}
+    body = match.group(1)
+    whitespace = r"[ \t\r\n]*"
+    identifier = r"[A-Za-z_$][A-Za-z0-9_$]*"
+    module_key = r"[A-Za-z_$][A-Za-z0-9_$.-]*(?:/[A-Za-z_$][A-Za-z0-9_$.-]*)*"
+    pair = re.compile(
+        rf"{whitespace}(?:(?P<bare>{identifier})|'(?P<single>{module_key})'|\"(?P<double>{module_key})\")"
+        rf"{whitespace}:{whitespace}(?P<quote>['\"])(?P<value>[^'\"\\\x00-\x1f]*)"
+        rf"(?P=quote){whitespace}"
+    )
+    result: dict[str, str] = {}
+    position = 0
+    if re.fullmatch(whitespace, body):
+        return result
+    while position < len(body):
+        item = pair.match(body, position)
+        if not item:
+            raise DiscoveryError(f"Configuración SeaJS {name} no es completamente literal")
+        key = item.group("bare") or item.group("single") or item.group("double")
+        result[key] = item.group("value")
+        position = item.end()
+        if position == len(body):
+            break
+        if body[position] != ",":
+            raise DiscoveryError(f"Configuración SeaJS {name} no es completamente literal")
+        position += 1
+        if re.fullmatch(whitespace, body[position:]):
+            position = len(body)
+            break
+    return result
 
 
 def resolve_seajs_module(config_source: str, module: str = EXPECTED_MODULE) -> str:

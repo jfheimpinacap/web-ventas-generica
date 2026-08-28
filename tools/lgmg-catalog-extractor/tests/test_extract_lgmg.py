@@ -133,6 +133,39 @@ class DynamicInspectionTests(unittest.TestCase):
     def test_resolves_literal_config(self):
         self.assertEqual(lgmg.resolve_seajs_module(CONFIG), "https://www.lgmglifts.com/es/resources/web/js/pro_list.js")
 
+    def test_literal_object_accepts_safe_key_forms_and_layout(self):
+        source = """paths: {
+            js: 'js',
+            $resource: "modules",
+        } alias: { "js/pro_list": "js/pro_list" }"""
+        self.assertEqual(lgmg._literal_object(source, "paths"), {"js": "js", "$resource": "modules"})
+        self.assertEqual(lgmg._literal_object(source, "alias"), {"js/pro_list": "js/pro_list"})
+        self.assertEqual(
+            lgmg._literal_object("alias:{'js/pro_list':'js/pro_list'}", "alias"),
+            {"js/pro_list": "js/pro_list"},
+        )
+
+    def test_literal_object_rejects_unsafe_quoted_keys(self):
+        keys = (
+            "/js/pro_list", "js/pro_list/", "js//pro_list", ".", "..", "../pro_list",
+            "js/../pro_list", r"js\pro_list", "https://example.com/module", "js/pro_list?x=1",
+            "js/pro_list#fragment", "js pro_list",
+        )
+        for key in keys:
+            with self.subTest(key=key), self.assertRaises(lgmg.DiscoveryError):
+                lgmg._literal_object(f"alias:{{'{key}':'js/pro_list'}}", "alias")
+
+    def test_literal_object_rejects_nonliteral_values_and_residue(self):
+        bodies = (
+            "js/pro_list:'js/pro_list'",
+            "'js/pro_list':moduleName",
+            "'js/pro_list':'js/' + 'pro_list'",
+            "'js/pro_list':'js/pro_list' hidden",
+        )
+        for body in bodies:
+            with self.subTest(body=body), self.assertRaises(lgmg.DiscoveryError):
+                lgmg._literal_object(f"alias:{{{body}}}", "alias")
+
     def test_module_scope_rejects_cross_origin_and_traversal(self):
         for source in (
             "seajs.config({base:'https://evil.example/es/resources/',alias:{'js/pro_list':'js/pro_list'}})",
