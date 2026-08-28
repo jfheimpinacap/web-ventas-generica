@@ -146,3 +146,28 @@ imágenes y PDF permanecen como referencias remotas con derechos pendientes. La
 herramienta no usa red, no descarga medios, no llama la API de JEM Nexus, no crea
 ni importa productos y no publica contenido. Todos los borradores permanecen
 pendientes, bloqueados, sin precio, sin categoría resuelta y no publicables.
+
+## Descarga autorizada de medios para revisión local
+
+`download_jem_review_media.py` 1.0.0 es una herramienta complementaria, separada del extractor y del preparador. Consume directamente una carpeta `review-package`, su carpeta de sesión contenedora o un ZIP con exactamente un `review-package`. El ZIP se lee sin extraerlo y solo se leen los seis archivos necesarios; la entrada nunca se modifica.
+
+Toda ejecución de red exige `--confirm-media-rights`. El indicador registra únicamente la decisión operativa de autorización para descarga local y su fecha UTC; no sustituye la documentación comercial o contractual que JEM Nexus deba conservar. La descarga está limitada al host HTTPS exacto `www.lgmglifts.com`, a imágenes bajo `/es/upload/images/` y a PDF bajo `/es/upload/file/`. No admite credenciales, otros puertos, query, fragmentos, subdominios, downgrade ni redirects externos.
+
+Antes de los medios consulta una sola vez `robots.txt` y falla de forma segura si no puede interpretarlo o prohíbe las rutas. No hay concurrencia. El retraso mínimo es 1 segundo, el timeout predeterminado es 30 segundos y se permiten como máximo cinco redirects y dos reintentos adicionales únicamente para fallos transitorios controlados.
+
+Las imágenes se validan por extensión, MIME y firmas JPEG, PNG o WebP; los PDF por MIME y `%PDF-`. `application/octet-stream` solo se acepta cuando firma y extensión coinciden. Los límites son 20 MiB por imagen, 50 MiB por PDF, 1 GiB de imágenes, 2 GiB de PDF, 3 GiB combinados, 500 URLs de imagen y 200 URLs de PDF. Los bytes se transmiten a `.part`, se hashean con SHA-256 y solo se promueven atómicamente después de validarse; no se recomprimen ni modifican.
+
+Se deduplican primero las URLs y después el contenido por SHA-256. `--resume` exige otra vez la confirmación, el mismo fingerprint y un `media-download-state.json` creado por esta versión; comprueba existencia, tamaño y hash antes de reutilizar un medio. Sin `--resume`, la salida debe ser nueva o estar vacía.
+
+La salida incluye `media/images/`, `media/datasheets/`, `downloaded-images.csv`, `downloaded-datasheets.csv`, `media-files.csv`, `media-failures.csv`, `media-summary.json`, `media-summary.txt`, `media-manifest.json`, `media-download-state.json` y `README-media.txt`. Es un paquete para revisión visual posterior: no llama JEM Nexus, no importa productos, no asocia fichas, no aprueba imágenes principales y no publica contenido.
+
+Ejemplo para la validación posterior, exclusivamente bajo la carpeta temporal controlada indicada:
+
+```powershell
+py -3 ".\tools\lgmg-catalog-extractor\download_jem_review_media.py" `
+  --input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Review-Validation-20260828-093227.zip" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\medios-lgmg" `
+  --confirm-media-rights
+```
+
+Para reanudar esa misma salida parcial, repita el comando y agregue `--resume`.
