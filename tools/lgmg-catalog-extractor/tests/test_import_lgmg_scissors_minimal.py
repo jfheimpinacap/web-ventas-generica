@@ -122,8 +122,31 @@ class MinimalImporterTests(unittest.TestCase):
         self.write_csv(self.media / "import-images.csv", self.image_rows)
         self.assertRaises(minimal.BlockingError, minimal.safe_media_file, self.media, "../escape.jpg")
         target = self.media / self.image_rows[0]["local_file"]
-        link = target.with_name("link.jpg"); link.symlink_to(target)
-        self.assertRaises(minimal.BlockingError, minimal.safe_media_file, self.media, link.relative_to(self.media).as_posix())
+        link = target.with_name("link.jpg"); link.write_bytes(jpeg_bytes("synthetic-link"))
+        ordinary_bytes = {path: path.read_bytes() for path in self.media.rglob("*") if path.is_file()}
+        original_is_symlink = Path.is_symlink
+        checked_paths = []
+        output = self.root / "unexpected-output"
+        FakeClient.states = self.state
+        client = FakeClient("http://localhost:5000", "opaque")
+
+        def controlled_is_symlink(path):
+            checked_paths.append(path)
+            if path == link:
+                return True
+            return original_is_symlink(path)
+
+        with mock.patch.object(Path, "is_symlink", controlled_is_symlink):
+            with self.assertRaises(minimal.BlockingError) as caught:
+                minimal.safe_media_file(self.media, link.relative_to(self.media).as_posix())
+
+        self.assertIn("Symlink prohibido", str(caught.exception))
+        self.assertIn(link, checked_paths)
+        self.assertEqual(ordinary_bytes, {path: path.read_bytes() for path in self.media.rglob("*") if path.is_file()})
+        self.assertFalse(output.exists())
+        self.assertEqual(client.methods, [])
+        self.assertEqual(client.state["products"], [])
+        self.assertEqual(client.state["images"], [])
 
     def test_local_origins_redirects_and_methods(self):
         for origin in ("http://localhost:5000", "http://127.0.0.1:5000/"):
