@@ -297,7 +297,7 @@ def resolve_categories(categories):
         exact=[c for c in categories if root and c.get("parent")==root["id"] and normalized(c.get("name"))==normalized(target)]
         aliases=[c for c in categories if target==TARGETS[0] and root and c.get("parent")==root["id"] and normalized(c.get("name"))==normalized(ALIAS)]
         matches=exact+aliases
-        if len(matches)>1: action="conflict_requires_review"; block=True
+        if len(matches)>1: c={}; action="conflict_requires_review"; block=True
         elif matches:
             c=matches[0]; action="reuse_exact" if exact else "rename_and_reuse"; block=c.get("product_type")!="machinery"
             if c.get("is_active") is not True: action="reactivation_required"

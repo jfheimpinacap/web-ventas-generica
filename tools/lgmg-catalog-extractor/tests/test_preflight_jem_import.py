@@ -16,7 +16,7 @@ class Headers(dict):
 
 
 class Response(io.BytesIO):
-    def __init__(self, body=b"{}", status=200, url="http://localhost:5000/api/health", content_type="application/json"):
+    def __init__(self, body=b"{}", status=200, url=None, content_type="application/json"):
         super().__init__(body); self.status=status; self.url=url; self.headers=Headers({"Content-Type":content_type})
     def getcode(self): return self.status
     def geturl(self): return self.url
@@ -27,8 +27,8 @@ class Opener:
     def open(self,request,timeout):
         self.calls.append((request,timeout))
         if self.error: raise self.error
-        response=self.response or Response(url=request.full_url)
-        response.url=request.full_url if response.url.endswith("/api/health") else response.url
+        response=self.response or Response()
+        if response.url is None: response.url=request.full_url
         return response
 
 
@@ -86,8 +86,16 @@ class CliAndSecurityTests(unittest.TestCase):
         for value in ("http://u:p@localhost:5000","http://localhost:5000/api","http://localhost:5000?q=1","http://localhost:5000#x"):
             with self.assertRaises(subject.PreflightError): subject.normalize_origin(value)
     def test_11_redirect_rejected(self):
-        response=Response(url="http://127.0.0.1:5000/api/health")
-        with self.assertRaises(subject.PreflightError): subject.LocalJsonClient("http://localhost:5000",token(),Opener(response)).get_json("/api/health",authenticated=False)
+        for final_url in ("http://127.0.0.1:5000/api/health","http://localhost:5000/api/brands"):
+            with self.subTest(final_url=final_url):
+                response=Response(url=final_url); opener=Opener(response)
+                with self.assertRaises(subject.PreflightError): subject.LocalJsonClient("http://localhost:5000",token(),opener).get_json("/api/health",authenticated=False)
+                self.assertEqual(response.geturl(),final_url)
+                self.assertEqual(opener.calls[0][0].method,"GET")
+        response=Response(); opener=Opener(response)
+        self.assertEqual(subject.LocalJsonClient("http://localhost:5000",token(),opener).get_json("/api/health",authenticated=False),{})
+        self.assertEqual(response.geturl(),"http://localhost:5000/api/health")
+        self.assertEqual(opener.calls[0][0].method,"GET")
     def test_12_only_get(self):
         opener=Opener(); subject.LocalJsonClient("http://localhost:5000",token(),opener).get_json("/api/health",authenticated=False)
         self.assertEqual(opener.calls[0][0].method,"GET")
@@ -142,7 +150,17 @@ class ResolutionTests(unittest.TestCase):
     def test_30_alias_reusable(self):
         rows,_,_=subject.resolve_categories([category(),category(subject.ALIAS,2,1)])
         self.assertEqual(rows[0]["proposed_action"],"rename_and_reuse")
-    def test_31_alias_target_conflict(self): self.assertTrue(subject.resolve_categories([category(),category(subject.ALIAS,2,1),category(subject.TARGETS[0],3,1)])[1])
+    def test_31_alias_target_conflict(self):
+        rows,blockers,_=subject.resolve_categories([category(),category(subject.ALIAS,2,1),category(subject.TARGETS[0],3,1)])
+        row=rows[0]
+        self.assertEqual(blockers,["category_conflict:"+subject.TARGETS[0]])
+        self.assertEqual(row["proposed_action"],"conflict_requires_review")
+        self.assertTrue(row["blocking"])
+        self.assertEqual((row["local_id"],row["parent_id"]),("",""))
+        self.assertTrue(row["exact_match"])
+        self.assertTrue(row["normalized_match"])
+        self.assertTrue(row["known_alias"])
+        self.assertTrue(row["human_review"])
     def test_32_category_missing(self): self.assertEqual(subject.resolve_categories([category()])[0][0]["proposed_action"],"create_required")
     def test_33_brand_states(self):
         self.assertEqual(subject.resolve_brand([brand()])[0][0]["proposed_action"],"reuse_exact")
