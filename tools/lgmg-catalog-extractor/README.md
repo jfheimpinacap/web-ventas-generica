@@ -285,3 +285,43 @@ La resolución conserva la raíz `Maquinarias`, sus siete categorías y la marca
 El snapshot comercial canónico se toma al principio y se repite al final. Un cambio concurrente produce `NO_GO`; la herramienta no lo reconcilia ni atribuye. Los veredictos son: `GO` cuando todo ya está resuelto y no quedan acciones; `CONDITIONAL_GO` cuando solo quedan acciones explícitas o revisiones humanas; y `NO_GO` ante bloqueos, conflictos, incompatibilidades o cambios concurrentes. Los códigos de salida son `0` para `GO`/`CONDITIONAL_GO`, `3` para un preflight completado con `NO_GO` y `2` para errores de entrada, autenticación, red local, formato o escritura.
 
 El preflight es estrictamente declarativo: realiza cero solicitudes API de escritura, no modifica la base de datos, no copia ni sube medios, no importa, no elimina y no publica. Incluso con `GO`, `ready_for_import`, `content_published` y `apply_performed` permanecen en `false`; las acciones propuestas siguen siendo manuales y requieren revisión posterior.
+
+## Importador mínimo temporal de tijeras eléctricas LGMG
+
+`import_lgmg_scissors_minimal.py` es una vía local, mínima y temporal. Acepta exclusivamente los 21 modelos estándar cerrados en el código (S0607E-2 a S1413Ⅱ), conserva el nombre propuesto y carga una sola imagen principal offline por producto. No importa detalles técnicos, especificaciones, fichas, precios ni otras familias; tampoco publica productos.
+
+La categoría y la marca son precondiciones manuales: antes de usarlo deben existir una única raíz activa `Maquinaria` (`maquinaria`, tipo `machinery`, sin padre), una única subcategoría activa `Elevadores tipo tijera eléctricos` bajo esa raíz y una única marca activa `LGMG`. La herramienta nunca las crea o modifica. La eliminación del producto de ejemplo JLG también es manual y está fuera de alcance.
+
+El modo predeterminado es una simulación de solo lectura: valida los CSV, la integridad de las 21 asociaciones/20 archivos, consulta la API local con `GET`, clasifica existentes y escribe informes. `--apply --confirm-minimal-import` habilita únicamente los `POST` para crear los productos ausentes y cargar su imagen principal. El token se lee solo desde `JEM_NEXUS_ACCESS_TOKEN`; no se pasa por CLI ni se persiste. No hay opción de publicación.
+
+La repetición es idempotente de manera sencilla: reutiliza una coincidencia exacta, omite su imagen si ya existe y carga solamente la imagen faltante. Una coincidencia ambigua o incompatible produce `NO_GO` antes de escribir. Los códigos de salida son `0` para simulación aprobada o aplicación verificada, `2` para error operativo/aplicación parcial y `3` para una precondición bloqueante o conflicto previo.
+
+### Windows 11 (PowerShell)
+
+Simulación bajo `C:\Users\Franz\Desktop\jem docs\temp`:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py "C:\Users\Franz\Desktop\jem docs\temp\web-ventas-generica\tools\lgmg-catalog-extractor\import_lgmg_scissors_minimal.py" `
+  --plan-input "C:\Users\Franz\Desktop\jem docs\temp\import-plan" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\media-package" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\minimal-import-dry-run"
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+Aplicación explícita (solo después de revisar la simulación y preparar manualmente categoría y marca):
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py "C:\Users\Franz\Desktop\jem docs\temp\web-ventas-generica\tools\lgmg-catalog-extractor\import_lgmg_scissors_minimal.py" `
+  --plan-input "C:\Users\Franz\Desktop\jem docs\temp\import-plan" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\media-package" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\minimal-import-apply" `
+  --apply `
+  --confirm-minimal-import
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+Use un directorio de salida nuevo y vacío en cada ejecución. La validación dinámica debe realizarse manualmente en Windows 11 contra la API local, después de revisar los seis informes generados.
