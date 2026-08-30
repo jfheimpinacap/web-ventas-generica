@@ -68,6 +68,13 @@
 .admin-products-table th, .admin-products-table td { padding: 6px 7px; }
 .admin-products-table th { background: #f2f6fa; color: var(--admin-text); font-size: 11px; font-weight: 600; }
 .admin-products-table td:first-child { min-width: 145px; max-width: 230px; overflow-wrap: anywhere; font-weight: 600; }
+.admin-products-table__name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-products-table__thumbnail { display: grid; box-sizing: border-box; flex: 0 0 44px; width: 44px; height: 44px; overflow: hidden; place-items: center; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: #f8fafc; }
+.admin-products-table__thumbnail img,
+.admin-products-table__thumbnail .admin-image-placeholder,
+.admin-products-table__placeholder { display: block; box-sizing: border-box; width: 44px; height: 44px; border: 0; border-radius: inherit; background: #f8fafc; }
+.admin-products-table__thumbnail img { object-fit: cover; }
+.admin-products-table__name-text { min-width: 0; overflow-wrap: anywhere; }
 .admin-products-table__secondary { display: block; margin-top: 2px; color: var(--admin-muted); font-size: 11px; font-weight: 400; }
 .admin-products-table__status { align-items: flex-start; flex-direction: column; gap: 3px; }
 .admin-products-table .badge { min-height: 20px; padding: 2px 5px; border-radius: var(--admin-radius); font-size: 11px; white-space: nowrap; }
