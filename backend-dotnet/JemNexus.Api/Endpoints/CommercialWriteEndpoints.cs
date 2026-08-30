@@ -330,7 +330,6 @@ public static class CommercialWriteEndpoints
         return Results.Ok(await ProductDetailAsync(dbContext, product.Id, cancellationToken));
     }
 
-    private const string ProductDeleteBlockedByQuotesMessage = "No se puede eliminar este producto porque tiene cotizaciones asociadas. Puedes despublicarlo o inactivarlo.";
     private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
 
     private static async Task<IResult> DeleteProductAsync(string idOrSlug, JemNexusDbContext dbContext, ClaimsPrincipal user, CancellationToken cancellationToken)
@@ -338,8 +337,10 @@ public static class CommercialWriteEndpoints
         var product = await dbContext.Products.FirstOrDefaultAsync(candidate => candidate.Id.ToString() == idOrSlug || candidate.Slug == idOrSlug, cancellationToken);
         if (product is null) return Results.NotFound(new { detail = "product not found." });
 
-        var hasQuoteRequests = await dbContext.QuoteRequests.AnyAsync(quote => quote.ProductId == product.Id, cancellationToken);
-        if (hasQuoteRequests) return Results.Conflict(new { detail = ProductDeleteBlockedByQuotesMessage });
+        var blockers = new List<string>(2);
+        if (product.IsPublished) blockers.Add("Debes quitar el producto de Publicado antes de eliminarlo");
+        if (product.IsFeatured) blockers.Add("Debes quitar el producto de Destacado antes de eliminarlo");
+        if (blockers.Count > 0) return Results.Conflict(new { detail = string.Join(". ", blockers) + "." });
 
         if (IsInMemoryProvider(dbContext))
         {
@@ -367,6 +368,16 @@ public static class CommercialWriteEndpoints
             foreach (var promotion in dbContext.Promotions.Where(promotion => promotion.ProductId == product.Id))
             {
                 promotion.ProductId = null;
+            }
+
+            foreach (var quoteRequest in dbContext.QuoteRequests.Where(quote => quote.ProductId == product.Id))
+            {
+                quoteRequest.ProductId = null;
+            }
+
+            foreach (var quoteItem in dbContext.CommercialQuoteItems.Where(item => item.ProductId == product.Id))
+            {
+                quoteItem.ProductId = null;
             }
         }
         else

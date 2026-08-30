@@ -217,7 +217,10 @@ export function AdminProductEditPage() {
     try {
       setIsSubmitting(true);
       setError(null);
-      await updateProduct(slug, values);
+      const updated = await updateProduct(slug, values);
+      const persistedValues = mapProductToFormValues(updated);
+      setInitialValues(persistedValues);
+      setFormValues(persistedValues);
     } catch (submitError) {
       setError(getSafeApiErrorMessage(submitError, "No se pudo actualizar el producto."));
     } finally {
@@ -390,6 +393,12 @@ export function AdminProductEditPage() {
     }
   };
 
+  const deleteBlockers = [
+    initialValues?.is_published ? 'Quita "Publicado" y guarda los cambios antes de eliminar.' : null,
+    initialValues?.is_featured ? 'Quita "Destacado" y guarda los cambios antes de eliminar.' : null,
+  ].filter((message): message is string => Boolean(message));
+  const isDeleteBlocked = deleteBlockers.length > 0;
+
   const previewValues = formValues ?? initialValues;
   const selectedPending = pending.images.find((image) => image.id === selectedPendingId) ?? null;
 
@@ -450,11 +459,13 @@ export function AdminProductEditPage() {
               <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
                 <h2>Eliminar producto</h2>
                 <p className="ui-note">
-                  Esta acción es irreversible y solo puede realizarse si el producto no tiene cotizaciones asociadas.
+                  Esta acción es irreversible. Para eliminar, el producto debe estar sin publicar y sin destacar.
+                  Haber sido utilizado en una cotización no impide eliminarlo: las cotizaciones históricas conservarán los datos registrados al emitirlas.
                 </p>
+                {deleteBlockers.map((message) => <p className="ui-note ui-note--error" key={message}>{message}</p>)}
                 {deleteError ? <p className="ui-note ui-note--error">{deleteError}</p> : null}
                 {!deleteConfirmOpen ? (
-                  <button type="button" className="btn btn--ghost btn--danger" onClick={() => setDeleteConfirmOpen(true)} disabled={isDeleting}>
+                  <button type="button" className="btn btn--ghost btn--danger" onClick={() => setDeleteConfirmOpen(true)} disabled={isDeleting || isDeleteBlocked}>
                     Eliminar producto
                   </button>
                 ) : (
