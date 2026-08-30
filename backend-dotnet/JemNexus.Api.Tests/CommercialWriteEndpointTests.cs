@@ -30,6 +30,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     [Theory]
     [InlineData("POST", "/api/categories/")]
     [InlineData("PATCH", "/api/products/1/")]
+    [InlineData("DELETE", "/api/products/1/")]
     [InlineData("DELETE", "/api/brands/1/")]
     public async Task CommercialWriteEndpointsRequireBearerToken(string method, string path)
     {
@@ -51,6 +52,18 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         using var client = await CreateAuthorizedClientAsync("viewer");
 
         var response = await client.PostAsJsonAsync("/api/categories/", new { name = "Bloqueada", product_type = ProductTypes.Machinery });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonCommercialUserCannotDeleteProduct()
+    {
+        await _factory.SeedCommercialDataAsync();
+        await _factory.SeedUnauthorizedUserAsync();
+        using var client = await CreateAuthorizedClientAsync("viewer");
+
+        var response = await client.DeleteAsync("/api/products/1/");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -114,6 +127,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/products/{slug}/", new { short_description = "Actualizado", is_featured = true }));
         Assert.Equal("Actualizado", updated.GetProperty("short_description").GetString());
 
+        await client.PatchAsJsonAsync($"/api/products/{slug}/", new { is_published = false, is_featured = false });
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/products/{slug}/")).StatusCode);
     }
 
@@ -259,6 +273,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
             var product = await dbContext.Products.FirstAsync(product => product.Id == 2);
+            product.IsPublished = false;
             dbContext.ProductImages.Add(new ProductImage { Id = 10, Product = product, Image = "products/filtro.jpg", AltText = "Filtro" });
             dbContext.ProductSpecs.Add(new ProductSpec { Id = 10, Product = product, Key = "Medida", Value = "10", Unit = "cm" });
             dbContext.Promotions.Add(new Promotion { Id = 10, Title = "Oferta filtro", Product = product, IsActive = true });
@@ -285,7 +300,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteProductWithQuotesReturnsConflictAndKeepsCommercialData()
+    public async Task DeletePublishedProductReturnsConflictAndKeepsCommercialData()
     {
         await _factory.SeedCommercialDataAsync();
         using var client = await CreateAuthorizedClientAsync();
@@ -294,12 +309,101 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Contains("No se puede eliminar este producto porque tiene cotizaciones asociadas", body);
+        Assert.Contains("Debes quitar el producto de Publicado antes de eliminarlo", body);
 
         using var scope = _factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         Assert.True(await dbContext.Products.AnyAsync(product => product.Id == 1 && product.IsPublished));
         Assert.True(await dbContext.QuoteRequests.AnyAsync(quote => quote.Id == 1 && quote.ProductId == 1 && quote.Status == QuoteStatuses.New));
+    }
+
+    [Theory]
+    [InlineData(false, true, "Debes quitar el producto de Destacado")]
+    [InlineData(true, true, "Debes quitar el producto de Publicado")]
+    public async Task DeleteFeaturedOrPublishedAndFeaturedProductReturnsControlledConflict(bool isPublished, bool isFeatured, string expectedMessage)
+    {
+        await _factory.SeedCommercialDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await dbContext.Products.SingleAsync(product => product.Id == 2);
+            product.IsPublished = isPublished;
+            product.IsFeatured = isFeatured;
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthorizedClientAsync();
+        var response = await client.DeleteAsync("/api/products/filtro/");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains(expectedMessage, body);
+        if (isPublished && isFeatured) Assert.Contains("Debes quitar el producto de Destacado", body);
+    }
+
+    [Fact]
+    public async Task DeleteQuotedProductPreservesQuoteItemSnapshotsAndNullsHistoricalReferences()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await dbContext.Products.SingleAsync(product => product.Id == 1);
+            product.IsPublished = false;
+            product.IsFeatured = false;
+            var quote = new CommercialQuote
+            {
+                Id = 20, Status = CommercialQuoteStatuses.Issued, Folio = "COT-2026-000020", IssuedAtUtc = DateTime.UtcNow,
+                IssuedOn = new DateOnly(2026, 8, 30), Currency = CommercialQuoteCurrencies.Clp,
+                SaleCondition = CommercialQuoteSaleConditions.Cash, ValidityDays = 30,
+                CustomerBusinessName = "Cliente histórico", CustomerRut = "76.123.456-7", CustomerBusinessActivity = "Construcción",
+                CustomerAddress = "Dirección 123", CustomerPhone = "+56912345678", CustomerCityOrCommune = "Santiago",
+                CustomerContactName = "Contacto", ResponsibleSellerId = 1, ResponsibleSellerName = "Vendedor", ResponsibleSellerCode = "VEN-0001"
+            };
+            quote.Items.Add(new CommercialQuoteItem
+            {
+                Id = 20, CommercialQuote = quote, Position = 1, Origin = CommercialQuoteItemOrigins.Catalog, Product = product,
+                ProductName = "Excavadora snapshot", BrandName = "Marca snapshot", ModelName = "Modelo snapshot",
+                Quantity = 2, UnitNetAmount = 100000m, DiscountPercent = 10m
+            });
+            CommercialQuoteCalculator.Calculate(quote);
+            dbContext.CommercialQuotes.Add(quote);
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthorizedClientAsync();
+        var deleteResponse = await client.DeleteAsync("/api/products/excavadora/");
+        var detailResponse = await client.GetAsync("/api/admin/commercial-quotes/20");
+        var detail = await ReadJsonAsync<JsonElement>(detailResponse);
+        var pdfResponse = await client.GetAsync("/api/admin/commercial-quotes/20/pdf");
+
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, pdfResponse.StatusCode);
+        Assert.Equal("application/pdf", pdfResponse.Content.Headers.ContentType?.MediaType);
+        var item = detail.GetProperty("items")[0];
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("product_id").ValueKind);
+        Assert.Equal("Excavadora snapshot", item.GetProperty("product_name").GetString());
+        Assert.Equal("Modelo snapshot", item.GetProperty("model_name").GetString());
+        Assert.Equal(2, item.GetProperty("quantity").GetInt32());
+        Assert.Equal(100000m, item.GetProperty("unit_net_amount").GetDecimal());
+        Assert.Equal(180000m, item.GetProperty("line_net_amount").GetDecimal());
+        Assert.Equal(214200m, detail.GetProperty("total_amount").GetDecimal());
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.False(await assertContext.Products.AnyAsync(product => product.Id == 1));
+        Assert.True(await assertContext.CommercialQuotes.AnyAsync(quote => quote.Id == 20));
+        Assert.True(await assertContext.CommercialQuoteItems.AnyAsync(quoteItem => quoteItem.Id == 20 && quoteItem.ProductId == null));
+        Assert.True(await assertContext.QuoteRequests.AnyAsync(quote => quote.Id == 1 && quote.ProductId == null));
+    }
+
+    [Fact]
+    public async Task DeleteMissingProductReturnsNotFound()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/products/no-existe/")).StatusCode);
     }
 
     [Fact]

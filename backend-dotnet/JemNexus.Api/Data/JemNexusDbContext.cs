@@ -178,7 +178,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(item => item.LineNetAmount).HasPrecision(18, 2);
             entity.HasIndex(item => new { item.CommercialQuoteId, item.Position }).IsUnique();
             entity.HasOne(item => item.CommercialQuote).WithMany(quote => quote.Items).HasForeignKey(item => item.CommercialQuoteId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(item => item.Product).WithMany().HasForeignKey(item => item.ProductId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(item => item.Product).WithMany().HasForeignKey(item => item.ProductId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 
@@ -528,7 +528,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasOne(quote => quote.Product)
                 .WithMany(product => product.QuoteRequests)
                 .HasForeignKey(quote => quote.ProductId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

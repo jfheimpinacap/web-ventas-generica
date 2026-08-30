@@ -43,7 +43,28 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260822020000_AddCommercialQuoteIssueIdempotency", discoveredMigrationIds);
         Assert.Contains("20260824010000_AddSellerContactQuoteSnapshots", discoveredMigrationIds);
         Assert.Contains("20260825010000_AddCustomerProfileStatus", discoveredMigrationIds);
+        Assert.Contains("20260830000000_PreserveQuotesWhenDeletingProducts", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
+    }
+
+    [Fact]
+    public void HistoricalQuoteProductRelationsUseSetNullWithoutChangingSnapshots()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_QuoteProductDeleteMetadataTests;Trusted_Connection=True;TrustServerCertificate=True")
+            .Options;
+        using var context = new JemNexusDbContext(options);
+        var model = context.GetService<IDesignTimeModel>().Model;
+
+        var quoteItemProductForeignKey = model.FindEntityType(typeof(JemNexus.Api.Models.CommercialQuoteItem))!
+            .GetForeignKeys().Single(foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(JemNexus.Api.Models.Product));
+        var quoteRequestProductForeignKey = model.FindEntityType(typeof(JemNexus.Api.Models.QuoteRequest))!
+            .GetForeignKeys().Single(foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(JemNexus.Api.Models.Product));
+
+        Assert.False(quoteItemProductForeignKey.IsRequired);
+        Assert.False(quoteRequestProductForeignKey.IsRequired);
+        Assert.Equal(DeleteBehavior.SetNull, quoteItemProductForeignKey.DeleteBehavior);
+        Assert.Equal(DeleteBehavior.SetNull, quoteRequestProductForeignKey.DeleteBehavior);
     }
 
     [Fact]

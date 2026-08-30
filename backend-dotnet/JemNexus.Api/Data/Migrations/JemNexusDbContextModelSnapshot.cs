@@ -1293,7 +1293,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.HasOne("JemNexus.Api.Models.Product", "Product")
                         .WithMany("QuoteRequests")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.NoAction);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("JemNexus.Api.Models.AppUser", "UpdatedBy")
                         .WithMany()
@@ -1317,7 +1317,7 @@ namespace JemNexus.Api.Data.Migrations
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteItem", b =>
                 {
                     b.HasOne("JemNexus.Api.Models.CommercialQuote", "CommercialQuote").WithMany("Items").HasForeignKey("CommercialQuoteId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.HasOne("JemNexus.Api.Models.Product", "Product").WithMany().HasForeignKey("ProductId").OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("JemNexus.Api.Models.Product", "Product").WithMany().HasForeignKey("ProductId").OnDelete(DeleteBehavior.SetNull);
                     b.Navigation("CommercialQuote"); b.Navigation("Product");
                 });
 
