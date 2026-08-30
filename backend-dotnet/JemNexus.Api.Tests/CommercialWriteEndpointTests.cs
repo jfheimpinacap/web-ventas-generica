@@ -351,6 +351,10 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             var product = await dbContext.Products.SingleAsync(product => product.Id == 1);
             product.IsPublished = false;
             product.IsFeatured = false;
+            await dbContext.SaveChangesAsync();
+            Assert.True(product.Id > 0);
+            Assert.False(product.IsPublished);
+            Assert.False(product.IsFeatured);
             var quote = new CommercialQuote
             {
                 Id = 20, Currency = CommercialQuoteCurrencies.Clp,
@@ -361,7 +365,8 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             };
             quote.Items.Add(new CommercialQuoteItem
             {
-                Id = 20, CommercialQuote = quote, Position = 1, Origin = CommercialQuoteItemOrigins.Catalog, Product = product,
+                Id = 20, CommercialQuote = quote, Position = 1, Origin = CommercialQuoteItemOrigins.Catalog,
+                ProductId = product.Id, Product = product,
                 ProductName = "Excavadora snapshot", BrandName = "Marca snapshot", ModelName = "Modelo snapshot",
                 Quantity = 2, UnitNetAmount = 100000m, DiscountPercent = 10m
             });
@@ -369,6 +374,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             quote.Issue(2026, 20, new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc), new DateOnly(2026, 8, 30));
             dbContext.CommercialQuotes.Add(quote);
             await dbContext.SaveChangesAsync();
+            Assert.True(await dbContext.CommercialQuoteItems.AnyAsync(item => item.Id == 20 && item.ProductId == product.Id));
         }
 
         using var client = await CreateAuthorizedClientAsync();
@@ -383,10 +389,14 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal("application/pdf", pdfResponse.Content.Headers.ContentType?.MediaType);
         var item = detail.GetProperty("items")[0];
         Assert.Equal(JsonValueKind.Null, item.GetProperty("product_id").ValueKind);
+        Assert.Equal(CommercialQuoteItemOrigins.Catalog, item.GetProperty("source").GetString());
         Assert.Equal("Excavadora snapshot", item.GetProperty("product_name").GetString());
+        Assert.Equal("Marca snapshot", item.GetProperty("brand_name").GetString());
         Assert.Equal("Modelo snapshot", item.GetProperty("model_name").GetString());
         Assert.Equal(2, item.GetProperty("quantity").GetInt32());
         Assert.Equal(100000m, item.GetProperty("unit_net_amount").GetDecimal());
+        Assert.Equal(10m, item.GetProperty("discount_percent").GetDecimal());
+        Assert.Equal(90000m, item.GetProperty("final_unit_net_amount").GetDecimal());
         Assert.Equal(180000m, item.GetProperty("line_net_amount").GetDecimal());
         Assert.Equal(214200m, detail.GetProperty("total_amount").GetDecimal());
 
