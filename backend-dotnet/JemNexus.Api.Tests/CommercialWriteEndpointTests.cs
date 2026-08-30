@@ -355,7 +355,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             {
                 Id = 20, Currency = CommercialQuoteCurrencies.Clp,
                 SaleCondition = CommercialQuoteSaleConditions.Cash, ValidityDays = 30,
-                CustomerBusinessName = "Cliente histórico", CustomerRut = "76.123.456-7", CustomerBusinessActivity = "Construcción",
+                CustomerBusinessName = "Cliente histórico", CustomerRut = "12.345.678-5", CustomerBusinessActivity = "Construcción",
                 CustomerAddress = "Dirección 123", CustomerPhone = "+56912345678", CustomerCityOrCommune = "Santiago",
                 CustomerContactName = "Contacto", ResponsibleSellerId = 1, ResponsibleSellerName = "Vendedor", ResponsibleSellerCode = "VEN-0001"
             };
