@@ -353,8 +353,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
             product.IsFeatured = false;
             var quote = new CommercialQuote
             {
-                Id = 20, Status = CommercialQuoteStatuses.Issued, Folio = "COT-2026-000020", IssuedAtUtc = DateTime.UtcNow,
-                IssuedOn = new DateOnly(2026, 8, 30), Currency = CommercialQuoteCurrencies.Clp,
+                Id = 20, Currency = CommercialQuoteCurrencies.Clp,
                 SaleCondition = CommercialQuoteSaleConditions.Cash, ValidityDays = 30,
                 CustomerBusinessName = "Cliente histórico", CustomerRut = "76.123.456-7", CustomerBusinessActivity = "Construcción",
                 CustomerAddress = "Dirección 123", CustomerPhone = "+56912345678", CustomerCityOrCommune = "Santiago",
@@ -367,6 +366,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
                 Quantity = 2, UnitNetAmount = 100000m, DiscountPercent = 10m
             });
             CommercialQuoteCalculator.Calculate(quote);
+            quote.Issue(2026, 20, new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc), new DateOnly(2026, 8, 30));
             dbContext.CommercialQuotes.Add(quote);
             await dbContext.SaveChangesAsync();
         }
