@@ -166,11 +166,42 @@ class MinimalImporterTests(unittest.TestCase):
         self.assertNotIn("token", json.dumps(payload).casefold())
 
     def test_exact_manual_preconditions_and_no_go(self):
-        root, sub, brand = minimal.resolve_preconditions(self.state["categories"], self.state["brands"])
-        self.assertEqual((root["id"], sub["id"], brand["id"]), (1, 2, 3))
-        for key in ("categories", "brands"):
-            state = json.loads(json.dumps(self.state)); state[key] = []
-            self.assertRaises(minimal.BlockingError, minimal.resolve_preconditions, state["categories"], state["brands"])
+        for slug in ("elevadores-tipo-tijera-electricos", "elevador-electrico"):
+            with self.subTest(accepted_slug=slug):
+                state = json.loads(json.dumps(self.state)); state["categories"][1]["slug"] = slug
+                root, sub, brand = minimal.resolve_preconditions(state["categories"], state["brands"])
+                self.assertEqual((root["id"], sub["id"], brand["id"]), (1, 2, 3))
+
+        subcategory_mutations = {
+            "historical_name": {"name": "Elevador eléctrico", "slug": "elevador-electrico"},
+            "empty_slug": {"slug": ""},
+            "arbitrary_slug": {"slug": "otro-slug"},
+            "similar_name": {"name": "Elevadores tipo tijera eléctrico"},
+            "missing_parent": {"parent": None},
+            "wrong_parent": {"parent": 99},
+            "inactive": {"is_active": False},
+            "wrong_type": {"product_type": "spare_part"},
+        }
+        for case, mutation in subcategory_mutations.items():
+            with self.subTest(rejected_subcategory=case):
+                state = json.loads(json.dumps(self.state)); state["categories"][1].update(mutation)
+                self.assertRaises(minimal.BlockingError, minimal.resolve_preconditions, state["categories"], state["brands"])
+
+        for case, categories in (
+            ("two_subcategories", self.state["categories"] + [dict(self.state["categories"][1], id=4, slug="elevador-electrico")]),
+            ("missing_root", self.state["categories"][1:]),
+            ("ambiguous_root", [self.state["categories"][0], dict(self.state["categories"][0], id=4)] + self.state["categories"][1:]),
+        ):
+            with self.subTest(rejected_categories=case):
+                self.assertRaises(minimal.BlockingError, minimal.resolve_preconditions, categories, self.state["brands"])
+
+        for case, brands in (
+            ("missing_brand", []),
+            ("inactive_brand", [dict(self.state["brands"][0], is_active=False)]),
+            ("ambiguous_brand", self.state["brands"] + [dict(self.state["brands"][0], id=4)]),
+        ):
+            with self.subTest(rejected_brand=case):
+                self.assertRaises(minimal.BlockingError, minimal.resolve_preconditions, self.state["categories"], brands)
 
     def test_minimal_unpublished_payload(self):
         payload = minimal.product_payload(self.product_rows[0], 2, 3)
@@ -197,7 +228,10 @@ class MinimalImporterTests(unittest.TestCase):
         code = minimal.run(self.plan, self.media, "http://localhost:5000", out, False, "opaque", FakeClient)
         self.assertEqual(code, 0)
         manifest = json.loads((out / "minimal-import-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["mode"], "dry_run")
         self.assertEqual(manifest["http_methods_used"], ["GET"]); self.assertFalse(manifest["content_published"])
+        self.assertEqual(manifest["products_created"], 0); self.assertEqual(manifest["images_uploaded"], 0)
+        self.assertEqual(manifest["version"], "1.0.1")
         self.assertIn("S0607EⅡ", (out / "minimal-import-manifest.json").read_text(encoding="utf-8"))
         self.assertNotIn("opaque", "".join(p.read_text(encoding="utf-8-sig") for p in out.iterdir()))
         FakeClient.states = self.state
