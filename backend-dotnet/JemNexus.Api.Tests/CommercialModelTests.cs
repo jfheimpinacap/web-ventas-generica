@@ -9,7 +9,8 @@ public sealed class CommercialModelTests
 {
     private static readonly DbContextOptions<JemNexusDbContext> ContextOptions =
         new DbContextOptionsBuilder<JemNexusDbContext>()
-            .UseInMemoryDatabase("CommercialModelTests")
+            .UseSqlServer(
+                "Server=(localdb)\\mssqllocaldb;Database=JemNexus_ModelTests;Trusted_Connection=True;TrustServerCertificate=True")
             .Options;
 
     [Fact]
