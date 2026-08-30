@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 TOOL_NAME = "import_lgmg_scissors_minimal"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.0.1"
 TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -52,6 +52,10 @@ MODEL_SOURCE_KEYS = (
     ("S1413Ⅱ", "lgmg-18c29f8f44eaba7c"),
 )
 MODELS = tuple(model for model, _ in MODEL_SOURCE_KEYS)
+TARGET_SUBCATEGORY_SLUGS = frozenset({
+    "elevadores-tipo-tijera-electricos",
+    "elevador-electrico",
+})
 
 
 class ImportErrorSafe(Exception):
@@ -262,7 +266,7 @@ def resolve_preconditions(categories, brands):
         raise BlockingError("Corregir manualmente: debe existir una única raíz activa Maquinaria (slug maquinaria, machinery, sin padre)")
     root = roots[0]
     subs = [c for c in categories if c.get("name") == "Elevadores tipo tijera eléctricos" and
-            slug_normalized(c.get("slug")) == "elevadores-tipo-tijera-electricos" and c.get("product_type") == "machinery" and
+            slug_normalized(c.get("slug")) in TARGET_SUBCATEGORY_SLUGS and c.get("product_type") == "machinery" and
             c.get("is_active") is True and c.get("parent") == root.get("id")]
     if len(subs) != 1:
         raise BlockingError("Corregir manualmente: debe existir una única subcategoría activa Elevadores tipo tijera eléctricos bajo Maquinaria")
