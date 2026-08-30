@@ -65,7 +65,6 @@ public sealed class CommercialModelTests
     [InlineData(typeof(ProductImage), typeof(Product), nameof(ProductImage.ProductId), nameof(ProductImage.Product), nameof(Product.Images), true)]
     [InlineData(typeof(ProductSpec), typeof(Product), nameof(ProductSpec.ProductId), nameof(ProductSpec.Product), nameof(Product.Specs), true)]
     [InlineData(typeof(Promotion), typeof(Product), nameof(Promotion.ProductId), nameof(Promotion.Product), nameof(Product.Promotions), false)]
-    [InlineData(typeof(QuoteRequest), typeof(Product), nameof(QuoteRequest.ProductId), nameof(QuoteRequest.Product), nameof(Product.QuoteRequests), false)]
     [InlineData(typeof(HomeSectionItem), typeof(Product), nameof(HomeSectionItem.ProductId), nameof(HomeSectionItem.Product), nameof(Product.HomeSectionItems), true)]
     [InlineData(typeof(Category), typeof(Category), nameof(Category.ParentId), nameof(Category.Parent), nameof(Category.Children), false)]
     public void CommercialRelationshipsUseNoActionDeletes(
@@ -87,6 +86,31 @@ public sealed class CommercialModelTests
 
         Assert.Equal(isRequired, foreignKey.IsRequired);
         Assert.Equal(DeleteBehavior.NoAction, foreignKey.DeleteBehavior);
+        Assert.Equal(dependentToPrincipalName, foreignKey.DependentToPrincipal?.Name);
+        Assert.Equal(principalToDependentName, foreignKey.PrincipalToDependent?.Name);
+    }
+
+    [Theory]
+    [InlineData(typeof(QuoteRequest), nameof(QuoteRequest.ProductId), nameof(QuoteRequest.Product), nameof(Product.QuoteRequests))]
+    [InlineData(typeof(CommercialQuoteItem), nameof(CommercialQuoteItem.ProductId), nameof(CommercialQuoteItem.Product), null)]
+    public void HistoricalProductRelationshipsUseSetNull(
+        Type dependentType,
+        string foreignKeyPropertyName,
+        string dependentToPrincipalName,
+        string? principalToDependentName)
+    {
+        using var context = CreateContext();
+        var dependentEntity = context.Model.FindEntityType(dependentType);
+        Assert.NotNull(dependentEntity);
+
+        var foreignKey = dependentEntity.GetForeignKeys()
+            .Single(foreignKey =>
+                foreignKey.PrincipalEntityType.ClrType == typeof(Product)
+                && foreignKey.Properties.Single().Name == foreignKeyPropertyName);
+
+        Assert.True(foreignKey.Properties.Single().IsNullable);
+        Assert.False(foreignKey.IsRequired);
+        Assert.Equal(DeleteBehavior.SetNull, foreignKey.DeleteBehavior);
         Assert.Equal(dependentToPrincipalName, foreignKey.DependentToPrincipal?.Name);
         Assert.Equal(principalToDependentName, foreignKey.PrincipalToDependent?.Name);
     }
