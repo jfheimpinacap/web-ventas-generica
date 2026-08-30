@@ -288,13 +288,13 @@ El preflight es estrictamente declarativo: realiza cero solicitudes API de escri
 
 ## Importador mínimo temporal de tijeras eléctricas LGMG
 
-`import_lgmg_scissors_minimal.py` 1.0.1 es una vía local, mínima y temporal. Acepta exclusivamente los 21 modelos estándar cerrados en el código (S0607E-2 a S1413Ⅱ), conserva el nombre propuesto y carga una sola imagen principal offline por producto. No importa detalles técnicos, especificaciones, fichas, precios ni otras familias; tampoco publica productos.
+`import_lgmg_scissors_minimal.py` 1.1.0 es una vía local, mínima y temporal. Acepta exclusivamente los 21 modelos fuente cerrados en el código (S0607E-2 a S1413Ⅱ), conserva el modelo oficial del proveedor y su `source_key` como procedencia auditable, pero crea el modelo comercial final y el nombre `Elevador tipo tijera eléctrico LGMG {modelo final}`. No importa detalles técnicos, especificaciones, fichas, precios ni otras familias; tampoco publica productos.
 
 La categoría y la marca son precondiciones manuales: antes de usarlo deben existir una única raíz activa `Maquinaria` (`maquinaria`, tipo `machinery`, sin padre), una única subcategoría activa con el nombre exacto `Elevadores tipo tijera eléctricos` bajo esa raíz y una única marca activa `LGMG`. Para esa subcategoría solo se admite el slug canónico `elevadores-tipo-tijera-electricos` o, exclusivamente, el slug histórico conocido `elevador-electrico`, que el panel conserva al renombrar categorías existentes; no es una coincidencia abierta. La herramienta no cambia el slug ni realiza escrituras de categorías o marcas. La eliminación del producto de ejemplo JLG también es manual y está fuera de alcance.
 
 El modo predeterminado es una simulación de solo lectura: valida los CSV, la integridad de las 21 asociaciones/20 archivos, consulta la API local con `GET`, clasifica existentes y escribe informes. `--apply --confirm-minimal-import` habilita únicamente los `POST` para crear los productos ausentes y cargar su imagen principal. El token se lee solo desde `JEM_NEXUS_ACCESS_TOKEN`; no se pasa por CLI ni se persiste. No hay opción de publicación.
 
-La repetición es idempotente de manera sencilla: reutiliza una coincidencia exacta, omite su imagen si ya existe y carga solamente la imagen faltante. Una coincidencia ambigua o incompatible produce `NO_GO` antes de escribir. Los códigos de salida son `0` para simulación aprobada o aplicación verificada, `2` para error operativo/aplicación parcial y `3` para una precondición bloqueante o conflicto previo.
+La repetición es idempotente de manera sencilla: reutiliza una coincidencia canónica exacta, omite su imagen si ya existe y carga solamente la imagen faltante. Nunca vuelve a crear los nombres o modelos anteriores. Un producto en el estado heredado produce un conflicto controlado que pide ejecutar primero el canonizador; una coincidencia ambigua o incompatible produce `NO_GO` antes de escribir. Los códigos de salida son `0` para simulación aprobada o aplicación verificada, `2` para error operativo/aplicación parcial y `3` para una precondición bloqueante o conflicto previo.
 
 ### Windows 11 (PowerShell)
 
@@ -325,3 +325,33 @@ Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
 ```
 
 Use un directorio de salida nuevo y vacío en cada ejecución. La validación dinámica debe realizarse manualmente en Windows 11 contra la API local, después de revisar los seis informes generados.
+
+## Canonización cerrada del lote de tijeras eléctricas LGMG
+
+`canonicalize_lgmg_scissors_catalog.py` implementa la decisión comercial cerrada para los productos ID 2 a 22. La fuente y las etapas de extracción y preparación continúan conservando los modelos oficiales, incluido U+2161 `Ⅱ`; **no existe una regla global para retirar números romanos**. Solo las 12 equivalencias enumeradas dentro del canonizador eliminan U+2161, mientras nueve modelos se conservan. Los 21 nombres pasan de `Elevador de tijera...` a `Elevador tipo tijera...`.
+
+La herramienta acepta únicamente la API local HTTP en `localhost:5000` o `127.0.0.1:5000`, rechaza redirecciones y toma el token solamente de `JEM_NEXUS_ACCESS_TOKEN`. El modo predeterminado es un dry-run exclusivamente GET. La aplicación requiere conjuntamente `--apply --confirm-lgmg-scissors-canonicalization`; después del preflight completo, sus únicas escrituras son PATCH mínimos con `name` y `model` a los 21 IDs cerrados. La omisión deliberada de `slug` hace que el backend conserve cada URL existente.
+
+El preflight es fail-closed para marca, subcategoría, publicación, destacado, imagen principal única y estado anterior/final exacto. Los estados ya finales se omiten, por lo que una ejecución interrumpida se puede reanudar y una repetición completamente aplicada hace cero escrituras. El producto JLG ID 1 queda expresamente fuera del mapeo, no bloquea por su marca actual y se verifica sin cambios antes/después. No hay rollback destructivo, creación, eliminación, publicación ni modificación de imágenes.
+
+Dry-run en PowerShell, que debe realizarse realmente solo en Windows después del merge:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py ".\tools\lgmg-catalog-extractor\canonicalize_lgmg_scissors_catalog.py" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\lgmg-canonicalization-dry-run"
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+Aplicación posterior al merge, solamente después de revisar los seis informes del dry-run:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py ".\tools\lgmg-catalog-extractor\canonicalize_lgmg_scissors_catalog.py" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\lgmg-canonicalization-apply" `
+  --apply `
+  --confirm-lgmg-scissors-canonicalization
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 TOOL_NAME = "import_lgmg_scissors_minimal"
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.1.0"
 TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -52,6 +52,15 @@ MODEL_SOURCE_KEYS = (
     ("S1413Ⅱ", "lgmg-18c29f8f44eaba7c"),
 )
 MODELS = tuple(model for model, _ in MODEL_SOURCE_KEYS)
+SOURCE_TARGET_MODELS = dict((
+    ("S0607E-2", "S0607E-2"), ("S0808E-2", "S0808E-2"), ("S0812E-2", "S0812E-2"),
+    ("S1012E-2", "S1012E-2"), ("S1212E-2", "S1212E-2"), ("S1413E-2", "S1413E-2"),
+    ("SS0407ER", "SS0407ER"), ("SS0507E", "SS0507E"), ("SS0607E", "SS0607E"),
+    ("S0607EⅡ", "S0607E"), ("S0808EⅡ", "S0808E"), ("S0812EⅡ", "S0812E"),
+    ("S1012EⅡ", "S1012E"), ("S1212EⅡ", "S1212E"), ("S1413EⅡ", "S1413E"),
+    ("S0607Ⅱ", "S0607"), ("S0808Ⅱ", "S0808"), ("S0812Ⅱ", "S0812"),
+    ("S1012Ⅱ", "S1012"), ("S1212Ⅱ", "S1212"), ("S1413Ⅱ", "S1413"),
+))
 TARGET_SUBCATEGORY_SLUGS = frozenset({
     "elevadores-tipo-tijera-electricos",
     "elevador-electrico",
@@ -106,6 +115,10 @@ def validate_plan(plan_root):
             raise BlockingError(f"Fila fuera del alcance mínimo: {row.get('source_key', '')}")
         if not row.get("proposed_name") or len(row["proposed_name"]) > 220:
             raise BlockingError(f"proposed_name inválido: {row.get('source_key', '')}")
+    for row in rows:
+        row["source_model"] = row["metric_model"]
+        row["target_model"] = SOURCE_TARGET_MODELS[row["metric_model"]]
+        row["target_name"] = f"Elevador tipo tijera eléctrico LGMG {row['target_model']}"
     return rows, sha256(path.read_bytes())
 
 
@@ -280,17 +293,31 @@ def nested_id(value):
     return value.get("id") if isinstance(value, dict) else value
 
 
+def canonical_values(row):
+    source = row.get("source_model", row["metric_model"])
+    target = row.get("target_model", SOURCE_TARGET_MODELS[source])
+    return source, target, row.get("target_name", f"Elevador tipo tijera eléctrico LGMG {target}")
+
+
 def classify_products(rows, products, images, category_id, brand_id):
     image_counts = {}
     for image in images:
         image_counts[nested_id(image.get("product")) or image.get("product_id")] = image_counts.get(nested_id(image.get("product")) or image.get("product_id"), 0) + 1
     decisions = []
     for row in rows:
-        hits = [p for p in products if normalized(p.get("model")) == normalized(row["metric_model"])]
+        source_model, target_model, target_name = canonical_values(row)
+        hits = [p for p in products if normalized(p.get("model")) in
+                {normalized(source_model), normalized(target_model)}]
         if not hits:
             decisions.append({"row": row, "action": "create_product", "product": None}); continue
-        exact = [p for p in hits if p.get("name") == row["proposed_name"] and nested_id(p.get("brand")) == brand_id and
+        exact = [p for p in hits if p.get("name") == target_name and p.get("model") == target_model and nested_id(p.get("brand")) == brand_id and
                  nested_id(p.get("category")) == category_id and p.get("is_published") is False]
+        legacy = [p for p in hits if p.get("name") == f"Elevador de tijera eléctrico LGMG {source_model}" and
+                  p.get("model") == source_model and nested_id(p.get("brand")) == brand_id and
+                  nested_id(p.get("category")) == category_id]
+        if legacy:
+            decisions.append({"row": row, "action": "conflict", "product": legacy[0],
+                              "error": "Ejecute primero canonicalize_lgmg_scissors_catalog.py"}); continue
         if len(hits) != 1 or len(exact) != 1:
             decisions.append({"row": row, "action": "conflict", "product": hits[0] if len(hits) == 1 else None}); continue
         product = exact[0]
@@ -301,11 +328,12 @@ def classify_products(rows, products, images, category_id, brand_id):
 
 
 def product_payload(row, category_id, brand_id):
+    _, target_model, target_name = canonical_values(row)
     return {
-        "name": row["proposed_name"], "category": category_id, "brand": brand_id,
+        "name": target_name, "category": category_id, "brand": brand_id,
         "supplier": None, "technical_sheet": None, "product_type": "machinery",
         "condition": "new", "short_description": "", "description": "",
-        "model": row["metric_model"], "sku": None, "working_height_m": None,
+        "model": target_model, "sku": None, "working_height_m": None,
         "terrain_type": None, "year": None, "hours_meter": None,
         "maximum_load_capacity_kg": None, "machine_weight_kg": None,
         "power_source": None, "includes_technical_review": False,
@@ -334,7 +362,7 @@ def write_outputs(output, result):
     output.mkdir(exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".minimal-import-staging-", dir=output))
     try:
-        product_fields = ["source_key", "metric_model", "proposed_name", "action", "product_id", "image_action"]
+        product_fields = ["source_key", "source_model", "target_model", "target_name", "proposed_name", "action", "product_id", "image_action"]
         with (staging / OUTPUT_NAMES[0]).open("w", encoding="utf-8-sig", newline="") as stream:
             writer = csv.DictWriter(stream, product_fields, lineterminator="\r\n"); writer.writeheader(); writer.writerows(result["product_rows"])
         with (staging / OUTPUT_NAMES[1]).open("w", encoding="utf-8-sig", newline="") as stream:
@@ -345,7 +373,7 @@ def write_outputs(output, result):
         manifest = {
             "tool": TOOL_NAME, "version": TOOL_VERSION, "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "mode": result["mode"], "local_api_origin": result["origin"], "input_fingerprint_sha256": result["fingerprint"],
-            "models": list(MODELS), "products_planned": 21, **result["counts"], "errors": result["errors"],
+            "source_models": list(MODELS), "target_models": list(SOURCE_TARGET_MODELS.values()), "products_planned": 21, **result["counts"], "errors": result["errors"],
             "http_methods_used": result["methods"], "categories_created": 0, "categories_updated": 0,
             "brands_created": 0, "brands_updated": 0, "products_deleted": 0,
             "specifications_created": 0, "datasheets_uploaded": 0, "content_published": False,
@@ -388,7 +416,8 @@ def run(plan_root, media_root, base_url, output, apply, token, client_factory=Lo
                     client.post_image(product_id, image); counts["images_uploaded"] += 1; image_action = "uploaded"
                 else:
                     counts["images_skipped_present"] += 1
-            product_rows.append({"source_key": row["source_key"], "metric_model": row["metric_model"],
+            product_rows.append({"source_key": row["source_key"], "source_model": row["source_model"],
+                                 "target_model": row["target_model"], "target_name": row["target_name"],
                                  "proposed_name": row["proposed_name"], "action": action, "product_id": product_id or "",
                                  "image_action": image_action})
         if apply:

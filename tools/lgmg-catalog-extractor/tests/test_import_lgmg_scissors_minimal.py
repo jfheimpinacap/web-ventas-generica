@@ -214,13 +214,28 @@ class MinimalImporterTests(unittest.TestCase):
 
     def test_existing_detection_conflicts_and_idempotence(self):
         row = self.product_rows[0]
-        product = {"id": 8, "name": row["proposed_name"], "model": row["metric_model"],
+        _, target_model, target_name = minimal.canonical_values(row)
+        product = {"id": 8, "name": target_name, "model": target_model,
                    "brand": {"id": 3}, "category": {"id": 2}, "is_published": False}
         decision = minimal.classify_products([row], [product], [], 2, 3)[0]
         self.assertEqual(decision["action"], "upload_image_only")
         self.assertEqual(minimal.classify_products([row], [product], [{"product": 8}], 2, 3)[0]["action"], "already_present")
         conflict = dict(product, name="Nombre incompatible")
         self.assertEqual(minimal.classify_products([row], [conflict], [], 2, 3)[0]["action"], "conflict")
+        legacy = dict(product, name=f"Elevador de tijera eléctrico LGMG {row['metric_model']}", model=row["metric_model"])
+        decision = minimal.classify_products([row], [legacy], [], 2, 3)[0]
+        self.assertEqual(decision["action"], "conflict")
+        self.assertIn("canonicalize_lgmg", decision["error"])
+
+    def test_payload_uses_closed_target_and_preserves_source(self):
+        rows, _ = minimal.validate_plan(self.plan)
+        changed = [row for row in rows if row["source_model"] != row["target_model"]]
+        self.assertEqual(len(changed), 12)
+        self.assertTrue(all("Ⅱ" in row["source_model"] and "Ⅱ" not in row["target_model"] for row in changed))
+        for row in rows:
+            payload = minimal.product_payload(row, 2, 3)
+            self.assertEqual(payload["model"], row["target_model"])
+            self.assertEqual(payload["name"], f"Elevador tipo tijera eléctrico LGMG {row['target_model']}")
 
     def test_dry_run_get_only_apply_multipart_and_unicode_manifest(self):
         FakeClient.states = self.state
@@ -231,7 +246,7 @@ class MinimalImporterTests(unittest.TestCase):
         self.assertEqual(manifest["mode"], "dry_run")
         self.assertEqual(manifest["http_methods_used"], ["GET"]); self.assertFalse(manifest["content_published"])
         self.assertEqual(manifest["products_created"], 0); self.assertEqual(manifest["images_uploaded"], 0)
-        self.assertEqual(manifest["version"], "1.0.1")
+        self.assertEqual(manifest["version"], "1.1.0")
         self.assertIn("S0607EⅡ", (out / "minimal-import-manifest.json").read_text(encoding="utf-8"))
         self.assertNotIn("opaque", "".join(p.read_text(encoding="utf-8-sig") for p in out.iterdir()))
         FakeClient.states = self.state
@@ -240,6 +255,11 @@ class MinimalImporterTests(unittest.TestCase):
         applied_manifest = json.loads((applied / "minimal-import-manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(applied_manifest["products_created"], 21); self.assertEqual(applied_manifest["images_uploaded"], 21)
         self.assertEqual(applied_manifest["categories_created"], 0); self.assertFalse(applied_manifest["credentials_persisted"])
+        with (applied / "minimal-import-products.csv").open(encoding="utf-8-sig") as stream:
+            report = list(csv.DictReader(stream))
+        self.assertEqual(report[0]["source_key"], minimal.MODEL_SOURCE_KEYS[0][1])
+        self.assertEqual(report[9]["source_model"], "S0607EⅡ")
+        self.assertEqual(report[9]["target_model"], "S0607E")
 
 
 if __name__ == "__main__":
