@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { AdminIcon } from "../../components/admin/AdminIcon";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { AdminProductImage } from "../../components/admin/AdminProductImage";
 import { getSafeApiErrorMessage } from "../../services/api";
 import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
 import type {
@@ -362,7 +363,7 @@ export function AdminProductsPage() {
                     const category = categories.find((item) => item.id === product.category.id) ?? product.category;
                     const root = getRootCategory(category, categories) ?? category;
                     const subcategory = category.parent && category.id !== root.id ? category.name : "—";
-                    return <tr key={product.id}><td>{product.name}</td><td><span>{root.name}</span><span className="admin-products-table__secondary">{subcategory}</span></td><td>{product.brand?.name ?? "—"}</td><td>{formatCondition(product.condition)}</td><td><span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span></td><td><div className="admin-products-table__status"><span className={`badge ${product.is_featured ? "badge--ok" : "badge--muted"}`}>{product.is_featured ? "Destacado" : "Normal"}</span><span className={`badge ${product.is_published ? "badge--ok" : "badge--muted"}`}>{product.is_published ? "Publicado" : "No publicado"}</span></div></td><td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString("es-CL") : "—"}</td><td><Link className="table-action" to={`/admin/productos/${product.slug}/editar`}><AdminIcon name="edit" />Editar</Link></td></tr>;
+                    return <tr key={product.id}><td><div className="admin-products-table__name"><div className="admin-products-table__thumbnail">{product.main_image ? <AdminProductImage imageId={product.main_image.id} alt={product.main_image.alt_text.trim() || product.name} /> : <div className="admin-products-table__placeholder" role="img" aria-label={`Sin imagen para ${product.name}`} />}</div><span className="admin-products-table__name-text">{product.name}</span></div></td><td><span>{root.name}</span><span className="admin-products-table__secondary">{subcategory}</span></td><td>{product.brand?.name ?? "—"}</td><td>{formatCondition(product.condition)}</td><td><span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span></td><td><div className="admin-products-table__status"><span className={`badge ${product.is_featured ? "badge--ok" : "badge--muted"}`}>{product.is_featured ? "Destacado" : "Normal"}</span><span className={`badge ${product.is_published ? "badge--ok" : "badge--muted"}`}>{product.is_published ? "Publicado" : "No publicado"}</span></div></td><td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString("es-CL") : "—"}</td><td><Link className="table-action" to={`/admin/productos/${product.slug}/editar`}><AdminIcon name="edit" />Editar</Link></td></tr>;
                   })}</tbody>
                 </table>
               </div>
