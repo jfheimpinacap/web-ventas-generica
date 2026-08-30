@@ -7,6 +7,11 @@ namespace JemNexus.Api.Tests;
 
 public sealed class CommercialModelTests
 {
+    private static readonly DbContextOptions<JemNexusDbContext> ContextOptions =
+        new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseInMemoryDatabase("CommercialModelTests")
+            .Options;
+
     [Fact]
     public void DbContextContainsExpectedCommercialDbSets()
     {
@@ -163,10 +168,6 @@ public sealed class CommercialModelTests
 
     private static JemNexusDbContext CreateContext()
     {
-        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
-            .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=JemNexus_ModelTests;Trusted_Connection=True;TrustServerCertificate=True")
-            .Options;
-
-        return new JemNexusDbContext(options);
+        return new JemNexusDbContext(ContextOptions);
     }
 }
