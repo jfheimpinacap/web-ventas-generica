@@ -525,3 +525,21 @@ consultar el producto (`pre_patch_revalidated`) y reconstruye el payload mínimo
 desde ese detalle fresco. Los fallos posteriores a una escritura devuelven
 `PARTIAL_FAILURE` sin borrar las 21 filas, IDs ni acciones acumuladas; el
 producto fallido queda `partial_failure` y las filas posteriores `not_started`.
+
+La evidencia de altura acepta valores métricos simples y, únicamente para las
+etiquetas controladas de altura de trabajo, celdas explícitas `dentro/fuera`
+como `9.8m/8m(dentro/fuera)`. El primer número es la altura interior aprobada;
+el segundo es la altura exterior y también se interpreta y valida (debe ser
+positivo y no superar al primero). Ambos valores y la celda original quedan en
+la evidencia de informe. La altura nunca se infiere del nombre del modelo. La
+allowlist exacta de peso incluye además la etiqueta real `Peso de Máquina (CE)`
+usada por SS0607E, sin admitir pesos de componentes ni conversiones imperiales.
+
+Los fallos controlados registran `failure_stage`, un `failure_code` estable
+(por ejemplo `EVIDENCE_WORKING_HEIGHT_INCOMPATIBLE`,
+`EVIDENCE_MACHINE_WEIGHT_INCOMPATIBLE`, `EVIDENCE_CAPACITY_INCOMPATIBLE` o
+`EVIDENCE_POWER_24V_MISSING`) y el modelo afectado cuando corresponde. Si el
+directorio de salida ya fue validado y está nuevo o vacío, el conflicto produce
+los ocho informes habituales con cero POST y cero PATCH. El diagnóstico de CLI
+y los informes nunca incluyen credenciales, mensajes arbitrarios, multipart,
+cuerpos HTTP ni contenido binario de PDF.

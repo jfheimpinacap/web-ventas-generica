@@ -81,14 +81,14 @@ class FakeClient:
         return deepcopy(detail)
 
 
-def fixture():
-    catalog = tuple({"source_model": f"SRC{i:02}", "target_model": f"M{i:02}",
+def fixture(catalog=None):
+    catalog = catalog or tuple({"source_model": f"SRC{i:02}", "target_model": f"M{i:02}",
         "target_name": f"Elevador tipo tijera eléctrico LGMG M{i:02}", "working_height_m": float(i),
         "maximum_load_capacity_kg": 200 + i, "machine_weight_kg": 1000 + i,
         "power_source": "electric_24v", "datasheet_name": f"Ficha técnica LGMG M{i:02}"} for i in range(1, 22))
     datasheets, media = [], {}
     for i, row in enumerate(catalog, 1):
-        data = b"%PDF-" + bytes([64 + i]) * (20 + i); filename = f"M{i:02}.pdf"; media[filename] = data
+        data = b"%PDF-" + bytes([64 + i]) * (20 + i); filename = f'{row["target_model"]}.pdf'; media[filename] = data
         datasheets.append({"file_name": filename, "relative_path": filename, "size_bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest()})
     state = {"categories": [{"id": 1, "name": "Maquinaria", "is_active": True, "parent": None, "product_type": "machinery"},
@@ -114,6 +114,32 @@ def read_rows(path):
     with path.open(encoding="utf-8-sig", newline="") as stream: return list(csv.DictReader(stream))
 
 
+REAL_COMPOUND_HEIGHTS = {
+    "S0808E-2": "9.8m/8m(dentro/fuera)", "S1212E-2": "14m/9.5m(dentro/fuera)",
+    "S1413E-2": "15.8m/10m(dentro/fuera)", "S0808EⅡ": "9.8/8 m(dentro / fuera)",
+    "S1212EⅡ": "14/9.5 m(dentro / fuera)", "S1413EⅡ": "15.8/10 m(dentro / fuera)",
+    "S0808Ⅱ": "9.8/8 m(dentro / fuera)", "S1212Ⅱ": "14/9.5 m(dentro / fuera)",
+    "S1413Ⅱ": "15.8/10 m(dentro/fuera)",
+}
+
+
+def realistic_evidence(catalog=None):
+    catalog = catalog or tool.approved_catalog(); rows = []
+    for product in catalog:
+        source = product["source_model"]; height = REAL_COMPOUND_HEIGHTS.get(source, f'{product["working_height_m"]:g}m')
+        height_label = "Máx. Altura de Trabajo" if source == "SS0607E" else "Altura máxima de trabajo"
+        if source == "SS0607E": weight_label, power_label, power = "Peso de Máquina (CE)", "Fuente de Alimentación", "24V DC 150Ah"
+        elif source.endswith("E-2"): weight_label, power_label, power = "Peso de la máquina", "Fuente de potencia", "Batería 24 V"
+        else: weight_label, power_label, power = "Peso de la máquina (CE/ANSI)", "Fuente de potencia", "24V DC"
+        rows.extend((
+            {"source_key": product["source_key"], "source_label": height_label, "source_value": height},
+            {"source_key": product["source_key"], "source_label": "Capacidad de la plataforma", "source_value": f'{product["maximum_load_capacity_kg"]}kg'},
+            {"source_key": product["source_key"], "source_label": weight_label, "source_value": f'{product["machine_weight_kg"]}kg'},
+            {"source_key": product["source_key"], "source_label": power_label, "source_value": power},
+        ))
+    return rows
+
+
 class EnrichmentTests(unittest.TestCase):
     def approved(self): return tool.approved_catalog()[0]
 
@@ -121,6 +147,74 @@ class EnrichmentTests(unittest.TestCase):
         self.assertEqual(len(tool.APPROVED_ROWS), 21)
         self.assertEqual(tool.APPROVED_ROWS[0], ("S0607E-2", "S0607E-2", "7.8", 230, 1550))
         self.assertEqual(tool.APPROVED_ROWS[-1], ("S1413Ⅱ", "S1413", "15.8", 320, 3500))
+
+    def test_all_21_realistic_evidence_rows_are_accepted(self):
+        catalog = tool.approved_catalog(); evidence = tool.validate_evidence(catalog, realistic_evidence(catalog))
+        self.assertEqual(len(evidence), 21)
+        self.assertEqual(next(x for x in evidence if x["source_model"] == "S0808E-2")["height_outside_m"], "8")
+
+    def test_realistic_21_product_dry_run_has_no_writes(self):
+        catalog = tool.approved_catalog(); tool.validate_evidence(catalog, realistic_evidence(catalog))
+        _, datasheets, media, state = fixture(catalog); client = FakeClient(state, {}, media)
+        code, result = tool.orchestrate(client, deepcopy(state), catalog, datasheets, ".", False)
+        self.assertEqual((code, result["verdict"], result["products_examined"]), (0, "DRY_RUN_APPROVED", 21))
+        self.assertEqual((len(result["products"]), len(result["datasheets"]), client.post_count, client.patch_count), (21, 21, 0, 0))
+
+    def test_real_compound_height_regressions_select_inside_value(self):
+        catalog = tool.approved_catalog()
+        for source, inside, outside in (("S0808E-2", "9.8", "8"), ("S1212EⅡ", "14", "9.5"), ("S1413Ⅱ", "15.8", "10")):
+            with self.subTest(source=source):
+                product = next(x for x in catalog if x["source_model"] == source)
+                result = tool.validate_evidence([product], realistic_evidence([product]))[0]
+                self.assertEqual((result["height_inside_m"], result["height_outside_m"]), (inside, outside))
+
+    def test_ss0607e_real_labels_regression(self):
+        product = next(x for x in tool.approved_catalog() if x["source_model"] == "SS0607E")
+        result = tool.validate_evidence([product], realistic_evidence([product]))[0]
+        self.assertEqual(result["height_values"], "7.5m"); self.assertEqual(result["weight_values"], "1335kg")
+
+    def test_compound_height_is_strict_and_fail_closed(self):
+        product = next(x for x in tool.approved_catalog() if x["source_model"] == "S0808E-2")
+        for bad in ("9.7m/8m(dentro/fuera)", "9.8m/(dentro/fuera)", "9.8m/8m", "32ft/26ft(dentro/fuera)",
+                "9.8m(dentro/fuera)", "9.8m/8m/7m(dentro/fuera)", "9.8m/8m(fuera/dentro)", "0m/0m(dentro/fuera)"):
+            rows = realistic_evidence([product]); rows[0]["source_value"] = bad
+            with self.subTest(value=bad), self.assertRaises(tool.SafeError) as caught: tool.validate_evidence([product], rows)
+            self.assertEqual(caught.exception.failure_code, "EVIDENCE_WORKING_HEIGHT_INCOMPATIBLE")
+
+    def test_component_weight_and_missing_24v_have_stable_codes(self):
+        product = next(x for x in tool.approved_catalog() if x["source_model"] == "SS0607E")
+        for index, value, code in ((2, "Peso de la batería", "EVIDENCE_MACHINE_WEIGHT_INCOMPATIBLE"),
+                (3, "12V DC 150Ah", "EVIDENCE_POWER_24V_MISSING")):
+            rows = realistic_evidence([product])
+            if index == 2: rows[index]["source_label"] = value
+            else: rows[index]["source_value"] = value
+            with self.subTest(code=code), self.assertRaises(tool.SafeError) as caught: tool.validate_evidence([product], rows)
+            self.assertEqual(caught.exception.failure_code, code)
+
+    def test_safe_error_cli_diagnostic_never_prints_message(self):
+        previous = tool.run; tool.run = lambda *args, **kwargs: (_ for _ in ()).throw(tool.SafeError("access token=SENSITIVE"))
+        try:
+            stderr = io.StringIO()
+            from contextlib import redirect_stderr
+            with redirect_stderr(stderr): code = tool.main(["--plan-input", "p", "--media-input", "m", "--api-base-url", "http://localhost:5000", "--output-dir", "o"])
+            self.assertEqual(code, 1); self.assertEqual(stderr.getvalue(), "ERROR: INPUT_VALIDATION_FAILED\n")
+        finally: tool.run = previous
+
+    def test_controlled_failure_reports_are_safe_and_complete(self):
+        result = {"mode": "dry-run", "verdict": "CONFLICT", "conflicts": 1,
+            "failure_stage": "evidence_validation", "failure_code": "EVIDENCE_WORKING_HEIGHT_INCOMPATIBLE",
+            "failed_product": "S0808E-2", "post_requests": 0, "patch_requests": 0,
+            "products": [], "datasheets": [], "actions": [],
+            "errors": [{"product": "S0808E-2", "error": "EVIDENCE_WORKING_HEIGHT_INCOMPATIBLE"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "reports"; tool.write_outputs(output, result)
+            self.assertEqual({p.name for p in output.iterdir()}, set(tool.OUTPUT_NAMES))
+            summary = json.loads((output / "enrichment-summary.json").read_text())
+            self.assertEqual((summary["verdict"], summary["conflicts"], summary["post_requests"], summary["patch_requests"]),
+                ("CONFLICT", 1, 0, 0))
+            combined = b"".join(path.read_bytes() for path in output.iterdir())
+            for secret in (b"access token=SENSITIVE", b"Authorization", b"multipart", b"%PDF-"):
+                self.assertNotIn(secret, combined)
 
     def test_backend_static_contract(self):
         root = PATH.parents[2]
