@@ -450,7 +450,12 @@ es un dry-run de solo GET. La aplicación exige conjuntamente `--apply` y
 `JEM_NEXUS_ACCESS_TOKEN`. Su preflight fail-closed obtiene snapshots completos,
 resuelve los 21 productos por identidad comercial y jerarquía activas, comprueba
 su estado no publicado, imagen principal única y campos preservados, y termina
-sin escrituras ante cualquier diferencia.
+sin escrituras ante cualquier diferencia. Antes del primer POST o PATCH clasifica
+las 21 fichas de forma inmutable como `upload_required`, `reuse_required` o
+`already_associated`; la validación de los cuatro campos técnicos directos, la
+resolución por metadatos y SHA-256 y la construcción del PATCH son fases
+separadas. Por ello una asociación válida no es un conflicto y nunca se envía
+`technical_sheet` con valor nulo.
 
 Las únicas escrituras autorizadas son `POST /api/technical-sheets` con los
 campos multipart `name` y `file`, y `PATCH /api/products/{id}` mínimo con un
@@ -458,8 +463,17 @@ subconjunto de `working_height_m`, `maximum_load_capacity_kg`,
 `machine_weight_kg`, `power_source` y `technical_sheet`. No crea productos,
 ProductSpecs ni variantes, no modifica imágenes, nombres, modelos, slugs,
 descripciones o datos comerciales, no publica y mantiene vacíos terreno, año y
-horómetro. Las fichas existentes se descargan con autenticación y se reutilizan
-solo después de verificar metadatos y SHA-256.
+horómetro. El contrato de fichas usado es exclusivamente `GET
+/api/technical-sheets`, `GET /api/technical-sheets/{id}/file` y `POST
+/api/technical-sheets`; sus respuestas se validan estrictamente mediante `id`,
+`name`, `original_file_name`, `content_type`, `size_bytes`, `created_at`,
+`updated_at` y `file_url`, exigiendo `content_type=application/pdf`. Las fichas
+existentes se descargan por `/file` y se reutilizan solo después de verificar
+metadatos y SHA-256; tamaño y tipo por sí solos nunca prueban igualdad.
+El tamaño máximo coincide con el backend: 10 MiB exactos. Un archivo de hasta
+10 MiB es admisible y uno mayor se rechaza localmente antes de cualquier HTTP.
+Las fichas previas JPEG, PNG o WebP también se descargan con su tipo contractual
+para establecer la línea base física, pero nunca son candidatas PDF para LGMG.
 
 Dry-run posterior al merge:
 
@@ -493,3 +507,21 @@ carga 21; un HTTP 429 produce `PAUSED_RATE_LIMIT`, conserva `Retry-After` y
 también retorna 2. Al repetir después de la ventana, verifica y reutiliza las
 fichas ya cargadas. En estado final, la repetición realiza cero POST y cero
 PATCH y emite `IDEMPOTENT_VERIFIED`.
+
+`enrichment-products.csv` y `enrichment-datasheets.csv` siempre contienen una
+fila por cada uno de los 21 modelos, incluso en dry-run, pausa y reanudación.
+Registran campos directos pendientes, estado de ficha, hash, tipo de contenido,
+asociación y verificación final. `enrichment-actions.csv` separa y ordena cada
+GET de verificación, POST de ficha y PATCH de producto, sin persistir tokens,
+multipart ni bytes PDF. La verificación final compara por ID productos
+seleccionados y no seleccionados, categorías, marcas, imágenes, ProductSpecs y
+fichas, y rechaza cualquier modificación concurrente fuera de los cinco campos
+autorizados.
+
+Después de cada POST, la herramienta conserva primero el estado `uploaded`,
+valida los metadatos, descarga inmediatamente la ficha por `/file` y solo marca
+`hash_verified` al comprobar su SHA-256. Antes de cualquier PATCH vuelve a
+consultar el producto (`pre_patch_revalidated`) y reconstruye el payload mínimo
+desde ese detalle fresco. Los fallos posteriores a una escritura devuelven
+`PARTIAL_FAILURE` sin borrar las 21 filas, IDs ni acciones acumuladas; el
+producto fallido queda `partial_failure` y las filas posteriores `not_started`.

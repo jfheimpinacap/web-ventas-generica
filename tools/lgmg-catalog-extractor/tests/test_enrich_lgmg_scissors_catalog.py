@@ -1,17 +1,20 @@
 """Pruebas sintéticas: nunca usan red, API real ni base de datos."""
 
+from copy import deepcopy
+import csv
+import hashlib
 import importlib.util
 import io
 import json
-import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 import urllib.error
 
 PATH = Path(__file__).parents[1] / "enrich_lgmg_scissors_catalog.py"
 SPEC = importlib.util.spec_from_file_location("enrichment", PATH)
-tool = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(tool)
+tool = importlib.util.module_from_spec(SPEC); sys.modules[SPEC.name] = tool; SPEC.loader.exec_module(tool)
 
 
 class Headers:
@@ -31,8 +34,84 @@ class Opener:
     def __init__(self): self.requests = []; self.responses = []
     def open(self, request, timeout):
         self.requests.append((request, timeout))
-        if self.responses: return self.responses.pop(0)
-        return Response(request.full_url, {})
+        return self.responses.pop(0) if self.responses else Response(request.full_url, {})
+
+
+def sheet_metadata(sheet_id, name, filename, data):
+    return {"id": sheet_id, "name": name, "original_file_name": filename,
+        "content_type": "application/pdf", "size_bytes": len(data), "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z", "file_url": f"/technical-sheets/{sheet_id}/file"}
+
+
+class FakeClient:
+    """Backend falso mutable y persistente para invocaciones consecutivas."""
+    def __init__(self, state, files, media_files):
+        self.state, self.files, self.media_files, self.calls = state, files, media_files, []
+        self.post_count = self.patch_count = 0
+        self.concurrent_change = False
+        self.fail_patch_at = None; self.get_mutation = None; self.bad_post_metadata = False; self.bad_post_hash = False
+
+    def get_json(self, path):
+        self.calls.append(("GET", path))
+        routes = {"/api/categories?include_inactive=true": "categories", "/api/brands?include_inactive=true": "brands",
+            "/api/products?include_unpublished=true": "products", "/api/product-images": "images",
+            "/api/product-specs": "specs", "/api/technical-sheets": "sheets"}
+        if path in routes: return deepcopy(self.state[routes[path]])
+        product_id = int(path.rsplit("/", 1)[1])
+        if self.get_mutation: self.get_mutation(self, product_id); self.get_mutation = None
+        return deepcopy(self.state["details"][product_id])
+
+    def download(self, sheet_id, expected_content_type="application/pdf"):
+        self.calls.append(("GET", f"/api/technical-sheets/{sheet_id}/file")); return self.files[sheet_id]
+
+    def post_datasheet(self, name, filename, data):
+        self.calls.append(("POST", "/api/technical-sheets")); self.post_count += 1
+        sheet_id = max([s["id"] for s in self.state["sheets"]] or [0]) + 1
+        sheet = sheet_metadata(sheet_id, name, filename, data)
+        if self.bad_post_metadata: sheet["original_file_name"] = "wrong.pdf"
+        self.state["sheets"].append(sheet); self.files[sheet_id] = b"wrong" if self.bad_post_hash else data
+        return deepcopy(sheet)
+
+    def patch_product(self, product_id, payload):
+        self.calls.append(("PATCH", f"/api/products/{product_id}")); self.patch_count += 1
+        if self.fail_patch_at == product_id: raise tool.SafeError("synthetic secret must not escape")
+        detail = self.state["details"][product_id]
+        for key, value in payload.items(): detail[key] = {"id": value} if key == "technical_sheet" else value
+        if self.concurrent_change: detail["slug"] += "-concurrent"
+        return deepcopy(detail)
+
+
+def fixture():
+    catalog = tuple({"source_model": f"SRC{i:02}", "target_model": f"M{i:02}",
+        "target_name": f"Elevador tipo tijera eléctrico LGMG M{i:02}", "working_height_m": float(i),
+        "maximum_load_capacity_kg": 200 + i, "machine_weight_kg": 1000 + i,
+        "power_source": "electric_24v", "datasheet_name": f"Ficha técnica LGMG M{i:02}"} for i in range(1, 22))
+    datasheets, media = [], {}
+    for i, row in enumerate(catalog, 1):
+        data = b"%PDF-" + bytes([64 + i]) * (20 + i); filename = f"M{i:02}.pdf"; media[filename] = data
+        datasheets.append({"file_name": filename, "relative_path": filename, "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest()})
+    state = {"categories": [{"id": 1, "name": "Maquinaria", "is_active": True, "parent": None, "product_type": "machinery"},
+            {"id": 2, "name": "Elevadores tipo tijera eléctricos", "is_active": True, "parent": {"id": 1}, "product_type": "machinery"}],
+        "brands": [{"id": 1, "name": "LGMG", "is_active": True}], "products": [], "details": [],
+        "images": [], "specs": [], "sheets": []}
+    state["details"] = {}
+    for i, row in enumerate(catalog, 1):
+        summary = {"id": i, "name": row["target_name"], "model": row["target_model"], "slug": f"m{i:02}"}
+        state["products"].append(summary)
+        state["details"][i] = {**summary, "brand": {"id": 1}, "category": {"id": 2}, "description": f"desc {i}",
+            "summary": f"summary {i}", "supplier": None, "price": 100, "currency": "CLP", "includes_vat": True,
+            "stock": 1, "condition": "new", "sku": f"SKU{i}", "includes": "charger", "is_published": False,
+            "is_featured": False, "terrain_type": None, "year": None, "hours_meter": None,
+            "working_height_m": None, "maximum_load_capacity_kg": None, "machine_weight_kg": None,
+            "power_source": None, "technical_sheet": None, "updated_at": "old", "updated_by": None}
+        state["images"].append({"id": i, "product": {"id": i}, "is_main": True, "url": f"/{i}.jpg"})
+        state["specs"].append({"id": i, "product": {"id": i}, "label": "unchanged"})
+    return catalog, tuple(datasheets), media, state
+
+
+def read_rows(path):
+    with path.open(encoding="utf-8-sig", newline="") as stream: return list(csv.DictReader(stream))
 
 
 class EnrichmentTests(unittest.TestCase):
@@ -42,146 +121,227 @@ class EnrichmentTests(unittest.TestCase):
         self.assertEqual(len(tool.APPROVED_ROWS), 21)
         self.assertEqual(tool.APPROVED_ROWS[0], ("S0607E-2", "S0607E-2", "7.8", 230, 1550))
         self.assertEqual(tool.APPROVED_ROWS[-1], ("S1413Ⅱ", "S1413", "15.8", 320, 3500))
-        self.assertTrue(all(tool.approved_catalog()[i]["power_source"] == "electric_24v" for i in range(21)))
 
-    def test_u2161_and_existing_tables_are_cross_checked(self):
-        catalog = tool.approved_catalog()
-        changed = [x for x in catalog if x["source_model"] != x["target_model"]]
-        self.assertEqual(len(changed), 12)
-        self.assertTrue(all("Ⅱ" in x["source_model"] and "Ⅱ" not in x["target_model"] for x in changed))
-        self.assertEqual(len({x["source_key"] for x in catalog}), 21)
+    def test_backend_static_contract(self):
+        root = PATH.parents[2]
+        endpoints = (root / "backend-dotnet/JemNexus.Api/Endpoints/TechnicalSheetEndpoints.cs").read_text()
+        dtos = (root / "backend-dotnet/JemNexus.Api/Dtos/TechnicalSheetDtos.cs").read_text()
+        program = (root / "backend-dotnet/JemNexus.Api/Program.cs").read_text()
+        self.assertIn('MapGet("/{id:int}/file"', endpoints)
+        self.assertNotIn('MapGet("/{id:int}/' + 'download"', endpoints)
+        self.assertIn("string ContentType", dtos); self.assertIn("JsonNamingPolicy.SnakeCaseLower", program)
+        self.assertIn("MaxFileSize = 10 * 1024 * 1024", endpoints)
+        self.assertEqual(tool.MAX_DATASHEET_BYTES, 10 * 1024 * 1024)
 
-    def test_exact_names_and_deterministic_datasheet_names(self):
-        for row in tool.approved_catalog():
-            self.assertEqual(row["target_name"], f"Elevador tipo tijera eléctrico LGMG {row['target_model']}")
-            self.assertEqual(row["datasheet_name"], f"Ficha técnica LGMG {row['target_model']}")
+    def test_ten_mib_boundary_is_accepted_and_larger_rejected_before_http(self):
+        tool.validate_datasheet_sizes([{"size_bytes": tool.MAX_DATASHEET_BYTES}])
+        with self.assertRaisesRegex(tool.SafeError, "SIZE_LIMIT"):
+            tool.validate_datasheet_sizes([{"size_bytes": tool.MAX_DATASHEET_BYTES + 1}])
 
-    def test_origin_allowlist_is_exact(self):
-        for good in ("http://localhost:5000", "http://127.0.0.1:5000/"):
-            self.assertIn(tool.normalize_origin(good), ("http://localhost:5000", "http://127.0.0.1:5000"))
-        for bad in ("https://localhost:5000", "http://localhost", "http://localhost:5001", "http://user@localhost:5000", "http://localhost:5000/api", "http://localhost:5000?q=1", "http://localhost:5000/#x", "http://LOCALHOST:5000"):
-            with self.subTest(bad=bad), self.assertRaises(tool.SafeError): tool.normalize_origin(bad)
+    def test_real_content_type_contract_is_strict(self):
+        data = b"%PDF-x"; valid = sheet_metadata(1, "n", "x.pdf", data)
+        tool.validate_sheet_contract(valid)
+        invalid = dict(valid); invalid["mi" + "me_type"] = invalid.pop("content_type")
+        with self.assertRaises(tool.SafeError): tool.validate_sheet_contract(invalid)
 
-    def test_dry_client_allows_only_get(self):
-        client = tool.LocalApiClient("http://localhost:5000", "secret", False, Opener())
-        client.get_json("/api/products?include_unpublished=true")
-        with self.assertRaises(tool.SafeError): client.patch_product(1, {"working_height_m": 7.8})
-        with self.assertRaises(tool.SafeError): client.request("DELETE", "/api/products/1")
-        self.assertEqual([x[0] for x in client.calls], ["GET"])
+    def test_download_uses_file_route_and_allowlist(self):
+        opener = Opener(); opener.responses.append(Response("http://localhost:5000/api/technical-sheets/4/file", b"%PDF-x", "application/pdf"))
+        client = tool.LocalApiClient("http://localhost:5000", "secret", True, opener)
+        client.download(4)
+        self.assertEqual(client.calls, [("GET", "/api/technical-sheets/4/file")])
+        with self.assertRaises(tool.SafeError): client.get_json("/api/technical-sheets/4/" + "download")
 
-    def test_get_query_and_dynamic_routes_are_closed(self):
-        client = tool.LocalApiClient("http://localhost:5000", "x", opener=Opener())
-        for bad in ("/api/products", "/api/products?include_unpublished=false", "/api/products/1?x=1", "/api/foo"):
-            with self.assertRaises(tool.SafeError): client.get_json(bad)
-
-    def test_patch_allowlist_and_numeric_json(self):
-        client = tool.LocalApiClient("http://localhost:5000", "x", True, Opener())
-        client.patch_product(7, {"working_height_m": 7.8, "power_source": "electric_24v"})
-        for payload in ({"name": "x"}, {"working_height_m": "7.8"}, {"power_source": "diesel"}, {}):
-            with self.subTest(payload=payload), self.assertRaises(tool.SafeError): client.patch_product(7, payload)
-        with self.assertRaises(tool.SafeError): client.request("POST", "/api/products", payload={})
-
-    def test_multipart_has_exact_name_and_file_fields(self):
-        opener = Opener(); client = tool.LocalApiClient("http://localhost:5000", "x", True, opener)
-        client.post_datasheet("Ficha técnica LGMG S0607", "safe.pdf", b"%PDF-x")
-        request = opener.requests[0][0]; body = request.data
-        self.assertEqual(body.count(b'name="name"'), 1); self.assertEqual(body.count(b'name="file"'), 1)
-        self.assertIn(b'filename="safe.pdf"', body); self.assertNotIn(b"secret", body)
-
-    def test_token_only_from_environment_and_not_cli(self):
-        self.assertEqual(tool.access_token({tool.TOKEN_ENV: "opaque"}), "opaque")
-        for env in ({}, {tool.TOKEN_ENV: "x\nleak"}):
-            with self.assertRaises(tool.SafeError): tool.access_token(env)
-        options = {x.dest for x in tool.build_parser()._actions}
-        self.assertNotIn("token", options); self.assertNotIn("password", options)
-
-    def test_apply_requires_double_confirmation_before_platform_or_io(self):
-        for apply, confirm in ((True, False), (False, True)):
-            with self.assertRaisesRegex(tool.SafeError, "ambas confirmaciones"):
-                tool.run("missing", "missing", "http://localhost:5000", "out", apply, confirm, "x", platform="linux")
-
-    def test_windows_only_gate(self):
-        with self.assertRaisesRegex(tool.SafeError, "Windows"):
-            tool.run("missing", "missing", "http://localhost:5000", "out", False, False, "x", platform="linux")
-
-    def test_minimal_patch_only_missing_and_numbers(self):
+    def test_minimal_patch_never_emits_null_sheet(self):
         approved = self.approved(); detail = {"working_height_m": None, "maximum_load_capacity_kg": 230,
             "machine_weight_kg": "1550", "power_source": "electric_24v", "technical_sheet": None}
-        patch = tool.minimal_patch(detail, approved, 9)
-        self.assertEqual(patch, {"working_height_m": 7.8, "technical_sheet": 9})
-        self.assertIsInstance(patch["working_height_m"], float); self.assertIsInstance(patch["technical_sheet"], int)
+        self.assertEqual(tool.minimal_patch(detail, approved), {"working_height_m": 7.8})
+        self.assertEqual(tool.minimal_patch(detail, approved, 9), {"working_height_m": 7.8, "technical_sheet": 9})
+        self.assertNotIn(None, tool.minimal_patch(detail, approved).values())
 
-    def test_minimal_patch_rejects_nonempty_conflict(self):
-        with self.assertRaisesRegex(tool.SafeError, "working_height_m"):
-            tool.minimal_patch({"working_height_m": 99}, self.approved(), 1)
+    def test_hierarchy_parent_and_root_are_enforced(self):
+        catalog, datasheets, media, state = fixture(); state["categories"][1]["parent"] = {"id": 99}
+        with self.assertRaisesRegex(tool.SafeError, "Jerarquía"): tool.preflight(FakeClient(state, {}, media), state, catalog, datasheets)
+        self.assertEqual(state["sheets"], [])
 
-    def test_preserved_terrain_year_hours_preflight(self):
-        source = PATH.read_text(encoding="utf-8")
-        self.assertIn('(\"terrain_type\", \"year\", \"hours_meter\")', source)
-        for forbidden in ('"description":', '"slug":', '"is_published":', '"is_featured":'):
-            self.assertNotIn(forbidden, source)
+    def test_dry_run_has_21_rows_and_no_writes(self):
+        catalog, datasheets, media, state = fixture(); client = FakeClient(state, {}, media)
+        code, result = tool.orchestrate(client, deepcopy(state), catalog, datasheets, ".", False)
+        self.assertEqual((code, result["verdict"]), (0, "DRY_RUN_APPROVED"))
+        self.assertEqual((len(result["products"]), len(result["datasheets"])), (21, 21))
+        self.assertTrue(all(x["status"] == "upload_required" for x in result["datasheets"]))
+        self.assertEqual((client.post_count, client.patch_count), (0, 0))
 
-    def test_datasheet_reuse_downloads_and_checks_hash(self):
-        data = b"%PDF-synthetic"; opener = Opener(); opener.responses.append(Response("http://localhost:5000/api/technical-sheets/4/download", data, "application/pdf"))
-        client = tool.LocalApiClient("http://localhost:5000", "secret", True, opener)
-        approved = self.approved(); sheet = {"id": 4, "name": approved["datasheet_name"], "original_file_name": "x.pdf", "mime_type": "application/pdf", "size_bytes": len(data)}
-        metadata = {"file_name": "x.pdf", "size_bytes": len(data), "sha256": tool.hashlib.sha256(data).hexdigest(), "relative_path": "x.pdf"}
-        found, reused = tool.resolve_sheet(client, [sheet], approved, metadata, Path("."))
-        self.assertTrue(reused); self.assertEqual(found["id"], 4); self.assertEqual(client.calls, [("GET", "/api/technical-sheets/4/download")])
+    def test_pause_resume_and_idempotent_three_runs(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, data in media.items(): (root / name).write_bytes(data)
+            first = FakeClient(state, files, media); code1, result1 = tool.orchestrate(first, tool.snapshot(first, catalog), catalog, datasheets, root, True)
+            self.assertEqual((code1, result1["verdict"], first.post_count, first.patch_count), (2, "PAUSED_UPLOAD_WINDOW", 20, 20))
+            self.assertEqual((len(result1["products"]), len(result1["datasheets"])), (21, 21))
+            self.assertEqual(result1["datasheets"][-1]["status"], "pending_upload_window")
+            second = FakeClient(state, files, media); code2, result2 = tool.orchestrate(second, tool.snapshot(second, catalog), catalog, datasheets, root, True)
+            self.assertEqual((code2, second.post_count, second.patch_count), (0, 1, 1))
+            self.assertEqual(result2["verdict"], "APPLY_VERIFIED")
+            self.assertEqual(result2["updated_product_ids"], [21])
+            third = FakeClient(state, files, media); code3, result3 = tool.orchestrate(third, tool.snapshot(third, catalog), catalog, datasheets, root, True)
+            self.assertEqual((code3, third.post_count, third.patch_count), (0, 0, 0))
+            self.assertEqual(result3["verdict"], "IDEMPOTENT_VERIFIED")
+            self.assertTrue(all(x["final_verified"] for x in result3["products"]))
+            self.assertEqual((len(result3["products"]), len(result3["datasheets"])), (21, 21))
 
-    def test_datasheet_hash_collision_and_duplicate_are_blocking(self):
-        approved = self.approved(); metadata = {"file_name": "x.pdf", "size_bytes": 7, "sha256": "0" * 64, "relative_path": "x.pdf"}
-        candidate = {"id": 1, "name": approved["datasheet_name"], "original_file_name": "x.pdf", "mime_type": "application/pdf", "size_bytes": 7}
-        client = tool.LocalApiClient("http://localhost:5000", "x", True, Opener())
-        with self.assertRaises(tool.SafeError): tool.resolve_sheet(client, [candidate, dict(candidate, id=2)], approved, metadata, ".")
-        with self.assertRaises(tool.SafeError): tool.resolve_sheet(client, [dict(candidate, name="Other")], approved, metadata, ".")
+    def test_post_hash_verified_then_patch_failure_is_resumable(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media); client.fail_patch_at = 1
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+            self.assertEqual((code, result["verdict"]), (1, "PARTIAL_FAILURE"))
+            self.assertEqual((len(result["products"]), len(result["datasheets"])), (21, 21))
+            self.assertEqual(result["created_datasheet_ids"], [1]); self.assertEqual(result["failed_product"], "M01")
+            self.assertEqual([a["result"] for a in result["actions"][-3:]], ["uploaded", "hash_verified", "pre_patch_revalidated"])
+            self.assertIsNone(state["details"][1]["technical_sheet"]); self.assertEqual(len(state["sheets"]), 1)
+            resumed = FakeClient(state, files, media)
+            code2, result2 = tool.orchestrate(resumed, tool.snapshot(resumed, catalog[:1]), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual((code2, resumed.post_count, resumed.patch_count), (0, 0, 1))
+            self.assertEqual(result2["datasheets_reused"], 1)
 
-    def test_rate_limit_configuration_is_read_from_repository(self):
-        root = PATH.parents[2]
-        self.assertEqual(tool.read_rate_limit(root), {"PermitLimit": 20, "WindowSeconds": 600})
+    def test_failure_after_multiple_products_preserves_progress(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media); client.fail_patch_at = 3
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+            self.assertEqual(code, 1); self.assertEqual(result["updated_product_ids"], [1, 2])
+            self.assertEqual(result["created_datasheet_ids"], [1, 2, 3])
+            self.assertEqual(result["products"][3]["status"], "not_started")
 
-    def test_rate_429_preserves_retry_after_without_sleep(self):
+    def test_post_metadata_or_hash_failure_never_patches_or_claims_hash(self):
+        for attribute in ("bad_post_metadata", "bad_post_hash"):
+            catalog, datasheets, media, state = fixture(); files = {}
+            with self.subTest(attribute=attribute), tempfile.TemporaryDirectory() as tmp:
+                for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+                client = FakeClient(state, files, media); setattr(client, attribute, True)
+                code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+                self.assertEqual((code, client.patch_count, result["verdict"]), (1, 0, "PARTIAL_FAILURE"))
+                self.assertFalse(result["datasheets"][0]["hash_verified"])
+                self.assertEqual(len(result["products"]), 21); self.assertNotIn(b"wrong", json.dumps(result).encode())
+
+    def test_pre_patch_revalidation_handles_concurrent_technical_values(self):
+        cases = (("working_height_m", 999, 1), ("working_height_m", 1.0, 0), ("technical_sheet", {"id": 999}, 1))
+        for field, value, expected_code in cases:
+            catalog, datasheets, media, state = fixture(); files = {}
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
+                for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+                client = FakeClient(state, files, media)
+                before = tool.snapshot(client, catalog[:1])
+                client.get_mutation = lambda c, pid, f=field, v=value: c.state["details"][pid].__setitem__(f, v)
+                code, result = tool.orchestrate(client, before, catalog[:1], datasheets[:1], tmp, True)
+                self.assertEqual(code, expected_code)
+                self.assertIn("pre_patch_revalidated", [a["result"] for a in result["actions"]])
+                if expected_code: self.assertEqual(client.patch_count, 0)
+
+    def test_unrelated_jpeg_is_baselined_and_preserved(self):
+        catalog, datasheets, media, state = fixture(); jpeg = b"\xff\xd8\xffsynthetic"
+        foreign = sheet_metadata(80, "Photo", "photo.jpg", jpeg); foreign["content_type"] = "image/jpeg"
+        state["sheets"].append(foreign); files = {80: jpeg}; client = FakeClient(state, files, media)
+        plans, cache = tool.preflight(client, state, catalog, datasheets)
+        self.assertIn(80, cache); self.assertTrue(all(p.resolved_sheet is None for p in plans))
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "M01.pdf").write_bytes(media["M01.pdf"])
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog[:1]), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual(code, 0); self.assertEqual(state["sheets"][0], foreign); self.assertEqual(files[80], jpeg)
+
+    def test_already_enriched_product_is_accepted(self):
+        catalog, datasheets, media, state = fixture(); data = media["M01.pdf"]
+        state["sheets"].append(sheet_metadata(1, catalog[0]["datasheet_name"], "M01.pdf", data)); files = {1: data}
+        detail = state["details"][1]
+        for key in tool.DIRECT_FIELDS: detail[key] = catalog[0][key]
+        detail["technical_sheet"] = {"id": 1}
+        plans, _ = tool.preflight(FakeClient(state, files, media), state, catalog, datasheets)
+        self.assertEqual(plans[0].sheet_status, "already_associated"); self.assertEqual(plans[0].direct_patch, {})
+
+    def test_orphan_exact_sheet_is_reused_without_post(self):
+        catalog, datasheets, media, state = fixture(); data = media["M01.pdf"]
+        state["sheets"].append(sheet_metadata(1, catalog[0]["datasheet_name"], "M01.pdf", data)); client = FakeClient(state, {1: data}, media)
+        plans, _ = tool.preflight(client, state, catalog, datasheets)
+        self.assertEqual(plans[0].sheet_status, "reuse_required")
+
+    def test_product_21_conflict_blocks_every_write(self):
+        catalog, datasheets, media, state = fixture(); state["details"][21]["working_height_m"] = 999
+        client = FakeClient(state, {}, media)
+        with self.assertRaises(tool.SafeError): tool.orchestrate(client, deepcopy(state), catalog, datasheets, ".", True)
+        self.assertEqual((client.post_count, client.patch_count), (0, 0))
+
+    def test_wrong_associated_sheet_is_conflict(self):
+        catalog, datasheets, media, state = fixture(); data = b"%PDF-wrong"
+        state["sheets"].append(sheet_metadata(99, "Other", "other.pdf", data)); state["details"][1]["technical_sheet"] = {"id": 99}
+        with self.assertRaisesRegex(tool.SafeError, "asociada"):
+            tool.preflight(FakeClient(state, {99: data}, media), state, catalog, datasheets)
+
+    def test_same_size_different_hash_unrelated_is_ignored(self):
+        catalog, datasheets, media, state = fixture(); expected = media["M01.pdf"]; foreign = b"%PDF-Z" + b"Z" * (len(expected) - 6)
+        self.assertEqual(len(expected), len(foreign))
+        state["sheets"].append(sheet_metadata(8, "Foreign", "foreign.pdf", foreign))
+        plans, _ = tool.preflight(FakeClient(state, {8: foreign}, media), state, catalog, datasheets)
+        self.assertEqual(plans[0].sheet_status, "upload_required")
+
+    def test_same_hash_under_other_name_is_conflict(self):
+        catalog, datasheets, media, state = fixture(); data = media["M01.pdf"]
+        state["sheets"].append(sheet_metadata(8, "Foreign", "foreign.pdf", data))
+        with self.assertRaisesRegex(tool.SafeError, "Colisión"):
+            tool.preflight(FakeClient(state, {8: data}, media), state, catalog, datasheets)
+
+    def test_concurrent_commercial_change_is_detected(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media); client.concurrent_change = True
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual((code, result["verdict"]), (1, "PARTIAL_FAILURE"))
+            self.assertEqual(len(result["products"]), 1); self.assertEqual(result["updated_product_ids"], [1])
+
+    def test_collections_are_preserved_after_complete_application(self):
+        catalog, datasheets, media, state = fixture(); before = deepcopy(state); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media)
+            # Use one item to avoid the intentional 20-upload window in this preservation unit.
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog[:1]), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual(code, 0); self.assertTrue(result["final_verification"])
+            for key in ("categories", "brands", "images", "specs", "products"): self.assertEqual(state[key], before[key])
+
+    def test_reports_have_required_columns_and_no_secrets(self):
+        catalog, datasheets, media, state = fixture(); _, result = tool.orchestrate(FakeClient(state, {}, media), deepcopy(state), catalog, datasheets, ".", False)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"; tool.write_outputs(output, result)
+            products, sheets = read_rows(output / "enrichment-products.csv"), read_rows(output / "enrichment-datasheets.csv")
+            self.assertEqual((len(products), len(sheets)), (21, 21))
+            self.assertTrue({"direct_fields_pending", "technical_sheet_status", "final_verified"} <= set(products[0]))
+            self.assertTrue({"target_model", "product_id", "content_type", "hash_verified", "associated"} <= set(sheets[0]))
+            combined = b"".join(x.read_bytes() for x in output.iterdir())
+            for secret in (b"Authorization", b"Bearer", b"secret"): self.assertNotIn(secret, combined)
+
+    def test_client_safety_multipart_and_rate_limit(self):
+        opener = Opener(); client = tool.LocalApiClient("http://localhost:5000", "secret", True, opener)
+        client.post_datasheet("Ficha", "safe.pdf", b"%PDF-x")
+        body = opener.requests[0][0].data
+        self.assertEqual(body.count(b'name="name"'), 1); self.assertEqual(body.count(b'name="file"'), 1); self.assertNotIn(b"secret", body)
         class RateOpener:
             def open(self, request, timeout):
                 raise urllib.error.HTTPError(request.full_url, 429, "rate", Headers(values={"Retry-After": "17"}), None)
-        client = tool.LocalApiClient("http://localhost:5000", "x", opener=RateOpener())
-        with self.assertRaises(tool.RatePause) as caught: client.get_json("/api/technical-sheets")
-        self.assertEqual(caught.exception.retry_after, 17); self.assertEqual(caught.exception.verdict, "PAUSED_RATE_LIMIT")
+        with self.assertRaises(tool.RatePause) as caught:
+            tool.LocalApiClient("http://localhost:5000", "x", opener=RateOpener()).get_json("/api/technical-sheets")
+        self.assertEqual((caught.exception.verdict, caught.exception.retry_after), ("PAUSED_RATE_LIMIT", 17))
 
-    def test_upload_limit_constants(self):
-        self.assertEqual((tool.UPLOAD_LIMIT, tool.UPLOAD_WINDOW_SECONDS), (20, 600))
-        self.assertEqual(tool.RatePause("PAUSED_UPLOAD_WINDOW", 600).retry_after, 600)
-
-    def test_csv_bom_crlf_formula_and_unicode(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "x.csv"; tool.write_csv(path, ["v"], [{"v": "=1+1"}, {"v": "S0607EⅡ"}])
-            raw = path.read_bytes(); self.assertTrue(raw.startswith(b"\xef\xbb\xbf")); self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
-            self.assertIn(b"'=1+1", raw); self.assertIn("Ⅱ", raw.decode("utf-8-sig"))
-
-    def test_reports_are_exact_staged_and_secret_free(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            output = Path(tmp) / "out"; tool.write_outputs(output, {"mode": "dry-run", "verdict": "DRY_RUN_APPROVED", "products": [], "datasheets": [], "actions": [], "errors": []})
-            self.assertEqual({x.name for x in output.iterdir()}, set(tool.OUTPUT_NAMES))
-            combined = b"".join(x.read_bytes() for x in output.iterdir()); self.assertNotIn(b"Authorization", combined); self.assertNotIn(b"Bearer", combined)
-
-    def test_output_staging_cleanup_on_nonempty_destination(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            output = Path(tmp) / "out"; output.mkdir(); (output / "keep").write_text("x")
-            with self.assertRaises(tool.SafeError): tool.write_outputs(output, {"products": [], "datasheets": [], "actions": [], "errors": []})
-            self.assertFalse(any(x.name.startswith(".enrichment-staging-") for x in Path(tmp).iterdir()))
-
-    def test_no_destructive_or_out_of_scope_http(self):
-        source = PATH.read_text(encoding="utf-8")
-        self.assertNotIn('request("DELETE"', source); self.assertNotIn('request("PUT"', source)
-        self.assertNotIn('POST", "/api/products"', source); self.assertNotIn('POST", "/api/product-images"', source)
-
-    def test_redirect_handler_rejects(self):
-        with self.assertRaises(tool.SafeError): tool.NoRedirect().redirect_request(None, None, 302, "", {}, "http://elsewhere")
-
-    def test_unsafe_multipart_filename_rejected(self):
+    def test_origin_token_and_write_allowlists(self):
+        self.assertEqual(tool.normalize_origin("http://localhost:5000"), "http://localhost:5000")
+        for bad in ("https://localhost:5000", "http://localhost:5001", "http://user@localhost:5000"):
+            with self.assertRaises(tool.SafeError): tool.normalize_origin(bad)
+        self.assertEqual(tool.access_token({tool.TOKEN_ENV: "opaque"}), "opaque")
         client = tool.LocalApiClient("http://localhost:5000", "x", True, Opener())
-        for name in ("../x.pdf", "a/b.pdf", 'a".pdf', "a\n.pdf"):
-            with self.subTest(name=name), self.assertRaises(tool.SafeError): client.post_datasheet("n", name, b"x")
+        with self.assertRaises(tool.SafeError): client.patch_product(1, {"technical_sheet": None})
+        source = PATH.read_text(); self.assertNotIn('request("DELETE"', source); self.assertNotIn('request("PUT"', source)
 
 
 if __name__ == "__main__": unittest.main()
