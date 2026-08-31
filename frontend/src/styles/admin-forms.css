@@ -637,6 +637,16 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.admin-product-editor-form .admin-form-panel--product-grid > label {
+  min-width: 0;
+}
+
+.admin-product-editor-form .admin-form-panel--product-grid > label > select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .admin-product-technical-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
