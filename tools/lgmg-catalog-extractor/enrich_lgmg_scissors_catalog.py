@@ -54,6 +54,13 @@ APPROVED_ROWS = (
 class SafeError(Exception):
     """Error controlado que nunca incluye credenciales ni cuerpos binarios."""
 
+    def __init__(self, message="", *, failure_stage="input_validation",
+            failure_code="INPUT_VALIDATION_FAILED", failed_product=None):
+        super().__init__(message)
+        self.failure_stage = failure_stage
+        self.failure_code = failure_code
+        self.failed_product = failed_product
+
 
 class RatePause(SafeError):
     def __init__(self, verdict, retry_after=None):
@@ -190,6 +197,35 @@ def _number(value):
     except Exception: return None
 
 
+_COMPOUND_HEIGHT = re.compile(
+    r"(?P<inside>[0-9]+(?:[.,][0-9]+)?)\s*m?\s*/\s*"
+    r"(?P<outside>[0-9]+(?:[.,][0-9]+)?)\s*m\s*"
+    r"\(\s*dentro\s*/\s*fuera\s*\)\Z", re.I)
+
+
+def _working_height(value, audit):
+    """Parse only a metric scalar or the approved inside/outside cell shape."""
+    original = str(value)
+    match = _COMPOUND_HEIGHT.fullmatch(original)
+    if match:
+        inside = Decimal(match.group("inside").replace(",", "."))
+        outside = Decimal(match.group("outside").replace(",", "."))
+        if not inside.is_finite() or not outside.is_finite() or inside <= 0 or outside <= 0 or inside < outside:
+            return None
+        return inside, outside, original
+    simple = audit.metric_number(original, "m")
+    if simple is None: return None
+    inside = Decimal(simple)
+    if not inside.is_finite() or inside <= 0: return None
+    return inside, None, original
+
+
+def _evidence_error(code, product):
+    raise SafeError(f"Evidencia incompatible: {product['source_model']}",
+        failure_stage="evidence_validation", failure_code=code,
+        failed_product=product["target_model"])
+
+
 def validate_evidence(selected, specifications):
     audit = _audit_module(); grouped = {}
     for row in specifications: grouped.setdefault(row.get("source_key"), []).append(row)
@@ -200,29 +236,28 @@ def validate_evidence(selected, specifications):
         for row in specs:
             label = audit.normalized(row.get("source_label"))
             if label in {"altura maxima de trabajo", "max. altura de trabajo", "maximum working height", "max. working height"}:
-                value = audit.metric_number(row.get("source_value", ""), "m")
-                if value: heights.append((Decimal(value), row))
-        if not heights or max(v for v, _ in heights) != Decimal(str(product["working_height_m"])):
-            raise SafeError(f"Evidencia de altura incompatible: {product['source_model']}")
-        # Si la fuente distingue interior/exterior, ambas filas deben estar presentes.
-        labels = [audit.normalized(r.get("source_label")) for _, r in heights]
-        if any("interior" in x or "exterior" in x for x in labels) and not (any("interior" in x for x in labels) and any("exterior" in x for x in labels)):
-            raise SafeError("Altura interior/exterior incompleta")
+                parsed = _working_height(row.get("source_value", ""), audit)
+                if parsed: heights.append((*parsed, row))
+        approved_height = Decimal(str(product["working_height_m"]))
+        if not heights or {inside for inside, _, _, _ in heights} != {approved_height}:
+            _evidence_error("EVIDENCE_WORKING_HEIGHT_INCOMPATIBLE", product)
         caps = audit.capacity_evidence(specs, str(product["maximum_load_capacity_kg"]))
-        if not caps: raise SafeError(f"Evidencia de capacidad incompatible: {product['source_model']}")
+        if not caps: _evidence_error("EVIDENCE_CAPACITY_INCOMPATIBLE", product)
         weights = []
-        allowed_weight = re.compile(r"^(?:peso de la maquina|peso total de la maquina|machine weight|overall machine weight)(?: \(ce/ansi\)| \(ce\))?$")
+        allowed_weight = re.compile(r"^(?:peso de la maquina|peso de maquina|peso total de la maquina|machine weight|overall machine weight)(?: \(ce/ansi\)| \(ce\))?$")
         for row in specs:
             if allowed_weight.fullmatch(audit.normalized(row.get("source_label"))):
                 value = audit.metric_number(row.get("source_value", ""), "kg")
                 if value: weights.append((Decimal(value), row))
         if {v for v, _ in weights} != {Decimal(product["machine_weight_kg"])}:
-            raise SafeError(f"Evidencia de peso incompatible: {product['source_model']}")
+            _evidence_error("EVIDENCE_MACHINE_WEIGHT_INCOMPATIBLE", product)
         power = [r for r in specs if re.search(r"(?:24\s*v|24v)", str(r.get("source_value", "")), re.I)
             and audit.normalized(r.get("source_label")) in {"fuente de potencia", "fuente de alimentacion", "power source", "bateria de plomo-acido", "lead-acid battery"}]
-        if not power: raise SafeError(f"Evidencia eléctrica 24 V ausente: {product['source_model']}")
-        evidence_rows.append({"source_model": product["source_model"], "height_labels": " | ".join(r.get("source_label", "") for _, r in heights),
-            "height_values": " | ".join(r.get("source_value", "") for _, r in heights),
+        if not power: _evidence_error("EVIDENCE_POWER_24V_MISSING", product)
+        evidence_rows.append({"source_model": product["source_model"], "height_labels": " | ".join(r.get("source_label", "") for _, _, _, r in heights),
+            "height_values": " | ".join(original for _, _, original, _ in heights),
+            "height_inside_m": " | ".join(str(inside) for inside, _, _, _ in heights),
+            "height_outside_m": " | ".join("" if outside is None else str(outside) for _, outside, _, _ in heights),
             "capacity_labels": " | ".join(r.get("source_label", "") for r in caps),
             "capacity_values": " | ".join(r.get("source_value", "") for r in caps),
             "weight_labels": " | ".join(r.get("source_label", "") for _, r in weights),
@@ -498,7 +533,10 @@ def _safe_failure(result, plans, index, exc):
     result["verdict"] = "PARTIAL_FAILURE" if wrote else "CONFLICT"
     result["conflicts"] += 1
     result["failed_product"] = plans[index].approved["target_model"] if index < len(plans) else "final_verification"
-    result["errors"].append({"product": result["failed_product"], "error": type(exc).__name__})
+    safe = exc if isinstance(exc, SafeError) else SafeError()
+    result.update({"failure_stage": safe.failure_stage,
+        "failure_code": safe.failure_code})
+    result["errors"].append({"product": result["failed_product"], "error": safe.failure_code})
     if index < len(plans):
         result["products"][index]["status"] = "partial_failure" if wrote else "conflict"
         result["datasheets"][index]["status"] = "partial_failure" if wrote else "conflict"
@@ -607,25 +645,35 @@ def run(plan_input, media_input, base_url, output, apply=False, confirmed=False,
     if apply != confirmed: raise SafeError("Aplicación requiere ambas confirmaciones")
     if (platform or sys.platform) != "win32": raise SafeError("Esta herramienta solo puede ejecutarse en Windows")
     audit = _audit_module(); plan_root, media_root = Path(plan_input), Path(media_input)
-    audit.safe_paths(plan_root, media_root, Path(output)); plan, media = audit.validate_inputs(plan_root, media_root)
-    catalog = approved_catalog(); selected = audit.select_products(plan["rows"]["import-products.csv"], catalog)
-    datasheets = audit.validate_datasheets(selected, plan, media, media_root)
-    if len(datasheets) != 21 or len({x["sha256"] for x in datasheets}) != 21:
-        raise SafeError("Se requieren 21 PDF físicos únicos")
-    validate_datasheet_sizes(datasheets)
-    validate_evidence(selected, plan["rows"]["import-specifications.csv"])
-    read_rate_limit(Path(__file__).resolve().parents[2]); client = client_factory(normalize_origin(base_url), token, apply=apply)
-    before = snapshot(client, catalog)
+    audit.safe_paths(plan_root, media_root, Path(output))
+    client = None; plan = media = None
     try:
+        plan, media = audit.validate_inputs(plan_root, media_root)
+        catalog = approved_catalog(); selected = audit.select_products(plan["rows"]["import-products.csv"], catalog)
+        datasheets = audit.validate_datasheets(selected, plan, media, media_root)
+        if len(datasheets) != 21 or len({x["sha256"] for x in datasheets}) != 21:
+            raise SafeError("Se requieren 21 PDF físicos únicos")
+        validate_datasheet_sizes(datasheets)
+        validate_evidence(selected, plan["rows"]["import-specifications.csv"])
+        read_rate_limit(Path(__file__).resolve().parents[2]); client = client_factory(normalize_origin(base_url), token, apply=apply)
+        before = snapshot(client, catalog)
         code, result = orchestrate(client, before, catalog, datasheets, media_root, apply)
     except Exception as exc:
+        safe = exc if isinstance(exc, SafeError) else SafeError()
         result = {"mode": "apply" if apply else "dry-run", "verdict": "CONFLICT", "conflicts": 1,
-            "products": [], "datasheets": [], "actions": [], "errors": [{"product": "", "error": type(exc).__name__}]}
+            "failure_stage": safe.failure_stage, "failure_code": safe.failure_code,
+            "failed_product": safe.failed_product, "products": [], "datasheets": [], "actions": [],
+            "errors": [{"product": safe.failed_product or "", "error": safe.failure_code}]}
         code = 1
-    result["input_hashes"] = {"plan": plan["manifest"].get("combined_fingerprint_sha256"), "media": media["manifest"].get("combined_fingerprint_sha256")}
+    result["input_hashes"] = {"plan": plan["manifest"].get("combined_fingerprint_sha256") if plan else None,
+        "media": media["manifest"].get("combined_fingerprint_sha256") if media else None}
     for order, action in enumerate(result.get("actions", []), 1): action["order"] = order
-    result["http_methods_and_paths"] = client.calls
+    result["http_methods_and_paths"] = client.calls if client else []
+    result["post_requests"] = sum(method == "POST" for method, _ in result["http_methods_and_paths"])
+    result["patch_requests"] = sum(method == "PATCH" for method, _ in result["http_methods_and_paths"])
     write_outputs(output, result)
+    if code == 1 and result.get("failure_code"):
+        print(f"ERROR: {result['failure_code']}", file=sys.stderr)
     return code
 
 def access_token(environ=os.environ):
@@ -646,7 +694,8 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     try: return run(args.plan_input, args.media_input, args.api_base_url, args.output_dir, args.apply, args.confirmed, access_token())
     except Exception as exc:
-        print(f"ERROR: {type(exc).__name__}", file=sys.stderr); return 1
+        code = exc.failure_code if isinstance(exc, SafeError) else "UNEXPECTED_FAILURE"
+        print(f"ERROR: {code}", file=sys.stderr); return 1
 
 
 if __name__ == "__main__": raise SystemExit(main())
