@@ -543,3 +543,68 @@ directorio de salida ya fue validado y está nuevo o vacío, el conflicto produc
 los ocho informes habituales con cero POST y cero PATCH. El diagnóstico de CLI
 y los informes nunca incluyen credenciales, mensajes arbitrarios, multipart,
 cuerpos HTTP ni contenido binario de PDF.
+
+## Auditoría offline del catálogo LGMG restante
+
+`audit_lgmg_remaining_catalog.py` prepara, sin importar ni modificar productos, la
+tabla de aprobación humana del plan LGMG amplio. Su alcance contractual es de 57
+productos: identifica 21 tijeras eléctricas estándar mediante los pares exactos
+`source_key + metric_model` leídos de `MODEL_SOURCE_KEYS` y deja 36 productos en
+seis familias. `processed_closed_cohort` describe esa cohorte cerrada; **no**
+significa que la herramienta haya consultado la base de datos.
+
+Las propuestas cerradas, siempre pendientes de aprobación humana, son:
+
+| Familia fuente | Subcategoría propuesta | Prefijo comercial propuesto |
+| --- | --- | --- |
+| Elevador Eléctrico RT de Tijera | Elevadores tipo tijera todoterreno | Elevador tipo tijera todoterreno eléctrico LGMG |
+| Elevadores de Brazo Articulado | Elevadores tipo brazo articulado | Elevador tipo brazo articulado eléctrico LGMG |
+| Elevadores de Brazo Telescópico | Elevadores tipo brazo telescópico | Elevador tipo brazo telescópico eléctrico LGMG |
+| Elevador Mástil Vertical | Elevadores tipo mástil vertical | Elevador tipo mástil vertical eléctrico LGMG |
+| Elevador de Tijera Sobre Orugas | Elevadores tipo tijera sobre orugas | Elevador tipo tijera sobre orugas eléctrico LGMG |
+| Manipuladores Telescópicos | Manipuladores telescópicos | Manipulador telescópico eléctrico LGMG |
+
+El modelo propuesto conserva literalmente `metric_model`, incluido Unicode como
+`Ⅱ` y cualquier sufijo. El nombre es únicamente el prefijo de la tabla, un
+espacio y ese modelo exacto. El modelo imperial, los aliases y el nombre original
+del plan permanecen separados para comparar; no generan productos adicionales.
+
+La auditoría vuelve a comprobar hashes, tamaños, rutas, asociaciones, MIME,
+extensiones y firmas binarias de imágenes y PDF. Exige una candidata principal
+única y al menos una imagen válida por producto. `AR24JE` y `T38JE` son las únicas
+fichas permitidas como `missing_at_source`: no bloquean una futura importación
+mínima después de aprobarla, pero dejan el enriquecimiento técnico pendiente.
+La importación mínima futura (identidad, categoría, modelo, nombre e imagen) es
+distinta de asociar la ficha y completar el enriquecimiento técnico.
+
+La herramienta acepta exclusivamente `--plan-input`, `--media-input` y
+`--output-dir`, todos obligatorios y directorios locales seguros. Está cerrada a
+los fingerprints aprobados del plan
+`75d68378dcd7bf77b19f9c7f0e60806085deaecadf2b7fa70e3102812be4bcb7` y de medios
+`b16d7f40250cc9b7a1b4affe029d0a87bba4355968e289fdab99ddbb4d656c9b`.
+No requiere backend, frontend ni token; no usa red, API o base de datos y no
+ofrece aplicación ni publicación.
+
+Produce exactamente nueve archivos: `remaining-catalog-scope.csv`,
+`remaining-products-for-approval.csv`, `remaining-families.csv`,
+`remaining-media.csv`, `remaining-conflicts.csv`, `remaining-summary.json`,
+`remaining-summary.txt`, `remaining-manifest.json` y
+`README-remaining-audit.txt`. Las `approval_key` y el fingerprint agregado
+permitirán al importador general futuro comprobar que una aprobación no cambió.
+El plan `electric-only` no necesariamente cubre el catálogo mundial: productos
+no eléctricos o inciertos fuera del plan no cuentan como importados y tampoco
+deben olvidarse silenciosamente.
+
+Ejemplo para Windows (ejecutar después del merge con los paquetes reales):
+
+```powershell
+Set-Location "C:\Users\Franz\Desktop\web-ventas-generica"
+
+$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+& "C:\Windows\py.exe" -3 `
+  ".\tools\lgmg-catalog-extractor\audit_lgmg_remaining_catalog.py" `
+  --plan-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Qualified-Power-Validation-20260828-145126\import-plan" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Media-Download-20260828-105313\media-package" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Remaining-Audit-$Stamp"
+```
