@@ -432,3 +432,64 @@ hojas de cálculo. Una entrada corrupta, insegura o distinta del lote cerrado
 impide cualquier paquete parcial. El estado exitoso `AUDIT_COMPLETE` significa
 únicamente que la evidencia local fue inventariada: no significa que los datos
 estén listos para actualizar o publicar.
+
+## Enriquecimiento controlado posterior a la auditoría
+
+`enrich_lgmg_scissors_catalog.py` aplica exclusivamente la decisión comercial
+cerrada para las 21 tijeras LGMG. Vuelve a validar los `import-plan` y
+`media-package` originales, las 21 asociaciones y PDF, y la evidencia de altura
+de trabajo, capacidad, peso base y alimentación eléctrica de 24 V. La tabla
+explícita conserva U+2161 en los modelos fuente y se cruza con
+`MODEL_SOURCE_KEYS` y `SOURCE_TARGET_MODELS`; no existe una transformación
+Unicode general ni se consumen como fuente los informes de auditoría.
+
+La herramienta funciona únicamente en Windows y contra los orígenes locales
+exactos `http://localhost:5000` y `http://127.0.0.1:5000`. El modo predeterminado
+es un dry-run de solo GET. La aplicación exige conjuntamente `--apply` y
+`--confirm-lgmg-scissors-enrichment`, con el token disponible solamente en
+`JEM_NEXUS_ACCESS_TOKEN`. Su preflight fail-closed obtiene snapshots completos,
+resuelve los 21 productos por identidad comercial y jerarquía activas, comprueba
+su estado no publicado, imagen principal única y campos preservados, y termina
+sin escrituras ante cualquier diferencia.
+
+Las únicas escrituras autorizadas son `POST /api/technical-sheets` con los
+campos multipart `name` y `file`, y `PATCH /api/products/{id}` mínimo con un
+subconjunto de `working_height_m`, `maximum_load_capacity_kg`,
+`machine_weight_kg`, `power_source` y `technical_sheet`. No crea productos,
+ProductSpecs ni variantes, no modifica imágenes, nombres, modelos, slugs,
+descripciones o datos comerciales, no publica y mantiene vacíos terreno, año y
+horómetro. Las fichas existentes se descargan con autenticación y se reutilizan
+solo después de verificar metadatos y SHA-256.
+
+Dry-run posterior al merge:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py -3 ".\tools\lgmg-catalog-extractor\enrich_lgmg_scissors_catalog.py" `
+  --plan-input "C:\ruta\al\import-plan" `
+  --media-input "C:\ruta\al\media-package" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\ruta\a\lgmg-enrichment-dry-run"
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+Aplicación, únicamente después de revisar los ocho informes del dry-run:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = "PEGAR_TOKEN_LOCAL_TEMPORAL_AQUI"
+py -3 ".\tools\lgmg-catalog-extractor\enrich_lgmg_scissors_catalog.py" `
+  --plan-input "C:\ruta\al\import-plan" `
+  --media-input "C:\ruta\al\media-package" `
+  --api-base-url "http://localhost:5000" `
+  --output-dir "C:\ruta\a\lgmg-enrichment-apply" `
+  --apply `
+  --confirm-lgmg-scissors-enrichment
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+La ejecución es secuencial, reanudable e idempotente. Nunca espera una ventana
+larga: tras 20 cargas nuevas emite `PAUSED_UPLOAD_WINDOW` y código 2 antes de la
+carga 21; un HTTP 429 produce `PAUSED_RATE_LIMIT`, conserva `Retry-After` y
+también retorna 2. Al repetir después de la ventana, verifica y reutiliza las
+fichas ya cargadas. En estado final, la repetición realiza cero POST y cero
+PATCH y emite `IDEMPOTENT_VERIFIED`.
