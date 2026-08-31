@@ -49,6 +49,7 @@ class FakeClient:
         self.state, self.files, self.media_files, self.calls = state, files, media_files, []
         self.post_count = self.patch_count = 0
         self.concurrent_change = False
+        self.fail_patch_at = None; self.get_mutation = None; self.bad_post_metadata = False; self.bad_post_hash = False
 
     def get_json(self, path):
         self.calls.append(("GET", path))
@@ -56,20 +57,24 @@ class FakeClient:
             "/api/products?include_unpublished=true": "products", "/api/product-images": "images",
             "/api/product-specs": "specs", "/api/technical-sheets": "sheets"}
         if path in routes: return deepcopy(self.state[routes[path]])
-        product_id = int(path.rsplit("/", 1)[1]); return deepcopy(self.state["details"][product_id])
+        product_id = int(path.rsplit("/", 1)[1])
+        if self.get_mutation: self.get_mutation(self, product_id); self.get_mutation = None
+        return deepcopy(self.state["details"][product_id])
 
-    def download(self, sheet_id):
+    def download(self, sheet_id, expected_content_type="application/pdf"):
         self.calls.append(("GET", f"/api/technical-sheets/{sheet_id}/file")); return self.files[sheet_id]
 
     def post_datasheet(self, name, filename, data):
         self.calls.append(("POST", "/api/technical-sheets")); self.post_count += 1
         sheet_id = max([s["id"] for s in self.state["sheets"]] or [0]) + 1
         sheet = sheet_metadata(sheet_id, name, filename, data)
-        self.state["sheets"].append(sheet); self.files[sheet_id] = data
+        if self.bad_post_metadata: sheet["original_file_name"] = "wrong.pdf"
+        self.state["sheets"].append(sheet); self.files[sheet_id] = b"wrong" if self.bad_post_hash else data
         return deepcopy(sheet)
 
     def patch_product(self, product_id, payload):
         self.calls.append(("PATCH", f"/api/products/{product_id}")); self.patch_count += 1
+        if self.fail_patch_at == product_id: raise tool.SafeError("synthetic secret must not escape")
         detail = self.state["details"][product_id]
         for key, value in payload.items(): detail[key] = {"id": value} if key == "technical_sheet" else value
         if self.concurrent_change: detail["slug"] += "-concurrent"
@@ -125,6 +130,13 @@ class EnrichmentTests(unittest.TestCase):
         self.assertIn('MapGet("/{id:int}/file"', endpoints)
         self.assertNotIn('MapGet("/{id:int}/' + 'download"', endpoints)
         self.assertIn("string ContentType", dtos); self.assertIn("JsonNamingPolicy.SnakeCaseLower", program)
+        self.assertIn("MaxFileSize = 10 * 1024 * 1024", endpoints)
+        self.assertEqual(tool.MAX_DATASHEET_BYTES, 10 * 1024 * 1024)
+
+    def test_ten_mib_boundary_is_accepted_and_larger_rejected_before_http(self):
+        tool.validate_datasheet_sizes([{"size_bytes": tool.MAX_DATASHEET_BYTES}])
+        with self.assertRaisesRegex(tool.SafeError, "SIZE_LIMIT"):
+            tool.validate_datasheet_sizes([{"size_bytes": tool.MAX_DATASHEET_BYTES + 1}])
 
     def test_real_content_type_contract_is_strict(self):
         data = b"%PDF-x"; valid = sheet_metadata(1, "n", "x.pdf", data)
@@ -178,6 +190,68 @@ class EnrichmentTests(unittest.TestCase):
             self.assertTrue(all(x["final_verified"] for x in result3["products"]))
             self.assertEqual((len(result3["products"]), len(result3["datasheets"])), (21, 21))
 
+    def test_post_hash_verified_then_patch_failure_is_resumable(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media); client.fail_patch_at = 1
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+            self.assertEqual((code, result["verdict"]), (1, "PARTIAL_FAILURE"))
+            self.assertEqual((len(result["products"]), len(result["datasheets"])), (21, 21))
+            self.assertEqual(result["created_datasheet_ids"], [1]); self.assertEqual(result["failed_product"], "M01")
+            self.assertEqual([a["result"] for a in result["actions"][-3:]], ["uploaded", "hash_verified", "pre_patch_revalidated"])
+            self.assertIsNone(state["details"][1]["technical_sheet"]); self.assertEqual(len(state["sheets"]), 1)
+            resumed = FakeClient(state, files, media)
+            code2, result2 = tool.orchestrate(resumed, tool.snapshot(resumed, catalog[:1]), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual((code2, resumed.post_count, resumed.patch_count), (0, 0, 1))
+            self.assertEqual(result2["datasheets_reused"], 1)
+
+    def test_failure_after_multiple_products_preserves_progress(self):
+        catalog, datasheets, media, state = fixture(); files = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+            client = FakeClient(state, files, media); client.fail_patch_at = 3
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+            self.assertEqual(code, 1); self.assertEqual(result["updated_product_ids"], [1, 2])
+            self.assertEqual(result["created_datasheet_ids"], [1, 2, 3])
+            self.assertEqual(result["products"][3]["status"], "not_started")
+
+    def test_post_metadata_or_hash_failure_never_patches_or_claims_hash(self):
+        for attribute in ("bad_post_metadata", "bad_post_hash"):
+            catalog, datasheets, media, state = fixture(); files = {}
+            with self.subTest(attribute=attribute), tempfile.TemporaryDirectory() as tmp:
+                for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+                client = FakeClient(state, files, media); setattr(client, attribute, True)
+                code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog, datasheets, tmp, True)
+                self.assertEqual((code, client.patch_count, result["verdict"]), (1, 0, "PARTIAL_FAILURE"))
+                self.assertFalse(result["datasheets"][0]["hash_verified"])
+                self.assertEqual(len(result["products"]), 21); self.assertNotIn(b"wrong", json.dumps(result).encode())
+
+    def test_pre_patch_revalidation_handles_concurrent_technical_values(self):
+        cases = (("working_height_m", 999, 1), ("working_height_m", 1.0, 0), ("technical_sheet", {"id": 999}, 1))
+        for field, value, expected_code in cases:
+            catalog, datasheets, media, state = fixture(); files = {}
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
+                for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
+                client = FakeClient(state, files, media)
+                before = tool.snapshot(client, catalog[:1])
+                client.get_mutation = lambda c, pid, f=field, v=value: c.state["details"][pid].__setitem__(f, v)
+                code, result = tool.orchestrate(client, before, catalog[:1], datasheets[:1], tmp, True)
+                self.assertEqual(code, expected_code)
+                self.assertIn("pre_patch_revalidated", [a["result"] for a in result["actions"]])
+                if expected_code: self.assertEqual(client.patch_count, 0)
+
+    def test_unrelated_jpeg_is_baselined_and_preserved(self):
+        catalog, datasheets, media, state = fixture(); jpeg = b"\xff\xd8\xffsynthetic"
+        foreign = sheet_metadata(80, "Photo", "photo.jpg", jpeg); foreign["content_type"] = "image/jpeg"
+        state["sheets"].append(foreign); files = {80: jpeg}; client = FakeClient(state, files, media)
+        plans, cache = tool.preflight(client, state, catalog, datasheets)
+        self.assertIn(80, cache); self.assertTrue(all(p.resolved_sheet is None for p in plans))
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "M01.pdf").write_bytes(media["M01.pdf"])
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog[:1]), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual(code, 0); self.assertEqual(state["sheets"][0], foreign); self.assertEqual(files[80], jpeg)
+
     def test_already_enriched_product_is_accepted(self):
         catalog, datasheets, media, state = fixture(); data = media["M01.pdf"]
         state["sheets"].append(sheet_metadata(1, catalog[0]["datasheet_name"], "M01.pdf", data)); files = {1: data}
@@ -223,8 +297,9 @@ class EnrichmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for name, data in media.items(): (Path(tmp) / name).write_bytes(data)
             client = FakeClient(state, files, media); client.concurrent_change = True
-            with self.assertRaisesRegex(tool.SafeError, "comercial"):
-                tool.orchestrate(client, tool.snapshot(client, catalog), catalog[:1], datasheets[:1], tmp, True)
+            code, result = tool.orchestrate(client, tool.snapshot(client, catalog), catalog[:1], datasheets[:1], tmp, True)
+            self.assertEqual((code, result["verdict"]), (1, "PARTIAL_FAILURE"))
+            self.assertEqual(len(result["products"]), 1); self.assertEqual(result["updated_product_ids"], [1])
 
     def test_collections_are_preserved_after_complete_application(self):
         catalog, datasheets, media, state = fixture(); before = deepcopy(state); files = {}

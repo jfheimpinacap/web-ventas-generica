@@ -26,7 +26,7 @@ TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 TOOL_NAME = "enrich_lgmg_scissors_catalog"
 TOOL_VERSION = "1.0.0"
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-MAX_DATASHEET_BYTES = 20 * 1024 * 1024
+MAX_DATASHEET_BYTES = 10 * 1024 * 1024
 UPLOAD_LIMIT = 20
 UPLOAD_WINDOW_SECONDS = 600
 OUTPUT_NAMES = (
@@ -129,10 +129,10 @@ class LocalApiClient:
             if "power_source" in payload and payload["power_source"] != "electric_24v": raise SafeError("Energía no permitida")
         else: raise SafeError("Método HTTP no permitido")
 
-    def request(self, method, path, payload=None, body=None, content_type=None, binary=False):
+    def request(self, method, path, payload=None, body=None, content_type=None, binary=False, expected_content_type=None):
         self._validate(method, path, payload)
         if payload is not None: body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
-        headers = {"Accept": "application/pdf" if binary else "application/json",
+        headers = {"Accept": (expected_content_type or "application/octet-stream") if binary else "application/json",
             "Authorization": "Bearer " + self._token}
         if content_type: headers["Content-Type"] = content_type
         elif payload is not None: headers["Content-Type"] = "application/json; charset=utf-8"
@@ -144,7 +144,7 @@ class LocalApiClient:
             raw = response.read((MAX_DATASHEET_BYTES if binary else MAX_RESPONSE_BYTES) + 1)
             if len(raw) > (MAX_DATASHEET_BYTES if binary else MAX_RESPONSE_BYTES): raise SafeError("Respuesta demasiado grande")
             if binary:
-                if response.headers.get_content_type() != "application/pdf": raise SafeError("MIME descargado inválido")
+                if response.headers.get_content_type() != expected_content_type: raise SafeError("MIME descargado inválido")
                 return raw
             if response.headers.get_content_type() != "application/json": raise SafeError("MIME JSON inválido")
             return json.loads(raw.decode("utf-8"))
@@ -157,7 +157,9 @@ class LocalApiClient:
             raise SafeError(f"Respuesta local inválida: {type(exc).__name__}") from None
 
     def get_json(self, path): return self.request("GET", path)
-    def download(self, sheet_id): return self.request("GET", f"/api/technical-sheets/{int(sheet_id)}/file", binary=True)
+    def download(self, sheet_id, expected_content_type="application/pdf"):
+        return self.request("GET", f"/api/technical-sheets/{int(sheet_id)}/file", binary=True,
+            expected_content_type=expected_content_type)
     def patch_product(self, product_id, payload): return self.request("PATCH", f"/api/products/{int(product_id)}", payload=payload)
     def post_datasheet(self, name, filename, data):
         if Path(filename).name != filename or any(c in filename for c in ('"', "\r", "\n")): raise SafeError("Nombre original inseguro")
@@ -289,7 +291,7 @@ def validate_sheet_contract(sheet):
 def sheet_hash(client, sheet, cache, actions=None, product_id=None):
     sheet_id = sheet["id"]
     if sheet_id not in cache:
-        cache[sheet_id] = hashlib.sha256(client.download(sheet_id)).hexdigest()
+        cache[sheet_id] = hashlib.sha256(client.download(sheet_id, sheet["content_type"])).hexdigest()
         if actions is not None:
             actions.append({"method": "GET", "path": f"/api/technical-sheets/{sheet_id}/file",
                 "product_id": product_id, "sheet_id": sheet_id, "result": "hash_verified"})
@@ -490,8 +492,33 @@ def _report_rows(plans):
     return products, datasheets
 
 
+def _safe_failure(result, plans, index, exc):
+    wrote = bool(result["created_datasheet_ids"] or result["updated_product_ids"] or
+        any(action.get("method") in {"POST", "PATCH"} for action in result["actions"]))
+    result["verdict"] = "PARTIAL_FAILURE" if wrote else "CONFLICT"
+    result["conflicts"] += 1
+    result["failed_product"] = plans[index].approved["target_model"] if index < len(plans) else "final_verification"
+    result["errors"].append({"product": result["failed_product"], "error": type(exc).__name__})
+    if index < len(plans):
+        result["products"][index]["status"] = "partial_failure" if wrote else "conflict"
+        result["datasheets"][index]["status"] = "partial_failure" if wrote else "conflict"
+        for later in range(index + 1, len(plans)):
+            result["products"][later]["status"] = "not_started"
+            result["datasheets"][later]["status"] = "not_started"
+    return 1, result
+
+
+def _validate_uploaded_sheet(sheet, plan):
+    validate_sheet_contract(sheet)
+    if (sheet["name"] != plan.approved["datasheet_name"] or
+            sheet["original_file_name"] != plan.datasheet["file_name"] or
+            sheet["content_type"] != "application/pdf" or
+            sheet["size_bytes"] != plan.datasheet["size_bytes"]):
+        raise SafeError("UPLOADED_SHEET_METADATA_MISMATCH")
+
+
 def orchestrate(client, before, catalog, datasheets, media_root, apply=False):
-    """Run a complete immutable 21-item preflight, then optionally apply its plan."""
+    """Run a complete immutable preflight, preserving progress on every failure."""
     actions = []
     plans, cache = preflight(client, before, catalog, datasheets, actions)
     products, sheet_rows = _report_rows(plans)
@@ -502,8 +529,7 @@ def orchestrate(client, before, catalog, datasheets, media_root, apply=False):
         "updated_product_ids": [], "created_datasheet_ids": [], "failed_product": None,
         "retry_after_seconds": None, "final_verification": False, "products": products,
         "datasheets": sheet_rows, "actions": actions, "errors": []}
-    if not apply:
-        return 0, result
+    if not apply: return 0, result
     sheets, uploads = list(before["sheets"]), 0
     for index, plan in enumerate(plans):
         product_row, sheet_row = products[index], sheet_rows[index]
@@ -511,40 +537,71 @@ def orchestrate(client, before, catalog, datasheets, media_root, apply=False):
             sheet = plan.resolved_sheet
             if sheet is None:
                 if uploads >= UPLOAD_LIMIT:
-                    sheet_row["status"] = product_row["status"] = "pending_upload_window"
-                    result["verdict"], result["retry_after_seconds"], result["failed_product"] = "PAUSED_UPLOAD_WINDOW", UPLOAD_WINDOW_SECONDS, plan.approved["target_model"]
+                    product_row["status"] = sheet_row["status"] = "pending_upload_window"
+                    for later in range(index + 1, len(plans)):
+                        products[later]["status"] = sheet_rows[later]["status"] = "not_started"
+                    result.update({"verdict": "PAUSED_UPLOAD_WINDOW", "retry_after_seconds": UPLOAD_WINDOW_SECONDS,
+                        "failed_product": plan.approved["target_model"]})
                     return 2, result
-                path = Path(media_root).joinpath(*plan.datasheet["relative_path"].split("/"))
-                sheet = client.post_datasheet(plan.approved["datasheet_name"], plan.datasheet["file_name"], path.read_bytes())
-                validate_sheet_contract(sheet)
-                uploads += 1; result["datasheets_uploaded"] += 1; result["created_datasheet_ids"].append(sheet["id"]); sheets.append(sheet)
-                actions.append({"method": "POST", "path": "/api/technical-sheets", "product_id": plan.summary["id"], "sheet_id": sheet["id"], "result": "uploaded"})
-                sheet_row["status"] = "uploaded"
+                path = Path(media_root).joinpath(*plan.datasheet["relative_path"].split("/")); data = path.read_bytes()
+                sheet = client.post_datasheet(plan.approved["datasheet_name"], plan.datasheet["file_name"], data)
+                uploads += 1; result["datasheets_uploaded"] += 1
+                # Preserve the created ID as soon as the POST contract provides one.
+                if isinstance(sheet, dict) and isinstance(sheet.get("id"), int):
+                    result["created_datasheet_ids"].append(sheet["id"]); sheet_row["sheet_id"] = sheet["id"]
+                actions.append({"method": "POST", "path": "/api/technical-sheets", "product_id": plan.summary["id"],
+                    "sheet_id": sheet.get("id") if isinstance(sheet, dict) else "", "result": "uploaded"})
+                product_row["status"] = sheet_row["status"] = "uploaded"
+                _validate_uploaded_sheet(sheet, plan); sheets.append(sheet)
+                digest = sheet_hash(client, sheet, cache, actions, plan.summary["id"])
+                if digest != plan.datasheet["sha256"]: raise SafeError("UPLOADED_SHEET_HASH_MISMATCH")
+                sheet_row["status"] = "hash_verified"; sheet_row["hash_verified"] = True
             elif plan.sheet_status == "reuse_required":
-                result["datasheets_reused"] += 1; sheet_row["status"] = "reused"
-            payload = build_minimal_patch(plan.detail, plan.direct_patch, sheet["id"])
+                result["datasheets_reused"] += 1; sheet_row["status"] = "hash_verified"
+
+            fresh = client.get_json(f"/api/products/{plan.summary['id']}")
+            actions.append({"method": "GET", "path": f"/api/products/{plan.summary['id']}", "product_id": plan.summary["id"],
+                "sheet_id": sheet["id"], "result": "pre_patch_revalidated"})
+            if immutable_projection(fresh) != immutable_projection(plan.detail):
+                raise SafeError("PRE_PATCH_IMMUTABLE_CONFLICT")
+            fresh_direct = validate_direct_fields(fresh, plan.approved)
+            payload = build_minimal_patch(fresh, fresh_direct, sheet["id"])
             if payload:
                 client.patch_product(plan.summary["id"], payload)
                 result["updated"] += 1; result["updated_product_ids"].append(plan.summary["id"])
-                actions.append({"method": "PATCH", "path": f"/api/products/{plan.summary['id']}", "product_id": plan.summary["id"], "sheet_id": sheet["id"], "result": "associated"})
-            else:
-                result["already_enriched"] += 1
+                actions.append({"method": "PATCH", "path": f"/api/products/{plan.summary['id']}", "product_id": plan.summary["id"],
+                    "sheet_id": sheet["id"], "result": "associated"})
+                product_row["status"] = sheet_row["status"] = "associated"
+            else: result["already_enriched"] += 1
             verified = client.get_json(f"/api/products/{plan.summary['id']}")
-            actions.append({"method": "GET", "path": f"/api/products/{plan.summary['id']}", "product_id": plan.summary["id"], "sheet_id": sheet["id"], "result": "verified"})
+            actions.append({"method": "GET", "path": f"/api/products/{plan.summary['id']}", "product_id": plan.summary["id"],
+                "sheet_id": sheet["id"], "result": "verified"})
             if build_minimal_patch(verified, validate_direct_fields(verified, plan.approved), sheet["id"]):
-                raise SafeError("Verificación inmediata incompleta")
-            product_row["status"] = "verified"; sheet_row.update({"sheet_id": sheet["id"], "status": "verified", "hash_verified": True, "associated": True})
+                raise SafeError("IMMEDIATE_VERIFICATION_FAILED")
+            product_row["status"] = sheet_row["status"] = "verified"
+            sheet_row.update({"sheet_id": sheet["id"], "hash_verified": True, "associated": True})
         except RatePause as pause:
             product_row["status"] = sheet_row["status"] = "pending_upload_window"
-            result.update({"verdict": pause.verdict, "retry_after_seconds": pause.retry_after, "failed_product": plan.approved["target_model"]})
+            result.update({"verdict": pause.verdict, "retry_after_seconds": pause.retry_after,
+                "failed_product": plan.approved["target_model"]})
             return 2, result
-    after = snapshot(client, catalog)
-    verify_final(client, before, after, plans, cache, result["created_datasheet_ids"])
+        except Exception as exc:
+            return _safe_failure(result, plans, index, exc)
+    try:
+        after = snapshot(client, catalog)
+        verify_final(client, before, after, plans, cache, result["created_datasheet_ids"])
+    except Exception as exc:
+        return _safe_failure(result, plans, len(plans), exc)
     for row in products: row["final_verified"] = True
     result["final_verification"] = True
     result["verdict"] = "IDEMPOTENT_VERIFIED" if result["updated"] == 0 and result["datasheets_uploaded"] == 0 else "APPLY_VERIFIED"
     return 0, result
 
+
+def validate_datasheet_sizes(datasheets):
+    if any(not isinstance(x.get("size_bytes"), int) or isinstance(x.get("size_bytes"), bool)
+            or x["size_bytes"] < 0 or x["size_bytes"] > MAX_DATASHEET_BYTES for x in datasheets):
+        raise SafeError("DATASHEET_SIZE_LIMIT")
 
 def run(plan_input, media_input, base_url, output, apply=False, confirmed=False, token="", client_factory=LocalApiClient, platform=None):
     if apply != confirmed: raise SafeError("Aplicación requiere ambas confirmaciones")
@@ -553,8 +610,9 @@ def run(plan_input, media_input, base_url, output, apply=False, confirmed=False,
     audit.safe_paths(plan_root, media_root, Path(output)); plan, media = audit.validate_inputs(plan_root, media_root)
     catalog = approved_catalog(); selected = audit.select_products(plan["rows"]["import-products.csv"], catalog)
     datasheets = audit.validate_datasheets(selected, plan, media, media_root)
-    if len(datasheets) != 21 or len({x["sha256"] for x in datasheets}) != 21 or any(x["size_bytes"] >= MAX_DATASHEET_BYTES for x in datasheets):
-        raise SafeError("Se requieren 21 PDF físicos únicos menores al máximo")
+    if len(datasheets) != 21 or len({x["sha256"] for x in datasheets}) != 21:
+        raise SafeError("Se requieren 21 PDF físicos únicos")
+    validate_datasheet_sizes(datasheets)
     validate_evidence(selected, plan["rows"]["import-specifications.csv"])
     read_rate_limit(Path(__file__).resolve().parents[2]); client = client_factory(normalize_origin(base_url), token, apply=apply)
     before = snapshot(client, catalog)

@@ -470,6 +470,10 @@ horómetro. El contrato de fichas usado es exclusivamente `GET
 `updated_at` y `file_url`, exigiendo `content_type=application/pdf`. Las fichas
 existentes se descargan por `/file` y se reutilizan solo después de verificar
 metadatos y SHA-256; tamaño y tipo por sí solos nunca prueban igualdad.
+El tamaño máximo coincide con el backend: 10 MiB exactos. Un archivo de hasta
+10 MiB es admisible y uno mayor se rechaza localmente antes de cualquier HTTP.
+Las fichas previas JPEG, PNG o WebP también se descargan con su tipo contractual
+para establecer la línea base física, pero nunca son candidatas PDF para LGMG.
 
 Dry-run posterior al merge:
 
@@ -513,3 +517,11 @@ multipart ni bytes PDF. La verificación final compara por ID productos
 seleccionados y no seleccionados, categorías, marcas, imágenes, ProductSpecs y
 fichas, y rechaza cualquier modificación concurrente fuera de los cinco campos
 autorizados.
+
+Después de cada POST, la herramienta conserva primero el estado `uploaded`,
+valida los metadatos, descarga inmediatamente la ficha por `/file` y solo marca
+`hash_verified` al comprobar su SHA-256. Antes de cualquier PATCH vuelve a
+consultar el producto (`pre_patch_revalidated`) y reconstruye el payload mínimo
+desde ese detalle fresco. Los fallos posteriores a una escritura devuelven
+`PARTIAL_FAILURE` sin borrar las 21 filas, IDs ni acciones acumuladas; el
+producto fallido queda `partial_failure` y las filas posteriores `not_started`.
