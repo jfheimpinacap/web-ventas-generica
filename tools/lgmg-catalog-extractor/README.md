@@ -355,3 +355,80 @@ py ".\tools\lgmg-catalog-extractor\canonicalize_lgmg_scissors_catalog.py" `
   --confirm-lgmg-scissors-canonicalization
 Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
 ```
+# Auditoría técnica offline de las 21 tijeras eléctricas estándar
+
+`audit_lgmg_scissors_technical_data.py` es una herramienta **exclusivamente
+offline, local y de solo lectura**. Examina el `import-plan` amplio validado y
+su `media-package` para preparar evidencia técnica de las 21 tijeras de la
+familia fuente `Elevadores de Tijera`. No consulta los valores actualmente
+almacenados en JEM Nexus.
+
+La selección usa conjuntamente el `source_key` estable y el modelo fuente de
+la tabla cerrada del importador mínimo. La relación fuente/objetivo se obtiene,
+sin ejecutar herramientas con efectos externos, de la tabla cerrada del
+canonizador: se preservan modelos fuente como `S0607EⅡ`, pero el informe usa el
+modelo comercial `S0607E` y el nombre `Elevador tipo tijera eléctrico LGMG
+S0607E`. No se aplica una sustitución Unicode general.
+
+## Entradas y ejecución posterior al merge
+
+Las tres opciones aceptadas son carpetas físicas locales:
+
+* `--plan-input`: carpeta del `import-plan` completo;
+* `--media-input`: carpeta del `media-package` completo;
+* `--output-dir`: carpeta nueva o vacía, separada de ambas entradas.
+
+La ejecución real contra los paquetes conservados se realizará en Windows
+después del merge. Ejemplo PowerShell con rutas placeholder:
+
+```powershell
+py -3 ".\tools\lgmg-catalog-extractor\audit_lgmg_scissors_technical_data.py" `
+  --plan-input "C:\ruta\al\import-plan" `
+  --media-input "C:\ruta\al\media-package" `
+  --output-dir "C:\ruta\a\technical-audit"
+```
+
+La herramienta no acepta URL, API, token, credenciales, descarga, publicación
+ni modo de aplicación. No llama a JEM Nexus, no usa base de datos y no crea,
+actualiza o elimina productos, fichas o especificaciones. Tampoco copia,
+renombra o sube PDF: solo informa rutas relativas, asociaciones, MIME, tamaño,
+SHA-256, firma física y reutilización. Que un PDF esté disponible localmente no
+confirma ni autoriza su publicación comercial.
+
+## Campos y tratamiento conservador
+
+La auditoría prepara candidatos con evidencia para `WorkingHeightM`,
+`MaximumLoadCapacityKg`, `MachineWeightKg`, `PowerSource`, `TerrainType`,
+`Year`, `HoursMeter` y la disponibilidad fuente relacionada con
+`TechnicalSheetId`. Conserva además todas las demás filas como posibles
+`ProductSpec` (por ejemplo dimensiones, velocidades, pendientes, radios,
+baterías y demás atributos que no tienen un campo directo en `Product`).
+
+Capacidad y energía reutilizan los resultados conservadores del plan. Altura y
+peso solo admiten etiquetas explícitas de una allowlist y unidades métricas;
+no convierten pies o libras. El terreno exige equivalencia estructurada con el
+enum y nunca se infiere de familia, modelo, nombre o fotografía. Año no se
+inventa, y horómetro queda no proporcionado/no aplicable. Conflictos, valores
+no representables y ausencias quedan vacíos y marcados para revisión humana.
+Todos los candidatos requieren revisión humana; el resultado siempre declara
+`ready_for_update=false` y no prepara payloads ni IDs.
+
+## Nueve salidas
+
+La promoción atómica desde staging produce exactamente:
+
+1. `technical-audit-products.csv`;
+2. `technical-audit-field-candidates.csv`;
+3. `technical-audit-specifications.csv`;
+4. `technical-audit-datasheets.csv`;
+5. `technical-audit-warnings.csv`;
+6. `technical-audit-summary.json`;
+7. `technical-audit-summary.txt`;
+8. `technical-audit-manifest.json`;
+9. `README-technical-audit.txt`.
+
+Los CSV preservan Unicode, usan UTF-8 con BOM y CRLF, y protegen fórmulas de
+hojas de cálculo. Una entrada corrupta, insegura o distinta del lote cerrado
+impide cualquier paquete parcial. El estado exitoso `AUDIT_COMPLETE` significa
+únicamente que la evidencia local fue inventariada: no significa que los datos
+estén listos para actualizar o publicar.
