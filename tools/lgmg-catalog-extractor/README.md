@@ -774,3 +774,84 @@ año, horómetro, peso, altura, terreno, precio, IVA o stock, ni atributos deriv
 del modelo o una fotografía. Todos comenzarán con `show_price = false`,
 `is_published = false`, `is_featured = false` y `price = null`; el futuro proceso exigirá
 dry-run, confirmación, lotes, checkpoint, reanudación, idempotencia, rollback y validación final.
+
+## Importación completa controlada del catálogo LGMG restante
+
+`import_lgmg_remaining_controlled.py` implementa la etapa cerrada posterior al plan de **57**
+productos y a la cohorte procesada de **21** tijeras: importa los **36** restantes, sin filtros
+de modelo, en estas seis subcategorías exactas bajo `Maquinaria`: tijera todoterreno, brazo
+articulado, brazo telescópico, mástil vertical, tijera sobre orugas y manipuladores
+telescópicos. La identidad se cruza mediante `source_key + metric_model + approval_key` y la
+cohorte anterior se obtiene como sintaxis desde `MODEL_SOURCE_KEYS`; no se duplica una lista
+manual de 36 modelos.
+
+La herramienta exige los fingerprints aprobados del plan
+`75d68378dcd7bf77b19f9c7f0e60806085deaecadf2b7fa70e3102812be4bcb7`, medios originales
+`b16d7f40250cc9b7a1b4affe029d0a87bba4355968e289fdab99ddbb4d656c9b`, catálogo restante
+`62230925212e866c59197a03975bb5707d40ef416b05bb071de84e43cef7ea39`, entrada de auditoría
+`d2b46313a8b9219793c6f9541e383b8eef47f6d1b2f76dbf7bf7bbd984371665`, decisiones
+`280811cc376c2aa480511fcfa6923e120973e252016efb74e3b89e318130d779` y paquete reparado
+`f9c18b7000a93d37e69e306960da8f3e237e4cc2bbf1122f892053566c01b157`. No hay bypass.
+Valida conjuntos cerrados, manifests, hashes, tamaños, tipos regulares, ausencia de symlinks,
+rutas no solapadas y todos los medios antes de llamar a la API.
+
+Se conservan nombre aprobado, modelo literal (incluidos `-2` y `Ⅱ`), marca LGMG, categoría,
+tipo `machinery`, condición `new`, disponibilidad `on_request`, descripciones existentes,
+especificaciones con nombre/valor/unidad/orden/Unicode, capacidad máxima validada y energía
+solo si cabe en el enum. Se cargan imágenes sin alterar bytes y fichas PDF compatibles. No se
+inventan año, horómetro, altura, peso, terreno, precio, IVA, stock físico ni beneficios. Todo
+producto se crea con `price = null`, `price_visible = false`, `is_published = false` e
+`is_featured = false`, y con los booleanos comerciales conservadores desactivados.
+
+El paquete reparado es la única fuente de medios. A13JE conserva dos imágenes y A14JE tres,
+con la primera asociación como principal. SR1018E-2 y T28JE usan sus reemplazos validados.
+AR24JE y T38JE se crean sin ficha porque no existe en origen; H625E se crea sin intentar subir
+su PDF de 38.610.993 bytes. Los tres generan seguimiento, no datos inventados ni un bloqueo.
+
+Hay exactamente un modo obligatorio: `--dry-run`, `--apply`, `--verify` o `--rollback`.
+Todos autentican exclusivamente con `JEM_NEXUS_ACCESS_TOKEN`; el token no es argumento ni se
+persiste. Una API real exige HTTPS (HTTP solo se admite para loopback sintético en pruebas),
+con timeout, límite de respuesta y paginación acotada. No se llama a LGMG. Dry-run y verify
+son de lectura. Apply exige `--confirm-apply IMPORTAR_36_LGMG_RESTANTES`; rollback exige
+`--confirm-rollback REVERTIR_IMPORTACION_36_LGMG_RESTANTES`.
+
+El dry-run consulta identidad, categorías, marca, productos no publicados, imágenes,
+especificaciones y fichas; detecta exactos, candidatos y conflictos; simula operaciones y
+produce `dry_run_fingerprint_sha256`. Apply no admite bypass: exige ese dry-run compatible,
+misma versión/HEAD, API, fingerprints y snapshot remoto. El lote predeterminado es 20, por lo
+que la cohorte se divide **20 + 16**; `--batch-size` acepta 1–20. El checkpoint JSON externo
+se escribe atómicamente, registra únicamente IDs y operaciones sin autorización, y `--resume`
+rechaza entradas, API, modo o tamaño distintos. Los exactos se omiten, una segunda ejecución
+no escribe y un conflicto ambiguo bloquea. Un fallo detiene productos posteriores y conserva
+`APPLY_PARTIAL`. Verify vuelve a exigir los 36 exactos. Rollback reanudable elimina solo IDs
+creados y evidenciados por este checkpoint, en orden de dependencias, preservando recursos
+preexistentes.
+
+Cada ejecución produce exactamente ocho informes: `remaining-import-summary.json`,
+`remaining-import-summary.txt`, `remaining-import-products.csv`, `remaining-import-media.csv`,
+`remaining-import-operations.csv`, `remaining-import-conflicts.csv`,
+`remaining-import-manifest.json` y `README-remaining-import.txt`. Los CSV son UTF-8 con BOM,
+CRLF y protección de fórmulas; los JSON preservan Unicode. Los veredictos son
+`DRY_RUN_READY`, `APPLY_COMPLETE`, `APPLY_PARTIAL`, `VERIFY_COMPLETE`, `ROLLBACK_COMPLETE` y
+`CONFLICT`.
+
+Ejemplos Windows (reemplace todos los marcadores; ejecute primero dry-run y revíselo):
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = (Get-Content -Raw "<RUTA_TOKEN_TEMPORAL>").Trim()
+$Tool = ".\tools\lgmg-catalog-extractor\import_lgmg_remaining_controlled.py"
+$Common = @('--plan-input','<RUTA_PLAN>','--remaining-audit-input','<RUTA_AUDITORIA>',
+  '--repaired-media-input','<RUTA_PAQUETE_REPARADO>','--api-base-url','<HTTPS_API_BASE>')
+
+py $Tool @Common --output-dir '<SALIDA_DRY_RUN>' --dry-run --checkpoint '<RUTA_CHECKPOINT>'
+py $Tool @Common --output-dir '<SALIDA_APPLY>' --apply --checkpoint '<RUTA_CHECKPOINT>' `
+  --confirm-apply IMPORTAR_36_LGMG_RESTANTES
+py $Tool @Common --output-dir '<SALIDA_VERIFY>' --verify --checkpoint '<RUTA_CHECKPOINT>'
+py $Tool @Common --output-dir '<SALIDA_ROLLBACK>' --rollback --checkpoint '<RUTA_CHECKPOINT>' `
+  --confirm-rollback REVERTIR_IMPORTACION_36_LGMG_RESTANTES
+Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+```
+
+Después del merge, el primer uso real será el dry-run en Windows. Sus ocho informes deberán
+revisarse y aprobarse antes de autorizar apply; estos ejemplos no publican y no se ejecutan en
+Codex.
