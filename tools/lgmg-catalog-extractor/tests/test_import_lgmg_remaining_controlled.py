@@ -14,7 +14,7 @@ tool = importlib.util.module_from_spec(spec); spec.loader.exec_module(tool)
 
 class Args:
     dry_run = apply = verify = rollback = False
-    checkpoint = None; batch_size = 20; resume = False
+    checkpoint = "state.json"; batch_size = 20; resume = False
     confirm_apply = confirm_rollback = None
 
 
@@ -40,6 +40,8 @@ class ControlledImporterTests(unittest.TestCase):
         with self.assertRaises(SystemExit): parser.parse_args([])
         base = ["--plan-input","p","--remaining-audit-input","a","--repaired-media-input","r","--output-dir","o","--api-base-url","https://api.example"]
         with self.assertRaises(SystemExit): parser.parse_args(base + ["--dry-run", "--verify"])
+        for mode in ("--dry-run", "--apply", "--verify", "--rollback"):
+            with self.assertRaises(SystemExit): parser.parse_args(base + [mode])
 
     def test_02_token_only_environment_and_never_returned_in_error(self):
         self.assertEqual(tool.access_token({tool.TOKEN_ENV: "opaque-secret"}), "opaque-secret")
@@ -138,13 +140,12 @@ class ControlledImporterTests(unittest.TestCase):
         self.assertEqual(tool.classify_products(data,{"products":[exact]},cats,brand)[0]["status"],"already_imported_exact")
         self.assertEqual(tool.classify_products(data,{"products":[dict(exact,name="Otro")]},cats,brand)[0]["status"],"conflict_existing_product")
 
-    def test_17_checkpoint_atomic_resume_and_secret_absence(self):
+    def test_17_checkpoint_atomic_and_secret_absence(self):
         with tempfile.TemporaryDirectory() as temp:
-            path=Path(temp)/"state.json"; expected={"tool":tool.TOOL_NAME,"version":tool.TOOL_VERSION,"mode":"apply","batch_size":20,"api_base":"https://a","fingerprints":{},"dry_run_fingerprint_sha256":"x"}
-            self.assertEqual(tool.load_checkpoint(path, expected, False), expected)
-            self.assertEqual(tool.load_checkpoint(path, expected, True), expected)
-            altered=dict(expected,batch_size=19)
-            with self.assertRaises(tool.ConflictError): tool.load_checkpoint(path, altered, True)
+            path=Path(temp)/"state.json"; expected={"state":"dry_run_ready","dry_run_fingerprint_sha256":"x"}
+            tool.atomic_json(path, expected)
+            self.assertEqual(json.loads(path.read_text()), expected)
+            self.assertFalse(list(Path(temp).glob("*.staging")))
             self.assertNotIn("Bearer", path.read_text())
 
     def test_18_csv_bom_crlf_formula_and_exact_outputs(self):
@@ -161,6 +162,46 @@ class ControlledImporterTests(unittest.TestCase):
         data={"fingerprints":tool.APPROVED_FINGERPRINTS}; decision={"row":{"approval_key":"a"},"status":"create_candidate","payload":{"model":"Ⅱ"}}
         first=tool.dry_run_fingerprint(data,[decision],"https://a","remote","head")
         self.assertEqual(first,tool.dry_run_fingerprint(data,[decision],"https://a","remote","head")); self.assertNotEqual(first,tool.dry_run_fingerprint(data,[decision],"https://b","remote","head"))
+
+    def test_22_complete_operation_plan_contracts_and_dependencies(self):
+        products=[]; specs={}; images={}; sheets={}; decisions=[]
+        for index in range(36):
+            model=f"M{index:02}"; key=f"s{index:02}"
+            row={"source_order":index+1,"source_key":key,"metric_model":model,"approval_key":f"a{index:02}"}
+            products.append(row); specs[key]=[{"name":"Ángulo","value":"≤ Ⅱ","order":"0"}]
+            count=2 if index < 35 else 1
+            images[model]=[{"sha256":f"{index:02x}"*32,"size_bytes":"10","association_order":str(n+1),
+                "is_primary":"true" if n == 0 else "false","original_filename":"x.jpg"} for n in range(count)]
+            sheets[model]={"datasheet_upload_allowed":index < 33,"corrected_sha256":f"{index+1:02x}"*32,"corrected_size_bytes":"20"}
+            decisions.append({"row":row,"payload":{"model":model},"status":"create_candidate","product":None})
+        data={"products":products,"specs":specs,"images":images,"sheets":sheets}
+        operations=tool.build_operations(data,decisions,20)
+        counts=tool.operation_counts(operations)
+        self.assertEqual(counts["product_operations"],36)
+        self.assertEqual(counts["image_operations"],71)
+        self.assertEqual(counts["datasheet_operations"],33)
+        self.assertEqual(counts["specification_operations"],36)
+        self.assertTrue(all(op["path_template"] in {"/api/technical-sheets","/api/products","/api/product-specs","/api/product-images"} for op in operations))
+        self.assertTrue(all(op["depends_on_operation"] for op in operations if op["resource_type"] in {"image","specification"}))
+
+    def test_23_superseded_fingerprint_and_checkpoint_states(self):
+        self.assertEqual(tool.SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256,
+            "85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553")
+        self.assertEqual(len(tool.CHECKPOINT_STATES),7)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/"cp.json"; tool.atomic_json(path,{"state":"dry_run_ready",
+                "dry_run_fingerprint_sha256":tool.SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256})
+            with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
+
+    def test_24_resources_are_reduced_and_dynamic(self):
+        root={"id":41,"name":"Maquinaria","slug":"maquinaria","parent":None,"product_type":"machinery","is_active":True,"volatile":"x"}
+        cats={name:{"id":100+i,"name":name,"slug":f"s-{i}","parent":41,"product_type":"machinery","is_active":True} for i,name in enumerate(tool.FAMILIES)}
+        value=tool.resource_view(root,cats,{"id":77,"name":"LGMG","is_active":True})
+        self.assertEqual(value["brand"],{"id":77,"name":"LGMG"}); self.assertEqual(len(value["categories"]),7)
+        self.assertNotIn("volatile",value["categories"][0])
+
+    def test_25_origin_rejects_api_suffix(self):
+        with self.assertRaises(tool.ConflictError): tool.normalize_origin("http://localhost:5000/api")
 
     def test_21_source_contains_no_lgmg_download_url_or_publish_option(self):
         source=MODULE.read_text(encoding="utf-8")
