@@ -608,3 +608,94 @@ $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
   --media-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Media-Download-20260828-105313\media-package" `
   --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Remaining-Audit-$Stamp"
 ```
+## Reparación y revisión de medios del catálogo LGMG restante
+
+`repair_lgmg_remaining_media.py` prepara, sin importar productos, un paquete completamente
+nuevo para los 36 productos y las seis familias restantes. La aprobación humana literal
+`APRUEBO LAS 6 FAMILIAS Y LOS 36 NOMBRES` aprueba las familias, los prefijos, los nombres
+deterministas y los modelos literales (incluido `Ⅱ`), pero **no** aprueba automáticamente
+imágenes ni fichas técnicas.
+
+La interfaz tiene exactamente cinco argumentos obligatorios: `--plan-input`, `--media-input`,
+`--remaining-audit-input`, `--decisions-input` y `--output-dir`. No existe modo de aplicación,
+publicación o acceso a JEM Nexus. La herramienta no requiere backend, frontend ni token; no
+consulta ni modifica la base de datos y no importa productos.
+
+El JSON de decisiones usa `schema_version: "1.0"`, la aprobación literal anterior,
+`datasheet_repairs` para `SR1018E-2`, `T28JE` y `H625E`, y la decisión visual cerrada
+`A13JE|A14JE`. Las fichas cruzadas de `SR1018E-2` (asociada originalmente con evidencia de
+`SR0818E-2`) y `T28JE` (asociada con evidencia de `T22JE`) solo pueden sustituirse desde una
+URL HTTPS de LGMG declarada explícitamente. No se raspan páginas, no se adivinan enlaces y no
+se descargan imágenes. Si las URLs directas están vacías no se llama a la red. Una descarga
+debe ser PDF por MIME y firma, no HTML, medir como máximo 10 MiB, conservar un SHA-256 y
+contener el marcador exacto cuando haya texto extraíble. Sin extracción confiable queda como
+`downloaded_pending_human_content_review`.
+
+La ficha original de `H625E` (38.610.993 bytes) se conserva solamente como metadato de
+trazabilidad: el paquete corregido la marca `excluded_backend_size_limit`, impide su carga y
+requiere seguimiento técnico y de ficha, sin bloquear la futura creación del producto. El
+límite contractual permanece en 10.485.760 bytes; el PDF no se comprime, divide, convierte ni
+reescribe. `AR24JE` y `T38JE` conservan `missing_at_source` y también pueden importarse
+posteriormente sin ficha, con seguimiento.
+
+Las imágenes físicamente compartidas por `A13JE` y `A14JE` no se interpretan mediante OCR,
+visión artificial o similitud perceptual. Se genera evidencia HTML local autónoma y CSV. La
+decisión debe ser uno de `approve_shared_images_for_both`, `approve_images_for_a13je_only`,
+`approve_images_for_a14je_only`, `reject_shared_images_for_both` o
+`pending_human_visual_review`. Mientras siga pendiente, ambos quedan fuera de readiness.
+
+La salida cerrada es:
+
+```text
+corrected-media/
+repair-summary.json
+repair-summary.txt
+repair-manifest.json
+repair-conflicts.csv
+repair-datasheets.csv
+repair-images.csv
+controlled-import-readiness.csv
+A13JE-A14JE-visual-review.html
+A13JE-A14JE-visual-review.csv
+README-repaired-media.txt
+```
+
+Los CSV usan UTF-8 con BOM, CRLF y protección contra fórmulas. El manifest registra hashes y
+tamaños de entradas/salidas, fingerprints aprobados, fingerprint determinista agregado,
+actividad de red cerrada y efectos nulos sobre API, base de datos, productos, cargas y
+publicación. No incluye el hash de sí mismo. Las entradas son inmutables; se rechazan rutas
+solapadas, traversal, rutas absolutas, letras de unidad, barras invertidas, symlinks y tipos
+especiales. El conjunto se construye en staging y se promueve atómicamente solamente cuando
+está completo.
+
+Los únicos veredictos son `REPAIR_COMPLETE` (dos reemplazos validados, exclusión de H625E y
+decisión visual explícita), `REVIEW_REQUIRED` (preparación válida a la que aún le falta una URL,
+revisión PDF o decisión visual; código de salida exitoso) y `CONFLICT` (inconsistencia o medio
+inválido; código distinto de cero). Por ello se recomienda ejecutar primero con URLs vacías y
+decisión pendiente, revisar las evidencias, completar el JSON y ejecutar de nuevo hacia otro
+directorio vacío.
+
+Ejemplo para ejecutar posteriormente en Windows (no se ejecuta en Codex):
+
+```powershell
+Set-Location "C:\Users\Franz\Desktop\web-ventas-generica"
+
+$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+& "C:\Windows\py.exe" -3 `
+  ".\tools\lgmg-catalog-extractor\repair_lgmg_remaining_media.py" `
+  --plan-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Qualified-Power-Validation-20260828-145126\import-plan" `
+  --media-input "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Media-Download-20260828-105313\media-package" `
+  --remaining-audit-input "RUTA_A_LA_CARPETA_remaining-audit" `
+  --decisions-input "RUTA_AL_ARCHIVO\remaining-media-decisions.json" `
+  --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Repaired-Media-$Stamp"
+```
+
+La siguiente etapa (Prompt 247) será una **importación completa controlada**, no una
+importación mínima estricta. Podrá representar todos los datos confiables del plan: nombre,
+modelo, marca, categorías, tipo, condición, disponibilidad, descripción, especificaciones,
+capacidad validada, energía representable, imágenes válidas y ficha compatible. No inventará
+año, horómetro, peso, altura, terreno, precio, IVA o stock, ni atributos derivados solamente
+del modelo o una fotografía. Todos comenzarán con `show_price = false`,
+`is_published = false`, `is_featured = false` y `price = null`; el futuro proceso exigirá
+dry-run, confirmación, lotes, checkpoint, reanudación, idempotencia, rollback y validación final.

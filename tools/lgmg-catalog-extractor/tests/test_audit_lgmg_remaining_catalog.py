@@ -128,6 +128,50 @@ class RemainingAuditTests(unittest.TestCase):
             with self.assertRaises(Exception): audit.write_outputs(output, {}, {}, {}, "fixed")
             self.assertEqual(list(output.iterdir()), [])
 
+    def test_hardened_media_findings_cover_mismatch_size_and_shared_files(self):
+        records = [
+            {"metric_model": "SR1018E-2", "datasheet": {"sha256": "d" * 64,
+                "size_bytes": 100, "filename": "SR0818E-2.pdf", "text": "Ficha SR0818E-2"},
+                "images": [{"sha256": "i" * 64, "filename": "sr1018e.jpg", "is_primary": True}]},
+            {"metric_model": "SR0818E-2", "datasheet": {"sha256": "d" * 64,
+                "size_bytes": 100, "filename": "SR0818E-2.pdf", "text": "Ficha SR0818E-2"},
+                "images": [{"sha256": "x" * 64, "filename": "sr0818e.jpg", "is_primary": True}]},
+            {"metric_model": "H625E", "datasheet": {"sha256": "h" * 64,
+                "size_bytes": audit.MAX_DATASHEET_BYTES + 1, "filename": "H625E.pdf", "text": "Ficha H625E"},
+                "images": [{"sha256": "h" * 64, "filename": "h625e.jpg", "is_primary": True}]},
+        ]
+        findings = audit.analyze_media_findings(records)
+        self.assertIn("datasheet_model_mismatch", findings["SR1018E-2"])
+        self.assertIn("datasheet_shared_across_products", findings["SR1018E-2"])
+        self.assertIn("datasheet_exceeds_backend_limit", findings["H625E"])
+
+    def test_all_images_shared_and_primary_filename_other_model_require_review(self):
+        records = [
+            {"metric_model": "A13JE", "datasheet": {}, "images": [
+                {"sha256": "1" * 64, "filename": "a13je.jpg", "is_primary": True},
+                {"sha256": "2" * 64, "filename": "shared.jpg", "is_primary": False}]},
+            {"metric_model": "A14JE", "datasheet": {}, "images": [
+                {"sha256": "1" * 64, "filename": "a13je.jpg", "is_primary": True},
+                {"sha256": "2" * 64, "filename": "shared.jpg", "is_primary": False}]},
+        ]
+        findings = audit.analyze_media_findings(records)
+        self.assertIn("all_images_shared_across_products", findings["A13JE"])
+        self.assertIn("all_images_shared_across_products", findings["A14JE"])
+        self.assertIn("primary_filename_mentions_other_model", findings["A14JE"])
+
+    def test_shared_secondary_only_does_not_block(self):
+        records = [
+            {"metric_model": "A13JE", "datasheet": {}, "images": [
+                {"sha256": "1" * 64, "filename": "a13je.jpg", "is_primary": True},
+                {"sha256": "s" * 64, "filename": "shared.jpg", "is_primary": False}]},
+            {"metric_model": "A14JE", "datasheet": {}, "images": [
+                {"sha256": "2" * 64, "filename": "a14je.jpg", "is_primary": True},
+                {"sha256": "s" * 64, "filename": "shared.jpg", "is_primary": False}]},
+        ]
+        findings = audit.analyze_media_findings(records)
+        self.assertNotIn("all_images_shared_across_products", findings["A13JE"])
+        self.assertNotIn("all_images_shared_across_products", findings["A14JE"])
+
 
 if __name__ == "__main__":
     unittest.main()
