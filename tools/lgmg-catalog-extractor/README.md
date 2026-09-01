@@ -872,6 +872,50 @@ dry-run completamente nuevo. Sus ocho informes y checkpoint deberán revisarse a
 considerar apply; estos ejemplos no publican y no se ejecutan en Codex.
 ## Auditoría individual de operaciones de especificaciones LGMG
 
+### Corrección 2.1.1 del esquema aprobado
+
+El intento real de dry-run 2.1.0 terminó antes de crear productos o un checkpoint
+aplicable con el falso conflicto `duplicate_specification_request` de SR0818E-2.
+La causa exacta era que el consumidor buscaba los campos internos `name`/`spec_name`,
+`key`/`spec_key`, `value`/`spec_value` y `order`/`spec_order` en filas que nunca los
+contienen. En consecuencia, las dos primeras filas se adaptaban ambas a nombre,
+clave y valor vacíos y orden cero. No era un defecto del detector de duplicados.
+
+El encabezado cerrado real es
+`source_key,metric_model,group_order,group_name,specification_order,source_label,source_value,normalized_label,normalized_value,unit,requires_review,maximum_load_capacity_candidate_kg`.
+La versión 2.1.1 lo valida exactamente y aplica una sola correspondencia:
+
+* `name = normalized_label` cuando no está vacío; en otro caso `source_label`;
+* `value = normalized_value` cuando no está vacío; en otro caso `source_value`;
+* `key = ""`, porque el plan aprobado no representa una clave y no se inventa una;
+* `unit = unit` literalmente, incluido el valor vacío;
+* `order = int(specification_order)`, nunca `group_order`.
+
+`requires_review`, `group_*` y `maximum_load_capacity_candidate_kg` siguen siendo
+evidencia auxiliar y no se envían al DTO. La adaptación no translitera: conserva
+`MODÈLE`, `Métrica`, tildes, símbolos, mayúsculas y `Ⅱ`. El mismo objeto efectivo
+alimenta el POST, `request_template`, informes, hashes, clave de operación, apply y
+resume.
+
+`specification_index` es únicamente el índice uno-basado de auditoría; `order` es
+el orden aprobado enviado al backend. La firma semántica compara la referencia
+estable del producto y los cinco campos efectivos `name`, `key`, `value`, `unit` y
+`order`. El índice no entra en esa firma y por tanto no puede ocultar dos requests
+realmente idénticos. `operation_key`, en cambio, identifica determinísticamente la
+operación auditable y se deriva del contrato completo de operación, su template y
+su dependencia, sin IDs futuros ni azar.
+
+Los conteos permanecen cerrados: 33 fichas + 36 productos + 1.057 especificaciones
++ 71 imágenes = 1.197 operaciones, sin descartar ni deduplicar silenciosamente
+ninguna fila. El schema del checkpoint permanece en `2.1`, pero la versión de
+herramienta forma parte de su contrato: un checkpoint 2.1.0 es incompatible con
+2.1.1 y se rechaza antes de cualquier mutación. Los dos fingerprints supersedidos
+ya registrados no cambian; el intento fallido no produjo otro fingerprint real.
+
+Después del merge, el dry-run real sigue pendiente en Windows y exige token nuevo,
+directorio de salida nuevo y checkpoint nuevo. No debe ejecutarse apply hasta
+revisar por completo el ZIP del siguiente dry-run.
+
 La versión 2.1.0 corrige el defecto observado en el dry-run anterior: sus 1.057
 filas `specification` calculaban el mismo `payload_sha256` a partir de un
 placeholder genérico y usaban `association_order=0`. Ese informe demostraba el

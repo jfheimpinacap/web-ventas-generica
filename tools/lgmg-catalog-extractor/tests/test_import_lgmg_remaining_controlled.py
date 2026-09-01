@@ -33,6 +33,13 @@ class Opener:
 
 
 class ControlledImporterTests(unittest.TestCase):
+    @staticmethod
+    def spec_row(label="Altura Ⅱ", value="≤ 3", order="7", unit="m", **changes):
+        row = dict(zip(tool.SPECIFICATION_COLUMNS,
+            ("source", "MⅡ", "1", "", str(order), label, value, "", "", unit, "false", "")))
+        row.update(changes)
+        return row
+
     def test_01_cli_has_exact_inputs_modes_and_no_token_argument(self):
         parser = tool.build_parser(); destinations = {a.dest for a in parser._actions}
         self.assertTrue({"plan_input", "remaining_audit_input", "repaired_media_input", "output_dir", "api_base_url"} <= destinations)
@@ -86,8 +93,27 @@ class ControlledImporterTests(unittest.TestCase):
         self.assertIsNone(payload["maximum_load_capacity_kg"]); self.assertIsNone(payload["power_source"])
 
     def test_08_specs_preserve_unicode_value_unit_and_order(self):
-        value = tool.spec_payload({"name":"Ángulo", "key":"ángulo", "value":"≤ Ⅱ", "unit":"°", "order":"7"}, 9)
-        self.assertEqual(value, {"product":9,"name":"Ángulo","key":"ángulo","value":"≤ Ⅱ","unit":"°","order":7})
+        value = tool.spec_payload(self.spec_row("Ángulo", "≤ Ⅱ", unit="°"), 9)
+        self.assertEqual(value, {"product":9,"name":"Ángulo","key":"","value":"≤ Ⅱ","unit":"°","order":7})
+
+    def test_08a_exact_specification_header_is_closed(self):
+        header = ",".join(tool.SPECIFICATION_COLUMNS)
+        row = "source,M,1,,1,MODÈLE,Métrica,,,,false,"
+        parsed = tool.specification_csv_rows((header + "\n" + row + "\n").encode())
+        self.assertEqual(parsed[0]["source_label"], "MODÈLE")
+        for bad in (header.rsplit(",", 1)[0], header + ",unexpected",
+                    header.replace("source_label", "name")):
+            with self.assertRaises(tool.ConflictError):
+                tool.specification_csv_rows((bad + "\n").encode())
+
+    def test_08b_approved_adapter_fallbacks_order_unit_and_unicode(self):
+        source = self.spec_row("MODÈLE", "Métrica Ⅱ ≤", order="2", unit="")
+        self.assertEqual(tool.specification_identity(source),
+            {"name":"MODÈLE", "key":"", "value":"Métrica Ⅱ ≤", "unit":"", "order":2})
+        normalized = dict(source, normalized_label="Ángulo máximo", normalized_value="9.8 m",
+                          group_order="99", specification_order="4", unit="°")
+        self.assertEqual(tool.specification_identity(normalized),
+            {"name":"Ángulo máximo", "key":"", "value":"9.8 m", "unit":"°", "order":4})
 
     def test_09_batch_default_split_and_range(self):
         self.assertEqual([len(x) for x in tool.batch_ranges()], [20, 16])
@@ -170,8 +196,8 @@ class ControlledImporterTests(unittest.TestCase):
             row={"source_order":index+1,"source_key":key,"metric_model":model,"approval_key":f"a{index:02}"}
             products.append(row)
             spec_count=30 if index < 13 else 29
-            specs[key]=[{"name":f"Ángulo {n} Ⅱ","key":f"angulo-{n}","value":f"≤ {n}","unit":"°","order":str(n)}
-                        for n in range(spec_count)]
+            specs[key]=[self.spec_row(f"Ángulo {n} Ⅱ", f"≤ {n}", n, "°",
+                        source_key=key, metric_model=model) for n in range(spec_count)]
             count=2 if index < 35 else 1
             images[model]=[{"sha256":f"{index:02x}"*32,"size_bytes":"10","association_order":str(n+1),
                 "is_primary":"true" if n == 0 else "false","original_filename":"x.jpg"} for n in range(count)]
@@ -186,6 +212,10 @@ class ControlledImporterTests(unittest.TestCase):
         self.assertEqual(counts["specification_operations"],1057)
         self.assertEqual(counts["total"],1197)
         self.assertEqual(len({op["operation_key"] for op in operations}),1197)
+        spec_operations=[op for op in operations if op["resource_type"]=="specification"]
+        self.assertEqual(len({op["payload_sha256"] for op in spec_operations}),1057)
+        self.assertEqual(len({tool.canonical(op["request_template"]) for op in spec_operations}),1057)
+        self.assertTrue(all(op["specification_index"] >= 1 for op in spec_operations))
         tool.validate_operation_dependencies(operations)
         self.assertTrue(all(op["path_template"] in {"/api/technical-sheets","/api/products","/api/product-specs","/api/product-images"} for op in operations))
         self.assertTrue(all(op["depends_on_operation"] for op in operations if op["resource_type"] in {"image","specification"}))
@@ -203,7 +233,7 @@ class ControlledImporterTests(unittest.TestCase):
             with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
 
     def test_26_schema_slug_policy_and_noncanonical_conflict(self):
-        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION),("2.1.0","2.1"))
+        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION),("2.1.1","2.1"))
         self.assertEqual(set(tool.CATEGORY_CONTRACT),set(tool.FAMILIES))
         self.assertEqual(tool.CATEGORY_SLUG_POLICY,"blocking_functional_filter")
         state={"categories":[{"id":1,**tool.ROOT_CATEGORY_CONTRACT}] +
@@ -219,8 +249,8 @@ class ControlledImporterTests(unittest.TestCase):
         row={"source_order":1,"source_key":"source","metric_model":"MⅡ","approval_key":"approved"}
         decision={"row":row,"payload":{"model":"MⅡ"},"status":"create_candidate","product":None}
         base={"products":[row],"images":{"MⅡ":[]},"sheets":{"MⅡ":{"datasheet_upload_allowed":False}}}
-        first={"name":"Altura Ⅱ","key":"altura","value":"≤ 3","unit":"m","order":"7"}
-        data={**base,"specs":{"source":[first,dict(first,value="≤ 4")]}}
+        first=self.spec_row()
+        data={**base,"specs":{"source":[first,dict(first,source_value="≤ 4")]}}
         one=tool.build_operations(data,[decision],20); two=tool.build_operations(data,[decision],20)
         specs=[op for op in one if op["resource_type"]=="specification"]
         self.assertEqual(one,two); self.assertEqual([x["specification_index"] for x in specs],[1,2])
@@ -232,6 +262,35 @@ class ControlledImporterTests(unittest.TestCase):
         duplicate={**base,"specs":{"source":[first,dict(first)]}}
         with self.assertRaisesRegex(tool.ConflictError,"duplicate_specification_request"):
             tool.build_operations(duplicate,[decision],20)
+
+    def test_27a_real_sr0818_rows_are_distinct_and_index_is_not_signature(self):
+        row={"source_order":1,"source_key":"lgmg-86a5a5b6b61de976","metric_model":"SR0818E-2","approval_key":"a"}
+        decision={"row":row,"payload":{"model":"SR0818E-2"},"status":"create_candidate","product":None}
+        base={"products":[row],"images":{"SR0818E-2":[]},"sheets":{"SR0818E-2":{"datasheet_upload_allowed":False}}}
+        first=self.spec_row("MODÈLE","SR0818E-2",1,"",source_key=row["source_key"],metric_model="SR0818E-2",
+                            requires_review="true",maximum_load_capacity_candidate_kg="680")
+        second=self.spec_row("Medidas","Métrica",2,"",source_key=row["source_key"],metric_model="SR0818E-2",requires_review="true")
+        operations=tool.build_operations({**base,"specs":{row["source_key"]:[first,second]}},[decision],20)
+        specs=[op for op in operations if op["resource_type"]=="specification"]
+        self.assertEqual([op["specification_index"] for op in specs],[1,2])
+        self.assertEqual(len({op["payload_sha256"] for op in specs}),2)
+        self.assertEqual(len({op["operation_key"] for op in specs}),2)
+        self.assertEqual(specs[0]["depends_on_operation_key"],specs[1]["depends_on_operation_key"])
+        # El índice de auditoría no forma parte de la firma semántica.
+        duplicate=dict(first, specification_order="1")
+        with self.assertRaisesRegex(tool.ConflictError,"duplicate_specification_request"):
+            tool.build_operations({**base,"specs":{row["source_key"]:[first,duplicate]}},[decision],20)
+
+        twenty_nine=[first,second] + [self.spec_row(f"Dato {n} Ⅱ",f"Valor {n} ≤",n,"",
+            source_key=row["source_key"],metric_model="SR0818E-2") for n in range(3,30)]
+        full=tool.build_operations({**base,"specs":{row["source_key"]:twenty_nine}},[decision],20)
+        self.assertEqual(len([op for op in full if op["resource_type"]=="specification"]),29)
+
+    def test_27b_checkpoint_210_is_rejected_before_mutation(self):
+        expected={"schema_version":"2.1","tool":tool.TOOL_NAME,"version":tool.TOOL_VERSION}
+        old=dict(expected,version="2.1.0")
+        with self.assertRaisesRegex(tool.ConflictError,"incompatible"):
+            tool.validate_checkpoint_static(old,expected)
 
     def test_24_resources_are_reduced_and_dynamic(self):
         root={"id":41,"name":"Maquinaria","slug":"maquinaria","parent":None,"product_type":"machinery","is_active":True,"volatile":"x"}

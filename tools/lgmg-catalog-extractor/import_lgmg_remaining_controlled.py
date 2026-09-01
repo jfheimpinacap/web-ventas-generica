@@ -26,7 +26,7 @@ import urllib.request
 import uuid
 
 TOOL_NAME = "import_lgmg_remaining_controlled"
-TOOL_VERSION = "2.1.0"
+TOOL_VERSION = "2.1.1"
 CHECKPOINT_SCHEMA_VERSION = "2.1"
 OPERATION_CONTRACT_VERSION = "2.1"
 SUPERSEDED_DRY_RUN_FINGERPRINTS = {
@@ -81,6 +81,11 @@ READ_ENDPOINTS = (
     "/api/auth/me", "/api/categories?include_inactive=true", "/api/brands?include_inactive=true",
     "/api/products?include_unpublished=true", "/api/product-images", "/api/product-specs", "/api/technical-sheets",
 )
+SPECIFICATION_COLUMNS = (
+    "source_key", "metric_model", "group_order", "group_name", "specification_order",
+    "source_label", "source_value", "normalized_label", "normalized_value", "unit",
+    "requires_review", "maximum_load_capacity_candidate_kg",
+)
 
 
 class ControlledImportError(ValueError):
@@ -131,6 +136,17 @@ def csv_rows(data: bytes, label: str):
         return list(csv.DictReader(io.StringIO(data.decode("utf-8-sig"), newline="")))
     except (UnicodeError, csv.Error) as exc:
         raise ConflictError(f"CSV inválido: {label}") from exc
+
+
+def specification_csv_rows(data: bytes):
+    """Carga el contrato cerrado aprobado de import-specifications.csv."""
+    try:
+        reader = csv.DictReader(io.StringIO(data.decode("utf-8-sig"), newline=""))
+        if tuple(reader.fieldnames or ()) != SPECIFICATION_COLUMNS:
+            raise ConflictError("Encabezado cerrado inválido: import-specifications.csv")
+        return list(reader)
+    except (UnicodeError, csv.Error) as exc:
+        raise ConflictError("CSV inválido: import-specifications.csv") from exc
 
 
 def json_value(data: bytes, label: str):
@@ -219,7 +235,7 @@ def validate_inputs(plan_root: Path, audit_root: Path, repaired_root: Path, *, t
     if _closed_files(plan_root) != set(plan_files) | {"import-manifest.json"}:
         raise ConflictError("Conjunto cerrado del plan alterado")
     products = csv_rows(regular_bytes(plan_root / "import-products.csv", "import-products.csv"), "import-products.csv")
-    specs = csv_rows(regular_bytes(plan_root / "import-specifications.csv", "import-specifications.csv"), "import-specifications.csv")
+    specs = specification_csv_rows(regular_bytes(plan_root / "import-specifications.csv", "import-specifications.csv"))
     if len(products) != 57:
         raise ConflictError("El plan debe contener 57 productos")
 
@@ -507,13 +523,25 @@ def spec_payload(row, product_id):
 
 
 def specification_identity(row):
-    """Campos literales aceptados por ProductSpecWriteDto, sin inferencia técnica."""
-    def field(primary, legacy):
-        return row[primary] if primary in row else row.get(legacy, "")
-    order = field("order", "spec_order")
-    return {"name": field("name", "spec_name"), "key": field("key", "spec_key"),
-            "value": field("value", "spec_value"), "unit": field("unit", "spec_unit"),
-            "order": int(order) if str(order).strip() else 0}
+    """Adapta una fila aprobada al ProductSpecWriteDto sin perder Unicode.
+
+    El plan no representa una clave de DTO: `key` conserva el contrato vacío. Los
+    campos normalizados, cuando existen, tienen precedencia; sus vacíos vuelven a
+    la evidencia fuente. El orden procede exclusivamente de specification_order.
+    """
+    missing = [field for field in SPECIFICATION_COLUMNS if field not in row]
+    unexpected = [field for field in row if field not in SPECIFICATION_COLUMNS]
+    if missing or unexpected:
+        raise ConflictError("Fila de especificación no cumple el esquema aprobado")
+    name = row["normalized_label"] or row["source_label"]
+    value = row["normalized_value"] or row["source_value"]
+    try:
+        order = int(row["specification_order"])
+    except (TypeError, ValueError) as exc:
+        raise ConflictError("specification_order inválido") from exc
+    if not name or not value:
+        raise ConflictError("Nombre o valor efectivo de especificación vacío")
+    return {"name": name, "key": "", "value": value, "unit": row["unit"], "order": order}
 
 
 def classify_products(data, state, categories, brand):
