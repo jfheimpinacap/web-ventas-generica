@@ -47,6 +47,7 @@ FAMILIES = {
 }
 MISSING_DATASHEETS = {"AR24JE", "T38JE"}
 POWER_ENUM = {"electric_24v", "electric_lithium"}
+MAX_DATASHEET_BYTES = 10_485_760
 
 
 class AuditError(ValueError):
@@ -226,6 +227,67 @@ def _validate_signature(data: bytes, mime: str, suffix: str, kind: str):
         raise AuditError("MIME, extensión o firma de PDF inválidos")
 
 
+def extract_pdf_text(data: bytes):
+    """Extract only simple literal PDF text; return None rather than guessing."""
+    chunks = re.findall(rb"\(([^()]*)\)\s*T[jJ]", data) or re.findall(rb"\(([^()]{3,})\)", data)
+    if not chunks:
+        return None
+    text = " ".join(chunk.decode("latin-1", "ignore") for chunk in chunks)
+    return text if len(re.findall(r"[A-Za-z0-9]", text)) >= 4 else None
+
+
+def conservative_model_markers(value: str, models):
+    """Find literal catalogue models without globally transforming their spelling."""
+    return sorted(model for model in models if re.search(
+        rf"(?<![A-Za-z0-9]){re.escape(model)}(?![A-Za-z0-9])", str(value or ""), re.IGNORECASE))
+
+
+def model_like_markers(value: str):
+    """Return conservative LGMG-shaped tokens, including models outside this cohort."""
+    return sorted(set(re.findall(r"(?<![A-Za-z0-9])(?:[A-Z]{1,4}\d{2,4}[A-Z](?:-\d+)?)(?![A-Za-z0-9])",
+        str(value or "").upper())))
+
+
+def analyze_media_findings(records):
+    """Classify general cross-product datasheet/image patterns for tests and audits."""
+    findings = {record["metric_model"]: [] for record in records}
+    models = set(findings)
+    datasheet_owners = {}
+    image_sets = {}
+    for record in records:
+        model = record["metric_model"]
+        sheet = record.get("datasheet") or {}
+        digest = sheet.get("sha256", "")
+        if digest: datasheet_owners.setdefault(digest, set()).add(model)
+        if int(sheet.get("size_bytes") or 0) > MAX_DATASHEET_BYTES:
+            findings[model].append("datasheet_exceeds_backend_limit")
+        text = sheet.get("text")
+        markers = sorted(set(conservative_model_markers(text or "", models) + model_like_markers(text or "")))
+        if text is not None and (model.upper() not in markers or any(marker != model.upper() for marker in markers)):
+            findings[model].append("datasheet_model_mismatch")
+        filename_markers = sorted(set(conservative_model_markers(sheet.get("filename", ""), models) + model_like_markers(sheet.get("filename", ""))))
+        if any(marker != model.upper() for marker in filename_markers):
+            findings[model].append("datasheet_filename_mentions_other_model")
+            if model.upper() not in filename_markers:
+                findings[model].append("datasheet_model_mismatch")
+        images = record.get("images") or []
+        image_sets[model] = {item.get("sha256") for item in images if item.get("sha256")}
+        primary = next((item for item in images if item.get("is_primary")), None)
+        if primary and any(marker != model.upper() for marker in sorted(set(conservative_model_markers(primary.get("filename", ""), models) + model_like_markers(primary.get("filename", ""))))):
+            findings[model].append("primary_filename_mentions_other_model")
+    for owners in datasheet_owners.values():
+        if len(owners) > 1:
+            for model in owners: findings[model].append("datasheet_shared_across_products")
+    ordered = sorted(image_sets)
+    for index, first in enumerate(ordered):
+        if not image_sets[first]: continue
+        for second in ordered[index + 1:]:
+            if image_sets[first] == image_sets[second]:
+                findings[first].append("all_images_shared_across_products")
+                findings[second].append("all_images_shared_across_products")
+    return {model: sorted(set(values)) for model, values in findings.items()}
+
+
 def inspect_media(remaining, plan, media, media_root: Path):
     keys = {r["source_key"]: r for r in remaining}
     file_rows = {}
@@ -273,7 +335,7 @@ def inspect_media(remaining, plan, media, media_root: Path):
             if status != "available_at_source": raise AuditError("Estado de ficha desconocido")
             sheet_info = physical(sheet, "datasheet", downloaded_sheets)
         results[key] = {"images": physical_images, "primary": physical(primary[0], "image", downloaded_images),
-            "datasheet": sheet_info, "datasheet_status": status}
+            "image_rows": images, "datasheet": sheet_info, "datasheet_row": sheet, "datasheet_status": status}
     missing = {p["metric_model"] for p in remaining if results[p["source_key"]]["datasheet_status"] == "missing_at_source"}
     if missing != MISSING_DATASHEETS:
         raise AuditError("AR24JE y T38JE deben ser las únicas fichas missing_at_source")
@@ -301,6 +363,17 @@ def build_audit(plan, media, media_root: Path):
     for row in plan["rows"]["import-specifications.csv"]:
         if row.get("source_key") in specs: specs[row["source_key"]].append(row)
     fixed = {"target_brand": "LGMG", "product_type": "machinery", "condition": "new", "stock_status": "on_request"}
+    finding_records = []
+    for source in remaining:
+        info = media_info[source["source_key"]]
+        sheet = info["datasheet"]
+        text = extract_pdf_text(read_regular(media_root.joinpath(*PurePosixPath(sheet[0]).parts), sheet[0])) if sheet[0] else None
+        finding_records.append({"metric_model": source["metric_model"],
+            "datasheet": {"sha256": sheet[1], "size_bytes": sheet[2] or 0,
+                "filename": Path(sheet[0]).name if sheet[0] else "", "text": text},
+            "images": [{"sha256": item[1], "filename": Path(item[0]).name,
+                "is_primary": item[1] == info["primary"][1]} for item in info["images"]]})
+    media_findings = analyze_media_findings(finding_records)
     output = []
     for source in remaining:
         conflicts = []
@@ -315,7 +388,11 @@ def build_audit(plan, media, media_root: Path):
         model = source["metric_model"]
         info = media_info[source["source_key"]]
         power = source.get("target_power_source", "")
-        followup = info["datasheet_status"] == "missing_at_source" or power not in POWER_ENUM
+        findings = media_findings[model]
+        followup = info["datasheet_status"] == "missing_at_source" or power not in POWER_ENUM or bool(findings)
+        media_review = any(x in findings for x in ("all_images_shared_across_products", "primary_filename_mentions_other_model"))
+        exceeds = "datasheet_exceeds_backend_limit" in findings
+        datasheet_problem = any(x in findings for x in ("datasheet_model_mismatch", "datasheet_filename_mentions_other_model"))
         row = {**source, "source_family": source["source_category"], "source_model": model,
             "source_proposed_name": source.get("proposed_name", ""), "proposed_target_subcategory": subcategory,
             "proposed_target_model": model, "proposed_target_name": f"{prefix} {model}",
@@ -326,10 +403,14 @@ def build_audit(plan, media, media_root: Path):
             "image_association_count": len(info["images"]), "unique_physical_image_count": len({x[0] for x in info["images"]}),
             "primary_image_status": "valid_unique_candidate", "datasheet_status": info["datasheet_status"],
             "technical_followup_required": followup, "minimal_import_status": "candidate_after_approval" if not conflicts else "blocked_identity",
-            "approval_status": "pending_human_approval", "ready_for_import": False,
-            "warnings": ";".join((["technical_followup_required"] if followup else []) + conflicts)}
+            "approval_status": "pending_human_approval", "product_data_approval_status": "pending_human_approval",
+            "media_approval_status": "pending_human_visual_review" if media_review else ("requires_datasheet_repair" if datasheet_problem else "media_prepared"),
+            "datasheet_upload_status": "excluded_backend_size_limit" if exceeds else ("blocked_model_mismatch" if datasheet_problem else info["datasheet_status"]),
+            "ready_for_controlled_import": False, "ready_for_import": False, "media_findings": findings,
+            "warnings": ";".join((["technical_followup_required"] if followup else []) + findings + conflicts)}
         row["approval_key"] = approval_key(row, info, plan["fingerprint"], media["fingerprint"])
         row["_conflicts"] = conflicts
+        row["_media_findings"] = findings
         output.append(row)
     fingerprint = sha(canonical([{k: v for k, v in row.items() if k != "_conflicts"} for row in output]))
     return {"scope": scope, "processed": processed, "products": output, "media": media_info,
@@ -369,7 +450,8 @@ def write_outputs(output: Path, audit, plan, media, created_at: str):
             "source_proposed_name", "proposed_target_subcategory", "proposed_target_model", "proposed_target_name", "naming_transformation", "brand",
             "product_type", "condition", "stock_status", "specification_count", "maximum_load_capacity_candidate_kg", "power_source_candidate",
             "power_source_representable", "image_association_count", "unique_physical_image_count", "primary_image_status", "datasheet_status",
-            "technical_followup_required", "minimal_import_status", "approval_status", "ready_for_import", "warnings")
+            "technical_followup_required", "minimal_import_status", "approval_status", "product_data_approval_status",
+            "media_approval_status", "datasheet_upload_status", "ready_for_controlled_import", "ready_for_import", "media_findings", "warnings")
         write_csv(staging / OUTPUT_NAMES[0], scope_fields, audit["scope"])
         write_csv(staging / OUTPUT_NAMES[1], product_fields, audit["products"])
         family_rows = []
@@ -397,6 +479,10 @@ def write_outputs(output: Path, audit, plan, media, created_at: str):
         conflicts = [{"source_order": r["source_order"], "source_key": r["source_key"], "metric_model": r["metric_model"],
             "conflict_code": code, "detail": "Valor conservador del plan incumplido", "blocking": True}
             for r in audit["products"] for code in r["_conflicts"]]
+        conflicts.extend({"source_order": r["source_order"], "source_key": r["source_key"], "metric_model": r["metric_model"],
+            "conflict_code": code, "detail": "Hallazgo general de coherencia de medios; requiere reparación o revisión humana",
+            "blocking": code not in ("datasheet_exceeds_backend_limit", "datasheet_shared_across_products")}
+            for r in audit["products"] for code in r.get("_media_findings", []))
         write_csv(staging / OUTPUT_NAMES[4], conflict_fields, conflicts)
         summary = {"verdict": "AUDIT_COMPLETE" if not conflicts else "CONFLICT", "approved_plan_fingerprint": plan["fingerprint"],
             "approved_media_fingerprint": media["fingerprint"], "remaining_catalog_fingerprint_sha256": audit["remaining_catalog_fingerprint_sha256"],
