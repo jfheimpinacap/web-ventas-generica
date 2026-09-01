@@ -870,3 +870,86 @@ Dry-run crea `<RUTA_CHECKPOINT>` y apply reutiliza exactamente ese archivo; nunc
 checkpoint nuevo para apply. Después del merge se debe generar un token nuevo y ejecutar un
 dry-run completamente nuevo. Sus ocho informes y checkpoint deberán revisarse antes de
 considerar apply; estos ejemplos no publican y no se ejecutan en Codex.
+## Auditoría individual de operaciones de especificaciones LGMG
+
+La versión 2.1.0 corrige el defecto observado en el dry-run anterior: sus 1.057
+filas `specification` calculaban el mismo `payload_sha256` a partir de un
+placeholder genérico y usaban `association_order=0`. Ese informe demostraba el
+número de POST, pero no qué `ProductSpec` correspondía a cada POST; por ello ese
+dry-run no era auditable ni aplicable.
+
+El contrato real de `POST /api/product-specs` es `ProductSpecWriteDto`: acepta
+`product` o `product_id`, `name`, `key`, `value`, `unit` y `order`. Durante el
+dry-run todavía no hay ID de producto. Cada operación conserva entonces un
+`request_template` canónico con `product_id_ref.operation_key` apuntando a la
+operación de producto y conserva literalmente nombre, clave, valor, unidad,
+orden, Unicode (incluido `Ⅱ`) e índice fuente uno-basado. No contiene IDs
+futuros, timestamps, azar ni inferencias técnicas nuevas. `payload_sha256` es
+SHA-256 de ese JSON UTF-8, con claves ordenadas y separadores compactos;
+`resolved_payload_sha256` queda vacío hasta que apply sustituye la referencia
+por el ID creado y vuelve a calcular el hash del payload real.
+
+Cada una de las 1.197 solicitudes lleva una `operation_key`, SHA-256 determinista
+del contrato 2.1, approval/source key, modelo, orden fuente, fase, acción,
+método, `path_template`, índice, hash de payload/archivo y clave de dependencia.
+Las fichas no dependen de otra operación; cada producto depende de su ficha si
+existe; especificaciones e imágenes dependen, por orden **y** clave, del producto
+del mismo modelo. Una solicitud de especificación realmente duplicada dentro de
+un producto es conflicto, no se distingue artificialmente. El fingerprint de
+operaciones incorpora templates, claves, dependencias y todos sus campos; el
+fingerprint de dry-run incorpora además las seis entradas, HEAD/versión, API,
+estado remoto, recursos, taxonomía, medios y lotes.
+
+El checkpoint usa schema `2.1` y conserva las 1.197 operaciones completas. Apply
+reconstruye y compara claves, dependencias, payloads y fingerprints antes de la
+primera escritura; registra después cada clave, hash de template, hash resuelto
+e ID. Resume omite solo una operación cuya clave completada coincide. Verify
+comprueba los productos y usa únicamente los endpoints existentes (la identidad
+de especificaciones queda limitada a lo que expone su listado). Rollback recorre
+en orden inverso exclusivamente operaciones completadas, por clave, eliminando
+especificaciones e imágenes antes que productos y fichas, y nunca categorías,
+marca, recursos preexistentes ni la cohorte anterior.
+
+Los fingerprints cerrados `85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553`
+(`superseded_incomplete_dry_run`) y
+`bda45b2889f54055332a529df141fc6abfcfa5f3e9cfe04320d5313b991cbd31`
+(`superseded_unauditable_specification_dry_run`) son rechazados explícitamente
+por apply, resume, verify y rollback. Debe generarse un dry-run nuevo. Los
+conteos derivados y validados son 33 fichas + 36 productos + 1.057
+especificaciones + 71 imágenes = 1.197 operaciones. Se mantienen exactamente
+los ocho informes existentes y el checkpoint externo obligatorio.
+
+## Diagnóstico de uso de slugs en categorías y marcas
+
+El diagnóstico estático de entidades, DTO, endpoints, contexto EF, formularios,
+hooks, navegación, filtros, rutas, enlaces, pruebas e importadores encontró lo
+siguiente:
+
+* `Category.Slug` y `Brand.Slug` se almacenan como columnas obligatorias de hasta
+  140 caracteres, ambas con índice único. No son el nombre visible.
+* Los endpoints administrativos aceptan el slug opcional introducido por el
+  usuario; al crear sin él (o al enviarlo expresamente) el backend lo genera con
+  `SlugHelper.GenerateSlug` y evita colisiones mediante sufijos. Los formularios
+  de categoría y marca exponen el campo como opcional.
+* Las rutas públicas de detalle usan el **slug del producto**, no el de categoría
+  ni el de marca. La navegación actual construye enlaces de catálogo con IDs.
+  Los filtros del backend, sin embargo, aceptan tanto ID como slug para
+  `category` y `brand`; por tanto estos slugs sí participan en funcionalidad del
+  catálogo aunque el frontend actual prefiera IDs.
+* Las relaciones de `Product` se guardan por `CategoryId` y `BrandId`. Este
+  importador resuelve una categoría y la marca LGMG por nombre exacto y valida
+  jerarquía/estado; luego envía sus IDs. No resuelve la relación por slug ni
+  hardcodea IDs locales.
+
+Por esa evidencia, `CATEGORY_SLUG_POLICY = blocking_functional_filter`. El slug
+observado `levadores-tipo-brazo-articulado` frente al canónico
+`elevadores-tipo-brazo-articulado` produce `category_slug_mismatch`, un conflicto
+bloqueante antes de cualquier mutación. No cambia el nombre o ID, no crea PATCH
+y no corrige automáticamente la categoría. El contrato también exige raíz
+`Maquinaria`/`maquinaria` y los seis pares canónicos declarados en el importador.
+
+Esta tarea no elimina ningún slug. Eliminarlos en el futuro exigiría una tarea
+separada para cambiar entidades, DTO/read models, validación y generación,
+índices/migraciones, endpoints de filtro, formularios/tipos/hooks, pruebas e
+importadores, además de definir compatibilidad de URLs y consumidores. Quitar
+solo las columnas rompería el esquema y los filtros existentes.

@@ -125,8 +125,8 @@ class ControlledImporterTests(unittest.TestCase):
         with self.assertRaises(tool.ControlledImportError): tool.paginated(Client(), "/api/products")
 
     def test_15_taxonomy_exact_brand_duplicate_and_hierarchy(self):
-        state = {"categories":[{"id":1,"name":"Maquinaria","product_type":"machinery","parent":None,"is_active":True}] +
-                [{"id":i+2,"name":name,"product_type":"machinery","parent":1,"is_active":True} for i,name in enumerate(tool.FAMILIES)],
+        state = {"categories":[{"id":1,"name":"Maquinaria","slug":"maquinaria","product_type":"machinery","parent":None,"is_active":True}] +
+                [{"id":i+2,"name":name,"slug":tool.CATEGORY_CONTRACT[name],"product_type":"machinery","parent":1,"is_active":True} for i,name in enumerate(tool.FAMILIES)],
                 "brands":[{"id":9,"name":"LGMG","is_active":True}]}
         _, cats, brand = tool.resolve_taxonomy(state); self.assertEqual((len(cats), brand["id"]), (6, 9))
         state["brands"].append(dict(state["brands"][0], id=10))
@@ -168,7 +168,10 @@ class ControlledImporterTests(unittest.TestCase):
         for index in range(36):
             model=f"M{index:02}"; key=f"s{index:02}"
             row={"source_order":index+1,"source_key":key,"metric_model":model,"approval_key":f"a{index:02}"}
-            products.append(row); specs[key]=[{"name":"Ángulo","value":"≤ Ⅱ","order":"0"}]
+            products.append(row)
+            spec_count=30 if index < 13 else 29
+            specs[key]=[{"name":f"Ángulo {n} Ⅱ","key":f"angulo-{n}","value":f"≤ {n}","unit":"°","order":str(n)}
+                        for n in range(spec_count)]
             count=2 if index < 35 else 1
             images[model]=[{"sha256":f"{index:02x}"*32,"size_bytes":"10","association_order":str(n+1),
                 "is_primary":"true" if n == 0 else "false","original_filename":"x.jpg"} for n in range(count)]
@@ -180,7 +183,10 @@ class ControlledImporterTests(unittest.TestCase):
         self.assertEqual(counts["product_operations"],36)
         self.assertEqual(counts["image_operations"],71)
         self.assertEqual(counts["datasheet_operations"],33)
-        self.assertEqual(counts["specification_operations"],36)
+        self.assertEqual(counts["specification_operations"],1057)
+        self.assertEqual(counts["total"],1197)
+        self.assertEqual(len({op["operation_key"] for op in operations}),1197)
+        tool.validate_operation_dependencies(operations)
         self.assertTrue(all(op["path_template"] in {"/api/technical-sheets","/api/products","/api/product-specs","/api/product-images"} for op in operations))
         self.assertTrue(all(op["depends_on_operation"] for op in operations if op["resource_type"] in {"image","specification"}))
 
@@ -192,10 +198,44 @@ class ControlledImporterTests(unittest.TestCase):
             path=Path(temp)/"cp.json"; tool.atomic_json(path,{"state":"dry_run_ready",
                 "dry_run_fingerprint_sha256":tool.SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256})
             with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
+            tool.atomic_json(path,{"state":"dry_run_ready", "dry_run_fingerprint_sha256":
+                "bda45b2889f54055332a529df141fc6abfcfa5f3e9cfe04320d5313b991cbd31"})
+            with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
+
+    def test_26_schema_slug_policy_and_noncanonical_conflict(self):
+        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION),("2.1.0","2.1"))
+        self.assertEqual(set(tool.CATEGORY_CONTRACT),set(tool.FAMILIES))
+        self.assertEqual(tool.CATEGORY_SLUG_POLICY,"blocking_functional_filter")
+        state={"categories":[{"id":1,**tool.ROOT_CATEGORY_CONTRACT}] +
+            [{"id":i+2,"name":name,"slug":tool.CATEGORY_CONTRACT[name],"parent":1,
+              "product_type":"machinery","is_active":True} for i,name in enumerate(tool.FAMILIES)],
+            "brands":[{"id":9,"name":"LGMG","slug":"lgmg","is_active":True}]}
+        target=next(x for x in state["categories"] if x["name"]=="Elevadores tipo brazo articulado")
+        target["slug"]="levadores-tipo-brazo-articulado"
+        with self.assertRaisesRegex(tool.ConflictError,"category_slug_mismatch"):
+            tool.resolve_taxonomy(state)
+
+    def test_27_individual_spec_template_keys_dependencies_and_duplicate(self):
+        row={"source_order":1,"source_key":"source","metric_model":"MⅡ","approval_key":"approved"}
+        decision={"row":row,"payload":{"model":"MⅡ"},"status":"create_candidate","product":None}
+        base={"products":[row],"images":{"MⅡ":[]},"sheets":{"MⅡ":{"datasheet_upload_allowed":False}}}
+        first={"name":"Altura Ⅱ","key":"altura","value":"≤ 3","unit":"m","order":"7"}
+        data={**base,"specs":{"source":[first,dict(first,value="≤ 4")]}}
+        one=tool.build_operations(data,[decision],20); two=tool.build_operations(data,[decision],20)
+        specs=[op for op in one if op["resource_type"]=="specification"]
+        self.assertEqual(one,two); self.assertEqual([x["specification_index"] for x in specs],[1,2])
+        self.assertEqual(specs[0]["specification_name"],"Altura Ⅱ")
+        self.assertEqual(specs[0]["association_order"],"")
+        self.assertEqual(specs[0]["payload_sha256"],tool.sha(tool.canonical(specs[0]["request_template"])))
+        self.assertEqual(len({op["operation_key"] for op in one}),len(one))
+        tool.validate_operation_dependencies(one)
+        duplicate={**base,"specs":{"source":[first,dict(first)]}}
+        with self.assertRaisesRegex(tool.ConflictError,"duplicate_specification_request"):
+            tool.build_operations(duplicate,[decision],20)
 
     def test_24_resources_are_reduced_and_dynamic(self):
         root={"id":41,"name":"Maquinaria","slug":"maquinaria","parent":None,"product_type":"machinery","is_active":True,"volatile":"x"}
-        cats={name:{"id":100+i,"name":name,"slug":f"s-{i}","parent":41,"product_type":"machinery","is_active":True} for i,name in enumerate(tool.FAMILIES)}
+        cats={name:{"id":100+i,"name":name,"slug":tool.CATEGORY_CONTRACT[name],"parent":41,"product_type":"machinery","is_active":True} for i,name in enumerate(tool.FAMILIES)}
         value=tool.resource_view(root,cats,{"id":77,"name":"LGMG","is_active":True})
         self.assertEqual(value["brand"],{"id":77,"name":"LGMG"}); self.assertEqual(len(value["categories"]),7)
         self.assertNotIn("volatile",value["categories"][0])
