@@ -42,7 +42,32 @@ OFFICIAL_PAGES = {
 VISUAL_DECISIONS = {
     "approve_shared_images_for_both", "approve_images_for_a13je_only",
     "approve_images_for_a14je_only", "reject_shared_images_for_both",
-    "pending_human_visual_review",
+    "pending_human_visual_review", "approve_separate_model_images",
+}
+OFFICIAL_DATASHEETS = {
+    "SR1018E-2": "https://www.lgmglifts.com/upload/file/2025/04/lgmg-RT-scissorlift-en-SR1018E-2.pdf",
+    "T28JE": "https://www.lgmglifts.com/upload/file/2023/07/10/73e3683775884b6da85c0f265d315616.pdf",
+}
+EXPECTED_MODEL_MARKERS = {
+    "SR1018E-2": ["SR1018E-2", "SR3369E-2"],
+    "T28JE": ["T28JE", "T92JE"],
+}
+APPROVED_SEPARATE_IMAGES = {
+    "A13JE": {
+        "primary_sha256": "21b8e8bbb8d2b40617b01fd86aee1c8c30025e742f90cc8f4229eaea264744ce",
+        "ordered_sha256": [
+            "21b8e8bbb8d2b40617b01fd86aee1c8c30025e742f90cc8f4229eaea264744ce",
+            "3fc3777d98efadbd36a4cc31fde58887a476e92f1b163250011128ad02f946f4",
+        ],
+    },
+    "A14JE": {
+        "primary_sha256": "e3e568efc55d1f9dcadc9bdd76f80a2ec1a6fe7d88df776cc3c5b8c1b16fe9de",
+        "ordered_sha256": [
+            "e3e568efc55d1f9dcadc9bdd76f80a2ec1a6fe7d88df776cc3c5b8c1b16fe9de",
+            "b95ee211b2a20be84372f88bfb828be596fe4fce6618b4e32f0dd6dfa9a13541",
+            "acb85d1fbe203d02ef7f1af42ef0e00d6f43cb643be952b8c65c85c572c9ab41",
+        ],
+    },
 }
 AUDIT_OUTPUTS = audit_contract.OUTPUT_NAMES
 OUTPUT_NAMES = (
@@ -167,10 +192,12 @@ def validate_decisions(data: bytes):
     for model in REPAIR_MODELS:
         item = repairs[model]
         if (item.get("action") != "replace_from_official_source" or item.get("product_page_url") != OFFICIAL_PAGES[model] or
-                item.get("expected_model_markers") != [model] or not isinstance(item.get("datasheet_url"), str)):
+                item.get("expected_model_markers") != EXPECTED_MODEL_MARKERS[model] or not isinstance(item.get("datasheet_url"), str)):
             raise RepairError(f"Decisión cerrada inválida para {model}")
         if item["datasheet_url"]:
             validate_official_url(item["datasheet_url"])
+            if item["datasheet_url"] != OFFICIAL_DATASHEETS[model]:
+                raise RepairError(f"URL oficial no aprobada para {model}")
     h625e = repairs["H625E"]
     if h625e != {"action": "exclude_backend_size_limit", "maximum_backend_size_bytes": MAX_DATASHEET_BYTES}:
         raise RepairError("La exclusión contractual de H625E fue alterada")
@@ -178,8 +205,25 @@ def validate_decisions(data: bytes):
     if not isinstance(shared, dict) or set(shared) != {"A13JE|A14JE"}:
         raise RepairError("Decisión visual cerrada ausente")
     visual = shared["A13JE|A14JE"]
-    if set(visual) != {"decision", "notes"} or visual.get("decision") not in VISUAL_DECISIONS or not isinstance(visual.get("notes"), str):
+    expected_keys = {"decision", "notes", "approved_images"} if visual.get("decision") == "approve_separate_model_images" else {"decision", "notes"}
+    if set(visual) != expected_keys or visual.get("decision") not in VISUAL_DECISIONS or not isinstance(visual.get("notes"), str):
         raise RepairError("Decisión visual desconocida o inválida")
+    if visual.get("decision") == "approve_separate_model_images":
+        approved = visual.get("approved_images")
+        if not isinstance(approved, dict) or set(approved) != {"A13JE", "A14JE"}:
+            raise RepairError("approved_images debe declarar exactamente A13JE y A14JE")
+        for model, expected in APPROVED_SEPARATE_IMAGES.items():
+            item = approved.get(model)
+            if not isinstance(item, dict) or set(item) != {"primary_sha256", "ordered_sha256"}:
+                raise RepairError(f"Contrato approved_images inválido para {model}")
+            primary, ordered = item["primary_sha256"], item["ordered_sha256"]
+            if (not isinstance(primary, str) or not re.fullmatch(r"[0-9a-f]{64}", primary) or
+                    not isinstance(ordered, list) or not ordered or
+                    any(not isinstance(x, str) or not re.fullmatch(r"[0-9a-f]{64}", x) for x in ordered) or
+                    len(ordered) != len(set(ordered)) or primary not in ordered or ordered[0] != primary):
+                raise RepairError(f"Hashes approved_images inválidos para {model}")
+            if item != expected:
+                raise RepairError(f"Conjunto de imágenes aprobado inesperado para {model}")
     return value
 
 
@@ -239,7 +283,7 @@ def extract_pdf_text(data: bytes):
     return text if len(re.findall(r"[A-Za-z0-9]", text)) >= 4 else None
 
 
-def validate_pdf(data: bytes, mime: str, expected_model: str, *, known_models=()):
+def validate_pdf(data: bytes, mime: str, expected_model: str, *, known_models=(), expected_markers=None):
     if not data or len(data) > MAX_DATASHEET_BYTES:
         raise RepairError("Ficha vacía o superior al límite de 10 MiB")
     base_mime = str(mime).partition(";")[0].strip().casefold()
@@ -252,15 +296,15 @@ def validate_pdf(data: bytes, mime: str, expected_model: str, *, known_models=()
     if text is None:
         return "downloaded_pending_human_content_review", None
     normalize = lambda s: re.sub(r"[^A-Z0-9]", "", s.upper())
-    expected = normalize(expected_model)
+    markers = expected_markers or [expected_model]
     found = {m for m in known_models if normalize(m) and normalize(m) in normalize(text)}
-    if expected not in normalize(text):
+    if not any(normalize(marker) in normalize(text) for marker in markers):
         other = sorted(m for m in found if m != expected_model)
         raise RepairError("datasheet_model_mismatch" + (":" + ",".join(other) if other else ""))
     return "validated_model_content", text
 
 
-def download_datasheet(url: str, expected_model: str, known_models, fetcher=None):
+def download_datasheet(url: str, expected_model: str, known_models, fetcher=None, expected_markers=None):
     url = validate_official_url(url); fetcher = fetcher or Fetcher()
     try:
         opened = fetcher.open(url)
@@ -279,7 +323,8 @@ def download_datasheet(url: str, expected_model: str, known_models, fetcher=None
         raise
     except Exception as exc:
         raise RepairError("Descarga oficial fallida") from exc
-    validation, _ = validate_pdf(data, mime, expected_model, known_models=known_models)
+    validation, _ = validate_pdf(data, mime, expected_model, known_models=known_models,
+        expected_markers=expected_markers)
     filename = Path(urllib.parse.urlsplit(final_url).path).name
     filename = re.sub(r"[^A-Za-z0-9._-]", "-", filename) or f"{expected_model}.pdf"
     if not filename.casefold().endswith(".pdf"):
@@ -351,8 +396,39 @@ def _media_associations(remaining_products, plan, media, media_root, target_medi
 
 def _visual_status(model, decision):
     if decision == "pending_human_visual_review": return "pending_human_visual_review", False
+    if decision == "approve_separate_model_images": return "approved_separate_model_images", True
     approved = decision == "approve_shared_images_for_both" or decision == f"approve_images_for_{model.casefold()}_only"
     return ("approved_by_human_visual_decision" if approved else "rejected_by_human_visual_decision"), approved
+
+
+def _apply_separate_images(image_rows, approved_images):
+    """Validate the closed original associations and return the approved associations."""
+    relevant = {model: [row for row in image_rows if row["metric_model"] == model]
+        for model in ("A13JE", "A14JE")}
+    expected_a13 = set(APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"])
+    expected_a14_own = set(APPROVED_SEPARATE_IMAGES["A14JE"]["ordered_sha256"])
+    original = {model: {row["sha256"] for row in rows} for model, rows in relevant.items()}
+    if original["A13JE"] != expected_a13 or original["A14JE"] != expected_a13 | expected_a14_own:
+        raise RepairError("Asociaciones originales A13JE/A14JE incoherentes con la evidencia aprobada")
+    if any(len(rows) != len(original[model]) for model, rows in relevant.items()):
+        raise RepairError("Asociaciones originales duplicadas para A13JE/A14JE")
+    keep = {model: approved_images[model]["ordered_sha256"] for model in approved_images}
+    unaffected = [row.copy() for row in image_rows if row["metric_model"] not in relevant]
+    selected = []
+    for model in ("A13JE", "A14JE"):
+        by_hash = {row["sha256"]: row.copy() for row in relevant[model]}
+        if set(keep[model]) - set(by_hash):
+            raise RepairError(f"Hash aprobado inexistente o no asociado originalmente a {model}")
+        for order, digest in enumerate(keep[model], 1):
+            row = by_hash[digest]
+            row["association_order"] = str(order)
+            row["is_primary"] = digest == approved_images[model]["primary_sha256"]
+            row["media_review_required"] = False
+            row["warnings"] = ";".join(w for w in row.get("warnings", "").split(";") if w and w != "shared_physical_content")
+            selected.append(row)
+    if unaffected != [row for row in image_rows if row["metric_model"] not in relevant]:
+        raise RepairError("Una imagen de otro producto fue alterada")
+    return unaffected + selected
 
 
 def build_package(plan, media, remaining, decisions, media_root: Path, staging: Path, fetcher=None):
@@ -362,7 +438,10 @@ def build_package(plan, media, remaining, decisions, media_root: Path, staging: 
         raise RepairError("La cohorte restante no contiene todos los modelos contractuales")
     corrected = staging / "corrected-media"; corrected.mkdir()
     image_rows, sheet_plan, known_models = _media_associations(products, plan, media, media_root, corrected)
-    network_urls, redirects, datasheet_rows, conflicts = [], 0, [], []
+    visual_contract = decisions["shared_image_decisions"]["A13JE|A14JE"]
+    if visual_contract["decision"] == "approve_separate_model_images":
+        image_rows = _apply_separate_images(image_rows, visual_contract["approved_images"])
+    network_urls, network_downloads, redirects, datasheet_rows, conflicts = [], [], 0, [], []
     sheet_hash_owners = {}
     for row in sheet_plan.values():
         if row.get("datasheet_status") == "available_at_source": sheet_hash_owners.setdefault(row.get("sha256"), set()).add(row.get("metric_model"))
@@ -380,7 +459,11 @@ def build_package(plan, media, remaining, decisions, media_root: Path, staging: 
             status, followup, validation = "awaiting_approved_datasheet_url", True, "not_downloaded"
             if approved_url:
                 network_urls.append(approved_url)
-                downloaded = download_datasheet(approved_url, model, known_models, fetcher)
+                downloaded = download_datasheet(approved_url, model, known_models, fetcher,
+                    decisions["datasheet_repairs"][model]["expected_model_markers"])
+                network_downloads.append({"metric_model": model, "url": approved_url,
+                    "sha256": downloaded["sha256"], "size_bytes": downloaded["size_bytes"],
+                    "redirects_followed": downloaded["redirects"]})
                 redirects += downloaded["redirects"]
                 if downloaded["sha256"] == source_hash or downloaded["sha256"] in sheet_hash_owners and model not in sheet_hash_owners[downloaded["sha256"]]:
                     raise RepairError(f"Ficha reparada físicamente compartida o no reemplazada: {model}")
@@ -443,7 +526,8 @@ def build_package(plan, media, remaining, decisions, media_root: Path, staging: 
     complete = all(sheet_by_model[m]["corrected_status"] == "validated_replacement" for m in REPAIR_MODELS) and decision != "pending_human_visual_review"
     verdict = "REPAIR_COMPLETE" if complete else "REVIEW_REQUIRED"
     return {"products": products, "images": image_rows, "datasheets": datasheet_rows, "readiness": readiness,
-        "conflicts": conflicts, "verdict": verdict, "network_urls": network_urls, "redirects": redirects,
+        "conflicts": conflicts, "verdict": verdict, "network_urls": network_urls,
+        "network_downloads": network_downloads, "redirects": redirects,
         "visual_decision": decision, "visual_notes": notes}
 
 
@@ -452,19 +536,30 @@ def _write_visual(staging: Path, result):
     for item in result["images"]:
         if item["metric_model"] not in {"A13JE", "A14JE"}: continue
         other = "A14JE" if item["metric_model"] == "A13JE" else "A13JE"
+        disposition = ("Imágenes conservadas para A13JE" if item["metric_model"] == "A13JE" else
+            "Imágenes propias conservadas para A14JE")
+        if item["metric_model"] == "A14JE" and item["is_primary"]:
+            disposition = "Nueva imagen principal de A14JE"
         rows.append({"product_model": item["metric_model"], "other_product_model": other,
             "association_order": item["association_order"], "is_primary": item["is_primary"], "relative_path": item["relative_path"],
             "original_filename": item["original_filename"], "sha256": item["sha256"], "size_bytes": item["size_bytes"],
             "mime": item["mime"], "width": item["width"], "height": item["height"],
             "shared_physical_content": other in item["shared_products"],
             "filename_mentions_other_model": other in item["filename_model_markers"],
-            "human_decision": result["visual_decision"], "human_notes": result["visual_notes"]})
+            "disposition": disposition, "human_decision": result["visual_decision"], "human_notes": result["visual_notes"]})
+    if result["visual_decision"] == "approve_separate_model_images":
+        by_hash = {row["sha256"]: row for row in rows if row["product_model"] == "A13JE"}
+        for digest in APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"]:
+            source = dict(by_hash[digest])
+            source.update({"product_model": "A14JE", "other_product_model": "A13JE",
+                "is_primary": False, "disposition": "Imágenes retiradas de A14JE"})
+            rows.append(source)
     fields = tuple(rows[0]) if rows else ("product_model", "other_product_model", "association_order", "is_primary", "relative_path", "original_filename", "sha256", "size_bytes", "mime", "width", "height", "shared_physical_content", "filename_mentions_other_model", "human_decision", "human_notes")
     write_csv(staging / "A13JE-A14JE-visual-review.csv", fields, rows)
     products = {r["metric_model"]: r for r in result["products"]}
     cards = []
     for row in rows:
-        cards.append(f'''<article><h3>{escape(row['product_model'])} — {'PRINCIPAL' if row['is_primary'] else 'adicional'}</h3>
+        cards.append(f'''<article><h2>{escape(row['disposition'])}</h2><h3>{escape(row['product_model'])} — {'PRINCIPAL' if row['is_primary'] else 'adicional'}</h3>
 <img src="{escape(row['relative_path'])}" alt="Evidencia sin interpretación de {escape(row['product_model'])}">
 <dl><dt>Nombre aprobado</dt><dd>{escape(products[row['product_model']].get('proposed_target_name',''))}</dd>
 <dt>Categoría</dt><dd>{escape(products[row['product_model']].get('proposed_target_subcategory',''))}</dd>
@@ -523,6 +618,7 @@ def _finish_outputs(staging, result, plan, media, remaining, decisions_raw, crea
         "repaired_media_fingerprint_sha256": repaired_fp, "input_files": input_files, "output_files": outputs,
         "total_plan_products": 57, "processed_closed_cohort": 21, "network_called": bool(result["network_urls"]),
         "network_request_count": len(result["network_urls"]), "network_requested_urls": result["network_urls"],
+        "network_downloads": result["network_downloads"],
         "network_redirects_followed": result["redirects"], "api_called": False, "database_modified": False,
         "products_created": 0, "products_updated": 0, "products_deleted": 0, "images_uploaded": 0,
         "datasheets_uploaded": 0, "content_published": False, "credentials_persisted": False, "apply_supported": False}

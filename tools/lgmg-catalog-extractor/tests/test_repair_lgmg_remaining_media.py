@@ -17,11 +17,12 @@ def decisions(decision="pending_human_visual_review", sr_url="", t_url=""):
     return {"schema_version": "1.0", "catalog_approval": {"approved": True, "approval_text": repair.APPROVAL_TEXT},
         "datasheet_repairs": {
             "SR1018E-2": {"action": "replace_from_official_source", "product_page_url": repair.OFFICIAL_PAGES["SR1018E-2"],
-                "datasheet_url": sr_url, "expected_model_markers": ["SR1018E-2"]},
+                "datasheet_url": sr_url, "expected_model_markers": repair.EXPECTED_MODEL_MARKERS["SR1018E-2"]},
             "T28JE": {"action": "replace_from_official_source", "product_page_url": repair.OFFICIAL_PAGES["T28JE"],
-                "datasheet_url": t_url, "expected_model_markers": ["T28JE"]},
+                "datasheet_url": t_url, "expected_model_markers": repair.EXPECTED_MODEL_MARKERS["T28JE"]},
             "H625E": {"action": "exclude_backend_size_limit", "maximum_backend_size_bytes": repair.MAX_DATASHEET_BYTES}},
-        "shared_image_decisions": {"A13JE|A14JE": {"decision": decision, "notes": "revisión Ⅱ"}}}
+        "shared_image_decisions": {"A13JE|A14JE": {"decision": decision, "notes": "revisión Ⅱ",
+            **({"approved_images": repair.APPROVED_SEPARATE_IMAGES} if decision == "approve_separate_model_images" else {})}}}
 
 
 def pdf(model=None):
@@ -60,6 +61,46 @@ class RepairRemainingMediaTests(unittest.TestCase):
             self.assertEqual(repair.validate_decisions(json.dumps(decisions(value)).encode())["shared_image_decisions"]["A13JE|A14JE"]["decision"], value)
         bad = decisions(); bad["catalog_approval"]["approval_text"] += "!"
         with self.assertRaises(repair.RepairError): repair.validate_decisions(json.dumps(bad).encode())
+
+    def test_separate_decision_contract_is_exact_and_fail_closed(self):
+        good = decisions("approve_separate_model_images", repair.OFFICIAL_DATASHEETS["SR1018E-2"], repair.OFFICIAL_DATASHEETS["T28JE"])
+        self.assertEqual(repair.validate_decisions(json.dumps(good).encode())["shared_image_decisions"]["A13JE|A14JE"]["approved_images"], repair.APPROVED_SEPARATE_IMAGES)
+        mutations = []
+        for mutate in (lambda x: x["shared_image_decisions"]["A13JE|A14JE"]["approved_images"].pop("A14JE"),
+                lambda x: x["shared_image_decisions"]["A13JE|A14JE"]["approved_images"].update({"X": {}}),
+                lambda x: x["shared_image_decisions"]["A13JE|A14JE"]["approved_images"]["A13JE"].update(primary_sha256="x"*64),
+                lambda x: x["shared_image_decisions"]["A13JE|A14JE"]["approved_images"]["A13JE"]["ordered_sha256"].append(repair.APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"][0]),
+                lambda x: x["shared_image_decisions"]["A13JE|A14JE"]["approved_images"]["A14JE"]["ordered_sha256"].reverse()):
+            value = json.loads(json.dumps(good)); mutate(value); mutations.append(value)
+        for value in mutations:
+            with self.assertRaises(repair.RepairError): repair.validate_decisions(json.dumps(value).encode())
+
+    def test_exact_official_urls_and_alias_markers(self):
+        value = decisions("pending_human_visual_review", *repair.OFFICIAL_DATASHEETS.values())
+        repair.validate_decisions(json.dumps(value).encode())
+        value["datasheet_repairs"]["T28JE"]["datasheet_url"] = "https://www.lgmglifts.com/other.pdf"
+        with self.assertRaises(repair.RepairError): repair.validate_decisions(json.dumps(value).encode())
+        self.assertEqual(repair.validate_pdf(pdf("T92JE"), "application/pdf", "T28JE",
+            expected_markers=repair.EXPECTED_MODEL_MARKERS["T28JE"])[0], "validated_model_content")
+
+    def test_separate_associations_preserve_bytes_and_other_products(self):
+        rows=[]
+        for model, hashes in (("A13JE", repair.APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"]),
+                ("A14JE", repair.APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"] + repair.APPROVED_SEPARATE_IMAGES["A14JE"]["ordered_sha256"])):
+            for i, digest in enumerate(hashes):
+                rows.append({"metric_model":model,"sha256":digest,"association_order":str(i+1),"is_primary":i==0,
+                    "relative_path":f"corrected-media/images/{digest}.jpg","warnings":"shared_physical_content","media_review_required":True})
+        other={"metric_model":"S0607EⅡ","sha256":"f"*64,"association_order":"1","is_primary":True,
+            "relative_path":"corrected-media/images/other.jpg","warnings":"","media_review_required":False}
+        rows.append(other)
+        result=repair._apply_separate_images(rows,repair.APPROVED_SEPARATE_IMAGES)
+        final={m:[r for r in result if r["metric_model"]==m] for m in ("A13JE","A14JE")}
+        self.assertEqual([r["sha256"] for r in final["A13JE"]],repair.APPROVED_SEPARATE_IMAGES["A13JE"]["ordered_sha256"])
+        self.assertEqual([r["sha256"] for r in final["A14JE"]],repair.APPROVED_SEPARATE_IMAGES["A14JE"]["ordered_sha256"])
+        self.assertTrue(final["A13JE"][0]["is_primary"]); self.assertTrue(final["A14JE"][0]["is_primary"])
+        self.assertEqual([r for r in result if r["metric_model"]=="S0607EⅡ"],[other])
+        broken=json.loads(json.dumps(rows)); broken=[r for r in broken if not (r["metric_model"]=="A14JE" and r["sha256"]==repair.APPROVED_SEPARATE_IMAGES["A14JE"]["ordered_sha256"][1])]
+        with self.assertRaises(repair.RepairError): repair._apply_separate_images(broken,repair.APPROVED_SEPARATE_IMAGES)
         bad = decisions("invented")
         with self.assertRaises(repair.RepairError): repair.validate_decisions(json.dumps(bad).encode())
 
@@ -139,6 +180,19 @@ class RepairRemainingMediaTests(unittest.TestCase):
             self.assertNotIn("file://",html); self.assertNotIn("base64",html); self.assertNotIn("<script",html); self.assertIn("corrected-media/images/x.jpg",html)
             rows=repair.csv_rows((Path(tmp)/"A13JE-A14JE-visual-review.csv").read_bytes(),"visual")
             self.assertEqual(len(rows),2); self.assertEqual({r["product_model"] for r in rows},{"A13JE","A14JE"})
+
+    def test_separate_visual_report_has_four_explicit_sections(self):
+        products=[{"metric_model":m,"proposed_target_name":m,"proposed_target_subcategory":"Familia"} for m in ("A13JE","A14JE")]
+        images=[]
+        for model in ("A13JE","A14JE"):
+            for i,digest in enumerate(repair.APPROVED_SEPARATE_IMAGES[model]["ordered_sha256"]):
+                images.append({"metric_model":model,"association_order":str(i+1),"is_primary":i==0,"relative_path":"corrected-media/images/x.jpg","original_filename":model+".jpg","sha256":digest,"size_bytes":4,"mime":"image/jpeg","width":1,"height":1,"shared_products":[model],"filename_model_markers":[model]})
+        result={"products":products,"images":images,"visual_decision":"approve_separate_model_images","visual_notes":"aprobado"}
+        with tempfile.TemporaryDirectory() as tmp:
+            repair._write_visual(Path(tmp),result); html=(Path(tmp)/"A13JE-A14JE-visual-review.html").read_text()
+            for heading in ("Imágenes conservadas para A13JE","Imágenes retiradas de A14JE","Imágenes propias conservadas para A14JE","Nueva imagen principal de A14JE"):
+                self.assertIn(heading,html)
+            self.assertEqual(len(repair.csv_rows((Path(tmp)/"A13JE-A14JE-visual-review.csv").read_bytes(),"visual")),7)
 
     def test_csv_bom_crlf_formula_and_unicode(self):
         with tempfile.TemporaryDirectory() as tmp:
