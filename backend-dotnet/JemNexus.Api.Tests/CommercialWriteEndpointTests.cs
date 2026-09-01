@@ -99,6 +99,109 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/promotions/{promotionId}/")).StatusCode);
     }
 
+    [Theory]
+    [InlineData("Elevadores tipo mástil vertical", "elevadores-tipo-mastil-vertical")]
+    [InlineData("  ELEVADORES   tipo... cañón -- articulado  ", "elevadores-tipo-canon-articulado")]
+    public async Task CategoryCreationAlwaysGeneratesCanonicalSlugFromName(string name, string expectedSlug)
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        var created = await ReadJsonAsync<JsonElement>(await client.PostAsJsonAsync("/api/categories/", new
+        {
+            name,
+            slug = "slug-manual-ignorado",
+            product_type = ProductTypes.Machinery
+        }));
+
+        Assert.Equal(expectedSlug, created.GetProperty("slug").GetString());
+    }
+
+    [Fact]
+    public async Task CategoryUpdateWithSameNameRepairsStaleSlugAndPreservesEntity()
+    {
+        await _factory.SeedCommercialDataAsync();
+        int categoryId;
+        int categoryCount;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            categoryCount = await dbContext.Categories.CountAsync();
+            var category = new Category
+            {
+                Name = "Elevadores tipo brazo articulado",
+                Slug = "levadores-tipo-brazo-articulado",
+                ParentId = 1,
+                ProductType = ProductTypes.Machinery,
+                Description = "Descripción conservada",
+                IsActive = true,
+                Order = 7
+            };
+            dbContext.Categories.Add(category);
+            await dbContext.SaveChangesAsync();
+            categoryId = category.Id;
+        }
+        using var client = await CreateAuthorizedClientAsync();
+
+        var updated = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/categories/{categoryId}/", new
+        {
+            name = "Elevadores tipo brazo articulado",
+            slug = "otro-slug-manual"
+        }));
+
+        Assert.Equal(categoryId, updated.GetProperty("id").GetInt32());
+        Assert.Equal("Elevadores tipo brazo articulado", updated.GetProperty("name").GetString());
+        Assert.Equal("elevadores-tipo-brazo-articulado", updated.GetProperty("slug").GetString());
+        Assert.Equal(1, updated.GetProperty("parent").GetInt32());
+        Assert.Equal(ProductTypes.Machinery, updated.GetProperty("product_type").GetString());
+        Assert.Equal("Descripción conservada", updated.GetProperty("description").GetString());
+        Assert.True(updated.GetProperty("is_active").GetBoolean());
+        Assert.Equal(7, updated.GetProperty("order").GetInt32());
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.Equal(categoryCount + 1, await assertContext.Categories.CountAsync());
+        var stored = await assertContext.Categories.SingleAsync(category => category.Id == categoryId);
+        Assert.Equal("elevadores-tipo-brazo-articulado", stored.Slug);
+    }
+
+    [Fact]
+    public async Task CategorySlugCollisionExcludesCurrentCategoryAndRepeatedUpdatesAreIdempotent()
+    {
+        await _factory.SeedCommercialDataAsync();
+        int categoryId;
+        int categoryCount;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            categoryCount = await dbContext.Categories.CountAsync();
+            var category = new Category { Name = "Plataformas", Slug = "slug-obsoleto", ProductType = ProductTypes.Machinery, IsActive = true };
+            dbContext.Categories.AddRange(
+                category,
+                new Category { Name = "Plataformas existentes", Slug = "plataformas", ProductType = ProductTypes.Machinery, IsActive = true });
+            await dbContext.SaveChangesAsync();
+            categoryId = category.Id;
+        }
+        using var client = await CreateAuthorizedClientAsync();
+
+        var first = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/categories/{categoryId}/", new { name = "Plataformas" }));
+        var second = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync($"/api/categories/{categoryId}/", new { name = "Plataformas" }));
+
+        Assert.Equal("plataformas-2", first.GetProperty("slug").GetString());
+        Assert.Equal("plataformas-2", second.GetProperty("slug").GetString());
+        Assert.Equal(categoryId, second.GetProperty("id").GetInt32());
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        Assert.Equal(categoryCount + 2, await assertContext.Categories.CountAsync());
+        Assert.Equal("plataformas-2", (await assertContext.Categories.SingleAsync(category => category.Id == categoryId)).Slug);
+
+        var renamed = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync("/api/categories/1/", new { name = "Maquinaria Especial" }));
+        var canonical = await ReadJsonAsync<JsonElement>(await client.PatchAsJsonAsync("/api/categories/1/", new { name = "Maquinaria Especial" }));
+        Assert.Equal("maquinaria-especial", renamed.GetProperty("slug").GetString());
+        Assert.Equal("maquinaria-especial", canonical.GetProperty("slug").GetString());
+    }
+
     [Fact]
     public async Task SellerCanCreateEditAndSoftDeleteBasicProductWithValidRelations()
     {
