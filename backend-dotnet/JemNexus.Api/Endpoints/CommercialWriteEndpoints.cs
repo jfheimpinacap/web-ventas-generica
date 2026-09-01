@@ -124,7 +124,7 @@ public static class CommercialWriteEndpoints
     {
         var name = Clean(request.Name);
         if (!string.IsNullOrWhiteSpace(name)) category.Name = name;
-        if (request.Slug is not null || (isCreate && string.IsNullOrWhiteSpace(category.Slug))) category.Slug = await UniqueSlugAsync(dbContext.Categories, Clean(request.Slug) ?? category.Name, category.Id, cancellationToken);
+        category.Slug = await UniqueSlugAsync(dbContext.Categories, category.Name, category.Id, cancellationToken);
         if (request.ParentId.HasValue || request.Parent.HasValue) category.ParentId = request.ParentId ?? request.Parent;
         if (request.ProductType is not null) category.ProductType = request.ProductType.Trim();
         if ((isCreate || request.ParentId.HasValue || request.Parent.HasValue) && category.ParentId.HasValue)
