@@ -642,7 +642,79 @@ Las imágenes físicamente compartidas por `A13JE` y `A14JE` no se interpretan m
 visión artificial o similitud perceptual. Se genera evidencia HTML local autónoma y CSV. La
 decisión debe ser uno de `approve_shared_images_for_both`, `approve_images_for_a13je_only`,
 `approve_images_for_a14je_only`, `reject_shared_images_for_both` o
-`pending_human_visual_review`. Mientras siga pendiente, ambos quedan fuera de readiness.
+`pending_human_visual_review` o, como sexta opción,
+`approve_separate_model_images`. Las cinco decisiones anteriores conservan su significado.
+La aprobación humana exacta de esta reparación es
+`APRUEBO LAS DOS FICHAS OFICIALES Y LA SEPARACIÓN DE IMÁGENES A13JE/A14JE`.
+
+La sexta decisión distingue el archivo físico deduplicado por SHA-256 de su asociación a un
+producto. A13JE conserva, en orden, `21b8e8bbb8d2b40617b01fd86aee1c8c30025e742f90cc8f4229eaea264744ce`
+(principal) y `3fc3777d98efadbd36a4cc31fde58887a476e92f1b163250011128ad02f946f4`.
+A14JE retira esas dos asociaciones y conserva solamente
+`e3e568efc55d1f9dcadc9bdd76f80a2ec1a6fe7d88df776cc3c5b8c1b16fe9de`
+(nueva principal), `b95ee211b2a20be84372f88bfb828be596fe4fce6618b4e32f0dd6dfa9a13541` y
+`acb85d1fbe203d02ef7f1af42ef0e00d6f43cb643be952b8c65c85c572c9ab41`.
+No se redimensiona, recomprime ni reescribe ninguna imagen.
+
+El contrato aprobado completo, que no debe ejecutarse en Codex, es:
+
+```json
+{
+  "schema_version": "1.0",
+  "catalog_approval": {
+    "approved": true,
+    "approval_text": "APRUEBO LAS 6 FAMILIAS Y LOS 36 NOMBRES"
+  },
+  "datasheet_repairs": {
+    "SR1018E-2": {
+      "action": "replace_from_official_source",
+      "product_page_url": "https://www.lgmglifts.com/product/pro-detail-5182.htm",
+      "datasheet_url": "https://www.lgmglifts.com/upload/file/2025/04/lgmg-RT-scissorlift-en-SR1018E-2.pdf",
+      "expected_model_markers": ["SR1018E-2", "SR3369E-2"]
+    },
+    "T28JE": {
+      "action": "replace_from_official_source",
+      "product_page_url": "https://www.lgmglifts.com/product/pro-detail-2045.htm",
+      "datasheet_url": "https://www.lgmglifts.com/upload/file/2023/07/10/73e3683775884b6da85c0f265d315616.pdf",
+      "expected_model_markers": ["T28JE", "T92JE"]
+    },
+    "H625E": {
+      "action": "exclude_backend_size_limit",
+      "maximum_backend_size_bytes": 10485760
+    }
+  },
+  "shared_image_decisions": {
+    "A13JE|A14JE": {
+      "decision": "approve_separate_model_images",
+      "notes": "A13JE conserva sus dos imágenes. A14JE elimina las dos asociaciones de A13JE y conserva sus tres imágenes propias.",
+      "approved_images": {
+        "A13JE": {
+          "primary_sha256": "21b8e8bbb8d2b40617b01fd86aee1c8c30025e742f90cc8f4229eaea264744ce",
+          "ordered_sha256": [
+            "21b8e8bbb8d2b40617b01fd86aee1c8c30025e742f90cc8f4229eaea264744ce",
+            "3fc3777d98efadbd36a4cc31fde58887a476e92f1b163250011128ad02f946f4"
+          ]
+        },
+        "A14JE": {
+          "primary_sha256": "e3e568efc55d1f9dcadc9bdd76f80a2ec1a6fe7d88df776cc3c5b8c1b16fe9de",
+          "ordered_sha256": [
+            "e3e568efc55d1f9dcadc9bdd76f80a2ec1a6fe7d88df776cc3c5b8c1b16fe9de",
+            "b95ee211b2a20be84372f88bfb828be596fe4fce6618b4e32f0dd6dfa9a13541",
+            "acb85d1fbe203d02ef7f1af42ef0e00d6f43cb643be952b8c65c85c572c9ab41"
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+Solo se autorizan las dos URL directas anteriores. Las descargas futuras exigen HTTPS y
+dominio oficial también tras redirecciones, estado HTTP satisfactorio, MIME y firma PDF,
+`%%EOF`, tamaño de 1 a 10 MiB, SHA-256, ausencia de HTML disfrazado y texto verificable. Se
+acepta `SR1018E-2` o `SR3369E-2`, y `T28JE` o `T92JE`; los modelos cruzados se rechazan. Si
+la extracción conservadora no es confiable, el estado es
+`downloaded_pending_human_content_review` y el veredicto `REVIEW_REQUIRED`.
 
 La salida cerrada es:
 
@@ -691,7 +763,10 @@ $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
   --output-dir "C:\Users\Franz\Desktop\jem docs\temp\JEM-Nexus-LGMG-Repaired-Media-$Stamp"
 ```
 
-La siguiente etapa (Prompt 247) será una **importación completa controlada**, no una
+Con ambas fichas validadas, las 36 filas quedan listas y el veredicto esperado es
+`REPAIR_COMPLETE`; una ficha pendiente conserva `REVIEW_REQUIRED`, y toda incoherencia
+produce `CONFLICT`. La reparación real se ejecutará posteriormente en Windows después del
+merge. La siguiente etapa (Prompt 248) será una **importación completa controlada**, no una
 importación mínima estricta. Podrá representar todos los datos confiables del plan: nombre,
 modelo, marca, categorías, tipo, condición, disponibilidad, descripción, especificaciones,
 capacidad validada, energía representable, imágenes válidas y ficha compatible. No inventará
