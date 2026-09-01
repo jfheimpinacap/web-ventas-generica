@@ -808,20 +808,28 @@ con la primera asociación como principal. SR1018E-2 y T28JE usan sus reemplazos
 AR24JE y T38JE se crean sin ficha porque no existe en origen; H625E se crea sin intentar subir
 su PDF de 38.610.993 bytes. Los tres generan seguimiento, no datos inventados ni un bloqueo.
 
-Hay exactamente un modo obligatorio: `--dry-run`, `--apply`, `--verify` o `--rollback`.
-Todos autentican exclusivamente con `JEM_NEXUS_ACCESS_TOKEN`; el token no es argumento ni se
+Hay exactamente un modo obligatorio: `--dry-run`, `--apply`, `--verify` o `--rollback`, y los
+cuatro exigen `--checkpoint`. Todos autentican exclusivamente con `JEM_NEXUS_ACCESS_TOKEN`; el token no es argumento ni se
 persiste. Una API real exige HTTPS (HTTP solo se admite para loopback sintético en pruebas),
 con timeout, límite de respuesta y paginación acotada. No se llama a LGMG. Dry-run y verify
 son de lectura. Apply exige `--confirm-apply IMPORTAR_36_LGMG_RESTANTES`; rollback exige
 `--confirm-rollback REVERTIR_IMPORTACION_36_LGMG_RESTANTES`.
 
 El dry-run consulta identidad, categorías, marca, productos no publicados, imágenes,
-especificaciones y fichas; detecta exactos, candidatos y conflictos; simula operaciones y
-produce `dry_run_fingerprint_sha256`. Apply no admite bypass: exige ese dry-run compatible,
-misma versión/HEAD, API, fingerprints y snapshot remoto. El lote predeterminado es 20, por lo
+especificaciones y fichas; detecta exactos, candidatos y conflictos; expone todas las
+mutaciones reales: primero la ficha, después el producto asociado, después las especificaciones
+separadas y las imágenes (la principal viaja como `is_main` en su propio upload). Produce
+fingerprints separados para estado remoto, plan de operaciones y dry-run completo. Apply no
+admite bypass: exige exactamente el checkpoint `dry_run_ready` creado por ese dry-run, misma
+versión/HEAD, API, fingerprints, taxonomía, marca, tamaño de lote y snapshot remoto. El
+fingerprint diagnóstico incompleto
+`85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553` queda registrado como
+supersedido y nunca se acepta para apply. El lote predeterminado es 20, por lo
 que la cohorte se divide **20 + 16**; `--batch-size` acepta 1–20. El checkpoint JSON externo
-se escribe atómicamente, registra únicamente IDs y operaciones sin autorización, y `--resume`
-rechaza entradas, API, modo o tamaño distintos. Los exactos se omiten, una segunda ejecución
+se crea atómicamente durante dry-run y registra plan, recursos preexistentes, IDs reales y cada
+operación completada sin autorización. `--resume` es obligatorio para continuar
+`apply_in_progress` o `apply_partial`, y rechaza entradas, API, herramienta, recursos, estado
+remoto, plan o tamaño distintos. Los exactos se omiten, una segunda ejecución
 no escribe y un conflicto ambiguo bloquea. Un fallo detiene productos posteriores y conserva
 `APPLY_PARTIAL`. Verify vuelve a exigir los 36 exactos. Rollback reanudable elimina solo IDs
 creados y evidenciados por este checkpoint, en orden de dependencias, preservando recursos
@@ -833,15 +841,20 @@ Cada ejecución produce exactamente ocho informes: `remaining-import-summary.jso
 `remaining-import-manifest.json` y `README-remaining-import.txt`. Los CSV son UTF-8 con BOM,
 CRLF y protección de fórmulas; los JSON preservan Unicode. Los veredictos son
 `DRY_RUN_READY`, `APPLY_COMPLETE`, `APPLY_PARTIAL`, `VERIFY_COMPLETE`, `ROLLBACK_COMPLETE` y
-`CONFLICT`.
+`CONFLICT`. El manifest se genera al final y contiene SHA-256 y tamaño de los otros siete
+informes, nunca de sí mismo, más el SHA-256 y tamaño del checkpoint externo.
 
-Ejemplos Windows (reemplace todos los marcadores; ejecute primero dry-run y revíselo):
+Ejemplos Windows (reemplace los marcadores). El frontend puede estar en
+`http://localhost:5174`, pero el origen del backend es `http://localhost:5000`, no
+`http://localhost:5000/api`. Copie el valor de `ventas_access_token` a un archivo temporal y
+elimínelo después de cargar la variable de entorno:
 
 ```powershell
-$env:JEM_NEXUS_ACCESS_TOKEN = (Get-Content -Raw "<RUTA_TOKEN_TEMPORAL>").Trim()
+$TokenFile = "<RUTA_TOKEN_TEMPORAL>"
+$env:JEM_NEXUS_ACCESS_TOKEN = (Get-Content -Raw $TokenFile).Trim()
 $Tool = ".\tools\lgmg-catalog-extractor\import_lgmg_remaining_controlled.py"
 $Common = @('--plan-input','<RUTA_PLAN>','--remaining-audit-input','<RUTA_AUDITORIA>',
-  '--repaired-media-input','<RUTA_PAQUETE_REPARADO>','--api-base-url','<HTTPS_API_BASE>')
+  '--repaired-media-input','<RUTA_PAQUETE_REPARADO>','--api-base-url','http://localhost:5000')
 
 py $Tool @Common --output-dir '<SALIDA_DRY_RUN>' --dry-run --checkpoint '<RUTA_CHECKPOINT>'
 py $Tool @Common --output-dir '<SALIDA_APPLY>' --apply --checkpoint '<RUTA_CHECKPOINT>' `
@@ -850,8 +863,10 @@ py $Tool @Common --output-dir '<SALIDA_VERIFY>' --verify --checkpoint '<RUTA_CHE
 py $Tool @Common --output-dir '<SALIDA_ROLLBACK>' --rollback --checkpoint '<RUTA_CHECKPOINT>' `
   --confirm-rollback REVERTIR_IMPORTACION_36_LGMG_RESTANTES
 Remove-Item Env:JEM_NEXUS_ACCESS_TOKEN
+Remove-Item -LiteralPath $TokenFile -Force
 ```
 
-Después del merge, el primer uso real será el dry-run en Windows. Sus ocho informes deberán
-revisarse y aprobarse antes de autorizar apply; estos ejemplos no publican y no se ejecutan en
-Codex.
+Dry-run crea `<RUTA_CHECKPOINT>` y apply reutiliza exactamente ese archivo; nunca se genera un
+checkpoint nuevo para apply. Después del merge se debe generar un token nuevo y ejecutar un
+dry-run completamente nuevo. Sus ocho informes y checkpoint deberán revisarse antes de
+considerar apply; estos ejemplos no publican y no se ejecutan en Codex.
