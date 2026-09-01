@@ -26,9 +26,27 @@ import urllib.request
 import uuid
 
 TOOL_NAME = "import_lgmg_remaining_controlled"
-TOOL_VERSION = "2.0.0"
-CHECKPOINT_SCHEMA_VERSION = "2.0"
-SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256 = "85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553"
+TOOL_VERSION = "2.1.0"
+CHECKPOINT_SCHEMA_VERSION = "2.1"
+OPERATION_CONTRACT_VERSION = "2.1"
+SUPERSEDED_DRY_RUN_FINGERPRINTS = {
+    "85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553": "superseded_incomplete_dry_run",
+    "bda45b2889f54055332a529df141fc6abfcfa5f3e9cfe04320d5313b991cbd31": "superseded_unauditable_specification_dry_run",
+}
+SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256 = next(iter(SUPERSEDED_DRY_RUN_FINGERPRINTS))
+# Los endpoints de catálogo aceptan slugs de categoría/marca como filtros. Por ello
+# una taxonomía no canónica es funcionalmente observable y bloquea un plan nuevo.
+CATEGORY_SLUG_POLICY = "blocking_functional_filter"
+CATEGORY_CONTRACT = {
+    "Elevadores tipo tijera todoterreno": "elevadores-tipo-tijera-todoterreno",
+    "Elevadores tipo brazo articulado": "elevadores-tipo-brazo-articulado",
+    "Elevadores tipo brazo telescópico": "elevadores-tipo-brazo-telescopico",
+    "Elevadores tipo mástil vertical": "elevadores-tipo-mastil-vertical",
+    "Elevadores tipo tijera sobre orugas": "elevadores-tipo-tijera-sobre-orugas",
+    "Manipuladores telescópicos": "manipuladores-telescopicos",
+}
+ROOT_CATEGORY_CONTRACT = {"name": "Maquinaria", "slug": "maquinaria", "parent": None,
+                          "product_type": "machinery", "is_active": True}
 CHECKPOINT_STATES = {"dry_run_ready", "apply_in_progress", "apply_partial", "apply_complete",
                      "verify_complete", "rollback_in_progress", "rollback_complete"}
 TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
@@ -303,6 +321,8 @@ def validate_inputs(plan_root: Path, audit_root: Path, repaired_root: Path, *, t
     for row in specs:
         if row.get("source_key") in specs_by:
             specs_by[row["source_key"]].append(row)
+    if sum(len(rows) for rows in specs_by.values()) != 1057:
+        raise ConflictError("Las 36 filas aprobadas deben derivar exactamente 1.057 especificaciones")
     return {"products": cohort, "specs": specs_by, "images": image_by, "sheets": sheet_by,
             "fingerprints": dict(APPROVED_FINGERPRINTS)}
 
@@ -438,11 +458,15 @@ def resolve_taxonomy(state):
     if len(roots) != 1:
         raise ConflictError("Debe existir una única raíz activa Maquinaria")
     root = roots[0]
+    if root.get("slug") != ROOT_CATEGORY_CONTRACT["slug"]:
+        raise ConflictError("category_slug_mismatch: Maquinaria")
     categories = {}
     for family in FAMILIES:
         hits = [x for x in state["categories"] if x.get("name") == family]
         if len(hits) != 1 or nested_id(hits[0].get("parent")) != root.get("id") or hits[0].get("product_type") != "machinery" or hits[0].get("is_active") is not True:
             raise ConflictError(f"Subcategoría ausente, duplicada o con jerarquía incorrecta: {family}")
+        if hits[0].get("slug") != CATEGORY_CONTRACT[family]:
+            raise ConflictError(f"category_slug_mismatch: {family}")
         categories[family] = hits[0]
     brands = [x for x in state["brands"] if x.get("name") == "LGMG" and x.get("is_active") is True]
     if len(brands) != 1:
@@ -477,9 +501,19 @@ def product_payload(row, category_id, brand_id):
 
 
 def spec_payload(row, product_id):
-    return {"product": product_id, "name": row.get("name") or row.get("spec_name"),
-            "key": row.get("key") or row.get("spec_key"), "value": row.get("value") or row.get("spec_value"),
-            "unit": row.get("unit") or None, "order": int(row.get("order") or row.get("spec_order") or 0)}
+    spec = specification_identity(row)
+    return {"product": product_id, "name": spec["name"], "key": spec["key"],
+            "value": spec["value"], "unit": spec["unit"], "order": spec["order"]}
+
+
+def specification_identity(row):
+    """Campos literales aceptados por ProductSpecWriteDto, sin inferencia técnica."""
+    def field(primary, legacy):
+        return row[primary] if primary in row else row.get(legacy, "")
+    order = field("order", "spec_order")
+    return {"name": field("name", "spec_name"), "key": field("key", "spec_key"),
+            "value": field("value", "spec_value"), "unit": field("unit", "spec_unit"),
+            "order": int(order) if str(order).strip() else 0}
 
 
 def classify_products(data, state, categories, brand):
@@ -523,6 +557,15 @@ def remote_fingerprint(state):
 
 def build_operations(data, decisions, batch_size):
     operations = []
+    def append(operation):
+        operation["operation_order"] = len(operations) + 1
+        identity = {"contract_version": OPERATION_CONTRACT_VERSION,
+                    **{k: operation.get(k, "") for k in ("approval_key", "source_key", "metric_model",
+                        "product_source_order", "phase", "action", "method", "path_template",
+                        "specification_index", "payload_sha256", "file_sha256", "depends_on_operation_key")}}
+        operation["operation_key"] = sha(canonical(identity))
+        operations.append(operation)
+        return operation
     for index, decision in enumerate(decisions):
         if decision["status"] != "create_candidate":
             continue
@@ -530,38 +573,51 @@ def build_operations(data, decisions, batch_size):
         batch, dependency = index // batch_size + 1, ""
         sheet = data["sheets"][model]
         if truth(sheet.get("datasheet_upload_allowed")):
-            operation = {"batch": batch, "product_source_order": row["source_order"], "metric_model": model,
+            operation = {"batch": batch, "product_source_order": row["source_order"], "approval_key": row["approval_key"], "source_key": row["source_key"], "metric_model": model,
                          "phase": "datasheet", "method": "POST", "path_template": "/api/technical-sheets",
-                         "resource_type": "datasheet", "action": "upload", "depends_on_operation": "",
+                         "resource_type": "datasheet", "action": "upload", "depends_on_operation": "", "depends_on_operation_key": "",
                          "payload_sha256": sha(canonical({"name": f"Ficha técnica LGMG {model}"})),
                          "file_sha256": sheet.get("corrected_sha256", ""), "file_size_bytes": sheet.get("corrected_size_bytes", ""),
-                         "association_order": "", "is_primary": "", "embedded_specification_count": 0, "status": "planned"}
-            operations.append(operation); dependency = len(operations)
+                         "request_template": {"name": f"Ficha técnica LGMG {model}"}, "resolved_payload_sha256": "", "association_order": "", "is_primary": "", "embedded_specification_count": 0, "status": "planned"}
+            dependency_op = append(operation); dependency = dependency_op["operation_order"]
         payload = dict(decision["payload"])
         if dependency: payload["technical_sheet"] = "{created_datasheet_id}"
-        operation = {"batch": batch, "product_source_order": row["source_order"], "metric_model": model,
+        product_template = payload
+        operation = {"batch": batch, "product_source_order": row["source_order"], "approval_key": row["approval_key"], "source_key": row["source_key"], "metric_model": model,
                      "phase": "product", "method": "POST", "path_template": "/api/products", "resource_type": "product",
-                     "action": "create", "depends_on_operation": dependency, "payload_sha256": sha(canonical(payload)),
+                     "action": "create", "depends_on_operation": dependency, "depends_on_operation_key": dependency_op["operation_key"] if dependency else "", "payload_sha256": sha(canonical(product_template)), "request_template": product_template, "resolved_payload_sha256": "",
                      "file_sha256": "", "file_size_bytes": "", "association_order": "", "is_primary": "",
                      "embedded_specification_count": 0, "status": "planned"}
-        operations.append(operation); product_op = len(operations)
-        for spec in data["specs"][row["source_key"]]:
-            operations.append({"batch": batch, "product_source_order": row["source_order"], "metric_model": model,
+        product_operation = append(operation); product_op = product_operation["operation_order"]
+        seen_specs = set()
+        for spec_index, spec in enumerate(data["specs"][row["source_key"]], 1):
+            individual = specification_identity(spec)
+            template = {"product_id_ref": {"operation_key": product_operation["operation_key"]}, **individual}
+            duplicate_identity = canonical(template)
+            if duplicate_identity in seen_specs:
+                raise ConflictError(f"duplicate_specification_request: {model} índice {spec_index}")
+            seen_specs.add(duplicate_identity)
+            append({"batch": batch, "product_source_order": row["source_order"], "approval_key": row["approval_key"], "source_key": row["source_key"], "metric_model": model,
                 "phase": "specification", "method": "POST", "path_template": "/api/product-specs",
                 "resource_type": "specification", "action": "create", "depends_on_operation": product_op,
-                "payload_sha256": sha(canonical(spec_payload(spec, "{created_product_id}"))), "file_sha256": "",
-                "file_size_bytes": "", "association_order": spec.get("order") or spec.get("spec_order") or 0,
-                "is_primary": "", "embedded_specification_count": 0, "status": "planned"})
+                "depends_on_operation_key": product_operation["operation_key"], "payload_sha256": sha(canonical(template)),
+                "request_template": template, "resolved_payload_sha256": "", "file_sha256": "", "file_size_bytes": "", "association_order": "",
+                "is_primary": "", "specification_index": spec_index, "specification_name": individual["name"],
+                "specification_key": individual["key"], "specification_value": individual["value"],
+                "specification_unit": individual["unit"], "specification_order": individual["order"],
+                "embedded_specification_count": 0, "status": "planned"})
         for image in data["images"][model]:
-            operations.append({"batch": batch, "product_source_order": row["source_order"], "metric_model": model,
+            template = {"product_id_ref": {"operation_key": product_operation["operation_key"]}, "alt_text": image.get("original_filename", ""), "order": int(image["association_order"]) - 1, "is_main": truth(image["is_primary"])}
+            append({"batch": batch, "product_source_order": row["source_order"], "approval_key": row["approval_key"], "source_key": row["source_key"], "metric_model": model,
                 "phase": "image", "method": "POST", "path_template": "/api/product-images",
-                "resource_type": "image", "action": "upload_and_associate", "depends_on_operation": product_op,
-                "payload_sha256": sha(canonical({"product": "{created_product_id}", "alt_text": image.get("original_filename", ""),
-                    "order": int(image["association_order"]) - 1, "is_main": truth(image["is_primary"])})),
+                "resource_type": "image", "action": "upload_and_associate", "depends_on_operation": product_op, "depends_on_operation_key": product_operation["operation_key"],
+                "payload_sha256": sha(canonical(template)), "request_template": template, "resolved_payload_sha256": "",
                 "file_sha256": image["sha256"], "file_size_bytes": image["size_bytes"],
                 "association_order": image["association_order"], "is_primary": truth(image["is_primary"]),
                 "embedded_specification_count": 0, "status": "planned"})
-    for order, operation in enumerate(operations, 1): operation["operation_order"] = order
+    keys = [operation["operation_key"] for operation in operations]
+    if len(keys) != len(set(keys)):
+        raise ConflictError("duplicate_operation_key")
     return operations
 
 
@@ -569,11 +625,27 @@ def operations_fingerprint(operations):
     return sha(canonical([{k: v for k, v in operation.items() if k != "status"} for operation in operations]))
 
 
+def validate_operation_dependencies(operations):
+    by_order = {op["operation_order"]: op for op in operations}
+    by_key = {op["operation_key"]: op for op in operations}
+    if len(by_order) != len(operations) or len(by_key) != len(operations):
+        raise ConflictError("Órdenes u operation keys duplicadas")
+    for operation in operations:
+        order, key = operation.get("depends_on_operation"), operation.get("depends_on_operation_key")
+        if bool(order) != bool(key):
+            raise ConflictError("Dependencia incompleta por order/key")
+        if order:
+            dependency = by_order.get(order)
+            if dependency is None or by_key.get(key) is not dependency or order >= operation["operation_order"] or dependency["metric_model"] != operation["metric_model"]:
+                raise ConflictError("Dependencia inexistente, posterior o de otro producto")
+
+
 def dry_run_fingerprint(data, decisions, origin, remote_fp, tool_head_value, operations=None, batch_size=20,
                         resources_preexisting=None):
     operations = operations or []
     contract = {"tool": TOOL_NAME, "version": TOOL_VERSION, "tool_head": tool_head_value, "api_base": origin,
                 "batch_size": batch_size, "fingerprints": data["fingerprints"], "remote_state_fingerprint_sha256": remote_fp,
+                "category_slug_policy": CATEGORY_SLUG_POLICY,
                 "resources_preexisting": resources_preexisting or {},
                 "products": [{"source_key": d["row"].get("source_key"), "metric_model": d["row"].get("metric_model"),
                     "approval_key": d["row"]["approval_key"], "status": d["status"],
@@ -621,7 +693,10 @@ def checkpoint_contract(batch_size, origin, data, dry_fp, remote_fp, operations_
             "api_base": origin, "batch_size": batch_size, "fingerprints": data["fingerprints"],
             "remote_state_fingerprint_sha256": remote_fp, "planned_operations_fingerprint_sha256": operations_fp,
             "dry_run_fingerprint_sha256": dry_fp,
-            "supersedes_dry_run_fingerprint_sha256": SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256,
+            "superseded_dry_run_fingerprints": dict(SUPERSEDED_DRY_RUN_FINGERPRINTS),
+            "category_slug_policy": CATEGORY_SLUG_POLICY,
+            "slug_diagnostic": "category_and_brand_slugs_are_backend_catalog_filters; importer_resolves_names_to_ids",
+            "resource_warnings": [],
             "approval_keys": sorted(products), "models": sorted(r["metric_model"] for r in data["products"]),
             "resolved_categories": resources["categories"], "resolved_brand": resources["brand"],
             "resources_preexisting": resources, "planned_batches": [len(x) for x in batch_ranges(36, batch_size)],
@@ -632,8 +707,11 @@ def checkpoint_contract(batch_size, origin, data, dry_fp, remote_fp, operations_
 
 def read_checkpoint(path):
     value = json_value(regular_bytes(path, "checkpoint"), "checkpoint")
-    if value.get("state") not in CHECKPOINT_STATES or value.get("dry_run_fingerprint_sha256") == SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256:
-        raise ConflictError("Checkpoint vacío, inválido o basado en el fingerprint supersedido")
+    dry_fp = value.get("dry_run_fingerprint_sha256")
+    if dry_fp in SUPERSEDED_DRY_RUN_FINGERPRINTS:
+        raise ConflictError(f"Checkpoint rechazado explícitamente: {SUPERSEDED_DRY_RUN_FINGERPRINTS[dry_fp]}")
+    if value.get("state") not in CHECKPOINT_STATES:
+        raise ConflictError("Checkpoint vacío o inválido")
     serialized = json.dumps(value, ensure_ascii=False)
     if any(word in serialized for word in ("Authorization", "Bearer ", "password", "cookie")):
         raise ConflictError("Checkpoint contiene material secreto")
@@ -646,6 +724,8 @@ def validate_checkpoint(value, expected):
             "resources_preexisting", "approval_keys", "models")
     if any(value.get(key) != expected.get(key) for key in keys):
         raise ConflictError("Checkpoint incompatible: inputs, API, herramienta, recursos, estado remoto o plan cambiaron")
+    if value.get("planned_operations") != expected.get("planned_operations"):
+        raise ConflictError("Checkpoint incompatible: operation keys, dependencias, templates o payloads cambiaron")
 
 
 def validate_checkpoint_static(value, expected):
@@ -653,6 +733,10 @@ def validate_checkpoint_static(value, expected):
             "resources_preexisting", "approval_keys", "models")
     if any(value.get(key) != expected.get(key) for key in keys):
         raise ConflictError("Checkpoint incompatible con inputs, API, herramienta o recursos preexistentes")
+    planned = value.get("planned_operations", [])
+    if operations_fingerprint(planned) != value.get("planned_operations_fingerprint_sha256"):
+        raise ConflictError("Checkpoint incompatible: operaciones o claves alteradas")
+    validate_operation_dependencies(planned)
 
 
 def _csv_safe(value):
@@ -671,17 +755,17 @@ def write_outputs(output: Path, result, checkpoint: Path):
     staging = Path(tempfile.mkdtemp(prefix=".remaining-import-staging-", dir=output))
     try:
         product_fields = ("source_order", "source_key", "metric_model", "approval_key", "approved_name", "approved_family", "status", "product_id", "verified", "category_id", "category_name", "category_parent_id", "brand_id", "brand_name", "payload_sha256", "specification_count", "image_count", "primary_image_sha256", "datasheet_action", "datasheet_sha256", "maximum_load_capacity_candidate_kg", "power_source_candidate", "power_source_representable", "show_price", "is_published", "is_featured", "price", "technical_followup_required", "planned_operation_count")
-        operation_fields = ("operation_order", "batch", "product_source_order", "metric_model", "phase", "method", "path_template", "resource_type", "action", "depends_on_operation", "payload_sha256", "file_sha256", "file_size_bytes", "association_order", "is_primary", "embedded_specification_count", "status")
+        operation_fields = ("operation_order", "operation_key", "batch", "product_source_order", "approval_key", "metric_model", "phase", "method", "path_template", "resource_type", "action", "depends_on_operation", "depends_on_operation_key", "payload_sha256", "resolved_payload_sha256", "file_sha256", "file_size_bytes", "association_order", "is_primary", "specification_index", "specification_name", "specification_key", "specification_value", "specification_unit", "specification_order", "embedded_specification_count", "status")
         write_csv(staging / OUTPUT_NAMES[2], product_fields, result["products"])
         write_csv(staging / OUTPUT_NAMES[3], ("metric_model", "kind", "association_order", "sha256", "size_bytes", "status", "followup"), result["media"])
         write_csv(staging / OUTPUT_NAMES[4], operation_fields, result["operations"])
         write_csv(staging / OUTPUT_NAMES[5], ("metric_model", "code", "detail", "blocking"), result["conflicts"])
-        summary_keys = ("mode", "verdict", "fingerprints", "api_base", "batch_size", "batches", "counts", "planned_operation_counts", "errors", "followups", "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256", "supersedes_dry_run_fingerprint_sha256")
+        summary_keys = ("mode", "verdict", "fingerprints", "api_base", "batch_size", "batches", "counts", "planned_operation_counts", "errors", "followups", "resource_warnings", "category_slug_policy", "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256", "superseded_dry_run_fingerprints")
         summary = {key: result[key] for key in summary_keys}
         (staging / OUTPUT_NAMES[0]).write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        lines = [f"Veredicto: {result['verdict']}", f"Modo: {result['mode']}", f"Productos: {len(result['products'])}"] + [f"{k}: {v}" for k, v in sorted(result["planned_operation_counts"].items())]
+        lines = [f"Veredicto: {result['verdict']}", f"Modo: {result['mode']}", f"Política de slugs: {result['category_slug_policy']}", f"Productos: {len(result['products'])}"] + [f"{k}: {v}" for k, v in sorted(result["planned_operation_counts"].items())]
         (staging / OUTPUT_NAMES[1]).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        (staging / OUTPUT_NAMES[7]).write_text("IMPORTACIÓN CONTROLADA LGMG RESTANTE\n\nLos siete informes y el checkpoint quedan enlazados criptográficamente. Nunca publica productos.\n", encoding="utf-8")
+        (staging / OUTPUT_NAMES[7]).write_text("IMPORTACIÓN CONTROLADA LGMG RESTANTE\n\nLos siete informes y el checkpoint 2.1 quedan enlazados criptográficamente. Cada ProductSpec conserva template, identidad y operation_key. Nunca publica productos ni corrige categorías.\n", encoding="utf-8")
         non_manifest = sorted(name for name in OUTPUT_NAMES if name != OUTPUT_NAMES[6])
         output_files = [{"name": name, "sha256": sha((staging / name).read_bytes()), "size_bytes": (staging / name).stat().st_size} for name in non_manifest]
         checkpoint_raw = regular_bytes(checkpoint, "checkpoint")
@@ -713,7 +797,8 @@ def _base_result(mode, origin, data, batches, remote_fp, operations_fp, dry_fp, 
             "batches": [len(x) for x in batches], "counts": {}, "planned_operation_counts": operation_counts(operations), "errors": [],
             "followups": [x for x in media if x["followup"] or x["status"] == "excluded"], "remote_state_fingerprint_sha256": remote_fp,
             "planned_operations_fingerprint_sha256": operations_fp, "dry_run_fingerprint_sha256": dry_fp,
-            "supersedes_dry_run_fingerprint_sha256": SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256,
+            "superseded_dry_run_fingerprints": dict(SUPERSEDED_DRY_RUN_FINGERPRINTS),
+            "category_slug_policy": CATEGORY_SLUG_POLICY, "resource_warnings": [],
             "tool_head": tool_head(), "products": products, "media": media, "operations": operations, "conflicts": [],
             "resources_preexisting": resources, "resources_created": {"products": [], "images": [], "specifications": [], "datasheets": []},
             "external_effects": {"api_called": True, "database_modified": False, "products_created": 0, "products_updated": 0,
@@ -722,7 +807,11 @@ def _base_result(mode, origin, data, batches, remote_fp, operations_fp, dry_fp, 
 
 
 def _record_mutation(checkpoint_path, checkpoint, operation, resource_type, resource_id):
-    completed = dict(operation, status="completed", resource_id=resource_id)
+    completed = {"operation_order": operation["operation_order"], "operation_key": operation["operation_key"],
+                 "resource_type": operation["resource_type"], "depends_on_operation_key": operation.get("depends_on_operation_key", ""),
+                 "request_template_sha256": operation["payload_sha256"],
+                 "resolved_payload_sha256": operation.get("resolved_payload_sha256", ""),
+                 "resource_id": resource_id, "metric_model": operation["metric_model"], "status": "completed"}
     checkpoint["completed_operations"].append(completed)
     checkpoint["mutations_executed"] += 1
     checkpoint["external_effects_zero"] = False
@@ -748,8 +837,14 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
     operations = build_operations(data, decisions, batch_size)
     remote_fp, operations_fp, head = remote_fingerprint(state), operations_fingerprint(operations), tool_head()
     dry_fp = dry_run_fingerprint(data, decisions, origin, remote_fp, head, operations, batch_size, resources)
-    if dry_fp == SUPERSEDED_INCOMPLETE_DRY_RUN_FINGERPRINT_SHA256:
-        raise ConflictError("El fingerprint incompleto supersedido nunca es aplicable")
+    if dry_fp in SUPERSEDED_DRY_RUN_FINGERPRINTS:
+        raise ConflictError("El fingerprint supersedido nunca es aplicable")
+    validate_operation_dependencies(operations)
+    counts = operation_counts(operations)
+    required = {"datasheet_operations": 33, "product_operations": 36,
+                "specification_operations": 1057, "image_operations": 71, "total": 1197}
+    if any(counts.get(key) != value for key, value in required.items()):
+        raise ConflictError("Conteos contractuales 33/36/1057/71/1197 incumplidos")
     expected = checkpoint_contract(batch_size, origin, data, dry_fp, remote_fp, operations_fp, resources, operations)
     result = _base_result(mode, origin, data, batches, remote_fp, operations_fp, dry_fp, resources, operations, decisions, batch_size)
     if mode == "dry_run":
@@ -780,9 +875,12 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
             cp["state"] = "apply_in_progress"; cp["apply_started"] = True; atomic_json(checkpoint, cp)
         if resume:
             operations = cp["planned_operations"]
+            planned_keys = {operation["operation_key"] for operation in operations}
+            if any(done.get("operation_key") not in planned_keys for done in cp["completed_operations"]):
+                raise ConflictError("Operación completada no coincide con ninguna operation_key del plan")
         try:
             for operation in operations:
-                if any(done["operation_order"] == operation["operation_order"] for done in cp["completed_operations"]):
+                if any(done.get("operation_key") == operation["operation_key"] for done in cp["completed_operations"]):
                     continue
                 key = next(r["approval_key"] for r in data["products"] if r["metric_model"] == operation["metric_model"])
                 created = cp["products"][key]["created"]
@@ -796,8 +894,14 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
                     made = client.post("/api/products", payload); created["product"] = made["id"]
                 elif operation["resource_type"] == "specification":
                     rows = data["specs"][next(r["source_key"] for r in data["products"] if r["metric_model"] == operation["metric_model"])]
-                    row = rows[int(operation["association_order"])] if str(operation["association_order"]).isdigit() and int(operation["association_order"]) < len(rows) else next(r for r in rows if sha(canonical(spec_payload(r, "{created_product_id}"))) == operation["payload_sha256"])
-                    made = client.post("/api/product-specs", spec_payload(row, created["product"]))
+                    row = rows[int(operation["specification_index"]) - 1]
+                    expected_template = {"product_id_ref": {"operation_key": operation["depends_on_operation_key"]},
+                                         **specification_identity(row)}
+                    if expected_template != operation["request_template"] or sha(canonical(expected_template)) != operation["payload_sha256"]:
+                        raise ConflictError("Template individual de especificación divergente")
+                    resolved = spec_payload(row, created["product"])
+                    operation["resolved_payload_sha256"] = sha(canonical(resolved))
+                    made = client.post("/api/product-specs", resolved)
                 else:
                     image = next(r for r in data["images"][operation["metric_model"]] if r["sha256"] == operation["file_sha256"])
                     path, raw = _validate_local_media(repaired, image, "image"); body, mime = _multipart_image(created["product"], image, path.name, raw)
