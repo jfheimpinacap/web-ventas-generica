@@ -1044,3 +1044,49 @@ Después del merge, el procedimiento Windows comienza generando un token nuevo y
 ejecutando **únicamente `--verify`** contra el checkpoint `apply_partial`. Se debe adjuntar
 y revisar el ZIP `PARTIAL_RESUME_READY`; no se ejecutará `--apply --resume` hasta obtener
 aprobación humana explícita de ese fingerprint. Su valor futuro no se anticipa aquí.
+
+## Plan canónico universal para checkpoints parciales (2.2.2)
+
+La versión 2.2.2 distingue de forma temprana el checkpoint heredado del incidente
+(`2.1.1`/schema `2.1`) de los checkpoints actuales (schema y contrato de operaciones
+`2.2`). La clasificación cerrada diferencia una ejecución nueva, `dry_run_ready`, el
+`apply_partial` heredado, `apply_partial` actual, `rollback_in_progress`,
+`apply_complete`, `rollback_complete` y cualquier checkpoint inválido. Una versión,
+estado, contrato, fingerprint, cohorte o modo incompatible se rechaza antes de intentar
+reconstruir operaciones.
+
+Para **todo** checkpoint parcial válido, la regla es
+`canonical_planned_operations = checkpoint["planned_operations"]`. Sus 1.197
+operaciones persistidas (33 fichas, 36 productos, 1.057 especificaciones y 71 imágenes)
+son el plan histórico aprobado. El snapshot remoto parcial puede acreditar taxonomía,
+marca, los IDs creados, identidades exactas, colisiones y evidencia para el fingerprint;
+no puede regenerar ni recortar ese plan, porque ya contiene los efectos de su prefijo
+completado. Esta regla se aplica al checkpoint heredado exacto, a futuros
+`apply_partial` 2.2 y a `rollback_in_progress` 2.2. Un dry-run nuevo y un
+`dry_run_ready`, en cambio, siguen reconstruyendo y contrastando el plan completo antes
+de la primera mutación.
+
+El `--verify` parcial usa exclusivamente GET, conserva byte por byte el checkpoint y
+produce `PARTIAL_RESUME_READY`. Los informes separan las cero mutaciones de la invocación
+de las 65 mutaciones históricas registradas, muestran 1.132 pendientes y derivan la
+operación siguiente y los estados de producto exclusivamente por `operation_key`. El
+fingerprint parcial enlaza los bytes del checkpoint, el plan canónico, el snapshot
+actual, el prefijo completado, la política de rate limiting, la versión y el HEAD; no
+contiene fechas, credenciales ni secretos.
+
+Un futuro `--apply --resume` solo será admisible después de revisar el ZIP y aprobar
+literalmente ese fingerprint. Al migrar el checkpoint heredado se conservan sus 1.197
+operaciones, las 65 completadas, IDs, hashes y claves; la continuación comienza en la
+primera clave pendiente (orden 66) sin repetir recursos. Un rollback parcial también
+usa el plan y los recursos propios persistidos, recorre las completadas en orden inverso
+y nunca elimina marca, categorías ni recursos preexistentes.
+
+El checkpoint real de Windows permanece intacto: SHA-256
+`dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef`, tamaño
+1.825.474 bytes, versión 2.1.1, 1.197 planificadas y 65 completadas. No existe todavía
+un fingerprint aprobado. Está prohibido restaurar `checkpoint-before-apply.json`, editar
+manualmente el checkpoint o ejecutar resume antes de revisar el próximo ZIP.
+
+**El siguiente paso real después del merge es ejecutar solamente `--verify` contra el
+checkpoint `apply_partial` original e intacto.** Después se revisará su ZIP; hasta
+entonces `--apply --resume` no está autorizado.

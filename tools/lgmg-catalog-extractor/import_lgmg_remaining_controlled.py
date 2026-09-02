@@ -28,7 +28,7 @@ import urllib.request
 import uuid
 
 TOOL_NAME = "import_lgmg_remaining_controlled"
-TOOL_VERSION = "2.2.0"
+TOOL_VERSION = "2.2.2"
 CHECKPOINT_SCHEMA_VERSION = "2.2"
 OPERATION_CONTRACT_VERSION = "2.2"
 LEGACY_CHECKPOINT_SHA256 = "dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef"
@@ -60,6 +60,9 @@ ROOT_CATEGORY_CONTRACT = {"name": "Maquinaria", "slug": "maquinaria", "parent": 
                           "product_type": "machinery", "is_active": True}
 CHECKPOINT_STATES = {"dry_run_ready", "apply_in_progress", "apply_partial", "apply_complete",
                      "verify_complete", "rollback_in_progress", "rollback_complete"}
+CHECKPOINT_KINDS = {"new_dry_run", "dry_run_ready", "legacy_apply_partial", "current_apply_partial",
+                    "current_rollback_in_progress", "current_apply_complete", "current_rollback_complete",
+                    "invalid_checkpoint"}
 TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 APPLY_CONFIRMATION = "IMPORTAR_36_LGMG_RESTANTES"
 ROLLBACK_CONFIRMATION = "REVERTIR_IMPORTACION_36_LGMG_RESTANTES"
@@ -665,11 +668,7 @@ def build_operations(data, decisions, batch_size):
     operations = []
     def append(operation):
         operation["operation_order"] = len(operations) + 1
-        identity = {"contract_version": OPERATION_CONTRACT_VERSION,
-                    **{k: operation.get(k, "") for k in ("approval_key", "source_key", "metric_model",
-                        "product_source_order", "phase", "action", "method", "path_template",
-                        "specification_index", "payload_sha256", "file_sha256", "depends_on_operation_key")}}
-        operation["operation_key"] = sha(canonical(identity))
+        operation["operation_key"] = operation_key_for(operation)
         operations.append(operation)
         return operation
     for index, decision in enumerate(decisions):
@@ -731,6 +730,14 @@ def operations_fingerprint(operations):
     return sha(canonical([{k: v for k, v in operation.items() if k != "status"} for operation in operations]))
 
 
+def operation_key_for(operation):
+    identity = {"contract_version": OPERATION_CONTRACT_VERSION,
+                **{k: operation.get(k, "") for k in ("approval_key", "source_key", "metric_model",
+                    "product_source_order", "phase", "action", "method", "path_template",
+                    "specification_index", "payload_sha256", "file_sha256", "depends_on_operation_key")}}
+    return sha(canonical(identity))
+
+
 def validate_operation_dependencies(operations):
     by_order = {op["operation_order"]: op for op in operations}
     by_key = {op["operation_key"]: op for op in operations}
@@ -744,6 +751,68 @@ def validate_operation_dependencies(operations):
             dependency = by_order.get(order)
             if dependency is None or by_key.get(key) is not dependency or order >= operation["operation_order"] or dependency["metric_model"] != operation["metric_model"]:
                 raise ConflictError("Dependencia inexistente, posterior o de otro producto")
+
+
+REQUIRED_OPERATION_COUNTS = {"datasheet_operations": 33, "product_operations": 36,
+    "specification_operations": 1057, "image_operations": 71, "total": 1197}
+
+
+def validate_canonical_operations(operations, expected_fingerprint, *, verify_operation_keys=True):
+    """Validate a persisted complete plan without deriving it from remote state."""
+    if not isinstance(operations, list) or operation_counts(operations) != REQUIRED_OPERATION_COUNTS:
+        raise ConflictError("Conteos contractuales 33/36/1057/71/1197 incumplidos")
+    if [op.get("operation_order") for op in operations] != list(range(1, 1198)):
+        raise ConflictError("El plan canónico exige órdenes continuos 1-1197")
+    keys = [op.get("operation_key") for op in operations]
+    if any(not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key) for key in keys) or len(set(keys)) != 1197:
+        raise ConflictError("El plan canónico exige 1197 operation_key únicas")
+    for operation in operations:
+        template = operation.get("request_template")
+        if not isinstance(template, dict) or operation.get("payload_sha256") != sha(canonical(template)):
+            raise ConflictError("Hash de payload o template inválido en el plan canónico")
+        if verify_operation_keys and operation["operation_key"] != operation_key_for(operation):
+            raise ConflictError("operation_key no coincide con la identidad contractual")
+        dependency_order = operation.get("depends_on_operation")
+        if operation["resource_type"] in {"specification", "image"} and not dependency_order:
+            raise ConflictError("Especificaciones e imágenes exigen dependencia de producto")
+    validate_operation_dependencies(operations)
+    by_order = {operation["operation_order"]: operation for operation in operations}
+    for operation in operations:
+        dependency = by_order.get(operation.get("depends_on_operation"))
+        if operation["resource_type"] in {"specification", "image"} and dependency["resource_type"] != "product":
+            raise ConflictError("Dependencia de especificación o imagen no es un producto")
+        if operation["resource_type"] == "product" and dependency and dependency["resource_type"] != "datasheet":
+            raise ConflictError("Dependencia de producto no es una ficha")
+    actual = operations_fingerprint(operations)
+    if actual != expected_fingerprint:
+        raise ConflictError("Fingerprint recalculado del plan canónico no coincide")
+    return operations
+
+
+def validate_completed_operations(checkpoint):
+    planned = checkpoint["planned_operations"]
+    completed = checkpoint.get("completed_operations")
+    if not isinstance(completed, list) or len(completed) > len(planned):
+        raise ConflictError("completed_operations inválidas")
+    planned_by_key = {op["operation_key"]: op for op in planned}
+    completed_keys = [done.get("operation_key") for done in completed]
+    if completed_keys != [op["operation_key"] for op in planned[:len(completed)]]:
+        raise ConflictError("Las operaciones completadas deben ser un prefijo continuo del plan")
+    plural = {"product":"products", "image":"images", "specification":"specifications", "datasheet":"datasheets"}
+    expected_resources = {name: [] for name in plural.values()}
+    for done in completed:
+        operation = planned_by_key.get(done.get("operation_key"))
+        if operation is None or done.get("resource_id") in (None, ""):
+            raise ConflictError("Operación completada desconocida o sin resource_id")
+        if any(done.get(key) != operation.get(key) for key in
+               ("operation_order", "operation_key", "metric_model", "resource_type", "depends_on_operation_key")):
+            raise ConflictError("Operación completada no coincide con el plan canónico")
+        expected_resources[plural[operation["resource_type"]]].append(done["resource_id"])
+    if checkpoint.get("resources_created") != expected_resources:
+        raise ConflictError("resources_created no coincide con completed_operations")
+    if checkpoint.get("mutations_executed") != len(completed):
+        raise ConflictError("mutations_executed no coincide con completed_operations")
+    return completed
 
 
 def dry_run_fingerprint(data, decisions, origin, remote_fp, tool_head_value, operations=None, batch_size=20,
@@ -794,7 +863,8 @@ def checkpoint_contract(batch_size, origin, data, dry_fp, remote_fp, operations_
     products = {}
     for row in sorted(data["products"], key=lambda item: item["approval_key"]):
         products[row["approval_key"]] = {"metric_model": row["metric_model"], "status": "not_started", "created": {}}
-    return {"schema_version": CHECKPOINT_SCHEMA_VERSION, "tool": TOOL_NAME, "version": TOOL_VERSION,
+    return {"schema_version": CHECKPOINT_SCHEMA_VERSION, "operation_contract_version": OPERATION_CONTRACT_VERSION,
+            "tool": TOOL_NAME, "version": TOOL_VERSION,
             "tool_head": tool_head(), "state": "dry_run_ready", "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "api_base": origin, "batch_size": batch_size, "fingerprints": data["fingerprints"],
             "remote_state_fingerprint_sha256": remote_fp, "planned_operations_fingerprint_sha256": operations_fp,
@@ -821,6 +891,71 @@ def read_checkpoint(path):
     serialized = json.dumps(value, ensure_ascii=False)
     if any(word in serialized for word in ("Authorization", "Bearer ", "password", "cookie")):
         raise ConflictError("Checkpoint contiene material secreto")
+    return value
+
+
+def classify_checkpoint(path, mode, resume):
+    """Read and fail-closed classify a checkpoint before any plan reconstruction."""
+    if mode == "dry_run" and not resume:
+        return "new_dry_run", None, None
+    raw = regular_bytes(path, "checkpoint")
+    value = json_value(raw, "checkpoint")
+    serialized = json.dumps(value, ensure_ascii=False)
+    if any(word in serialized for word in ("Authorization", "Bearer ", "password", "cookie")):
+        raise ConflictError("invalid_checkpoint: contiene material secreto")
+    if value.get("version") == LEGACY_VERSION or value.get("schema_version") == LEGACY_SCHEMA_VERSION:
+        if value.get("state") != "apply_partial" or mode not in {"verify", "apply"} or (mode == "apply" and not resume):
+            raise ConflictError("invalid_checkpoint: checkpoint heredado incompatible con el modo")
+        return "legacy_apply_partial", validate_legacy_partial_checkpoint(value, raw), raw
+    if value.get("tool") != TOOL_NAME or value.get("version") != TOOL_VERSION or value.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise ConflictError("invalid_checkpoint: versión, herramienta o schema no admitidos")
+    if value.get("operation_contract_version") != OPERATION_CONTRACT_VERSION:
+        raise ConflictError("invalid_checkpoint: contrato de operaciones no admitido")
+    state = value.get("state")
+    kinds = {"dry_run_ready":"dry_run_ready", "apply_in_progress":"current_apply_partial",
+        "apply_partial":"current_apply_partial",
+        "rollback_in_progress":"current_rollback_in_progress", "apply_complete":"current_apply_complete",
+        "verify_complete":"current_apply_complete", "rollback_complete":"current_rollback_complete"}
+    kind = kinds.get(state)
+    allowed = ((kind == "dry_run_ready" and (mode == "dry_run" or (mode == "apply" and not resume))) or
+        (kind == "current_apply_partial" and mode in {"verify", "apply", "rollback"}) or
+        (kind == "current_rollback_in_progress" and mode == "rollback") or
+        (kind == "current_apply_complete" and mode in {"verify", "rollback"}) or
+        (kind == "current_rollback_complete" and mode == "rollback"))
+    if not kind or not allowed or (kind == "current_apply_partial" and mode == "apply" and not resume):
+        raise ConflictError("invalid_checkpoint: estado incompatible con el modo solicitado")
+    return kind, value, raw
+
+
+def validate_current_checkpoint(value, data, origin, batch_size):
+    keys = ("fingerprints", "api_base", "batch_size")
+    expected = (data["fingerprints"], origin, batch_size)
+    if tuple(value.get(key) for key in keys) != expected:
+        raise ConflictError("Checkpoint actual incompatible con inputs, API o lote")
+    if value.get("tool_head") != tool_head():
+        raise ConflictError("Checkpoint actual pertenece a otro HEAD de la herramienta")
+    if value.get("approval_keys") != sorted(row["approval_key"] for row in data["products"]) or \
+            value.get("models") != sorted(row["metric_model"] for row in data["products"]):
+        raise ConflictError("Checkpoint actual no coincide con la cohorte aprobada")
+    migration = value.get("migration")
+    validate_canonical_operations(value.get("planned_operations"), value.get("planned_operations_fingerprint_sha256"),
+                                  verify_operation_keys=migration is None)
+    completed = validate_completed_operations(value)
+    if value.get("state") in {"apply_in_progress", "apply_partial"} and not 0 < len(completed) < 1197:
+        raise ConflictError("apply_partial exige progreso parcial no vacío")
+    expected_statuses = product_statuses(value["planned_operations"], completed)
+    products = value.get("products")
+    if not isinstance(products, dict) or set(products) != set(value["approval_keys"]):
+        raise ConflictError("Estados de productos ausentes o fuera de la cohorte")
+    allowed_statuses = ({model: {status} for model, status in expected_statuses.items()}
+        if value.get("state") in {"apply_in_progress", "apply_partial"}
+        else {model: {status, "verified"} for model, status in expected_statuses.items()})
+    if any(not isinstance(item, dict) or item.get("metric_model") not in allowed_statuses or
+           item.get("status") not in allowed_statuses[item["metric_model"]] for item in products.values()):
+        raise ConflictError("Estados de producto no derivados del progreso canónico")
+    if migration is not None and (migration.get("legacy_checkpoint_sha256") != LEGACY_CHECKPOINT_SHA256 or
+            migration.get("legacy_completed_operations") != 65 or not migration.get("remote_validation_passed")):
+        raise ConflictError("Evidencia de migración heredada inválida")
     return value
 
 
@@ -867,6 +1002,14 @@ def product_statuses(planned, completed):
     return result
 
 
+def checkpoint_progress(value):
+    """Derive progress solely from the canonical operation keys."""
+    completed_by_key = {done["operation_key"]: done for done in value["completed_operations"]}
+    pending = [operation for operation in value["planned_operations"]
+               if operation["operation_key"] not in completed_by_key]
+    return completed_by_key, pending, pending[0] if pending else None
+
+
 def partial_resume_fingerprint(value, checkpoint_hash, remote_evidence, current_head=None):
     completed = value["completed_operations"]
     contract = {"legacy_checkpoint_sha256": checkpoint_hash, "legacy_version": value["version"],
@@ -886,6 +1029,7 @@ def partial_resume_fingerprint(value, checkpoint_hash, remote_evidence, current_
 def migrate_legacy_checkpoint(path, value, fingerprint):
     migrated = json.loads(json.dumps(value))
     migrated.update({"version": TOOL_VERSION, "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "operation_contract_version": OPERATION_CONTRACT_VERSION,
         "tool_head": tool_head(), "state": "apply_in_progress"})
     migrated["migration"] = {"legacy_version": LEGACY_VERSION, "legacy_schema_version": LEGACY_SCHEMA_VERSION,
         "legacy_tool_head": LEGACY_TOOL_HEAD, "legacy_checkpoint_sha256": LEGACY_CHECKPOINT_SHA256,
@@ -900,7 +1044,7 @@ def migrate_legacy_checkpoint(path, value, fingerprint):
 
 
 def validate_checkpoint(value, expected):
-    keys = ("schema_version", "tool", "version", "tool_head", "api_base", "batch_size", "fingerprints",
+    keys = ("schema_version", "operation_contract_version", "tool", "version", "tool_head", "api_base", "batch_size", "fingerprints",
             "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256",
             "resources_preexisting", "approval_keys", "models")
     if any(value.get(key) != expected.get(key) for key in keys):
@@ -910,7 +1054,7 @@ def validate_checkpoint(value, expected):
 
 
 def validate_checkpoint_static(value, expected):
-    keys = ("schema_version", "tool", "version", "tool_head", "api_base", "batch_size", "fingerprints",
+    keys = ("schema_version", "operation_contract_version", "tool", "version", "tool_head", "api_base", "batch_size", "fingerprints",
             "resources_preexisting", "approval_keys", "models")
     if any(value.get(key) != expected.get(key) for key in keys):
         raise ConflictError("Checkpoint incompatible con inputs, API, herramienta o recursos preexistentes")
@@ -918,6 +1062,16 @@ def validate_checkpoint_static(value, expected):
     if operations_fingerprint(planned) != value.get("planned_operations_fingerprint_sha256"):
         raise ConflictError("Checkpoint incompatible: operaciones o claves alteradas")
     validate_operation_dependencies(planned)
+
+
+def validate_completed_remote_resources(checkpoint, state):
+    collections = {"product":"products", "image":"images", "specification":"specs", "datasheet":"sheets"}
+    ids = {kind: {str(item.get("id")) for item in state[name]} for kind, name in collections.items()}
+    for done in checkpoint["completed_operations"]:
+        if done.get("rollback_completed"):
+            continue
+        if str(done["resource_id"]) not in ids[done["resource_type"]]:
+            raise ConflictError("Recurso completado registrado no existe en el snapshot remoto")
 
 
 def _csv_safe(value):
@@ -942,6 +1096,9 @@ def write_outputs(output: Path, result, checkpoint: Path):
         write_csv(staging / OUTPUT_NAMES[4], operation_fields, result["operations"])
         write_csv(staging / OUTPUT_NAMES[5], ("metric_model", "code", "detail", "blocking", "operation_order", "operation_key", "phase", "path", "http_status", "retry_attempts"), result["conflicts"])
         summary_keys = ("mode", "verdict", "fingerprints", "api_base", "batch_size", "batches", "counts", "planned_operation_counts", "errors", "followups", "resource_warnings", "category_slug_policy", "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256", "superseded_dry_run_fingerprints")
+        summary_keys += tuple(key for key in ("partial_resume_fingerprint_sha256", "operation_status_counts",
+            "product_status_counts", "completed_operations", "remaining_operations", "next_operation_order",
+            "checkpoint_cumulative_mutations", "checkpoint_records_prior_database_modification") if key in result)
         summary = {key: result[key] for key in summary_keys}
         (staging / OUTPUT_NAMES[0]).write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         lines = [f"Veredicto: {result['verdict']}", f"Modo: {result['mode']}", f"Política de slugs: {result['category_slug_policy']}", f"Productos: {len(result['products'])}"] + [f"{k}: {v}" for k, v in sorted(result["planned_operation_counts"].items())]
@@ -1009,28 +1166,37 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
     origin = normalize_origin(origin); batches = batch_ranges(36, batch_size)
     if mode == "apply" and (not checkpoint.is_file() or checkpoint.stat().st_size == 0):
         raise ConflictError("Apply exige un checkpoint dry-run preexistente y no vacío")
+    checkpoint_kind, classified_checkpoint, checkpoint_raw = classify_checkpoint(checkpoint, mode, resume)
+    partial_kinds = {"legacy_apply_partial", "current_apply_partial", "current_rollback_in_progress"}
+    persisted_plan_kinds = partial_kinds | {"current_apply_complete", "current_rollback_complete"}
+    if checkpoint_kind.startswith("current_"):
+        validate_current_checkpoint(classified_checkpoint, data, origin, batch_size)
     client = client_factory(origin, token, mode)
     state = snapshot(client); root, categories, brand = resolve_taxonomy(state)
     decisions = classify_products(data, state, categories, brand)
     if len(decisions) != 36 or any(d["status"] == "conflict_existing_product" for d in decisions):
         raise ConflictError("CONFLICT: la clasificación remota no contiene exactamente 36 candidatas sin conflictos")
     resources = resource_view(root, categories, brand)
-    operations = build_operations(data, decisions, batch_size)
-    remote_fp, operations_fp, head = remote_fingerprint(state), operations_fingerprint(operations), tool_head()
-    dry_fp = dry_run_fingerprint(data, decisions, origin, remote_fp, head, operations, batch_size, resources)
+    operations = (classified_checkpoint["planned_operations"] if checkpoint_kind in persisted_plan_kinds
+                  else build_operations(data, decisions, batch_size))
+    remote_fp, head = remote_fingerprint(state), tool_head()
+    if checkpoint_kind in persisted_plan_kinds:
+        operations_fp = classified_checkpoint["planned_operations_fingerprint_sha256"]
+        dry_fp = classified_checkpoint["dry_run_fingerprint_sha256"]
+    else:
+        operations_fp = operations_fingerprint(operations)
+        dry_fp = dry_run_fingerprint(data, decisions, origin, remote_fp, head, operations, batch_size, resources)
     if dry_fp in SUPERSEDED_DRY_RUN_FINGERPRINTS:
         raise ConflictError("El fingerprint supersedido nunca es aplicable")
     validate_operation_dependencies(operations)
     counts = operation_counts(operations)
-    required = {"datasheet_operations": 33, "product_operations": 36,
-                "specification_operations": 1057, "image_operations": 71, "total": 1197}
-    if any(counts.get(key) != value for key, value in required.items()):
+    if counts != REQUIRED_OPERATION_COUNTS:
         raise ConflictError("Conteos contractuales 33/36/1057/71/1197 incumplidos")
     expected = checkpoint_contract(batch_size, origin, data, dry_fp, remote_fp, operations_fp, resources, operations)
     result = _base_result(mode, origin, data, batches, remote_fp, operations_fp, dry_fp, resources, operations, decisions, batch_size)
     if mode == "dry_run":
         if resume:
-            existing = read_checkpoint(checkpoint)
+            existing = classified_checkpoint
             if existing.get("state") != "dry_run_ready":
                 raise ConflictError("Dry-run resume no puede convertir un apply parcial")
             validate_checkpoint(existing, expected)
@@ -1042,44 +1208,67 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
                             "datasheets_planned": 33, "datasheets_excluded": 3, "mutating_requests_executed": 0}
         write_outputs(output, result, checkpoint); return 0
 
-    checkpoint_raw = regular_bytes(checkpoint, "checkpoint")
-    raw_value = json_value(checkpoint_raw, "checkpoint")
-    legacy_partial = raw_value.get("version") == LEGACY_VERSION or raw_value.get("schema_version") == LEGACY_SCHEMA_VERSION
-    if legacy_partial:
-        cp = validate_legacy_partial_checkpoint(raw_value, checkpoint_raw)
+    if checkpoint_kind in partial_kinds:
+        cp = classified_checkpoint
+        if checkpoint_kind == "legacy_apply_partial":
+            # The immutable 2.1.1 bytes already close its historical operation-key
+            # contract; do not reinterpret those keys with contract version 2.2.
+            validate_canonical_operations(cp["planned_operations"], LEGACY_OPERATIONS_FINGERPRINT,
+                                          verify_operation_keys=False)
+            validate_completed_operations(cp)
+        validate_completed_remote_resources(cp, state)
+        if cp.get("resources_preexisting") != resources:
+            raise ConflictError("Taxonomía o marca difieren del checkpoint parcial")
         # The bounded snapshot above is GET-only and classification proves exact
         # identities/absence using the backend's existing collection endpoints.
         evidence = {"remote_state_fingerprint_sha256": remote_fp,
             "existing_models": sorted(d["row"]["metric_model"] for d in decisions if d["status"] == "already_imported_exact"),
             "resource_ids": sorted((x["resource_type"], x["resource_id"]) for x in cp["completed_operations"])}
         partial_fp = partial_resume_fingerprint(cp, sha(checkpoint_raw), evidence, head)
+        done_by_key, pending_operations, next_operation = checkpoint_progress(cp)
+        completed_count = len(done_by_key)
+        pending_count = len(pending_operations)
         result.update({"partial_resume_fingerprint_sha256": partial_fp,
-            "rate_limit_policy": RATE_LIMIT_POLICY, "completed_operations": 65,
-            "remaining_operations": 1132, "next_operation_order": 66})
+            "rate_limit_policy": RATE_LIMIT_POLICY, "completed_operations": completed_count,
+            "remaining_operations": pending_count,
+            "next_operation_order": next_operation["operation_order"] if next_operation else None,
+            "operation_status_counts": {"completed": completed_count, "failed": 0,
+                "planned": pending_count, "total": len(cp["planned_operations"])},
+            "checkpoint_cumulative_mutations": cp["mutations_executed"],
+            "checkpoint_records_prior_database_modification": cp["mutations_executed"] > 0})
         statuses = product_statuses(cp["planned_operations"], cp["completed_operations"])
         result["product_status_counts"] = {name: list(statuses.values()).count(name)
             for name in ("completed", "in_progress", "not_started")}
+        for item in result["products"]:
+            item["status"] = statuses[item["metric_model"]]
         if mode == "verify":
             result["verdict"] = "PARTIAL_RESUME_READY"
-            result["operations"] = [dict(op, status="completed" if index < 65 else "planned",
-                resource_id=(cp["completed_operations"][index]["resource_id"] if index < 65 else ""))
-                for index, op in enumerate(cp["planned_operations"])]
+            result["operations"] = [dict(op, status="completed" if op["operation_key"] in done_by_key else "planned",
+                resource_id=done_by_key.get(op["operation_key"], {}).get("resource_id", ""))
+                for op in cp["planned_operations"]]
             result["resources_created"] = cp["resources_created"]
             result["external_effects"] = {"api_called": True, "database_modified": False,
-                "mutating_requests_executed": 0, "content_published": False}
+                "mutating_requests_executed": 0, "content_published": False,
+                "checkpoint_records_prior_database_modification": cp["mutations_executed"] > 0}
             write_outputs(output, result, checkpoint); return 0
-        if mode != "apply" or not resume:
-            raise ConflictError("Checkpoint heredado solo admite verify o --apply --resume")
-        if approved_partial_resume_fingerprint != partial_fp:
-            raise ConflictError("Fingerprint aprobado de reanudación parcial no coincide")
-        cp = migrate_legacy_checkpoint(checkpoint, cp, partial_fp)
-        operations = cp["planned_operations"]
+        if mode == "apply":
+            if not resume or approved_partial_resume_fingerprint != partial_fp:
+                raise ConflictError("Fingerprint aprobado de reanudación parcial no coincide")
+            if checkpoint_kind == "legacy_apply_partial":
+                cp = migrate_legacy_checkpoint(checkpoint, cp, partial_fp)
+            operations = cp["planned_operations"]
     else:
-        cp = read_checkpoint(checkpoint)
+        cp = classified_checkpoint
     if mode == "apply" and not resume:
         validate_checkpoint(cp, expected)
     else:
         validate_checkpoint_static(cp, expected)
+    if mode == "rollback" and cp["state"] == "rollback_complete":
+        result["verdict"] = "ROLLBACK_COMPLETE"
+        result["resources_created"] = cp["resources_created"]
+        result["counts"] = {"products": 36, "mutating_requests_executed": 0}
+        result["external_effects"].update({"database_modified": False, "mutating_requests_executed": 0})
+        write_outputs(output, result, checkpoint); return 0
     if mode == "apply":
         if cp["state"] in {"apply_in_progress", "apply_partial"} and not resume:
             raise ConflictError("--resume es obligatorio para continuar apply parcial")
@@ -1089,12 +1278,10 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
             cp["state"] = "apply_in_progress"; cp["apply_started"] = True; atomic_json(checkpoint, cp)
         if resume:
             operations = cp["planned_operations"]
-            planned_keys = {operation["operation_key"] for operation in operations}
-            if any(done.get("operation_key") not in planned_keys for done in cp["completed_operations"]):
-                raise ConflictError("Operación completada no coincide con ninguna operation_key del plan")
+            done_by_key, _, _ = checkpoint_progress(cp)
         try:
             for operation in operations:
-                if any(done.get("operation_key") == operation["operation_key"] for done in cp["completed_operations"]):
+                if operation["operation_key"] in done_by_key:
                     continue
                 key = next(r["approval_key"] for r in data["products"] if r["metric_model"] == operation["metric_model"])
                 created = cp["products"][key]["created"]
