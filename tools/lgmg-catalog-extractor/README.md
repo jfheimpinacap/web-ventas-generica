@@ -1094,7 +1094,7 @@ entonces `--apply --resume` no está autorizado.
 ## Finalización reducida del catálogo LGMG restante
 
 La decisión humana vigente es **APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y
-34 IMÁGENES PRINCIPALES**. Por ello `complete_lgmg_remaining_core.py` 1.0.0 sustituye
+34 IMÁGENES PRINCIPALES**. Por ello `complete_lgmg_remaining_core.py` 1.0.1 sustituye
 operativamente, sin modificarlo, al intento de reanudar las 1.197 operaciones. Parte
 de los dos productos históricos completos (SR0818E-2 y SR1018E-2), deriva los otros
 34 de la cohorte cerrada de 36 y crea un plan nuevo de 68 operaciones: 34 productos
@@ -1107,6 +1107,21 @@ SR1218E-2 reutiliza la ficha histórica validada desde la operación 65; no vuel
 subirla y rollback nunca la elimina. Los restantes 33 payloads usan
 `technical_sheet = null`. La carga futura de fichas, especificaciones y otros medios
 será manual o una tarea independiente.
+
+El DTO real de lectura de fichas no expone necesariamente `sha256`: para esta ficha,
+el SHA-256 contractual está representado exactamente por `original_file_name` como
+los 64 caracteres hexadecimales aprobados seguidos de `.pdf`. La validación 1.0.1
+comprueba conjuntamente el ID derivado del checkpoint, nombre, nombre físico
+canónico, MIME `application/pdf`, tamaño 406080 y ruta relativa segura exacta. Si el
+DTO sí incluye un `sha256` no vacío, también debe coincidir. La ausencia de asociación
+con producto es esperada antes de crear SR1218E-2; una asociación presente solo se
+acepta si corresponde a ese producto ya clasificado por identidad. `created_at` y
+`updated_at` no forman parte de la identidad. La ficha no se vuelve a subir ni se
+incluye en rollback, y esta corrección no amplía las 68 operaciones aprobadas.
+
+Después del merge debe ejecutarse un dry-run reducido completamente nuevo, con
+directorio de salida, checkpoint reducido y token nuevos; no se reutiliza un eventual
+checkpoint 1.0.0.
 
 `--source-checkpoint` es evidencia inmutable de solo lectura (2.1.1,
 `apply_partial`, 65 completadas). La herramienta valida sus bytes antes y después,
