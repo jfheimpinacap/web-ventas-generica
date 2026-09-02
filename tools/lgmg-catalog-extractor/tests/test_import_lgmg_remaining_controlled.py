@@ -16,6 +16,7 @@ class Args:
     dry_run = apply = verify = rollback = False
     checkpoint = "state.json"; batch_size = 20; resume = False
     confirm_apply = confirm_rollback = None
+    approved_partial_resume_fingerprint = None
 
 
 class Response:
@@ -69,7 +70,7 @@ class ControlledImporterTests(unittest.TestCase):
         self.assertEqual(len(tool.APPROVED_FINGERPRINTS), 6)
         self.assertTrue(all(len(x) == 64 for x in tool.APPROVED_FINGERPRINTS.values()))
         self.assertEqual(len(tool.FAMILIES), 6); self.assertEqual(len(tool.OUTPUT_NAMES), 8)
-        self.assertEqual(tool.VERDICTS, {"DRY_RUN_READY","APPLY_COMPLETE","APPLY_PARTIAL","VERIFY_COMPLETE","ROLLBACK_COMPLETE","CONFLICT"})
+        self.assertEqual(tool.VERDICTS, {"DRY_RUN_READY","APPLY_COMPLETE","APPLY_PARTIAL","VERIFY_COMPLETE","PARTIAL_RESUME_READY","ROLLBACK_COMPLETE","CONFLICT"})
 
     def test_05_closed_cohort_is_read_from_ast(self):
         pairs = tool._load_closed_pairs()
@@ -233,7 +234,7 @@ class ControlledImporterTests(unittest.TestCase):
             with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
 
     def test_26_schema_slug_policy_and_noncanonical_conflict(self):
-        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION),("2.1.1","2.1"))
+        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION,tool.OPERATION_CONTRACT_VERSION),("2.2.0","2.2","2.2"))
         self.assertEqual(set(tool.CATEGORY_CONTRACT),set(tool.FAMILIES))
         self.assertEqual(tool.CATEGORY_SLUG_POLICY,"blocking_functional_filter")
         state={"categories":[{"id":1,**tool.ROOT_CATEGORY_CONTRACT}] +
@@ -306,6 +307,52 @@ class ControlledImporterTests(unittest.TestCase):
         source=MODULE.read_text(encoding="utf-8")
         self.assertNotIn("https://www.lgmglifts.com",source); self.assertNotIn('"--publish"',source)
         self.assertNotIn("import requests",source); self.assertNotIn("telemetry",source.casefold())
+
+
+    def test_28_closed_legacy_constants_and_cli_binding(self):
+        self.assertEqual(tool.LEGACY_CHECKPOINT_SHA256, "dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef")
+        self.assertEqual(tool.LEGACY_CHECKPOINT_SIZE, 1825474)
+        a = Args(); a.apply = True; a.resume = True; a.confirm_apply = tool.APPLY_CONFIRMATION
+        with self.assertRaises(tool.ConflictError): tool.validate_cli(a)
+        a.approved_partial_resume_fingerprint = "a" * 64
+        self.assertEqual(tool.validate_cli(a), "apply")
+        b = Args(); b.verify = True; b.approved_partial_resume_fingerprint = "a" * 64
+        with self.assertRaises(tool.ConflictError): tool.validate_cli(b)
+
+    def test_29_rate_pacing_uses_fake_clock_and_sleep(self):
+        now = [0.0]; waits = []
+        def sleep(seconds): waits.append(seconds); now[0] += seconds
+        pace = tool.RateLimitCoordinator(clock=lambda: now[0], sleep=sleep)
+        pace.before_request(); pace.before_request()
+        self.assertEqual(waits, [33.0])
+        self.assertEqual(pace.diagnostic["proactive_wait_count"], 1)
+        self.assertEqual(tool.RATE_LIMIT_POLICY["queue_limit"], 0)
+        self.assertTrue(tool.RATE_LIMIT_POLICY["rejection_before_handler"])
+
+    def test_30_retry_after_seconds_date_fallback_and_bounds(self):
+        pace = tool.RateLimitCoordinator(clock=lambda: 0, sleep=lambda _: None)
+        self.assertEqual(pace.retry_delay("12"), 12)
+        current = tool.datetime(2026, 1, 1, tzinfo=tool.timezone.utc)
+        self.assertEqual(pace.retry_delay("Thu, 01 Jan 2026 00:00:10 GMT", current), 10)
+        self.assertEqual(pace.retry_delay(None), 660)
+        for bad in ("invalid", "0", "901"):
+            with self.assertRaises(tool.ControlledImportError): pace.retry_delay(bad, current)
+
+    def test_31_product_status_and_partial_fingerprint_are_derived(self):
+        planned = [{"operation_key":"a","metric_model":"uno"}, {"operation_key":"b","metric_model":"uno"},
+                   {"operation_key":"c","metric_model":"dos"}, {"operation_key":"d","metric_model":"tres"}]
+        completed = [{"operation_key":"a","resource_id":1,"resolved_payload_sha256":"1"},
+                     {"operation_key":"c","resource_id":2,"resolved_payload_sha256":"2"}]
+        self.assertEqual(tool.product_statuses(planned, completed),
+                         {"uno":"in_progress", "dos":"completed", "tres":"not_started"})
+        value = {"version":tool.LEGACY_VERSION,"tool_head":tool.LEGACY_TOOL_HEAD,
+            "fingerprints":tool.APPROVED_FINGERPRINTS,"remote_state_fingerprint_sha256":tool.LEGACY_REMOTE_FINGERPRINT,
+            "planned_operations_fingerprint_sha256":tool.LEGACY_OPERATIONS_FINGERPRINT,
+            "dry_run_fingerprint_sha256":tool.LEGACY_DRY_RUN_FINGERPRINT,
+            "completed_operations":completed,"planned_operations":planned}
+        first = tool.partial_resume_fingerprint(value, "f"*64, {"remote":"same"}, "h"*40)
+        self.assertEqual(first, tool.partial_resume_fingerprint(value, "f"*64, {"remote":"same"}, "h"*40))
+        self.assertNotEqual(first, tool.partial_resume_fingerprint(value, "f"*64, {"remote":"changed"}, "h"*40))
 
 
 if __name__ == "__main__": unittest.main()
