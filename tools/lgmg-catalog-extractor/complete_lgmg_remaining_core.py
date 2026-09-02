@@ -29,7 +29,7 @@ def _load_base():
 base = _load_base()  # El módulo base protege su CLI con __name__ == "__main__".
 
 TOOL_NAME = "complete_lgmg_remaining_core"
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.0.2"
 CHECKPOINT_SCHEMA_VERSION = "1.0"
 COMPLETION_PROFILE = "core_products_with_primary_images"
 HUMAN_APPROVAL = "APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y 34 IMÁGENES PRINCIPALES"
@@ -39,6 +39,10 @@ TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 SOURCE_SHA256 = "dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef"
 SOURCE_SIZE = 1_825_474
 PARTIAL_RESUME_FINGERPRINT = "8490bae3e3693fbef8752eafcf231d86528da6bbbb895b93d507eb0b84edf177"
+APPROVED_101_SHA256 = "1e655c651425d543c99c650d1730849bb8a86a6fbff9b218c1022dfdbcbc4dc9"
+APPROVED_101_SIZE = 138_358
+APPROVED_101_PLAN_FINGERPRINT = "d6bdd8571e8b0b977afe27d222d55e39f77933d836aa44ff671b21642db55be4"
+APPROVED_101_REMOTE_FINGERPRINT = "9a5a64bf4a234cb5c0648b72fe7ede34773820771075cf9cd894e969cc37d9c2"
 HISTORICAL_MODELS = {"SR0818E-2", "SR1018E-2"}
 PARTIAL_MODEL = "SR1218E-2"
 PARTIAL_SHEET_KEY = "1163d8780457d6ecfbf64b6fa2733b930cb36b221e9ba8a0e7b5168d77915458"
@@ -249,14 +253,67 @@ def new_checkpoint(origin, source_raw, historical, operations, resources, remote
             "external_effects": {"writes": 0, "published": 0}, "errors": [], "next_operation": 1}
 
 
-def read_core_checkpoint(path):
-    value = base.read_checkpoint(path)
-    if value.get("tool") != TOOL_NAME or value.get("version") != TOOL_VERSION or value.get("schema") != CHECKPOINT_SCHEMA_VERSION or value.get("state") not in STATES:
-        raise ConflictError("Checkpoint reducido incompatible")
+def _checkpoint_bytes(path):
+    """Read core checkpoints directly; the base reader only recognizes full-import states."""
+    if not path.exists():
+        raise ConflictError("Checkpoint vacío o inválido: archivo ausente")
+    raw = base.regular_bytes(path, "checkpoint")
+    if not raw:
+        raise ConflictError("Checkpoint vacío o inválido")
+    value = base.json_value(raw, "checkpoint")
+    if not isinstance(value, dict) or not value:
+        raise ConflictError("Checkpoint vacío o inválido")
+    if not all(key in value for key in ("tool", "version", "schema", "state", "planned_operations")):
+        raise ConflictError("Checkpoint vacío o inválido")
+    _secret_free(raw)
+    return value, raw
+
+
+def _validate_checkpoint_content(value):
+    if value.get("tool") != TOOL_NAME or value.get("schema") != CHECKPOINT_SCHEMA_VERSION or value.get("completion_profile") != COMPLETION_PROFILE:
+        raise ConflictError("Checkpoint reducido incompatible: identidad o schema")
+    if value.get("state") not in STATES:
+        raise ConflictError("Checkpoint reducido incompatible: estado")
     validate_core_operations(value.get("planned_operations", []))
     if value.get("planned_operations_fingerprint_sha256") != operations_fingerprint(value["planned_operations"]):
         raise ConflictError("Fingerprint del plan reducido divergente")
+    if value.get("operation_keys") != [op["operation_key"] for op in value["planned_operations"]]:
+        raise ConflictError("Lista operation_key divergente")
+    completed = value.get("completed_operations")
+    if not isinstance(completed, list) or len({op.get("operation_key") for op in completed}) != len(completed):
+        raise ConflictError("Operaciones completadas inválidas o duplicadas")
+    planned_keys = value["operation_keys"]
+    if [op.get("operation_key") for op in completed] != planned_keys[:len(completed)]:
+        raise ConflictError("Operaciones completadas no forman un prefijo canónico")
     return value
+
+
+def _validate_approved_101(value, raw, *, digest=sha):
+    if len(raw) != APPROVED_101_SIZE or digest(raw) != APPROVED_101_SHA256:
+        raise ConflictError("Checkpoint 1.0.1 no autorizado: hash o tamaño")
+    if (value.get("version") != "1.0.1" or value.get("human_approval") != HUMAN_APPROVAL or
+            value.get("state") != "core_dry_run_ready" or value.get("completed_operations") != [] or
+            value.get("resources_created") != {"products": [], "images": []} or
+            value.get("external_effects") != {"writes": 0, "published": 0} or value.get("errors") != [] or
+            value.get("next_operation") != 1 or value.get("source_checkpoint_modified") is not False or
+            value.get("full_resume_authorized") is not False or
+            value.get("source_checkpoint_sha256") != SOURCE_SHA256 or value.get("source_checkpoint_size") != SOURCE_SIZE or
+            value.get("source_checkpoint_status") != "superseded_by_core_completion" or
+            value.get("partial_resume_fingerprint_sha256") != PARTIAL_RESUME_FINGERPRINT or
+            value.get("planned_operations_fingerprint_sha256") != APPROVED_101_PLAN_FINGERPRINT or
+            value.get("remote_dry_run_fingerprint_sha256") != APPROVED_101_REMOTE_FINGERPRINT):
+        raise ConflictError("Checkpoint 1.0.1 aprobado semánticamente incompatible")
+    return _validate_checkpoint_content(value)
+
+
+def read_core_checkpoint(path, *, digest=sha):
+    value, raw = _checkpoint_bytes(path)
+    if value.get("version") == "1.0.1":
+        _validate_approved_101(value, raw, digest=digest)
+        return value, True
+    if value.get("version") != TOOL_VERSION:
+        raise ConflictError("Checkpoint reducido incompatible: versión")
+    return _validate_checkpoint_content(value), False
 
 
 def _secret_free(raw):
@@ -341,7 +398,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
     source, source_raw, historical = validate_source_checkpoint(source_checkpoint)
     before = (sha(source_raw), source_checkpoint.stat().st_size, source_checkpoint.stat().st_mtime_ns)
     data = base.validate_inputs(plan, audit, repaired)
-    cp = read_core_checkpoint(checkpoint) if mode != "dry_run" else None
+    cp, migrate_101 = read_core_checkpoint(checkpoint) if mode != "dry_run" else (None, False)
     client = client_factory(origin, token, mode)
     state = base.snapshot(client); _, categories, brand = base.resolve_taxonomy(state)
     def validate_sheet(sheet_id, name, digest, size):
@@ -366,10 +423,16 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
         planned_models = {x["metric_model"] for x in cp["planned_operations"]}
         if planned_models | HISTORICAL_MODELS != {d["row"]["metric_model"] for d in decisions}:
             raise ConflictError("Checkpoint reducido no cubre exactamente los 34 modelos restantes")
-        selected = [d for d in decisions if d["row"]["metric_model"] in planned_models]
-        computed = build_core_operations(data, selected, historical["partial_sheet_id"])
-        if cp["api_base_url"] != origin or cp["planned_operations"] != computed or cp["source_checkpoint_sha256"] != sha(source_raw):
+        if exact_models != HISTORICAL_MODELS or sum(d["status"] == "create_candidate" for d in decisions) != 34:
+            raise ConflictError("El snapshot remoto debe conservar 2 históricos, 34 ausentes y cero conflictos")
+        if cp["api_base_url"] != origin or cp["source_checkpoint_sha256"] != sha(source_raw):
             raise ConflictError("Apply/verify no coincide criptográficamente con dry-run")
+        # El plan persistido es canónico: aquí solo se validan sus medios, nunca se reconstruye.
+        for op in cp["planned_operations"]:
+            if op["resource_type"] == "image":
+                image = next((x for x in data["images"].get(op["metric_model"], []) if x["sha256"] == op["file_sha256"]), None)
+                if image is None: raise ConflictError("Imagen persistida no coincide con inputs")
+                base._validate_local_media(repaired, image, "image")
         if mode == "verify":
             verdict = "CORE_DRY_RUN_STILL_READY" if cp["state"] == "core_dry_run_ready" else "CORE_IMPORT_VERIFIED"
             writes = 0
@@ -377,6 +440,13 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
             if confirm_apply != APPLY_CONFIRMATION: raise ConflictError("Confirmación exacta de apply ausente")
             if (resume and cp["state"] != "core_apply_partial") or (not resume and cp["state"] != "core_dry_run_ready"):
                 raise ConflictError("Estado o --resume incompatible con apply")
+            if not resume and (cp["completed_operations"] or cp["resources_created"] != {"products": [], "images": []} or
+                               cp.get("external_effects") != {"writes": 0, "published": 0} or cp.get("next_operation") != 1):
+                raise ConflictError("Apply inicial exige cero operaciones y efectos previos")
+            if migrate_101:
+                cp["migrated_from"] = {"version": "1.0.1", "sha256": APPROVED_101_SHA256,
+                                       "size_bytes": APPROVED_101_SIZE, "approved": True}
+                cp["version"] = TOOL_VERSION
             cp["state"] = "core_apply_in_progress"; atomic_checkpoint(checkpoint, cp); writes = 0
             done = {x["operation_key"] for x in cp["completed_operations"]}
             try:
@@ -400,6 +470,8 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
                 cp["state"] = "core_apply_partial"; atomic_checkpoint(checkpoint, cp); raise
         else:
             if confirm_rollback != ROLLBACK_CONFIRMATION: raise ConflictError("Confirmación exacta de rollback ausente")
+            if cp["state"] not in {"core_apply_partial", "core_apply_complete", "core_rollback_in_progress"}:
+                raise ConflictError("Estado incompatible con rollback reducido")
             if resume and cp["state"] != "core_rollback_in_progress": raise ConflictError("--rollback --resume exige rollback parcial")
             cp["state"] = "core_rollback_in_progress"; atomic_checkpoint(checkpoint, cp); writes = 0
             for kind, endpoint in (("images", "product-images"), ("products", "products")):

@@ -1094,7 +1094,7 @@ entonces `--apply --resume` no está autorizado.
 ## Finalización reducida del catálogo LGMG restante
 
 La decisión humana vigente es **APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y
-34 IMÁGENES PRINCIPALES**. Por ello `complete_lgmg_remaining_core.py` 1.0.1 sustituye
+34 IMÁGENES PRINCIPALES**. Por ello `complete_lgmg_remaining_core.py` 1.0.2 sustituye
 operativamente, sin modificarlo, al intento de reanudar las 1.197 operaciones. Parte
 de los dos productos históricos completos (SR0818E-2 y SR1018E-2), deriva los otros
 34 de la cohorte cerrada de 36 y crea un plan nuevo de 68 operaciones: 34 productos
@@ -1119,9 +1119,20 @@ acepta si corresponde a ese producto ya clasificado por identidad. `created_at` 
 `updated_at` no forman parte de la identidad. La ficha no se vuelve a subir ni se
 incluye en rollback, y esta corrección no amplía las 68 operaciones aprobadas.
 
-Después del merge debe ejecutarse un dry-run reducido completamente nuevo, con
-directorio de salida, checkpoint reducido y token nuevos; no se reutiliza un eventual
-checkpoint 1.0.0.
+La causa del falso `Checkpoint vacío o inválido` de 1.0.1 fue exacta: el lector
+reducido delegaba en `read_checkpoint` del importador completo, cuyo conjunto de
+estados no contiene `core_dry_run_ready`. El archivo sí se abría y deserializaba, pero
+ese lector clasificaba su estado reducido válido como inválido. En 1.0.2 el lector
+reducido abre físicamente y valida su propio schema antes de clasificar el modo.
+
+No hace falta repetir el dry-run ni editar el checkpoint. La compatibilidad legado es
+deliberadamente cerrada al único checkpoint reducido 1.0.1 aprobado: exactamente
+138358 bytes y SHA-256
+`1e655c651425d543c99c650d1730849bb8a86a6fbff9b218c1022dfdbcbc4dc9`.
+Además del archivo exacto se vuelven a comprobar identidad, aprobación, schema,
+estado, cero efectos y recursos creados, los 68 órdenes y `operation_key`, hashes de
+payload, dependencias, composición 34+34 y fingerprints. Cualquier variante se
+rechaza. El checkpoint 1.0.0 sigue rechazado.
 
 `--source-checkpoint` es evidencia inmutable de solo lectura (2.1.1,
 `apply_partial`, 65 completadas). La herramienta valida sus bytes antes y después,
@@ -1131,9 +1142,12 @@ histórico. Los modos son:
 
 1. `--dry-run`: solo GET, confirma 2 existentes, 34 ausentes, la ficha histórica,
    las 34 imágenes y el plan 34+34; genera el checkpoint y los siete informes.
-2. `--apply --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL`: exige ese dry-run
-   enlazado criptográficamente, hace solo los 68 POST y ejecuta una verificación GET
-   final 36/36 automática.
+2. `--apply --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL`, **sin `--resume`**:
+   carga un checkpoint existente `core_dry_run_ready`, exige cero completadas,
+   vuelve a validar inputs, medios y snapshot remoto, y usa sus 68
+   `planned_operations` persistidas como plan canónico (no lo reconstruye). Solo
+   entonces migra atómicamente el 1.0.1 aprobado a 1.0.2, registra su procedencia,
+   pasa a `core_apply_in_progress`, hace los 68 POST y verifica 36/36.
 3. `--apply --resume` continúa un `core_apply_partial`, valida y omite las claves ya
    completadas, sin duplicarlas.
 4. `--verify` es solo lectura tanto antes como después del apply y no modifica el
@@ -1148,16 +1162,14 @@ serialización canónica, checkpoint atómico y `RequestCoordinator` del importa
 controlado. Solo se admite un origen HTTP local con puerto y el token procede
 exclusivamente de `JEM_NEXUS_ACCESS_TOKEN`.
 
-Ejemplo de PowerShell para el primer paso real después del merge (no ejecutar apply
-primero):
+El checkpoint histórico completo de 1.197 operaciones continúa sustituido, intacto y
+solo se usa como procedencia. La siguiente ejecución real en Windows queda pendiente
+para después del merge y debe usar el mismo checkpoint reducido aprobado, sin
+editarlo y sin `--resume`:
 
 ```powershell
-$env:JEM_NEXUS_ACCESS_TOKEN = '<token-efímero>'
-python .\complete_lgmg_remaining_core.py `
-  --plan-input C:\lgmg\plan --remaining-audit-input C:\lgmg\audit `
-  --repaired-media-input C:\lgmg\repaired --source-checkpoint C:\lgmg\historical.json `
-  --output-dir C:\lgmg\core-dry-run --api-base-url http://localhost:5000 `
-  --checkpoint C:\lgmg\core-checkpoint.json --dry-run
+$env:JEM_NEXUS_ACCESS_TOKEN = '<token-efímero-nuevo>'
+python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-apply --apply --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL
 ```
 
 Tras revisar ese resultado, los comandos Windows correspondientes son:
@@ -1169,7 +1181,7 @@ python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg
 python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-rollback --rollback --confirm-rollback REVERTIR_FINALIZACION_REDUCIDA_LGMG
 ```
 
-Desplegar este código no copia datos ni archivos locales a producción. Una migración
-a producción será una tarea separada. El primer paso real tras el merge será
-únicamente un dry-run local nuevo de este perfil reducido; la reanudación completa
-anterior permanece abandonada y no se ejecutará.
+Desplegar este código no copia datos ni archivos locales a producción. Siguen siendo
+34 productos y 34 imágenes principales; no se añaden especificaciones, fichas nuevas
+ni imágenes secundarias. Si el apply queda parcial, no se repite: una invocación
+posterior separada usa `--apply --resume` sobre el 1.0.2 parcial.

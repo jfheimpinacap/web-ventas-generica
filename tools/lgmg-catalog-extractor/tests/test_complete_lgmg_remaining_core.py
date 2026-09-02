@@ -42,7 +42,7 @@ def fixture_data():
 class CoreCompletionTests(unittest.TestCase):
     def test_contract_and_safe_import(self):
         self.assertEqual((core.TOOL_NAME, core.TOOL_VERSION, core.CHECKPOINT_SCHEMA_VERSION, core.COMPLETION_PROFILE),
-                         ("complete_lgmg_remaining_core", "1.0.1", "1.0", "core_products_with_primary_images"))
+                         ("complete_lgmg_remaining_core", "1.0.2", "1.0", "core_products_with_primary_images"))
         self.assertIs(core.RequestCoordinator, core.base.RateLimitCoordinator)
         self.assertIs(core.ApiClient, core.base.ApiClient)
 
@@ -189,9 +189,86 @@ class CoreCompletionTests(unittest.TestCase):
     def test_reduced_checkpoint_version_1_0_0_is_rejected(self):
         legacy = {"tool": core.TOOL_NAME, "version": "1.0.0", "schema": core.CHECKPOINT_SCHEMA_VERSION,
                   "state": "core_dry_run_ready", "planned_operations": []}
-        with mock.patch.object(core.base, "read_checkpoint", return_value=legacy), self.assertRaisesRegex(
-                core.ConflictError, "Checkpoint reducido incompatible"):
-            core.read_core_checkpoint(Path("synthetic-not-read.json"))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"; path.write_text(json.dumps(legacy), encoding="utf-8")
+            with self.assertRaisesRegex(core.ConflictError, "Checkpoint reducido incompatible"):
+                core.read_core_checkpoint(path)
+
+    def core_checkpoint(self, version="1.0.2"):
+        operations = core.build_core_operations(fixture_data(), [decision(i) for i in range(34)], 25)
+        value = core.new_checkpoint("http://localhost:5000", b"source", {"partial_sheet_id": 25},
+                                    operations, {}, "f" * 64, fixture_data())
+        value["version"] = version
+        return value
+
+    def test_checkpoint_reader_handles_physical_invalid_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"
+            with self.assertRaisesRegex(core.ConflictError, "Checkpoint vacío o inválido"):
+                core.read_core_checkpoint(path)
+            for raw, diagnostic in ((b"", "Checkpoint vacío"), (b"{", "JSON inválido"),
+                                    (b"{}", "Checkpoint vacío"), (b"[]", "Checkpoint vacío")):
+                with self.subTest(raw=raw):
+                    path.write_bytes(raw)
+                    with self.assertRaisesRegex(core.ConflictError, diagnostic): core.read_core_checkpoint(path)
+
+    def test_current_checkpoint_is_loaded_and_semantically_validated(self):
+        checkpoint = self.core_checkpoint()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"; core.atomic_checkpoint(path, checkpoint)
+            loaded, legacy = core.read_core_checkpoint(path)
+            self.assertFalse(legacy); self.assertEqual(loaded["planned_operations"], checkpoint["planned_operations"])
+            for mutate, diagnostic in (
+                    (lambda x: x["planned_operations"].pop(), "68 operaciones"),
+                    (lambda x: x["planned_operations"].append(dict(x["planned_operations"][0])), "68 operaciones"),
+                    (lambda x: x["operation_keys"].__setitem__(1, x["operation_keys"][0]), "operation_key"),
+                    (lambda x: x["planned_operations"][1].__setitem__("depends_on_operation_key", "0" * 64), "Hash recalculable"),
+                    (lambda x: x.__setitem__("planned_operations_fingerprint_sha256", "0" * 64), "Fingerprint")):
+                candidate = json.loads(json.dumps(checkpoint)); mutate(candidate); core.atomic_checkpoint(path, candidate)
+                with self.subTest(diagnostic=diagnostic), self.assertRaisesRegex(core.ConflictError, diagnostic):
+                    core.read_core_checkpoint(path)
+
+    def test_only_exact_approved_101_is_accepted_and_marked_for_migration(self):
+        checkpoint = self.core_checkpoint("1.0.1")
+        checkpoint.update({"human_approval": core.HUMAN_APPROVAL, "state": "core_dry_run_ready",
+                           "source_checkpoint_sha256": core.SOURCE_SHA256, "source_checkpoint_size": core.SOURCE_SIZE,
+                           "source_checkpoint_status": "superseded_by_core_completion",
+                           "source_checkpoint_modified": False, "full_resume_authorized": False,
+                           "partial_resume_fingerprint_sha256": core.PARTIAL_RESUME_FINGERPRINT,
+                           "remote_dry_run_fingerprint_sha256": core.APPROVED_101_REMOTE_FINGERPRINT,
+                           "planned_operations_fingerprint_sha256": core.APPROVED_101_PLAN_FINGERPRINT})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"
+            raw = json.dumps(checkpoint, ensure_ascii=False).encode()
+            raw += b" " * (core.APPROVED_101_SIZE - len(raw)); path.write_bytes(raw)
+            with mock.patch.object(core, "operations_fingerprint", return_value=core.APPROVED_101_PLAN_FINGERPRINT):
+                loaded, legacy = core.read_core_checkpoint(path, digest=lambda _: core.APPROVED_101_SHA256)
+            self.assertTrue(legacy); self.assertEqual(len(loaded["planned_operations"]), 68)
+            with self.assertRaisesRegex(core.ConflictError, "hash o tamaño"):
+                core.read_core_checkpoint(path, digest=lambda _: "0" * 64)
+            checkpoint["resources_created"]["products"].append({"id": 1}); raw = json.dumps(checkpoint).encode()
+            path.write_bytes(raw + b" " * (core.APPROVED_101_SIZE - len(raw)))
+            with mock.patch.object(core, "operations_fingerprint", return_value=core.APPROVED_101_PLAN_FINGERPRINT), self.assertRaisesRegex(core.ConflictError, "semánticamente"):
+                core.read_core_checkpoint(path, digest=lambda _: core.APPROVED_101_SHA256)
+
+    def test_public_main_classifies_apply_without_resume_and_loads_file(self):
+        checkpoint = self.core_checkpoint()
+        seen = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"; core.atomic_checkpoint(path, checkpoint)
+            def fake_run(*args, **kwargs):
+                seen["mode"], seen["resume"] = args[7], args[9]
+                seen["checkpoint"], _ = core.read_core_checkpoint(args[6])
+                return 0
+            argv = []
+            for flag in ("plan-input", "remaining-audit-input", "repaired-media-input", "source-checkpoint", "output-dir"):
+                argv += ["--" + flag, str(Path(tmp) / flag)]
+            argv += ["--api-base-url", "http://localhost:5000", "--checkpoint", str(path), "--apply",
+                     "--confirm-apply", core.APPLY_CONFIRMATION]
+            with mock.patch.object(core, "access_token", return_value="temporary"), mock.patch.object(core, "run", side_effect=fake_run):
+                self.assertEqual(core.main(argv), 0)
+            self.assertEqual((seen["mode"], seen["resume"]), ("apply", False))
+            self.assertTrue(seen["checkpoint"]); self.assertEqual(len(seen["checkpoint"]["planned_operations"]), 68)
 
     def test_outputs_are_exact_bom_crlf_formula_safe_and_secret_free(self):
         data = fixture_data(); decisions = [decision(i) for i in range(34)]
