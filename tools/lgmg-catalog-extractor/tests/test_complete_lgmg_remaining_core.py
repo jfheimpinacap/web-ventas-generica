@@ -42,7 +42,7 @@ def fixture_data():
 class CoreCompletionTests(unittest.TestCase):
     def test_contract_and_safe_import(self):
         self.assertEqual((core.TOOL_NAME, core.TOOL_VERSION, core.CHECKPOINT_SCHEMA_VERSION, core.COMPLETION_PROFILE),
-                         ("complete_lgmg_remaining_core", "1.0.0", "1.0", "core_products_with_primary_images"))
+                         ("complete_lgmg_remaining_core", "1.0.1", "1.0", "core_products_with_primary_images"))
         self.assertIs(core.RequestCoordinator, core.base.RateLimitCoordinator)
         self.assertIs(core.ApiClient, core.base.ApiClient)
 
@@ -113,6 +113,68 @@ class CoreCompletionTests(unittest.TestCase):
             self.assertEqual(unchanged, raw); self.assertEqual(historical["partial_sheet_id"], 25)
             self.assertEqual([len(historical[k]) for k in ("products", "images", "datasheets", "specifications")], [2, 2, 3, 58])
 
+    def historical_sheet(self, **changes):
+        sheet = {"id": 25, "name": core.PARTIAL_SHEET_NAME,
+                 "original_file_name": core.PARTIAL_SHEET_ORIGINAL_FILENAME,
+                 "content_type": "application/pdf", "size_bytes": 406080,
+                 "file_url": "/technical-sheets/25/file",
+                 "created_at": "2025-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}
+        sheet.update(changes)
+        return sheet
+
+    def validate_sheet(self, sheet, resource_id=25, allowed_product_ids=()):
+        return core.validate_historical_sheet([sheet], resource_id, core.PARTIAL_SHEET_NAME,
+                                              core.PARTIAL_SHEET_SHA256, core.PARTIAL_SHEET_SIZE,
+                                              allowed_product_ids)
+
+    def test_real_historical_sheet_dto_without_sha_or_product_is_accepted(self):
+        sheet = self.historical_sheet()
+        self.assertIs(self.validate_sheet(sheet), sheet)
+        sheet["created_at"] = "different"; sheet["updated_at"] = None; sheet["product_id"] = None
+        self.assertIs(self.validate_sheet(sheet), sheet)
+
+    def test_exact_explicit_sha_and_proven_product_association_are_accepted(self):
+        self.validate_sheet(self.historical_sheet(sha256=core.PARTIAL_SHEET_SHA256))
+        self.validate_sheet(self.historical_sheet(product={"id": 91, "model": core.PARTIAL_MODEL}),
+                            allowed_product_ids={91})
+
+    def test_historical_sheet_reports_each_divergent_field(self):
+        cases = (
+            ({"id": 26}, "historical_sheet_id_mismatch"),
+            ({"name": "another"}, "historical_sheet_name_mismatch"),
+            ({"content_type": "text/plain"}, "historical_sheet_content_type_mismatch"),
+            ({"size_bytes": 406081}, "historical_sheet_size_mismatch"),
+            ({"file_url": "/technical-sheets/26/file"}, "historical_sheet_file_url_mismatch"),
+            ({"sha256": "0" * 64}, "historical_sheet_explicit_sha256_mismatch"),
+            ({"product_id": 91}, "historical_sheet_unexpected_product_association"),
+        )
+        for changes, diagnostic in cases:
+            with self.subTest(diagnostic=diagnostic), self.assertRaisesRegex(core.ConflictError, diagnostic):
+                self.validate_sheet(self.historical_sheet(**changes))
+
+    def test_historical_sheet_requires_exact_canonical_original_filename(self):
+        digest = core.PARTIAL_SHEET_SHA256
+        invalid = ("0" * 64 + ".pdf", digest[:32] + ".pdf", digest + ".PDF",
+                   digest.upper() + ".pdf", digest + "-copy.pdf", digest + ".pdf.bak")
+        for filename in invalid:
+            with self.subTest(filename=filename), self.assertRaisesRegex(
+                    core.ConflictError, "historical_sheet_original_filename_mismatch"):
+                self.validate_sheet(self.historical_sheet(original_file_name=filename))
+
+    def test_historical_sheet_rejects_unsafe_or_noncanonical_urls(self):
+        invalid = ("https://example.com/technical-sheets/25/file",
+                   "/technical-sheets/25/file?download=1", "/technical-sheets/25/file#x",
+                   "/technical-sheets/../25/file", "//user:password@example.com/technical-sheets/25/file")
+        for file_url in invalid:
+            with self.subTest(file_url=file_url), self.assertRaisesRegex(
+                    core.ConflictError, "historical_sheet_file_url_mismatch"):
+                self.validate_sheet(self.historical_sheet(file_url=file_url))
+
+    def test_historical_sheet_id_is_supplied_from_checkpoint_derivation(self):
+        self.validate_sheet(self.historical_sheet(id=73, file_url="/technical-sheets/73/file"), resource_id=73)
+        with self.assertRaisesRegex(core.ConflictError, "historical_sheet_id_mismatch"):
+            self.validate_sheet(self.historical_sheet(), resource_id=73)
+
     def test_apply_and_rollback_confirmations(self):
         base = dict(dry_run=False, verify=False, resume=False)
         with self.assertRaises(core.ConflictError): core.validate_cli(argparse.Namespace(**base, apply=True, rollback=False, confirm_apply=None, confirm_rollback=None))
@@ -123,6 +185,13 @@ class CoreCompletionTests(unittest.TestCase):
             path = Path(tmp) / "same"
             with self.assertRaises(core.ConflictError):
                 core.run(path, path, path, path, Path(tmp) / "out", "http://localhost:1", path, "dry_run", "x")
+
+    def test_reduced_checkpoint_version_1_0_0_is_rejected(self):
+        legacy = {"tool": core.TOOL_NAME, "version": "1.0.0", "schema": core.CHECKPOINT_SCHEMA_VERSION,
+                  "state": "core_dry_run_ready", "planned_operations": []}
+        with mock.patch.object(core.base, "read_checkpoint", return_value=legacy), self.assertRaisesRegex(
+                core.ConflictError, "Checkpoint reducido incompatible"):
+            core.read_core_checkpoint(Path("synthetic-not-read.json"))
 
     def test_outputs_are_exact_bom_crlf_formula_safe_and_secret_free(self):
         data = fixture_data(); decisions = [decision(i) for i in range(34)]

@@ -29,7 +29,7 @@ def _load_base():
 base = _load_base()  # El módulo base protege su CLI con __name__ == "__main__".
 
 TOOL_NAME = "complete_lgmg_remaining_core"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.0.1"
 CHECKPOINT_SCHEMA_VERSION = "1.0"
 COMPLETION_PROFILE = "core_products_with_primary_images"
 HUMAN_APPROVAL = "APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y 34 IMÁGENES PRINCIPALES"
@@ -45,6 +45,7 @@ PARTIAL_SHEET_KEY = "1163d8780457d6ecfbf64b6fa2733b930cb36b221e9ba8a0e7b5168d779
 PARTIAL_SHEET_NAME = "Ficha técnica LGMG SR1218E-2"
 PARTIAL_SHEET_SHA256 = "fbfb3916b94d600e19df841560bf11bdf6dee9d7dd26500da44f5894cafde409"
 PARTIAL_SHEET_SIZE = 406_080
+PARTIAL_SHEET_ORIGINAL_FILENAME = PARTIAL_SHEET_SHA256 + ".pdf"
 OUTPUT_NAMES = (
     "core-products.csv", "core-images.csv", "core-operations.csv", "core-conflicts.csv",
     "core-summary.json", "core-manifest.json", "README-core-completion.txt",
@@ -107,6 +108,46 @@ def validate_source_checkpoint(path: Path, *, expected_sha256=SOURCE_SHA256, exp
         raise ConflictError("Identidad física de la ficha histórica divergente")
     return value, raw, {"products": product_done, "images": image_done, "datasheets": sheet_done,
                         "specifications": spec_done, "partial_sheet_id": partial.get("resource_id")}
+
+
+def validate_historical_sheet(sheets, resource_id, name, digest, size, allowed_product_ids=()):
+    """Validate the historical sheet against the backend's read DTO, field by field."""
+    from urllib.parse import urlsplit
+
+    hits = [item for item in sheets if item.get("id") == resource_id]
+    if len(hits) != 1:
+        raise ConflictError("historical_sheet_id_mismatch")
+    sheet = hits[0]
+    if sheet.get("name") != name:
+        raise ConflictError("historical_sheet_name_mismatch")
+    expected_filename = digest + ".pdf"
+    filename = sheet.get("original_file_name")
+    if filename != expected_filename or not filename.endswith(".pdf") or filename[:-4] != digest:
+        raise ConflictError("historical_sheet_original_filename_mismatch")
+    if sheet.get("content_type") != "application/pdf":
+        raise ConflictError("historical_sheet_content_type_mismatch")
+    if type(sheet.get("size_bytes")) is not int or sheet["size_bytes"] != size:
+        raise ConflictError("historical_sheet_size_mismatch")
+    expected_url = f"/technical-sheets/{resource_id}/file"
+    file_url = sheet.get("file_url")
+    parsed = urlsplit(file_url) if isinstance(file_url, str) else None
+    if (file_url != expected_url or parsed is None or parsed.scheme or parsed.netloc or
+            parsed.username or parsed.password or parsed.query or parsed.fragment or ".." in parsed.path.split("/")):
+        raise ConflictError("historical_sheet_file_url_mismatch")
+    explicit_digest = sheet.get("sha256")
+    if explicit_digest not in (None, "") and explicit_digest != digest:
+        raise ConflictError("historical_sheet_explicit_sha256_mismatch")
+    associations = []
+    for key in ("product_id", "productId"):
+        if sheet.get(key) is not None:
+            associations.append(sheet[key])
+    if sheet.get("product") is not None:
+        product = sheet["product"]
+        associations.append(product.get("id") if isinstance(product, dict) else product)
+    allowed = set(allowed_product_ids)
+    if any(value not in allowed for value in associations):
+        raise ConflictError("historical_sheet_unexpected_product_association")
+    return sheet
 
 
 def derive_core(data, state, categories, brand, historical, sheet_validator=None):
@@ -304,9 +345,12 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
     client = client_factory(origin, token, mode)
     state = base.snapshot(client); _, categories, brand = base.resolve_taxonomy(state)
     def validate_sheet(sheet_id, name, digest, size):
-        hits = [x for x in state["sheets"] if x.get("id") == sheet_id]
-        if len(hits) != 1 or hits[0].get("name") != name or hits[0].get("file_sha256", hits[0].get("sha256")) != digest or int(hits[0].get("file_size_bytes", hits[0].get("size", 0))) != size:
-            raise ConflictError("Ficha histórica remota de SR1218E-2 divergente")
+        exact_partial_ids = {
+            d["product"].get("id") for d in decisions
+            if d["row"]["metric_model"] == PARTIAL_MODEL and d["status"] == "already_imported_exact"
+            and isinstance(d.get("product"), dict) and d["product"].get("id") is not None
+        }
+        return validate_historical_sheet(state["sheets"], sheet_id, name, digest, size, exact_partial_ids)
     decisions = base.classify_products(data, state, categories, brand)
     conflicts = [d for d in decisions if d["status"] == "conflict_existing_product"]
     exact_models = {d["row"]["metric_model"] for d in decisions if d["status"] == "already_imported_exact"}
