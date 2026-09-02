@@ -1090,3 +1090,71 @@ manualmente el checkpoint o ejecutar resume antes de revisar el próximo ZIP.
 **El siguiente paso real después del merge es ejecutar solamente `--verify` contra el
 checkpoint `apply_partial` original e intacto.** Después se revisará su ZIP; hasta
 entonces `--apply --resume` no está autorizado.
+
+## Finalización reducida del catálogo LGMG restante
+
+La decisión humana vigente es **APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y
+34 IMÁGENES PRINCIPALES**. Por ello `complete_lgmg_remaining_core.py` 1.0.0 sustituye
+operativamente, sin modificarlo, al intento de reanudar las 1.197 operaciones. Parte
+de los dos productos históricos completos (SR0818E-2 y SR1018E-2), deriva los otros
+34 de la cohorte cerrada de 36 y crea un plan nuevo de 68 operaciones: 34 productos
+sin publicar, sin precio visible, seguidos por exactamente una imagen principal cada
+uno, en lotes de 20 y 14 productos.
+
+El perfil excluye deliberadamente las 999 especificaciones pendientes, 30 fichas
+pendientes, todas las imágenes secundarias, precios, publicación y enriquecimientos.
+SR1218E-2 reutiliza la ficha histórica validada desde la operación 65; no vuelve a
+subirla y rollback nunca la elimina. Los restantes 33 payloads usan
+`technical_sheet = null`. La carga futura de fichas, especificaciones y otros medios
+será manual o una tarea independiente.
+
+`--source-checkpoint` es evidencia inmutable de solo lectura (2.1.1,
+`apply_partial`, 65 completadas). La herramienta valida sus bytes antes y después,
+deriva de sus operaciones completadas los recursos preexistentes y escribe un
+checkpoint reducido separado. Nunca migra, sobrescribe ni reanuda el checkpoint
+histórico. Los modos son:
+
+1. `--dry-run`: solo GET, confirma 2 existentes, 34 ausentes, la ficha histórica,
+   las 34 imágenes y el plan 34+34; genera el checkpoint y los siete informes.
+2. `--apply --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL`: exige ese dry-run
+   enlazado criptográficamente, hace solo los 68 POST y ejecuta una verificación GET
+   final 36/36 automática.
+3. `--apply --resume` continúa un `core_apply_partial`, valida y omite las claves ya
+   completadas, sin duplicarlas.
+4. `--verify` es solo lectura tanto antes como después del apply y no modifica el
+   checkpoint.
+5. `--rollback --confirm-rollback REVERTIR_FINALIZACION_REDUCIDA_LGMG` (con
+   `--resume` si quedó parcial) elimina primero imágenes y luego productos, solo por
+   IDs registrados como nuevos. No elimina productos, imágenes, fichas,
+   especificaciones, categorías ni marca históricos.
+
+Todos los modos reutilizan el cliente HTTP, validadores de paquetes y medios,
+serialización canónica, checkpoint atómico y `RequestCoordinator` del importador
+controlado. Solo se admite un origen HTTP local con puerto y el token procede
+exclusivamente de `JEM_NEXUS_ACCESS_TOKEN`.
+
+Ejemplo de PowerShell para el primer paso real después del merge (no ejecutar apply
+primero):
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = '<token-efímero>'
+python .\complete_lgmg_remaining_core.py `
+  --plan-input C:\lgmg\plan --remaining-audit-input C:\lgmg\audit `
+  --repaired-media-input C:\lgmg\repaired --source-checkpoint C:\lgmg\historical.json `
+  --output-dir C:\lgmg\core-dry-run --api-base-url http://localhost:5000 `
+  --checkpoint C:\lgmg\core-checkpoint.json --dry-run
+```
+
+Tras revisar ese resultado, los comandos Windows correspondientes son:
+
+```powershell
+python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-apply --apply --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL
+python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-resume --apply --resume --confirm-apply CREAR_34_LGMG_CON_IMAGEN_PRINCIPAL
+python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-verify --verify
+python .\complete_lgmg_remaining_core.py <entradas-comunes> --output-dir C:\lgmg\core-rollback --rollback --confirm-rollback REVERTIR_FINALIZACION_REDUCIDA_LGMG
+```
+
+Desplegar este código no copia datos ni archivos locales a producción. Una migración
+a producción será una tarea separada. El primer paso real tras el merge será
+únicamente un dry-run local nuevo de este perfil reducido; la reanudación completa
+anterior permanece abandonada y no se ejecutará.
