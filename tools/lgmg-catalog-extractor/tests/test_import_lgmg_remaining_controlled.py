@@ -234,7 +234,7 @@ class ControlledImporterTests(unittest.TestCase):
             with self.assertRaises(tool.ConflictError): tool.read_checkpoint(path)
 
     def test_26_schema_slug_policy_and_noncanonical_conflict(self):
-        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION,tool.OPERATION_CONTRACT_VERSION),("2.2.0","2.2","2.2"))
+        self.assertEqual((tool.TOOL_VERSION,tool.CHECKPOINT_SCHEMA_VERSION,tool.OPERATION_CONTRACT_VERSION),("2.2.2","2.2","2.2"))
         self.assertEqual(set(tool.CATEGORY_CONTRACT),set(tool.FAMILIES))
         self.assertEqual(tool.CATEGORY_SLUG_POLICY,"blocking_functional_filter")
         state={"categories":[{"id":1,**tool.ROOT_CATEGORY_CONTRACT}] +
@@ -353,6 +353,198 @@ class ControlledImporterTests(unittest.TestCase):
         first = tool.partial_resume_fingerprint(value, "f"*64, {"remote":"same"}, "h"*40)
         self.assertEqual(first, tool.partial_resume_fingerprint(value, "f"*64, {"remote":"same"}, "h"*40))
         self.assertNotEqual(first, tool.partial_resume_fingerprint(value, "f"*64, {"remote":"changed"}, "h"*40))
+
+    def test_32_legacy_plan_is_validated_and_reused_before_remote_reconstruction(self):
+        planned = ([{"resource_type":"datasheet","metric_model":"M","operation_key":f"d{i}"} for i in range(33)] +
+                   [{"resource_type":"product","metric_model":"M","operation_key":f"p{i}"} for i in range(36)] +
+                   [{"resource_type":"specification","metric_model":"M","operation_key":f"s{i}"} for i in range(1057)] +
+                   [{"resource_type":"image","metric_model":"M","operation_key":f"i{i}"} for i in range(71)])
+        for order, operation in enumerate(planned, 1): operation["operation_order"] = order
+        completed = [dict(operation, resource_id=order) for order, operation in enumerate(planned[:65], 1)]
+        legacy = {"version":tool.LEGACY_VERSION,"schema_version":tool.LEGACY_SCHEMA_VERSION}
+        checkpoint_value = {**legacy, "planned_operations":planned, "completed_operations":completed,
+                            "resources_created":{"products":[],"images":[],"specifications":[],"datasheets":[]},
+                            "planned_operations_fingerprint_sha256":tool.LEGACY_OPERATIONS_FINGERPRINT,
+                            "dry_run_fingerprint_sha256":tool.LEGACY_DRY_RUN_FINGERPRINT}
+        events = []
+        def validate(value, raw):
+            events.append("legacy_validated")
+            return checkpoint_value
+        def snapshot(client):
+            events.append("snapshot")
+            return {}
+        base_result = {"operations":planned,"resources_created":{},"external_effects":{},"products":[{"metric_model":"M"}]}
+        with tempfile.TemporaryDirectory() as temp, mock.patch.multiple(tool,
+                validate_paths=mock.DEFAULT, validate_inputs=mock.DEFAULT, normalize_origin=mock.DEFAULT,
+                batch_ranges=mock.DEFAULT, classify_checkpoint=mock.DEFAULT, snapshot=mock.DEFAULT,
+                resolve_taxonomy=mock.DEFAULT, classify_products=mock.DEFAULT, resource_view=mock.DEFAULT,
+                build_operations=mock.DEFAULT, remote_fingerprint=mock.DEFAULT, operations_fingerprint=mock.DEFAULT,
+                tool_head=mock.DEFAULT, dry_run_fingerprint=mock.DEFAULT, validate_operation_dependencies=mock.DEFAULT,
+                checkpoint_contract=mock.DEFAULT, _base_result=mock.DEFAULT, partial_resume_fingerprint=mock.DEFAULT,
+                product_statuses=mock.DEFAULT, validate_canonical_operations=mock.DEFAULT,
+                validate_completed_operations=mock.DEFAULT, validate_completed_remote_resources=mock.DEFAULT,
+                write_outputs=mock.DEFAULT) as mocks:
+            mocks["validate_inputs"].return_value = {"fingerprints":{},"products":[]}
+            mocks["normalize_origin"].return_value = "https://api.example"
+            mocks["batch_ranges"].return_value = []
+            mocks["classify_checkpoint"].side_effect = lambda *args: (events.append("legacy_validated") or
+                ("legacy_apply_partial", checkpoint_value, b"legacy"))
+            mocks["snapshot"].side_effect = snapshot
+            mocks["resolve_taxonomy"].return_value = ({}, {}, {})
+            mocks["classify_products"].return_value = [{"row":{"metric_model":str(i)},"status":"create_candidate"} for i in range(36)]
+            mocks["resource_view"].return_value = {}
+            checkpoint_value["resources_preexisting"] = {}
+            checkpoint_value["mutations_executed"] = 65
+            mocks["remote_fingerprint"].return_value = "remote"
+            mocks["operations_fingerprint"].return_value = "operations"
+            mocks["tool_head"].return_value = "head"
+            mocks["dry_run_fingerprint"].return_value = "dry"
+            mocks["_base_result"].return_value = base_result
+            mocks["partial_resume_fingerprint"].return_value = "partial"
+            mocks["product_statuses"].return_value = {"M":"in_progress"}
+            code = tool.run(Path(temp),Path(temp),Path(temp),Path(temp),"https://api.example","verify","token",
+                            checkpoint=Path(temp)/"checkpoint.json",client_factory=lambda *args: object())
+        self.assertEqual(code, 0)
+        self.assertEqual(events, ["legacy_validated", "snapshot"])
+        mocks["build_operations"].assert_not_called()
+
+    @staticmethod
+    def canonical_fixture(completed_count=65, state="apply_partial"):
+        planned = []
+        def append(kind, model, dependency=None, sequence=0):
+            template = {"kind":kind,"model":model,"sequence":sequence}
+            operation = {"operation_order":len(planned)+1,"metric_model":model,"resource_type":kind,
+                "depends_on_operation":dependency["operation_order"] if dependency else "",
+                "depends_on_operation_key":dependency["operation_key"] if dependency else "",
+                "request_template":template,"payload_sha256":tool.sha(tool.canonical(template))}
+            operation["operation_key"] = tool.operation_key_for(operation); planned.append(operation); return operation
+        for index in range(36):
+            model=f"M{index:02}"; sheet=append("datasheet",model) if index < 33 else None
+            product=append("product",model,sheet)
+            for sequence in range(30 if index < 13 else 29): append("specification",model,product,sequence)
+            for sequence in range(2 if index < 35 else 1): append("image",model,product,sequence)
+        completed = [dict(op, resource_id=1000 + op["operation_order"]) for op in planned[:completed_count]]
+        resources = {name:[] for name in ("products","images","specifications","datasheets")}
+        for done in completed: resources[done["resource_type"] + "s"].append(done["resource_id"])
+        products = [{"approval_key":f"a{i:02}","metric_model":f"M{i:02}"} for i in range(36)]
+        checkpoint = {"schema_version":"2.2","operation_contract_version":"2.2","tool":tool.TOOL_NAME,
+            "version":tool.TOOL_VERSION,"tool_head":"head","state":state,"api_base":"https://api.example",
+            "batch_size":20,"fingerprints":tool.APPROVED_FINGERPRINTS,
+            "approval_keys":sorted(x["approval_key"] for x in products),"models":sorted(x["metric_model"] for x in products),
+            "planned_operations":planned,"completed_operations":completed,"resources_created":resources,
+            "mutations_executed":completed_count,"dry_run_fingerprint_sha256":"d"*64}
+        checkpoint["planned_operations_fingerprint_sha256"] = tool.operations_fingerprint(planned)
+        statuses = tool.product_statuses(planned, completed)
+        checkpoint["products"] = {row["approval_key"]:{"metric_model":row["metric_model"],
+            "status":statuses[row["metric_model"]],"created":{}} for row in products}
+        return checkpoint, {"fingerprints":tool.APPROVED_FINGERPRINTS,"products":products}
+
+    def test_33_checkpoint_classification_is_early_explicit_and_fail_closed(self):
+        self.assertEqual(tool.CHECKPOINT_KINDS,{"new_dry_run","dry_run_ready","legacy_apply_partial",
+            "current_apply_partial","current_rollback_in_progress","current_apply_complete",
+            "current_rollback_complete","invalid_checkpoint"})
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/"checkpoint.json"
+            self.assertEqual(tool.classify_checkpoint(path,"dry_run",False)[0],"new_dry_run")
+            cases = (("dry_run_ready","dry_run",True,"dry_run_ready"),
+                     ("apply_partial","verify",False,"current_apply_partial"),
+                     ("rollback_in_progress","rollback",False,"current_rollback_in_progress"),
+                     ("apply_complete","verify",False,"current_apply_complete"),
+                     ("rollback_complete","rollback",False,"current_rollback_complete"))
+            for state, mode, resume, expected in cases:
+                checkpoint, _ = self.canonical_fixture(state=state)
+                tool.atomic_json(path, checkpoint)
+                with self.subTest(state=state): self.assertEqual(tool.classify_checkpoint(path,mode,resume)[0],expected)
+            checkpoint["schema_version"] = "unexpected"; tool.atomic_json(path, checkpoint)
+            with self.assertRaisesRegex(tool.ConflictError,"invalid_checkpoint"):
+                tool.classify_checkpoint(path,"rollback",False)
+
+    def test_34_current_partial_plan_contract_and_tampering_are_validated(self):
+        checkpoint, data = self.canonical_fixture()
+        with mock.patch.object(tool,"tool_head",return_value="head"):
+            self.assertIs(tool.validate_current_checkpoint(checkpoint,data,"https://api.example",20),checkpoint)
+            completed_by_key, pending, following = tool.checkpoint_progress(checkpoint)
+            self.assertEqual((len(completed_by_key),len(pending),following["operation_order"]),(65,1132,66))
+            self.assertEqual(tool.operation_counts(checkpoint["planned_operations"]),tool.REQUIRED_OPERATION_COUNTS)
+            mutations = (
+                lambda cp: cp["planned_operations"].pop(),
+                lambda cp: cp["planned_operations"].append(dict(cp["planned_operations"][-1],operation_order=1198)),
+                lambda cp: cp["completed_operations"].pop(2),
+                lambda cp: cp["completed_operations"][0].update(resource_id=""),
+                lambda cp: cp["planned_operations"][1].update(depends_on_operation=1,depends_on_operation_key="bad"),
+            )
+            for mutate in mutations:
+                altered = json.loads(json.dumps(checkpoint)); mutate(altered)
+                with self.subTest(mutate=mutate), self.assertRaises(tool.ConflictError):
+                    tool.validate_current_checkpoint(altered,data,"https://api.example",20)
+
+    def test_35_current_partial_verify_and_rollback_reuse_persisted_plan(self):
+        for kind, mode, state in (("current_apply_partial","verify","apply_partial"),
+                                  ("current_rollback_in_progress","rollback","rollback_in_progress")):
+            checkpoint, data = self.canonical_fixture(state=state)
+            deleted = []
+            client = type("Client",(),{"delete":lambda self,path: deleted.append(path)})()
+            base_result = {"operations":checkpoint["planned_operations"],"resources_created":{},
+                           "external_effects":{},"errors":[],"followups":[],"resource_warnings":[],
+                           "products":[{"metric_model":f"M{i:02}"} for i in range(36)]}
+            with tempfile.TemporaryDirectory() as temp, mock.patch.multiple(tool,
+                    validate_paths=mock.DEFAULT,validate_inputs=mock.DEFAULT,normalize_origin=mock.DEFAULT,
+                    batch_ranges=mock.DEFAULT,classify_checkpoint=mock.DEFAULT,validate_current_checkpoint=mock.DEFAULT,
+                    snapshot=mock.DEFAULT,resolve_taxonomy=mock.DEFAULT,classify_products=mock.DEFAULT,
+                    resource_view=mock.DEFAULT,build_operations=mock.DEFAULT,remote_fingerprint=mock.DEFAULT,
+                    tool_head=mock.DEFAULT,validate_operation_dependencies=mock.DEFAULT,checkpoint_contract=mock.DEFAULT,
+                    _base_result=mock.DEFAULT,validate_completed_remote_resources=mock.DEFAULT,
+                    partial_resume_fingerprint=mock.DEFAULT,product_statuses=mock.DEFAULT,
+                    validate_checkpoint_static=mock.DEFAULT,atomic_json=mock.DEFAULT,write_outputs=mock.DEFAULT) as mocks:
+                mocks["validate_inputs"].return_value=data; mocks["normalize_origin"].return_value="https://api.example"
+                mocks["batch_ranges"].return_value=[]; mocks["classify_checkpoint"].return_value=(kind,checkpoint,b"same")
+                mocks["snapshot"].return_value={}; mocks["resolve_taxonomy"].return_value=({}, {}, {})
+                mocks["classify_products"].return_value=[{"row":{"metric_model":f"M{i:02}"},"status":"create_candidate"} for i in range(36)]
+                mocks["resource_view"].return_value=checkpoint.setdefault("resources_preexisting",{})
+                mocks["remote_fingerprint"].return_value="remote"; mocks["tool_head"].return_value="head"
+                mocks["_base_result"].return_value=base_result; mocks["partial_resume_fingerprint"].return_value="partial"
+                mocks["product_statuses"].return_value={f"M{i:02}":("in_progress" if i == 0 else "not_started") for i in range(36)}
+                code=tool.run(Path(temp),Path(temp),Path(temp),Path(temp),"https://api.example",mode,"token",
+                    checkpoint=Path(temp)/"cp",client_factory=lambda *args:client)
+            self.assertEqual(code,0); mocks["build_operations"].assert_not_called()
+            if mode == "verify":
+                self.assertEqual(base_result["verdict"],"PARTIAL_RESUME_READY")
+                self.assertEqual(base_result["operation_status_counts"],{"completed":65,"failed":0,"planned":1132,"total":1197})
+                mocks["atomic_json"].assert_not_called()
+            else:
+                self.assertTrue(deleted[0].endswith("/1065"))
+                self.assertEqual(len(deleted),65)
+
+    def test_36_migrated_checkpoint_can_become_partial_again_without_losing_its_plan(self):
+        legacy, data = self.canonical_fixture()
+        legacy.update(version=tool.LEGACY_VERSION,schema_version=tool.LEGACY_SCHEMA_VERSION,
+                      tool_head=tool.LEGACY_TOOL_HEAD)
+        original_keys = [operation["operation_key"] for operation in legacy["planned_operations"]]
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(tool,"tool_head",return_value="head"):
+            path=Path(temp)/"checkpoint.json"
+            migrated=tool.migrate_legacy_checkpoint(path,legacy,"f"*64)
+            for operation in migrated["planned_operations"][65:68]:
+                tool._record_mutation(path,migrated,operation,operation["resource_type"]+"s",2000+operation["operation_order"])
+            migrated["state"]="apply_partial"
+            statuses=tool.product_statuses(migrated["planned_operations"],migrated["completed_operations"])
+            for item in migrated["products"].values(): item["status"]=statuses[item["metric_model"]]
+            tool.atomic_json(path,migrated)
+            validated=tool.validate_current_checkpoint(migrated,data,"https://api.example",20)
+        completed,pending,next_operation=tool.checkpoint_progress(validated)
+        self.assertEqual([operation["operation_key"] for operation in validated["planned_operations"]],original_keys)
+        self.assertEqual((len(completed),len(pending),next_operation["operation_order"]),(68,1129,69))
+        self.assertEqual(validated["migration"]["legacy_completed_operations"],65)
+
+    def test_37_product_progress_is_derived_by_key_as_two_complete_one_in_progress(self):
+        planned=[]
+        for index in range(36):
+            count=2 if index < 3 else 1
+            planned.extend({"operation_key":f"{index}-{part}","metric_model":f"M{index:02}"}
+                           for part in range(count))
+        completed=[{"operation_key":operation["operation_key"]} for operation in planned[:5]]
+        statuses=tool.product_statuses(planned,completed)
+        self.assertEqual({name:list(statuses.values()).count(name) for name in
+            ("completed","in_progress","not_started")},{"completed":2,"in_progress":1,"not_started":33})
 
 
 if __name__ == "__main__": unittest.main()
