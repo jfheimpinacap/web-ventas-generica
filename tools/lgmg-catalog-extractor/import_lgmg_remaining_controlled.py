@@ -7,6 +7,7 @@ import argparse
 import ast
 import csv
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from decimal import Decimal, InvalidOperation
 import hashlib
 import io
@@ -20,15 +21,25 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 
 TOOL_NAME = "import_lgmg_remaining_controlled"
-TOOL_VERSION = "2.1.1"
-CHECKPOINT_SCHEMA_VERSION = "2.1"
-OPERATION_CONTRACT_VERSION = "2.1"
+TOOL_VERSION = "2.2.0"
+CHECKPOINT_SCHEMA_VERSION = "2.2"
+OPERATION_CONTRACT_VERSION = "2.2"
+LEGACY_CHECKPOINT_SHA256 = "dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef"
+LEGACY_CHECKPOINT_SIZE = 1_825_474
+LEGACY_VERSION = "2.1.1"
+LEGACY_SCHEMA_VERSION = "2.1"
+LEGACY_TOOL_HEAD = "e527f22aca3eda2b2a42b542ce72b4bde9200106"
+LEGACY_REMOTE_FINGERPRINT = "361205c85bae8e7c6a54c919131ed8d2b80d52589d902517e6f352e7e8b6ebed"
+LEGACY_OPERATIONS_FINGERPRINT = "cd64f3074521e15a858e7bf7de7727a1c637f8a14aebe3992b19bf7b1712a39a"
+LEGACY_DRY_RUN_FINGERPRINT = "b84b588f346eacb2306088215c1edfb9e9239a5907205a7b05f5d6e8f6791fc1"
+LEGACY_NEXT_OPERATION_KEY = "dd446e680bb00e3ec8244588b8f243c21bfe27233ea26d6d28233f75510e70f4"
 SUPERSEDED_DRY_RUN_FINGERPRINTS = {
     "85bb67b06624bbbb5b7a8d102c00faa776884c9a394eaf62cd8be3e7f9e72553": "superseded_incomplete_dry_run",
     "bda45b2889f54055332a529df141fc6abfcfa5f3e9cfe04320d5313b991cbd31": "superseded_unauditable_specification_dry_run",
@@ -75,7 +86,18 @@ OUTPUT_NAMES = (
     "remaining-import-operations.csv", "remaining-import-conflicts.csv",
     "remaining-import-manifest.json", "README-remaining-import.txt",
 )
-VERDICTS = {"DRY_RUN_READY", "APPLY_COMPLETE", "APPLY_PARTIAL", "VERIFY_COMPLETE", "ROLLBACK_COMPLETE", "CONFLICT"}
+VERDICTS = {"DRY_RUN_READY", "APPLY_COMPLETE", "APPLY_PARTIAL", "VERIFY_COMPLETE", "PARTIAL_RESUME_READY", "ROLLBACK_COMPLETE", "CONFLICT"}
+
+# Program.cs uses a per-user fixed-window global limiter (600/60 s), plus
+# endpoint policies (writes 60/60 s; uploads 20/600 s), queue zero and 429.
+# Use the strictest sustainable rate across all calls, with a 10% margin.
+RATE_LIMIT_POLICY = {"algorithm": "fixed_window", "partition": "authenticated_user",
+    "global_permit_limit": 600, "global_window_seconds": 60,
+    "write_permit_limit": 60, "write_window_seconds": 60,
+    "upload_permit_limit": 20, "upload_window_seconds": 600,
+    "queue_limit": 0, "rejection_status": 429, "retry_after_available": True,
+    "middleware_after_authentication_before_authorization_and_endpoints": True,
+    "rejection_before_handler": True, "safety_margin": 0.10}
 POWER_ENUM = {"electric_24v", "electric_lithium"}
 READ_ENDPOINTS = (
     "/api/auth/me", "/api/categories?include_inactive=true", "/api/brands?include_inactive=true",
@@ -387,11 +409,57 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ControlledImportError("Redirección HTTP rechazada")
 
 
+class RateLimitCoordinator:
+    """Shared, injectable preventive pacer and bounded 429 diagnostics."""
+    def __init__(self, clock=time.monotonic, sleep=time.sleep):
+        self.clock, self.sleep = clock, sleep
+        self.last_request = None
+        self.interval = RATE_LIMIT_POLICY["upload_window_seconds"] / RATE_LIMIT_POLICY["upload_permit_limit"] * 1.10
+        self.diagnostic = {"rate_limit_policy": dict(RATE_LIMIT_POLICY), "proactive_wait_count": 0,
+            "proactive_wait_seconds": 0.0, "http_429_count": 0, "retry_after_seconds": [],
+            "retry_attempts": 0, "rate_limit_exhausted": False}
+
+    def before_request(self):
+        now = self.clock()
+        if self.last_request is not None:
+            wait = max(0.0, self.interval - (now - self.last_request))
+            if wait:
+                self.sleep(wait)
+                self.diagnostic["proactive_wait_count"] += 1
+                self.diagnostic["proactive_wait_seconds"] += wait
+                now = self.clock()
+        self.last_request = now
+
+    def retry_delay(self, value, now=None):
+        fallback = RATE_LIMIT_POLICY["upload_window_seconds"] * 1.10
+        if not value:
+            return fallback
+        try:
+            delay = float(value)
+        except (TypeError, ValueError):
+            try:
+                current = datetime.now(timezone.utc) if now is None else now
+                delay = (parsedate_to_datetime(value) - current).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                raise ControlledImportError("Retry-After inválido") from None
+        if not 0 < delay <= 900:
+            raise ControlledImportError("Retry-After fuera del límite seguro")
+        return delay
+
+    def on_429(self, retry_after):
+        delay = self.retry_delay(retry_after)
+        self.diagnostic["http_429_count"] += 1
+        self.diagnostic["retry_attempts"] += 1
+        self.diagnostic["retry_after_seconds"].append(delay)
+        self.sleep(delay)
+
+
 class ApiClient:
-    def __init__(self, origin, token, mode, opener=None):
+    def __init__(self, origin, token, mode, opener=None, coordinator=None):
         self.origin, self._token, self.mode = normalize_origin(origin), token, mode
         self.opener = opener or urllib.request.build_opener(NoRedirect())
         self.operations = []
+        self.coordinator = coordinator or RateLimitCoordinator()
 
     def request(self, method, path, payload=None, *, content_type="application/json", accept="application/json"):
         mutating = method in {"POST", "PATCH", "PUT", "DELETE"}
@@ -405,7 +473,12 @@ class ApiClient:
             headers["Content-Type"] = content_type
         request = urllib.request.Request(self.origin + path, data=data, headers=headers, method=method)
         self.operations.append({"method": method, "path": path})
-        try:
+        # ASP.NET rate limiting runs after authentication and before endpoint
+        # dispatch, so its 429 proves that a mutating handler did not execute.
+        maximum_attempts = 3
+        for attempt in range(maximum_attempts):
+          self.coordinator.before_request()
+          try:
             response = self.opener.open(request, timeout=20)
             if normalize_origin(response.geturl().split("/api/", 1)[0]) != self.origin:
                 raise ControlledImportError("Cambio de origen rechazado")
@@ -416,9 +489,14 @@ class ApiClient:
             if accept == "application/json" and actual != "application/json":
                 raise ControlledImportError("Content-Type JSON inesperado")
             return json.loads(raw.decode("utf-8")) if accept == "application/json" else raw
-        except urllib.error.HTTPError as exc:
+          except urllib.error.HTTPError as exc:
+            if exc.code == 429 and attempt + 1 < maximum_attempts:
+                self.coordinator.on_429(exc.headers.get("Retry-After"))
+                continue
+            if exc.code == 429: self.coordinator.diagnostic["rate_limit_exhausted"] = True
             raise ControlledImportError(f"HTTP {exc.code} en {method} {path}") from None
-        except (urllib.error.URLError, TimeoutError, socket.timeout, UnicodeError, json.JSONDecodeError) as exc:
+          except (urllib.error.URLError, TimeoutError, socket.timeout, UnicodeError, json.JSONDecodeError) as exc:
+            # Ambiguous transport/response failures are never retried for mutations.
             raise ControlledImportError(f"Fallo API seguro en {method} {path}: {type(exc).__name__}") from None
 
     def get(self, path): return self.request("GET", path)
@@ -746,6 +824,81 @@ def read_checkpoint(path):
     return value
 
 
+def validate_legacy_partial_checkpoint(value, raw, *, expected_sha256=LEGACY_CHECKPOINT_SHA256,
+                                       expected_size=LEGACY_CHECKPOINT_SIZE):
+    """The only accepted 2.1 checkpoint is the immutable Windows incident."""
+    if sha(raw) != expected_sha256 or len(raw) != expected_size:
+        raise ConflictError("Hash o tamaño del checkpoint parcial heredado no coincide")
+    fixed = {"tool": TOOL_NAME, "version": LEGACY_VERSION, "schema_version": LEGACY_SCHEMA_VERSION,
+        "tool_head": LEGACY_TOOL_HEAD, "state": "apply_partial", "apply_started": True,
+        "rollback_started": False, "batch_size": 20, "fingerprints": APPROVED_FINGERPRINTS,
+        "remote_state_fingerprint_sha256": LEGACY_REMOTE_FINGERPRINT,
+        "planned_operations_fingerprint_sha256": LEGACY_OPERATIONS_FINGERPRINT,
+        "dry_run_fingerprint_sha256": LEGACY_DRY_RUN_FINGERPRINT, "mutations_executed": 65}
+    if any(value.get(k) != v for k, v in fixed.items()):
+        raise ConflictError("Contrato cerrado del checkpoint parcial heredado incumplido")
+    planned, completed = value.get("planned_operations", []), value.get("completed_operations", [])
+    if len(planned) != 1197 or len(completed) != 65:
+        raise ConflictError("El checkpoint heredado exige 1197 planificadas y 65 completadas")
+    keys = [x.get("operation_key") for x in completed]
+    if len(set(keys)) != 65 or keys != [x.get("operation_key") for x in planned[:65]]:
+        raise ConflictError("Las completadas no son el prefijo único 1-65")
+    identity = ("operation_order", "operation_key", "metric_model", "resource_type", "depends_on_operation_key")
+    for done, operation in zip(completed, planned):
+        if any(done.get(k) != operation.get(k) for k in identity) or done.get("resource_id") in (None, ""):
+            raise ConflictError("Operación completada heredada no coincide íntegramente con el plan")
+    if planned[65].get("operation_order") != 66 or planned[65].get("operation_key") != LEGACY_NEXT_OPERATION_KEY:
+        raise ConflictError("La siguiente operación heredada no es la 66 contractual")
+    expected_resources = {"products": [], "images": [], "specifications": [], "datasheets": []}
+    plural = {"product": "products", "image": "images", "specification": "specifications", "datasheet": "datasheets"}
+    for done in completed: expected_resources[plural[done["resource_type"]]].append(done["resource_id"])
+    if value.get("resources_created") != expected_resources or tuple(map(len, expected_resources.values())) != (2, 2, 58, 3):
+        raise ConflictError("resources_created heredado no coincide con completed_operations")
+    return value
+
+
+def product_statuses(planned, completed):
+    completed_keys = {x["operation_key"] for x in completed}
+    result = {}
+    for model in dict.fromkeys(x["metric_model"] for x in planned):
+        keys = [x["operation_key"] for x in planned if x["metric_model"] == model]
+        count = sum(key in completed_keys for key in keys)
+        result[model] = "completed" if count == len(keys) else "in_progress" if count else "not_started"
+    return result
+
+
+def partial_resume_fingerprint(value, checkpoint_hash, remote_evidence, current_head=None):
+    completed = value["completed_operations"]
+    contract = {"legacy_checkpoint_sha256": checkpoint_hash, "legacy_version": value["version"],
+        "legacy_tool_head": value["tool_head"], "fingerprints": value["fingerprints"],
+        "previous_remote_state_fingerprint": value["remote_state_fingerprint_sha256"],
+        "partial_remote_evidence": remote_evidence,
+        "planned_operations_fingerprint": value["planned_operations_fingerprint_sha256"],
+        "dry_run_fingerprint": value["dry_run_fingerprint_sha256"],
+        "completed": [{k: x.get(k) for k in ("operation_key", "resource_id", "resolved_payload_sha256")} for x in completed],
+        "next_operation_key": value["planned_operations"][len(completed)]["operation_key"],
+        "remaining_operations": len(value["planned_operations"]) - len(completed),
+        "rate_limit_policy": RATE_LIMIT_POLICY, "new_version": TOOL_VERSION,
+        "new_tool_head": current_head or tool_head()}
+    return sha(canonical(contract))
+
+
+def migrate_legacy_checkpoint(path, value, fingerprint):
+    migrated = json.loads(json.dumps(value))
+    migrated.update({"version": TOOL_VERSION, "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "tool_head": tool_head(), "state": "apply_in_progress"})
+    migrated["migration"] = {"legacy_version": LEGACY_VERSION, "legacy_schema_version": LEGACY_SCHEMA_VERSION,
+        "legacy_tool_head": LEGACY_TOOL_HEAD, "legacy_checkpoint_sha256": LEGACY_CHECKPOINT_SHA256,
+        "legacy_state": "apply_partial", "legacy_completed_operations": 65,
+        "migrated_version": TOOL_VERSION, "migrated_schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "partial_resume_fingerprint_sha256": fingerprint, "remote_validation_passed": True,
+        "migrated_at_utc": datetime.now(timezone.utc).isoformat()}
+    statuses = product_statuses(migrated["planned_operations"], migrated["completed_operations"])
+    for item in migrated.get("products", {}).values(): item["status"] = statuses[item["metric_model"]]
+    atomic_json(path, migrated)
+    return migrated
+
+
 def validate_checkpoint(value, expected):
     keys = ("schema_version", "tool", "version", "tool_head", "api_base", "batch_size", "fingerprints",
             "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256",
@@ -783,11 +936,11 @@ def write_outputs(output: Path, result, checkpoint: Path):
     staging = Path(tempfile.mkdtemp(prefix=".remaining-import-staging-", dir=output))
     try:
         product_fields = ("source_order", "source_key", "metric_model", "approval_key", "approved_name", "approved_family", "status", "product_id", "verified", "category_id", "category_name", "category_parent_id", "brand_id", "brand_name", "payload_sha256", "specification_count", "image_count", "primary_image_sha256", "datasheet_action", "datasheet_sha256", "maximum_load_capacity_candidate_kg", "power_source_candidate", "power_source_representable", "show_price", "is_published", "is_featured", "price", "technical_followup_required", "planned_operation_count")
-        operation_fields = ("operation_order", "operation_key", "batch", "product_source_order", "approval_key", "metric_model", "phase", "method", "path_template", "resource_type", "action", "depends_on_operation", "depends_on_operation_key", "payload_sha256", "resolved_payload_sha256", "file_sha256", "file_size_bytes", "association_order", "is_primary", "specification_index", "specification_name", "specification_key", "specification_value", "specification_unit", "specification_order", "embedded_specification_count", "status")
+        operation_fields = ("operation_order", "operation_key", "batch", "product_source_order", "approval_key", "metric_model", "phase", "method", "path_template", "resource_type", "action", "depends_on_operation", "depends_on_operation_key", "payload_sha256", "resolved_payload_sha256", "resource_id", "file_sha256", "file_size_bytes", "association_order", "is_primary", "specification_index", "specification_name", "specification_key", "specification_value", "specification_unit", "specification_order", "embedded_specification_count", "status")
         write_csv(staging / OUTPUT_NAMES[2], product_fields, result["products"])
         write_csv(staging / OUTPUT_NAMES[3], ("metric_model", "kind", "association_order", "sha256", "size_bytes", "status", "followup"), result["media"])
         write_csv(staging / OUTPUT_NAMES[4], operation_fields, result["operations"])
-        write_csv(staging / OUTPUT_NAMES[5], ("metric_model", "code", "detail", "blocking"), result["conflicts"])
+        write_csv(staging / OUTPUT_NAMES[5], ("metric_model", "code", "detail", "blocking", "operation_order", "operation_key", "phase", "path", "http_status", "retry_attempts"), result["conflicts"])
         summary_keys = ("mode", "verdict", "fingerprints", "api_base", "batch_size", "batches", "counts", "planned_operation_counts", "errors", "followups", "resource_warnings", "category_slug_policy", "remote_state_fingerprint_sha256", "planned_operations_fingerprint_sha256", "dry_run_fingerprint_sha256", "superseded_dry_run_fingerprints")
         summary = {key: result[key] for key in summary_keys}
         (staging / OUTPUT_NAMES[0]).write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -848,7 +1001,7 @@ def _record_mutation(checkpoint_path, checkpoint, operation, resource_type, reso
 
 
 def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, batch_size=20, resume=False,
-        client_factory=ApiClient):
+        client_factory=ApiClient, approved_partial_resume_fingerprint=None):
     if checkpoint is None:
         raise ConflictError("--checkpoint es obligatorio en dry-run, apply, verify y rollback")
     validate_paths(plan, audit, repaired, output, checkpoint, resume if mode == "dry_run" else True)
@@ -889,7 +1042,40 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
                             "datasheets_planned": 33, "datasheets_excluded": 3, "mutating_requests_executed": 0}
         write_outputs(output, result, checkpoint); return 0
 
-    cp = read_checkpoint(checkpoint)
+    checkpoint_raw = regular_bytes(checkpoint, "checkpoint")
+    raw_value = json_value(checkpoint_raw, "checkpoint")
+    legacy_partial = raw_value.get("version") == LEGACY_VERSION or raw_value.get("schema_version") == LEGACY_SCHEMA_VERSION
+    if legacy_partial:
+        cp = validate_legacy_partial_checkpoint(raw_value, checkpoint_raw)
+        # The bounded snapshot above is GET-only and classification proves exact
+        # identities/absence using the backend's existing collection endpoints.
+        evidence = {"remote_state_fingerprint_sha256": remote_fp,
+            "existing_models": sorted(d["row"]["metric_model"] for d in decisions if d["status"] == "already_imported_exact"),
+            "resource_ids": sorted((x["resource_type"], x["resource_id"]) for x in cp["completed_operations"])}
+        partial_fp = partial_resume_fingerprint(cp, sha(checkpoint_raw), evidence, head)
+        result.update({"partial_resume_fingerprint_sha256": partial_fp,
+            "rate_limit_policy": RATE_LIMIT_POLICY, "completed_operations": 65,
+            "remaining_operations": 1132, "next_operation_order": 66})
+        statuses = product_statuses(cp["planned_operations"], cp["completed_operations"])
+        result["product_status_counts"] = {name: list(statuses.values()).count(name)
+            for name in ("completed", "in_progress", "not_started")}
+        if mode == "verify":
+            result["verdict"] = "PARTIAL_RESUME_READY"
+            result["operations"] = [dict(op, status="completed" if index < 65 else "planned",
+                resource_id=(cp["completed_operations"][index]["resource_id"] if index < 65 else ""))
+                for index, op in enumerate(cp["planned_operations"])]
+            result["resources_created"] = cp["resources_created"]
+            result["external_effects"] = {"api_called": True, "database_modified": False,
+                "mutating_requests_executed": 0, "content_published": False}
+            write_outputs(output, result, checkpoint); return 0
+        if mode != "apply" or not resume:
+            raise ConflictError("Checkpoint heredado solo admite verify o --apply --resume")
+        if approved_partial_resume_fingerprint != partial_fp:
+            raise ConflictError("Fingerprint aprobado de reanudación parcial no coincide")
+        cp = migrate_legacy_checkpoint(checkpoint, cp, partial_fp)
+        operations = cp["planned_operations"]
+    else:
+        cp = read_checkpoint(checkpoint)
     if mode == "apply" and not resume:
         validate_checkpoint(cp, expected)
     else:
@@ -944,7 +1130,33 @@ def run(plan, audit, repaired, output, origin, mode, token, checkpoint=None, bat
             atomic_json(checkpoint, cp); result["verdict"] = "APPLY_COMPLETE"
         except (ControlledImportError, KeyError, IndexError) as exc:
             cp["state"] = "apply_partial"; atomic_json(checkpoint, cp)
-            result["verdict"] = "APPLY_PARTIAL"; result["errors"] = [{"code": "apply_stopped", "message": str(exc)[:240]}]
+            done_by_key = {x["operation_key"]: x for x in cp["completed_operations"]}
+            for row in result["operations"]:
+                done = done_by_key.get(row["operation_key"])
+                row["status"] = "completed" if done else "failed" if row["operation_key"] == operation["operation_key"] else "planned"
+                row["resource_id"] = done.get("resource_id", "") if done else ""
+                row["resolved_payload_sha256"] = done.get("resolved_payload_sha256", row.get("resolved_payload_sha256", "")) if done else row.get("resolved_payload_sha256", "")
+            statuses = product_statuses(cp["planned_operations"], cp["completed_operations"])
+            for item in cp["products"].values(): item["status"] = statuses[item["metric_model"]]
+            atomic_json(checkpoint, cp)
+            completed_count = len(cp["completed_operations"])
+            failed = {"operation_order": operation["operation_order"], "operation_key": operation["operation_key"],
+                "metric_model": operation["metric_model"], "phase": operation["phase"], "method": operation["method"],
+                "path": operation["path_template"], "http_status": 429 if "HTTP 429" in str(exc) else None}
+            result["verdict"] = "APPLY_PARTIAL"; result["errors"] = [{"code": "apply_stopped_http_429" if failed["http_status"] else "apply_stopped",
+                "message": str(exc)[:240], **failed, "completed_operations": completed_count,
+                "next_operation_order": operation["operation_order"]}]
+            result["conflicts"] = [{"code": result["errors"][0]["code"], "blocking": True, **failed,
+                "retry_attempts": client.coordinator.diagnostic["retry_attempts"]}]
+            cumulative = {"database_modified": cp["mutations_executed"] > 0,
+                "mutating_requests_executed": cp["mutations_executed"], "completed_operations": completed_count,
+                "resources_created": cp["resources_created"]}
+            result["checkpoint_cumulative_effects"] = cumulative
+            result["invocation_external_effects"] = {"database_modified": cp["mutations_executed"] > 0,
+                "mutating_requests_executed": cp["mutations_executed"], "content_published": False}
+            result["external_effects"] = dict(result["invocation_external_effects"])
+            result["resources_created"] = cp["resources_created"]
+            result["rate_limit_diagnostic"] = client.coordinator.diagnostic
             write_outputs(output, result, checkpoint); return 2
     elif mode == "verify":
         if cp["state"] not in {"apply_complete", "verify_complete"} or any(d["status"] != "already_imported_exact" for d in decisions):
@@ -995,6 +1207,7 @@ def build_parser():
     for mode in ("dry-run", "apply", "verify", "rollback"): modes.add_argument("--" + mode, action="store_true")
     parser.add_argument("--checkpoint", required=True); parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--resume", action="store_true"); parser.add_argument("--confirm-apply")
+    parser.add_argument("--approved-partial-resume-fingerprint")
     parser.add_argument("--confirm-rollback")
     return parser
 
@@ -1009,6 +1222,13 @@ def validate_cli(args):
     if mode in {"dry_run", "verify"} and (args.confirm_apply is not None or args.confirm_rollback is not None): raise ConflictError("Modos de lectura no aceptan confirmaciones de escritura")
     if mode == "apply" and args.confirm_rollback is not None or mode == "rollback" and args.confirm_apply is not None: raise ConflictError("Confirmación incompatible")
     if args.resume and not args.checkpoint: raise ConflictError("--resume exige --checkpoint")
+    approved = getattr(args, "approved_partial_resume_fingerprint", None)
+    if mode == "apply" and args.resume:
+        if not isinstance(approved, str) or not re.fullmatch(r"[0-9a-f]{64}", approved):
+            raise ConflictError("--apply --resume exige --approved-partial-resume-fingerprint hexadecimal minúsculo")
+    elif approved is not None:
+        raise ConflictError("--approved-partial-resume-fingerprint solo se admite con --apply --resume")
+    if args.resume and mode != "apply": raise ConflictError("--resume solo se admite con --apply")
     return mode
 
 
@@ -1016,7 +1236,8 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv); mode = validate_cli(args); token = access_token()
         return run(Path(args.plan_input), Path(args.remaining_audit_input), Path(args.repaired_media_input), Path(args.output_dir),
-                   args.api_base_url, mode, token, Path(args.checkpoint) if args.checkpoint else None, args.batch_size, args.resume)
+                   args.api_base_url, mode, token, Path(args.checkpoint) if args.checkpoint else None, args.batch_size, args.resume,
+                   approved_partial_resume_fingerprint=args.approved_partial_resume_fingerprint)
     except ConflictError as exc:
         print("CONFLICT: " + str(exc)[:240], file=sys.stderr); return 3
     except (ControlledImportError, OSError) as exc:

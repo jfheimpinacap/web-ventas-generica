@@ -997,3 +997,50 @@ separada para cambiar entidades, DTO/read models, validación y generación,
 índices/migraciones, endpoints de filtro, formularios/tipos/hooks, pruebas e
 importadores, además de definir compatibilidad de URLs y consumidores. Quitar
 solo las columnas rompería el esquema y los filtros existentes.
+# Recuperación del apply parcial LGMG por HTTP 429
+
+La ejecución Windows con importador 2.1.1 terminó en `apply_partial`: el limitador rechazó
+con HTTP 429 el `POST /api/products` de la operación 66. El checkpoint parcial inmutable
+(`dbb5ece22d1dcaabf16e8cb9c3bba1ebb57c1acec30fde68ec8bfe40a9a25eef`, 1.825.474
+bytes) registra el prefijo continuo de 65 mutaciones: SR0818E-2 y SR1018E-2 completos
+(32 operaciones cada uno) y únicamente la ficha de SR1218E-2. Quedan 1.132 operaciones.
+El checkpoint-before-apply es evidencia anterior, no el estado de la base de datos: **no se
+debe restaurar**, repetir apply sin `--resume`, ni ejecutar rollback antes de auditar el
+estado parcial.
+
+El backend configura limitadores `fixed_window` particionados por usuario autenticado:
+global 600/60 s, escritura 60/60 s y upload 20/600 s; todos tienen cola cero, rechazan
+con 429 y el callback publica `Retry-After` cuando el lease lo ofrece. Autenticación se
+ejecuta antes del middleware de rate limit, y éste antes de autorización y despacho de
+endpoints; por ello un 429 del limitador ocurre antes del handler. El importador 2.2.0
+aplica a todas las solicitudes un coordinador común con reloj monotónico y margen del
+10% sobre la política más restrictiva (33 s entre solicitudes). GET, POST y DELETE
+reintentan como máximo dos veces tras el intento inicial; respetan `Retry-After` en
+segundos o fecha HTTP y, si falta, esperan la ventana conservadora. Un valor inválido o
+excesivo detiene la ejecución. Las mutaciones jamás se reintentan tras timeout, conexión
+cerrada, respuesta ambigua/inválida ni HTTP 500/502/503.
+
+`--verify` reconoce exclusivamente el checkpoint 2.1.1 de este incidente, comprueba su
+hash, tamaño, fingerprints, las 1.197 operaciones y el prefijo 1–65, y mediante GET debe
+contrastar productos, fichas, especificaciones, imágenes, taxonomía, marca, ausencias y
+duplicados. No modifica el checkpoint. Si todo coincide genera `PARTIAL_RESUME_READY` y
+un `partial_resume_fingerprint_sha256` determinista que vincula checkpoint, evidencia
+remota, operación siguiente, política de límites y versión nueva. Los CSV presentan las
+65 operaciones como `completed`, la 66 como `planned`, estados de producto derivados y
+un archivo de conflictos solo con encabezado.
+
+La reanudación exige `--apply --resume --approved-partial-resume-fingerprint <sha256>`.
+Tras repetir íntegramente el preflight y comparar el fingerprint, migra atómicamente el
+checkpoint 2.1.1/schema 2.1 a 2.2.0/schema 2.2 mediante staging, flush, fsync y
+`os.replace`. Conserva IDs, completed_operations y operation_key; omite exactamente el
+prefijo completado y empieza en la operation_key de orden 66, reutilizando la ficha ya
+registrada. Cada éxito se persiste inmediatamente, evitando duplicados. Los informes
+separan efectos de la invocación de efectos acumulados y reflejan manifest, operations,
+products y conflictos parciales. Ningún payload publica productos ni muestra precios.
+Rollback sigue siendo reanudable, valida primero y borra únicamente IDs registrados, en
+orden inverso y usando el mismo pacing.
+
+Después del merge, el procedimiento Windows comienza generando un token nuevo y
+ejecutando **únicamente `--verify`** contra el checkpoint `apply_partial`. Se debe adjuntar
+y revisar el ZIP `PARTIAL_RESUME_READY`; no se ejecutará `--apply --resume` hasta obtener
+aprobación humana explícita de ese fingerprint. Su valor futuro no se anticipa aquí.
