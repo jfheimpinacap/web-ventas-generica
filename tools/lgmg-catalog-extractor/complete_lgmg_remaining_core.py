@@ -29,7 +29,7 @@ def _load_base():
 base = _load_base()  # El módulo base protege su CLI con __name__ == "__main__".
 
 TOOL_NAME = "complete_lgmg_remaining_core"
-TOOL_VERSION = "1.0.3"
+TOOL_VERSION = "1.0.4"
 CHECKPOINT_SCHEMA_VERSION = "1.0"
 COMPLETION_PROFILE = "core_products_with_primary_images"
 HUMAN_APPROVAL = "APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y 34 IMÁGENES PRINCIPALES"
@@ -389,7 +389,36 @@ def _associated_product_id(image):
     return next(iter(values), None)
 
 
-def validate_progress_snapshot(data, state, categories, brand, checkpoint):
+def _validate_product_sheet_detail(detail, operation, resource_id):
+    """Validate the ProductDetailReadDto and its closed historical-sheet contract."""
+    if not isinstance(detail, dict):
+        raise ConflictError("Detalle de producto ausente o no es un objeto")
+    template = operation["request_template"]
+    expected_sheet_id = template.get("technical_sheet")
+    expected = {
+        "id": resource_id, "model": operation["metric_model"], "name": template.get("name"),
+        "category": template.get("category"), "brand": template.get("brand"),
+        "is_published": False, "is_featured": False, "price": None, "price_visible": False,
+    }
+    actual = {
+        "id": detail.get("id"), "model": detail.get("model"), "name": detail.get("name"),
+        "category": base.nested_id(detail.get("category")), "brand": base.nested_id(detail.get("brand")),
+        "is_published": detail.get("is_published"), "is_featured": detail.get("is_featured"),
+        "price": detail.get("price"), "price_visible": detail.get("price_visible"),
+    }
+    for field, value in expected.items():
+        if actual[field] != value:
+            raise ConflictError(f"product_detail_{field}_mismatch")
+    if "technical_sheet" not in detail:
+        raise ConflictError("product_detail_technical_sheet_missing")
+    sheet = detail["technical_sheet"]
+    if not isinstance(sheet, dict):
+        raise ConflictError("product_detail_technical_sheet_not_object")
+    validate_historical_sheet([sheet], expected_sheet_id, PARTIAL_SHEET_NAME,
+                              PARTIAL_SHEET_SHA256, PARTIAL_SHEET_SIZE, {resource_id})
+
+
+def validate_progress_snapshot(data, state, categories, brand, checkpoint, client=None):
     """Validate remote reality derived exclusively from the persisted operation prefix."""
     _validate_checkpoint_content(checkpoint)
     decisions = base.classify_products(data, state, categories, brand)
@@ -400,6 +429,7 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint):
     completed = checkpoint["completed_operations"]
     completed_by_key = {item["operation_key"]: item for item in completed}
     product_ids = {}
+    detail_requirements = []
     for operation in planned:
         if operation["resource_type"] == "product" and operation["operation_key"] in completed_by_key:
             done = completed_by_key[operation["operation_key"]]
@@ -408,9 +438,12 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint):
             if decision["status"] != "already_imported_exact" or not product or product.get("id") != done["resource_id"]:
                 raise ConflictError("Producto completado ausente, duplicado, con ID o modelo divergente")
             template = operation["request_template"]
-            remote_sheet = base.nested_id(product.get("technical_sheet"))
-            if remote_sheet != template.get("technical_sheet"):
-                raise ConflictError("Producto completado con ficha técnica divergente")
+            expected_sheet = template.get("technical_sheet")
+            if "technical_sheet" in product:
+                if base.nested_id(product["technical_sheet"]) != expected_sheet:
+                    raise ConflictError("Producto completado con ficha técnica divergente")
+            elif type(expected_sheet) is int and expected_sheet > 0:
+                detail_requirements.append((operation, done["resource_id"]))
             # classify_products compares all safely representable product identity/policy fields.
             product_ids[operation["operation_key"]] = done["resource_id"]
         elif operation["resource_type"] == "product":
@@ -452,6 +485,11 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint):
                 raise ConflictError("Imagen completada ausente, duplicada, con ID o asociación divergente")
         elif hits:
             raise ConflictError("Imagen remota inesperada para una operación pendiente")
+    for operation, resource_id in detail_requirements:
+        if type(resource_id) is not int or resource_id <= 0 or client is None:
+            raise ConflictError("ID persistido inválido para detalle de producto")
+        detail = client.get(f"/api/products/{resource_id}")
+        _validate_product_sheet_detail(detail, operation, resource_id)
     return decisions
 
 
@@ -558,7 +596,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
             raise ConflictError("Checkpoint reducido no cubre exactamente los 34 modelos restantes")
         progressive = cp["state"] == "core_apply_partial" and (mode == "verify" or (mode == "apply" and resume))
         if progressive:
-            decisions = validate_progress_snapshot(data, state, categories, brand, cp)
+            decisions = validate_progress_snapshot(data, state, categories, brand, cp, client)
         elif exact_models != HISTORICAL_MODELS or sum(d["status"] == "create_candidate" for d in decisions) != 34:
             raise ConflictError("El snapshot remoto debe conservar 2 históricos, 34 ausentes y cero conflictos")
         if cp["api_base_url"] != origin or cp["source_checkpoint_sha256"] != sha(source_raw):

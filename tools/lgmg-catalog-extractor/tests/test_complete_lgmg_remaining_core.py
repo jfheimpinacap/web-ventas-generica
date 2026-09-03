@@ -42,7 +42,7 @@ def fixture_data():
 class CoreCompletionTests(unittest.TestCase):
     def test_contract_and_safe_import(self):
         self.assertEqual((core.TOOL_NAME, core.TOOL_VERSION, core.CHECKPOINT_SCHEMA_VERSION, core.COMPLETION_PROFILE),
-                         ("complete_lgmg_remaining_core", "1.0.3", "1.0", "core_products_with_primary_images"))
+                         ("complete_lgmg_remaining_core", "1.0.4", "1.0", "core_products_with_primary_images"))
         self.assertIs(core.RequestCoordinator, core.base.RateLimitCoordinator)
         self.assertIs(core.ApiClient, core.base.ApiClient)
 
@@ -194,7 +194,7 @@ class CoreCompletionTests(unittest.TestCase):
             with self.assertRaisesRegex(core.ConflictError, "Checkpoint reducido incompatible"):
                 core.read_core_checkpoint(path)
 
-    def core_checkpoint(self, version="1.0.3"):
+    def core_checkpoint(self, version="1.0.4"):
         operations = core.build_core_operations(fixture_data(), [decision(i) for i in range(34)], 25)
         value = core.new_checkpoint("http://localhost:5000", b"source", {"partial_sheet_id": 25},
                                     operations, {}, "f" * 64, fixture_data())
@@ -249,6 +249,100 @@ class CoreCompletionTests(unittest.TestCase):
             checkpoint, decisions, state = self.partial_fixture(prefix)
             with self.subTest(prefix=prefix), mock.patch.object(core.base, "classify_products", return_value=decisions):
                 self.assertIs(core.validate_progress_snapshot({}, state, {}, {}, checkpoint), decisions)
+
+    def detail_for(self, operation, resource_id, **changes):
+        template = operation["request_template"]
+        detail = {"id": resource_id, "model": operation["metric_model"], "name": template["name"],
+                  "category": {"id": template["category"]}, "brand": {"id": template["brand"]},
+                  "is_published": False, "is_featured": False, "price": None, "price_visible": False,
+                  "technical_sheet": self.historical_sheet()}
+        detail.update(changes)
+        return detail
+
+    def test_missing_list_field_uses_exact_checkpoint_derived_detail_get(self):
+        checkpoint, decisions, state = self.partial_fixture(43)
+        operation = next(op for op in checkpoint["planned_operations"]
+                         if op["resource_type"] == "product" and op["metric_model"] == core.PARTIAL_MODEL)
+        done = next(item for item in checkpoint["completed_operations"] if item["operation_key"] == operation["operation_key"])
+        old_id = done["resource_id"]
+        done["resource_id"] = 25
+        next(item for item in checkpoint["resources_created"]["products"] if item["id"] == old_id)["id"] = 25
+        product = next(item["product"] for item in decisions if item["row"]["metric_model"] == core.PARTIAL_MODEL)
+        product["id"] = 25
+        product.pop("technical_sheet", None)
+        self.assertIsNone(core.base.nested_id(product.get("technical_sheet")))  # reproduces 1.0.3 inference
+        for image in state["images"]:
+            if core._associated_product_id(image) == old_id:
+                image["product"] = {"id": 25}; image.pop("product_id", None)
+        class Client:
+            def __init__(self, response): self.response, self.operations = response, []
+            def get(self, path):
+                self.operations.append({"method": "GET", "path": path}); return self.response
+        client = Client(self.detail_for(operation, 25))
+        with mock.patch.object(core.base, "classify_products", return_value=decisions):
+            self.assertIs(core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client), decisions)
+        self.assertEqual(client.operations, [{"method": "GET", "path": "/api/products/25"}])
+        self.assertEqual(checkpoint["next_operation"], 44)
+        self.assertEqual(len(checkpoint["completed_operations"]), 43)
+        self.assertEqual(checkpoint["planned_operations"][43]["operation_order"], 44)
+        self.assertEqual(checkpoint["planned_operations"][43]["resource_type"], "image")
+
+    def test_absent_null_sheet_needs_no_detail_but_explicit_value_is_enforced(self):
+        checkpoint, decisions, state = self.partial_fixture(1)
+        product = next(item["product"] for item in decisions if item["product"])
+        product.pop("technical_sheet")
+        client = mock.Mock()
+        with mock.patch.object(core.base, "classify_products", return_value=decisions):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client)
+        client.get.assert_not_called()
+        product["technical_sheet"] = {"id": 25}
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "ficha técnica divergente"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client)
+
+    def test_product_detail_and_sheet_contract_fail_closed(self):
+        checkpoint, decisions, state = self.partial_fixture(5)
+        operation = checkpoint["planned_operations"][4]
+        resource_id = checkpoint["completed_operations"][4]["resource_id"]
+        product = next(item["product"] for item in decisions if item["row"]["metric_model"] == core.PARTIAL_MODEL)
+        product.pop("technical_sheet")
+        valid = self.detail_for(operation, resource_id)
+        cases = (
+            (None, "objeto"), ([], "objeto"),
+            ({**valid, "id": 999}, "product_detail_id_mismatch"),
+            ({**valid, "model": "otro"}, "product_detail_model_mismatch"),
+            ({**valid, "name": "otro"}, "product_detail_name_mismatch"),
+            ({**valid, "category": {"id": 999}}, "product_detail_category_mismatch"),
+            ({**valid, "brand": {"id": 999}}, "product_detail_brand_mismatch"),
+            ({k: v for k, v in valid.items() if k != "technical_sheet"}, "technical_sheet_missing"),
+            ({**valid, "technical_sheet": None}, "technical_sheet_not_object"),
+            ({**valid, "technical_sheet": "25"}, "technical_sheet_not_object"),
+        )
+        sheet_cases = (("id", 26, "id_mismatch"), ("name", "otro", "name_mismatch"),
+                       ("original_file_name", "otro.pdf", "original_filename_mismatch"),
+                       ("content_type", "text/plain", "content_type_mismatch"),
+                       ("size_bytes", 1, "size_mismatch"),
+                       ("file_url", "https://evil.test/x", "file_url_mismatch"))
+        cases += tuple(({**valid, "technical_sheet": self.historical_sheet(**{field: value})}, diagnostic)
+                       for field, value, diagnostic in sheet_cases)
+        for response, diagnostic in cases:
+            client = mock.Mock(); client.get.return_value = response
+            with self.subTest(diagnostic=diagnostic), mock.patch.object(
+                    core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                    core.ConflictError, diagnostic):
+                core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client)
+            client.get.assert_called_once_with(f"/api/products/{resource_id}")
+
+    def test_detail_get_failure_precedes_mutation_and_does_not_change_checkpoint(self):
+        checkpoint, decisions, state = self.partial_fixture(5)
+        next(item["product"] for item in decisions if item["row"]["metric_model"] == core.PARTIAL_MODEL).pop("technical_sheet")
+        before = json.dumps(checkpoint, sort_keys=True)
+        client = mock.Mock(); client.get.side_effect = core.ControlledImportError("HTTP 500 en GET")
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaises(
+                core.ControlledImportError):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client)
+        self.assertEqual(json.dumps(checkpoint, sort_keys=True), before)
+        self.assertFalse(client.post.called)
 
     def test_progress_checkpoint_rejects_noncanonical_accounting(self):
         for field, mutate, diagnostic in (
