@@ -1271,3 +1271,40 @@ No hace falta otro dry-run. Después del merge se debe generar un JWT nuevo y ej
 `--apply --resume` con el checkpoint parcial original. Para este incidente no se debe
 usar `--rollback`. El checkpoint histórico sustituido de 1.197 operaciones permanece
 intacto y no se reanuda ni modifica.
+
+### Seguimiento no bloqueante de `alt_text` en 1.0.5
+
+La evidencia de solo lectura confirmó que las 21 imágenes del prefijo completado sí
+existen, una por producto, con IDs y asociaciones coincidentes con el checkpoint,
+`is_main = true`, `order = 0` y rutas administradas bajo
+`/media/product-images/{product_id}/`. El único metadato divergente es
+`alt_text = ""`; esto no afecta la existencia, asociación ni condición principal de
+las imágenes que exige la aprobación reducida de 34 productos y 34 imágenes
+principales.
+
+La versión 1.0.5 acepta exclusivamente esa cadena exactamente vacía como
+`blank_nonblocking_followup` y registra, de forma determinista, un seguimiento manual
+de accesibilidad/SEO por imagen con modelo, `operation_key`, ID de imagen e ID de
+producto. Un valor ausente, `null`, espacios, otro texto o cualquier tipo no textual
+sigue siendo conflicto. No se recorta ni normaliza el valor, no se ejecutan PATCH ni
+recargas y no cambian el template, la clave ni el payload persistidos.
+
+Las comprobaciones estructurales siguen cerradas: ID positivo y coincidente,
+dependencia de producto correcta, exactamente una imagen, principal verdadera, orden
+cero y ruta relativa no vacía sin URL absoluta, credenciales, query, fragmento ni
+traversal, bajo el segmento del producto y con extensión `.jpg`, `.jpeg`, `.png` o
+`.webp`. Cualquier divergencia estructural bloquea antes de una mutación.
+
+El checkpoint físico 1.0.2 continúa intacto en 43/68 operaciones (22 productos y 21
+imágenes), con 151081 bytes y SHA-256
+`3ffafe17c6d63c7dca307ae7e3385462ed7bb598a8f2e9d13588cdf34edead1d`;
+la compatibilidad permanece cerrada a este archivo y al 1.0.1 aprobado. La migración
+a 1.0.5 conserva las 43 operaciones y ambas procedencias, añade los 21 seguimientos
+sin alterar el plan y pasa a `core_apply_in_progress`. La siguiente operación continúa
+siendo la 44, el POST de la imagen principal de T34JE-2 para el producto ya existente
+46; no se recrea ese producto ni se reenvían sus imágenes anteriores.
+
+No se requiere otro dry-run ni debe usarse `--rollback`. Después del merge se necesita
+un JWT nuevo y se debe ejecutar `--apply --resume` con el checkpoint parcial original
+e intacto. El checkpoint histórico sustituido de 1.197 operaciones permanece intacto
+y no debe reanudarse.

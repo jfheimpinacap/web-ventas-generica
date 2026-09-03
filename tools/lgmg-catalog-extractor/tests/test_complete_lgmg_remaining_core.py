@@ -42,7 +42,7 @@ def fixture_data():
 class CoreCompletionTests(unittest.TestCase):
     def test_contract_and_safe_import(self):
         self.assertEqual((core.TOOL_NAME, core.TOOL_VERSION, core.CHECKPOINT_SCHEMA_VERSION, core.COMPLETION_PROFILE),
-                         ("complete_lgmg_remaining_core", "1.0.4", "1.0", "core_products_with_primary_images"))
+                         ("complete_lgmg_remaining_core", "1.0.5", "1.0", "core_products_with_primary_images"))
         self.assertIs(core.RequestCoordinator, core.base.RateLimitCoordinator)
         self.assertIs(core.ApiClient, core.base.ApiClient)
 
@@ -194,7 +194,7 @@ class CoreCompletionTests(unittest.TestCase):
             with self.assertRaisesRegex(core.ConflictError, "Checkpoint reducido incompatible"):
                 core.read_core_checkpoint(path)
 
-    def core_checkpoint(self, version="1.0.4"):
+    def core_checkpoint(self, version="1.0.5"):
         operations = core.build_core_operations(fixture_data(), [decision(i) for i in range(34)], 25)
         value = core.new_checkpoint("http://localhost:5000", b"source", {"partial_sheet_id": 25},
                                     operations, {}, "f" * 64, fixture_data())
@@ -239,16 +239,19 @@ class CoreCompletionTests(unittest.TestCase):
         by_key = {x["operation_key"]: x for x in checkpoint["completed_operations"]}
         for op in checkpoint["planned_operations"]:
             if op["resource_type"] == "image" and op["operation_key"] in by_key:
+                product_id = product_ids[op["depends_on_operation_key"]]
                 images.append({"id": by_key[op["operation_key"]]["resource_id"],
-                               "product": {"id": product_ids[op["depends_on_operation_key"]]},
-                               "is_main": True, "order": 0})
+                               "product": {"id": product_id},
+                               "is_main": True, "order": 0,
+                               "image": f"/media/product-images/{product_id}/{op['metric_model']}.jpg",
+                               "alt_text": op["request_template"]["alt_text"]})
         return checkpoint, decisions, {"images": images}
 
     def test_progress_snapshot_is_derived_for_multiple_prefixes(self):
         for prefix in (1, 2, 43, 67):
             checkpoint, decisions, state = self.partial_fixture(prefix)
             with self.subTest(prefix=prefix), mock.patch.object(core.base, "classify_products", return_value=decisions):
-                self.assertIs(core.validate_progress_snapshot({}, state, {}, {}, checkpoint), decisions)
+                self.assertEqual(core.validate_progress_snapshot({}, state, {}, {}, checkpoint), (decisions, []))
 
     def detail_for(self, operation, resource_id, **changes):
         template = operation["request_template"]
@@ -274,13 +277,14 @@ class CoreCompletionTests(unittest.TestCase):
         for image in state["images"]:
             if core._associated_product_id(image) == old_id:
                 image["product"] = {"id": 25}; image.pop("product_id", None)
+                image["image"] = image["image"].replace(f"/{old_id}/", "/25/")
         class Client:
             def __init__(self, response): self.response, self.operations = response, []
             def get(self, path):
                 self.operations.append({"method": "GET", "path": path}); return self.response
         client = Client(self.detail_for(operation, 25))
         with mock.patch.object(core.base, "classify_products", return_value=decisions):
-            self.assertIs(core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client), decisions)
+            self.assertEqual(core.validate_progress_snapshot({}, state, {}, {}, checkpoint, client), (decisions, []))
         self.assertEqual(client.operations, [{"method": "GET", "path": "/api/products/25"}])
         self.assertEqual(checkpoint["next_operation"], 44)
         self.assertEqual(len(checkpoint["completed_operations"]), 43)
@@ -387,6 +391,73 @@ class CoreCompletionTests(unittest.TestCase):
             with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
                     core.ConflictError, "Imagen completada"):
                 core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+
+    def test_twenty_one_blank_alts_are_deterministic_nonblocking_followups(self):
+        checkpoint, decisions, state = self.partial_fixture(43)
+        controlled = [image for image in state["images"] if image["id"] >= 1000]
+        self.assertEqual(len(controlled), 21)
+        for image in controlled:
+            image["alt_text"] = ""
+        with mock.patch.object(core.base, "classify_products", return_value=decisions):
+            actual = core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+            repeated = core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+        self.assertEqual(actual, repeated)
+        self.assertIs(actual[0], decisions)
+        followups = actual[1]
+        self.assertEqual(len(followups), 21)
+        completed_images = {item["resource_id"]: item for item in checkpoint["completed_operations"]
+                            if item["resource_type"] == "image"}
+        for followup in followups:
+            done = completed_images[followup["image_resource_id"]]
+            self.assertEqual(followup, {
+                "code": "blank_image_alt_text_followup",
+                "status": "blank_nonblocking_followup", "blocking": False,
+                "metric_model": done["metric_model"], "operation_key": done["operation_key"],
+                "image_resource_id": done["resource_id"],
+                "product_id": next(image for image in controlled
+                                   if image["id"] == done["resource_id"])["product"]["id"],
+            })
+
+    def test_completed_image_alt_policy_is_exact_and_closed(self):
+        invalid = (None, "   ", "different.jpg", 7, True, {}, [])
+        for value in invalid:
+            checkpoint, decisions, state = self.partial_fixture(2)
+            image = next(item for item in state["images"] if item["id"] == 1002)
+            image["alt_text"] = value
+            with self.subTest(value=value), mock.patch.object(
+                    core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                    core.ConflictError, "alt_text_invalid"):
+                core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+        checkpoint, decisions, state = self.partial_fixture(2)
+        next(item for item in state["images"] if item["id"] == 1002).pop("alt_text")
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "alt_text_invalid"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+
+    def test_completed_image_structural_and_path_policy_remains_closed(self):
+        mutations = (
+            lambda image: image.__setitem__("order", 1),
+            lambda image: image.__setitem__("image", ""),
+            lambda image: image.__setitem__("image", "https://example.test/x.jpg"),
+            lambda image: image.__setitem__("image", image["image"] + "?x=1"),
+            lambda image: image.__setitem__("image", image["image"] + "#x"),
+            lambda image: image.__setitem__("image", "/media/product-images/../1001/x.jpg"),
+            lambda image: image.__setitem__("image", "/media/product-images/9999/x.jpg"),
+            lambda image: image.__setitem__("image", image["image"][:-4] + ".gif"),
+        )
+        for mutate in mutations:
+            checkpoint, decisions, state = self.partial_fixture(2)
+            image = next(item for item in state["images"] if item["id"] == 1002)
+            mutate(image)
+            with self.subTest(image=image), mock.patch.object(
+                    core.base, "classify_products", return_value=decisions), self.assertRaises(core.ConflictError):
+                core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+        checkpoint, decisions, state = self.partial_fixture(2)
+        image = next(item for item in state["images"] if item["id"] == 1002)
+        state["images"].append(dict(image, id=9999))
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "Imagen completada"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
 
     def test_checkpoint_reader_handles_physical_invalid_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
