@@ -29,7 +29,7 @@ def _load_base():
 base = _load_base()  # El módulo base protege su CLI con __name__ == "__main__".
 
 TOOL_NAME = "complete_lgmg_remaining_core"
-TOOL_VERSION = "1.0.2"
+TOOL_VERSION = "1.0.3"
 CHECKPOINT_SCHEMA_VERSION = "1.0"
 COMPLETION_PROFILE = "core_products_with_primary_images"
 HUMAN_APPROVAL = "APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y 34 IMÁGENES PRINCIPALES"
@@ -43,6 +43,12 @@ APPROVED_101_SHA256 = "1e655c651425d543c99c650d1730849bb8a86a6fbff9b218c1022dfdb
 APPROVED_101_SIZE = 138_358
 APPROVED_101_PLAN_FINGERPRINT = "d6bdd8571e8b0b977afe27d222d55e39f77933d836aa44ff671b21642db55be4"
 APPROVED_101_REMOTE_FINGERPRINT = "9a5a64bf4a234cb5c0648b72fe7ede34773820771075cf9cd894e969cc37d9c2"
+APPROVED_102_SHA256 = "3ffafe17c6d63c7dca307ae7e3385462ed7bb598a8f2e9d13588cdf34edead1d"
+APPROVED_102_SIZE = 151_081
+INCIDENT_43_KEY = "84e9ae43699fde61d2f7be43a72ca063dfb199f132048188282027b0a4436e57"
+INCIDENT_44_KEY = "2e7349beb740a1142548b233e03514a3a7a6745eceb53307216bc8132799c085"
+INCIDENT_44_FILE_SHA256 = "9aac094c90551c0050ea6f1eb009ab9a71e0092147e0e62ec9c934a3823d311b"
+INCIDENT_44_PAYLOAD_SHA256 = "61641df4a9809554ecc91f49c43db23becd3b11091e55b32f9155526e5f38a48"
 HISTORICAL_MODELS = {"SR0818E-2", "SR1018E-2"}
 PARTIAL_MODEL = "SR1218E-2"
 PARTIAL_SHEET_KEY = "1163d8780457d6ecfbf64b6fa2733b930cb36b221e9ba8a0e7b5168d77915458"
@@ -285,6 +291,21 @@ def _validate_checkpoint_content(value):
     planned_keys = value["operation_keys"]
     if [op.get("operation_key") for op in completed] != planned_keys[:len(completed)]:
         raise ConflictError("Operaciones completadas no forman un prefijo canónico")
+    expected = {"products": [], "images": []}
+    for done, planned in zip(completed, value["planned_operations"]):
+        if done.get("resource_id") in (None, "") or any(
+                done.get(field) != planned.get(field) for field in
+                ("operation_key", "operation_order", "metric_model", "resource_type")):
+            raise ConflictError("Operación completada desconocida, manipulada o sin resource_id")
+        expected[planned["resource_type"] + "s"].append(
+            {"id": done["resource_id"], "metric_model": done["metric_model"]})
+    if value.get("resources_created") != expected:
+        raise ConflictError("resources_created no coincide con completed_operations")
+    effects = value.get("external_effects")
+    if effects != {"writes": len(completed), "published": 0}:
+        raise ConflictError("external_effects no coincide con completed_operations")
+    if value.get("next_operation") != len(completed) + 1:
+        raise ConflictError("next_operation no coincide con completed_operations")
     return value
 
 
@@ -306,20 +327,132 @@ def _validate_approved_101(value, raw, *, digest=sha):
     return _validate_checkpoint_content(value)
 
 
+def _validate_approved_102(value, raw, *, digest=sha):
+    """Closed bridge for the one partial 1.0.2 checkpoint produced in Windows."""
+    if len(raw) != APPROVED_102_SIZE or digest(raw) != APPROVED_102_SHA256:
+        raise ConflictError("Checkpoint parcial 1.0.2 no autorizado: hash o tamaño")
+    if len(value.get("planned_operations", [])) != 68 or len(value.get("completed_operations", [])) != 43:
+        raise ConflictError("Checkpoint parcial 1.0.2 aprobado semánticamente incompatible")
+    migrated = value.get("migrated_from")
+    op43, op44 = value["planned_operations"][42:44]
+    done43 = value["completed_operations"][42]
+    if (value.get("version") != "1.0.2" or value.get("human_approval") != HUMAN_APPROVAL or
+            value.get("state") != "core_apply_partial" or
+            value.get("next_operation") != 44 or value.get("errors") != [] or
+            value.get("source_checkpoint_modified") is not False or value.get("full_resume_authorized") is not False or
+            value.get("source_checkpoint_sha256") != SOURCE_SHA256 or value.get("source_checkpoint_size") != SOURCE_SIZE or
+            value.get("source_checkpoint_status") != "superseded_by_core_completion" or
+            value.get("partial_resume_fingerprint_sha256") != PARTIAL_RESUME_FINGERPRINT or
+            value.get("planned_operations_fingerprint_sha256") != APPROVED_101_PLAN_FINGERPRINT or
+            migrated != {"version": "1.0.1", "sha256": APPROVED_101_SHA256,
+                         "size_bytes": APPROVED_101_SIZE, "approved": True} or
+            op43.get("operation_key") != INCIDENT_43_KEY or op43.get("operation_order") != 43 or
+            op43.get("metric_model") != "T34JE-2" or op43.get("resource_type") != "product" or
+            done43.get("operation_key") != INCIDENT_43_KEY or done43.get("resource_id") != 46 or
+            op44.get("operation_key") != INCIDENT_44_KEY or op44.get("operation_order") != 44 or
+            op44.get("metric_model") != "T34JE-2" or op44.get("resource_type") != "image" or
+            op44.get("depends_on_operation_key") != INCIDENT_43_KEY or
+            op44.get("file_sha256") != INCIDENT_44_FILE_SHA256 or
+            int(op44.get("file_size_bytes", 0)) != 38370 or
+            op44.get("relative_path") != "corrected-media/images/" + INCIDENT_44_FILE_SHA256 + ".jpg" or
+            op44.get("payload_sha256") != INCIDENT_44_PAYLOAD_SHA256):
+        raise ConflictError("Checkpoint parcial 1.0.2 aprobado semánticamente incompatible")
+    return _validate_checkpoint_content(value)
+
+
 def read_core_checkpoint(path, *, digest=sha):
     value, raw = _checkpoint_bytes(path)
     if value.get("version") == "1.0.1":
         _validate_approved_101(value, raw, digest=digest)
-        return value, True
+        return value, "1.0.1"
+    if value.get("version") == "1.0.2":
+        _validate_approved_102(value, raw, digest=digest)
+        return value, "1.0.2"
     if value.get("version") != TOOL_VERSION:
         raise ConflictError("Checkpoint reducido incompatible: versión")
-    return _validate_checkpoint_content(value), False
+    return _validate_checkpoint_content(value), None
 
 
 def _secret_free(raw):
     text = raw.decode("utf-8", "ignore")
     if re.search(r"(?i)Authorization|Bearer\s+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.|password|credential", text):
         raise ConflictError("Secreto potencial detectado en salidas")
+
+
+def _associated_product_id(image):
+    values = [image.get(key) for key in ("product_id", "productId") if image.get(key) is not None]
+    if image.get("product") is not None:
+        values.append(base.nested_id(image["product"]))
+    values = set(values)
+    if len(values) > 1:
+        raise ConflictError("Imagen con asociaciones de producto divergentes")
+    return next(iter(values), None)
+
+
+def validate_progress_snapshot(data, state, categories, brand, checkpoint):
+    """Validate remote reality derived exclusively from the persisted operation prefix."""
+    _validate_checkpoint_content(checkpoint)
+    decisions = base.classify_products(data, state, categories, brand)
+    if len(decisions) != 36:
+        raise ConflictError("La cohorte aprobada debe contener 36 productos")
+    by_model = {item["row"]["metric_model"]: item for item in decisions}
+    planned = checkpoint["planned_operations"]
+    completed = checkpoint["completed_operations"]
+    completed_by_key = {item["operation_key"]: item for item in completed}
+    product_ids = {}
+    for operation in planned:
+        if operation["resource_type"] == "product" and operation["operation_key"] in completed_by_key:
+            done = completed_by_key[operation["operation_key"]]
+            decision = by_model[operation["metric_model"]]
+            product = decision.get("product")
+            if decision["status"] != "already_imported_exact" or not product or product.get("id") != done["resource_id"]:
+                raise ConflictError("Producto completado ausente, duplicado, con ID o modelo divergente")
+            template = operation["request_template"]
+            remote_sheet = base.nested_id(product.get("technical_sheet"))
+            if remote_sheet != template.get("technical_sheet"):
+                raise ConflictError("Producto completado con ficha técnica divergente")
+            # classify_products compares all safely representable product identity/policy fields.
+            product_ids[operation["operation_key"]] = done["resource_id"]
+        elif operation["resource_type"] == "product":
+            if by_model[operation["metric_model"]]["status"] != "create_candidate":
+                raise ConflictError("Producto remoto inesperado para una operación no iniciada")
+    historical = [d for d in decisions if d["row"]["metric_model"] in HISTORICAL_MODELS]
+    if len(historical) != 2 or any(d["status"] != "already_imported_exact" for d in historical):
+        raise ConflictError("Los dos productos históricos exactos no coinciden")
+    historical_resources = checkpoint.get("resources_historical", {})
+    historical_products = {item.get("metric_model"): item.get("resource_id")
+                           for item in historical_resources.get("products", [])}
+    if set(historical_products) != HISTORICAL_MODELS:
+        raise ConflictError("Recursos históricos de producto divergentes")
+    for decision in historical:
+        if decision["product"].get("id") != historical_products[decision["row"]["metric_model"]]:
+            raise ConflictError("ID de producto histórico divergente")
+    historical_images = historical_resources.get("images", [])
+    if len(historical_images) != 2:
+        raise ConflictError("Deben conservarse las dos imágenes históricas")
+    for record in historical_images:
+        hits = [item for item in state["images"] if item.get("id") == record.get("resource_id")]
+        if (len(hits) != 1 or record.get("metric_model") not in HISTORICAL_MODELS or
+                _associated_product_id(hits[0]) != historical_products[record["metric_model"]]):
+            raise ConflictError("Imagen histórica ausente, duplicada o mal asociada")
+    for operation in planned:
+        if operation["resource_type"] != "image":
+            continue
+        dependency_id = product_ids.get(operation["depends_on_operation_key"])
+        if dependency_id is None:
+            continue  # Its product is absent, therefore no associated image can exist.
+        hits = [item for item in state["images"] if _associated_product_id(item) == dependency_id]
+        if operation["operation_key"] in completed_by_key:
+            done = completed_by_key[operation["operation_key"]]
+            exact = [item for item in hits if item.get("id") == done["resource_id"] and
+                     item.get("is_main", item.get("isMain")) is True and item.get("order", 0) == 0 and
+                     item.get("alt_text", item.get("altText", operation["request_template"]["alt_text"])) ==
+                     operation["request_template"]["alt_text"]]
+            if len(hits) != 1 or len(exact) != 1:
+                raise ConflictError("Imagen completada ausente, duplicada, con ID o asociación divergente")
+        elif hits:
+            raise ConflictError("Imagen remota inesperada para una operación pendiente")
+    return decisions
 
 
 def _csv(path, fields, rows):
@@ -398,7 +531,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
     source, source_raw, historical = validate_source_checkpoint(source_checkpoint)
     before = (sha(source_raw), source_checkpoint.stat().st_size, source_checkpoint.stat().st_mtime_ns)
     data = base.validate_inputs(plan, audit, repaired)
-    cp, migrate_101 = read_core_checkpoint(checkpoint) if mode != "dry_run" else (None, False)
+    cp, migration = read_core_checkpoint(checkpoint) if mode != "dry_run" else (None, None)
     client = client_factory(origin, token, mode)
     state = base.snapshot(client); _, categories, brand = base.resolve_taxonomy(state)
     def validate_sheet(sheet_id, name, digest, size):
@@ -423,7 +556,10 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
         planned_models = {x["metric_model"] for x in cp["planned_operations"]}
         if planned_models | HISTORICAL_MODELS != {d["row"]["metric_model"] for d in decisions}:
             raise ConflictError("Checkpoint reducido no cubre exactamente los 34 modelos restantes")
-        if exact_models != HISTORICAL_MODELS or sum(d["status"] == "create_candidate" for d in decisions) != 34:
+        progressive = cp["state"] == "core_apply_partial" and (mode == "verify" or (mode == "apply" and resume))
+        if progressive:
+            decisions = validate_progress_snapshot(data, state, categories, brand, cp)
+        elif exact_models != HISTORICAL_MODELS or sum(d["status"] == "create_candidate" for d in decisions) != 34:
             raise ConflictError("El snapshot remoto debe conservar 2 históricos, 34 ausentes y cero conflictos")
         if cp["api_base_url"] != origin or cp["source_checkpoint_sha256"] != sha(source_raw):
             raise ConflictError("Apply/verify no coincide criptográficamente con dry-run")
@@ -443,9 +579,14 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
             if not resume and (cp["completed_operations"] or cp["resources_created"] != {"products": [], "images": []} or
                                cp.get("external_effects") != {"writes": 0, "published": 0} or cp.get("next_operation") != 1):
                 raise ConflictError("Apply inicial exige cero operaciones y efectos previos")
-            if migrate_101:
+            if migration == "1.0.1":
                 cp["migrated_from"] = {"version": "1.0.1", "sha256": APPROVED_101_SHA256,
                                        "size_bytes": APPROVED_101_SIZE, "approved": True}
+                cp["version"] = TOOL_VERSION
+            elif migration == "1.0.2":
+                cp["migrated_from_partial_1_0_2"] = {
+                    "version": "1.0.2", "sha256": APPROVED_102_SHA256,
+                    "size_bytes": APPROVED_102_SIZE, "approved": True}
                 cp["version"] = TOOL_VERSION
             cp["state"] = "core_apply_in_progress"; atomic_checkpoint(checkpoint, cp); writes = 0
             done = {x["operation_key"] for x in cp["completed_operations"]}
