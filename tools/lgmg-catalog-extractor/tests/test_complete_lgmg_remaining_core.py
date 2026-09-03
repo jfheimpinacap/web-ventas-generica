@@ -42,7 +42,7 @@ def fixture_data():
 class CoreCompletionTests(unittest.TestCase):
     def test_contract_and_safe_import(self):
         self.assertEqual((core.TOOL_NAME, core.TOOL_VERSION, core.CHECKPOINT_SCHEMA_VERSION, core.COMPLETION_PROFILE),
-                         ("complete_lgmg_remaining_core", "1.0.2", "1.0", "core_products_with_primary_images"))
+                         ("complete_lgmg_remaining_core", "1.0.3", "1.0", "core_products_with_primary_images"))
         self.assertIs(core.RequestCoordinator, core.base.RateLimitCoordinator)
         self.assertIs(core.ApiClient, core.base.ApiClient)
 
@@ -194,12 +194,105 @@ class CoreCompletionTests(unittest.TestCase):
             with self.assertRaisesRegex(core.ConflictError, "Checkpoint reducido incompatible"):
                 core.read_core_checkpoint(path)
 
-    def core_checkpoint(self, version="1.0.2"):
+    def core_checkpoint(self, version="1.0.3"):
         operations = core.build_core_operations(fixture_data(), [decision(i) for i in range(34)], 25)
         value = core.new_checkpoint("http://localhost:5000", b"source", {"partial_sheet_id": 25},
                                     operations, {}, "f" * 64, fixture_data())
         value["version"] = version
         return value
+
+    def partial_fixture(self, prefix):
+        checkpoint = self.core_checkpoint()
+        checkpoint["state"] = "core_apply_partial"
+        checkpoint["completed_operations"] = []
+        checkpoint["resources_created"] = {"products": [], "images": []}
+        product_ids = {}
+        for op in checkpoint["planned_operations"][:prefix]:
+            resource_id = 1000 + op["operation_order"]
+            record = {"operation_key": op["operation_key"], "operation_order": op["operation_order"],
+                      "metric_model": op["metric_model"], "resource_type": op["resource_type"],
+                      "resource_id": resource_id}
+            checkpoint["completed_operations"].append(record)
+            checkpoint["resources_created"][op["resource_type"] + "s"].append(
+                {"id": resource_id, "metric_model": op["metric_model"]})
+            if op["resource_type"] == "product": product_ids[op["operation_key"]] = resource_id
+        checkpoint["external_effects"] = {"writes": prefix, "published": 0}
+        checkpoint["next_operation"] = prefix + 1
+        decisions, images = [], []
+        for i, op in enumerate(checkpoint["planned_operations"][::2]):
+            done = op["operation_key"] in {x["operation_key"] for x in checkpoint["completed_operations"]}
+            product = {"id": product_ids[op["operation_key"]], "model": op["metric_model"],
+                       "technical_sheet": op["request_template"]["technical_sheet"]} if done else None
+            decisions.append({**decision(i), "status": "already_imported_exact" if done else "create_candidate",
+                              "product": product})
+        historical_products, historical_images = [], []
+        for historical_index, model in enumerate(sorted(core.HISTORICAL_MODELS)):
+            r = row(40); r.update(metric_model=model, approved_name="LGMG " + model)
+            product_id, image_id = 800 + historical_index, 900 + historical_index
+            decisions.append({"row": r, "payload": {}, "status": "already_imported_exact",
+                              "product": {"id": product_id, "model": model}})
+            historical_products.append({"resource_id": product_id, "metric_model": model})
+            historical_images.append({"resource_id": image_id, "metric_model": model})
+            images.append({"id": image_id, "product_id": product_id, "is_main": True, "order": 0})
+        checkpoint["resources_historical"] = {"products": historical_products, "images": historical_images,
+                                                "datasheets": [], "specifications": [], "partial_sheet_id": 25}
+        by_key = {x["operation_key"]: x for x in checkpoint["completed_operations"]}
+        for op in checkpoint["planned_operations"]:
+            if op["resource_type"] == "image" and op["operation_key"] in by_key:
+                images.append({"id": by_key[op["operation_key"]]["resource_id"],
+                               "product": {"id": product_ids[op["depends_on_operation_key"]]},
+                               "is_main": True, "order": 0})
+        return checkpoint, decisions, {"images": images}
+
+    def test_progress_snapshot_is_derived_for_multiple_prefixes(self):
+        for prefix in (1, 2, 43, 67):
+            checkpoint, decisions, state = self.partial_fixture(prefix)
+            with self.subTest(prefix=prefix), mock.patch.object(core.base, "classify_products", return_value=decisions):
+                self.assertIs(core.validate_progress_snapshot({}, state, {}, {}, checkpoint), decisions)
+
+    def test_progress_checkpoint_rejects_noncanonical_accounting(self):
+        for field, mutate, diagnostic in (
+                ("gap", lambda x: x["completed_operations"].pop(1), "prefijo"),
+                ("resource", lambda x: x["resources_created"]["products"].pop(), "resources_created"),
+                ("effects", lambda x: x["external_effects"].__setitem__("writes", 1), "external_effects"),
+                ("next", lambda x: x.__setitem__("next_operation", 2), "next_operation"),
+                ("id", lambda x: x["completed_operations"][0].pop("resource_id"), "resource_id")):
+            checkpoint, _, _ = self.partial_fixture(43)
+            mutate(checkpoint)
+            with self.subTest(field=field), self.assertRaisesRegex(core.ConflictError, diagnostic):
+                core._validate_checkpoint_content(checkpoint)
+
+    def test_progress_snapshot_rejects_missing_completed_and_unexpected_pending_resources(self):
+        checkpoint, decisions, state = self.partial_fixture(43)
+        completed_product = next(d for d in decisions if d["status"] == "already_imported_exact" and
+                                 d["row"]["metric_model"] not in core.HISTORICAL_MODELS)
+        completed_product["status"], completed_product["product"] = "create_candidate", None
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "Producto completado"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+        checkpoint, decisions, state = self.partial_fixture(43)
+        pending = next(d for d in decisions if d["status"] == "create_candidate")
+        pending["status"], pending["product"] = "already_imported_exact", {"id": 9999}
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "Producto remoto inesperado"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+        checkpoint, decisions, state = self.partial_fixture(43)
+        dependency = checkpoint["completed_operations"][-1]["resource_id"]
+        state["images"].append({"id": 9999, "product_id": dependency, "is_main": True, "order": 0})
+        with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                core.ConflictError, "Imagen remota inesperada"):
+            core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
+
+    def test_completed_image_requires_recorded_id_and_product_association(self):
+        for mutation in (lambda image: image.__setitem__("id", 9999),
+                         lambda image: image.__setitem__("product", {"id": 9999}),
+                         lambda image: image.__setitem__("is_main", False)):
+            checkpoint, decisions, state = self.partial_fixture(2)
+            created_image = next(image for image in state["images"] if image["id"] == 1002)
+            mutation(created_image)
+            with mock.patch.object(core.base, "classify_products", return_value=decisions), self.assertRaisesRegex(
+                    core.ConflictError, "Imagen completada"):
+                core.validate_progress_snapshot({}, state, {}, {}, checkpoint)
 
     def test_checkpoint_reader_handles_physical_invalid_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:

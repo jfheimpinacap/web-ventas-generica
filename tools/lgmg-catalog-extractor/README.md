@@ -1185,3 +1185,47 @@ Desplegar este código no copia datos ni archivos locales a producción. Siguen 
 34 productos y 34 imágenes principales; no se añaden especificaciones, fichas nuevas
 ni imágenes secundarias. Si el apply queda parcial, no se repite: una invocación
 posterior separada usa `--apply --resume` sobre el 1.0.2 parcial.
+
+### Reanudación progresiva 1.0.3 (incidente de la operación 44)
+
+La causa raíz del conflicto posterior al apply parcial era que `run()` aplicaba también
+a `--apply --resume` la condición inicial `exact_models == HISTORICAL_MODELS` y 34
+`create_candidate`. `classify_products()` clasificaba correctamente los 22 productos
+recién creados como `already_imported_exact`, pero la condición ignoraba
+`completed_operations` y volvía a exigir el snapshot del dry-run (2 históricos, 34
+ausentes y cero conflictos). La cohorte inicial de 34 la construye `derive_core()` a
+partir de los `create_candidate`; el resume no debe reconstruirla.
+
+La versión 1.0.3 conserva ese contrato para `--dry-run` y para el apply inicial desde
+`core_dry_run_ready`. Solamente `--apply --resume` y `--verify` sobre
+`core_apply_partial` usan el preflight progresivo. Este valida que las completadas sean
+un prefijo continuo del plan persistido, con la misma `operation_key`, orden, modelo,
+tipo e ID; exige que `resources_created`, `external_effects.writes` y `next_operation`
+sean exactamente derivables del prefijo. Luego acredita cada producto e imagen remotos
+por su ID registrado, identidad y asociación de dependencia, rechaza duplicados, y
+exige que todo producto o imagen aún pendiente siga ausente. No adopta recursos.
+
+Para el checkpoint del incidente, esa derivación produce 2 productos y 2 imágenes
+históricos, 22 productos y 21 imágenes creados y exactos, 12 productos ausentes y 13
+imágenes pendientes, sin conflictos. La operación 43 acredita T34JE-2 como producto ID
+46; la 44, con clave
+`2e7349beb740a1142548b233e03514a3a7a6745eceb53307216bc8132799c085`, es su imagen
+principal todavía ausente. Por tanto, la primera mutación futura es únicamente esa
+imagen: T34JE-2 no se vuelve a crear. Después quedan otras 24 operaciones (25 en total).
+
+La compatibilidad 1.0.2 es deliberadamente cerrada al archivo real de 151081 bytes y
+SHA-256 `3ffafe17c6d63c7dca307ae7e3385462ed7bb598a8f2e9d13588cdf34edead1d`.
+Además del contrato físico se revalidan contenido, aprobación, schema, estado, los 68
+órdenes, fingerprints, prefijo 43, recursos 22+21, cero publicación/errores, procedencia
+1.0.1, y las operaciones 43 y 44 exactas. Su procedencia 1.0.1 se conserva separada:
+138358 bytes y SHA-256
+`1e655c651425d543c99c650d1730849bb8a86a6fbff9b218c1022dfdbcbc4dc9`.
+Tras todos los prechecks de lectura, el resume registra aparte la migración 1.0.2,
+actualiza atómicamente a 1.0.3/`core_apply_in_progress` y empieza en 44. Un fallo futuro
+persiste el nuevo prefijo como `core_apply_partial` 1.0.3, reanudable semánticamente.
+
+No se necesita otro dry-run, no se debe usar apply sin `--resume` y no se debe ejecutar
+rollback para este incidente. La ejecución real queda pendiente en Windows después del
+merge: generar un JWT nuevo, usar el mismo checkpoint parcial 1.0.2 y ejecutar
+`--apply --resume`. Se adjuntará el ZIP final; si vuelve a quedar parcial, no se repetirá
+el mismo comando hasta revisar el nuevo estado persistido.
