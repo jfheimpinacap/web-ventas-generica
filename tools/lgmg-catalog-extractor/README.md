@@ -1229,3 +1229,45 @@ rollback para este incidente. La ejecución real queda pendiente en Windows desp
 merge: generar un JWT nuevo, usar el mismo checkpoint parcial 1.0.2 y ejecutar
 `--apply --resume`. Se adjuntará el ZIP final; si vuelve a quedar parcial, no se repetirá
 el mismo comando hasta revisar el nuevo estado persistido.
+
+### Validación de detalle 1.0.4 para la ficha de SR1218E-2
+
+El listado `GET /api/products?include_unpublished=true` devuelve
+`ProductListReadDto`, que no expone `technical_sheet`; por tanto, que la clave no exista
+en ese JSON no significa que la asociación sea `null`. El detalle devuelve
+`ProductDetailReadDto`, sí expone `technical_sheet`, y el backend carga expresamente la
+relación `TechnicalSheet`. El falso conflicto de 1.0.3 fue exclusivamente la inferencia
+`product.get("technical_sheet") -> None` sobre el DTO incompleto del listado: el
+checkpoint y la asociación remota real no eran divergentes.
+
+La versión 1.0.4 mantiene todas las comprobaciones seguras del listado (identidad única,
+ID, modelo, nombre, categoría, marca, publicación, destacado y precio). Para cada
+producto completado cuyo template persistido exige una ficha positiva pero cuya clave
+no aparece en el listado, deriva el ID únicamente de `completed_operations` y consulta
+el detalle con el `ApiClient` seguro. En el prefijo contractual hay exactamente una
+consulta adicional, de solo lectura: `GET /api/products/25`. Se ejecuta y valida antes
+de comprobar medios pendientes, antes de migrar o escribir el checkpoint y antes de
+cualquier POST, PUT, PATCH o DELETE. Los templates que esperan `null` y no representan
+la clave no generan consultas; si el listado sí representa la clave, su valor se exige.
+
+El detalle debe acreditar el producto 25, modelo `SR1218E-2`, nombre aprobado,
+categoría y marca esperadas, no publicado, no destacado, precio nulo y no visible. Su
+objeto `technical_sheet` debe coincidir exactamente con ID 25, nombre
+`Ficha técnica LGMG SR1218E-2`, archivo
+`fbfb3916b94d600e19df841560bf11bdf6dee9d7dd26500da44f5894cafde409.pdf`,
+MIME `application/pdf`, tamaño 406080 y ruta relativa segura
+`/technical-sheets/25/file`. Se reutiliza el contrato cerrado de la ficha histórica;
+los timestamps continúan fuera de su identidad.
+
+El checkpoint físico 1.0.2 permanece intacto en 43/68 operaciones, 22 productos y 21
+imágenes, con tamaño 151081 y SHA-256
+`3ffafe17c6d63c7dca307ae7e3385462ed7bb598a8f2e9d13588cdf34edead1d`.
+La compatibilidad sigue cerrada exclusivamente a ese archivo y al 1.0.1 aprobado; la
+migración a 1.0.4 conserva la evidencia 1.0.1 y registra aparte la procedencia 1.0.2.
+La siguiente operación sigue siendo la 44: subir la imagen principal de T34JE-2 (ID
+46), sin recrear el producto ni repetir ninguna de las 43 claves completadas.
+
+No hace falta otro dry-run. Después del merge se debe generar un JWT nuevo y ejecutar
+`--apply --resume` con el checkpoint parcial original. Para este incidente no se debe
+usar `--rollback`. El checkpoint histórico sustituido de 1.197 operaciones permanece
+intacto y no se reanuda ni modifica.
