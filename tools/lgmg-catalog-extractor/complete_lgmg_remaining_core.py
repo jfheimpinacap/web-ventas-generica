@@ -29,7 +29,7 @@ def _load_base():
 base = _load_base()  # El módulo base protege su CLI con __name__ == "__main__".
 
 TOOL_NAME = "complete_lgmg_remaining_core"
-TOOL_VERSION = "1.0.4"
+TOOL_VERSION = "1.0.5"
 CHECKPOINT_SCHEMA_VERSION = "1.0"
 COMPLETION_PROFILE = "core_products_with_primary_images"
 HUMAN_APPROVAL = "APRUEBO LA FINALIZACIÓN REDUCIDA CON 34 PRODUCTOS Y 34 IMÁGENES PRINCIPALES"
@@ -389,6 +389,33 @@ def _associated_product_id(image):
     return next(iter(values), None)
 
 
+def _validate_completed_image_path(value, product_id):
+    """Accept only a managed, product-scoped image path from the read DTO."""
+    from urllib.parse import urlsplit
+
+    if not isinstance(value, str) or not value:
+        raise ConflictError("completed_image_path_invalid")
+    parsed = urlsplit(value)
+    parts = parsed.path.split("/")
+    if (parsed.scheme or parsed.netloc or parsed.username or parsed.password or parsed.query or
+            parsed.fragment or value != parsed.path or ".." in parts or
+            not value.startswith("/media/product-images/") or
+            len(parts) < 5 or parts[3] != str(product_id) or
+            Path(parsed.path).suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}):
+        raise ConflictError("completed_image_path_invalid")
+
+
+def _completed_image_alt_status(image, expected):
+    if "alt_text" not in image:
+        raise ConflictError("completed_image_alt_text_invalid")
+    actual = image["alt_text"]
+    if type(actual) is str and actual == expected:
+        return "exact"
+    if type(actual) is str and actual == "":
+        return "blank_nonblocking_followup"
+    raise ConflictError("completed_image_alt_text_invalid")
+
+
 def _validate_product_sheet_detail(detail, operation, resource_id):
     """Validate the ProductDetailReadDto and its closed historical-sheet contract."""
     if not isinstance(detail, dict):
@@ -430,6 +457,7 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint, clien
     completed_by_key = {item["operation_key"]: item for item in completed}
     product_ids = {}
     detail_requirements = []
+    followups = []
     for operation in planned:
         if operation["resource_type"] == "product" and operation["operation_key"] in completed_by_key:
             done = completed_by_key[operation["operation_key"]]
@@ -449,6 +477,13 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint, clien
         elif operation["resource_type"] == "product":
             if by_model[operation["metric_model"]]["status"] != "create_candidate":
                 raise ConflictError("Producto remoto inesperado para una operación no iniciada")
+    # A required product detail is read and validated before completed images and,
+    # therefore, before the caller can perform any pending POST.
+    for operation, resource_id in detail_requirements:
+        if type(resource_id) is not int or resource_id <= 0 or client is None:
+            raise ConflictError("ID persistido inválido para detalle de producto")
+        detail = client.get(f"/api/products/{resource_id}")
+        _validate_product_sheet_detail(detail, operation, resource_id)
     historical = [d for d in decisions if d["row"]["metric_model"] in HISTORICAL_MODELS]
     if len(historical) != 2 or any(d["status"] != "already_imported_exact" for d in historical):
         raise ConflictError("Los dos productos históricos exactos no coinciden")
@@ -477,20 +512,25 @@ def validate_progress_snapshot(data, state, categories, brand, checkpoint, clien
         hits = [item for item in state["images"] if _associated_product_id(item) == dependency_id]
         if operation["operation_key"] in completed_by_key:
             done = completed_by_key[operation["operation_key"]]
-            exact = [item for item in hits if item.get("id") == done["resource_id"] and
-                     item.get("is_main", item.get("isMain")) is True and item.get("order", 0) == 0 and
-                     item.get("alt_text", item.get("altText", operation["request_template"]["alt_text"])) ==
-                     operation["request_template"]["alt_text"]]
-            if len(hits) != 1 or len(exact) != 1:
+            if (type(done.get("resource_id")) is not int or done["resource_id"] <= 0 or len(hits) != 1 or
+                    hits[0].get("id") != done["resource_id"] or
+                    _associated_product_id(hits[0]) != dependency_id or
+                    hits[0].get("is_main") is not True or type(hits[0].get("order")) is not int or
+                    hits[0]["order"] != 0):
                 raise ConflictError("Imagen completada ausente, duplicada, con ID o asociación divergente")
+            _validate_completed_image_path(hits[0].get("image"), dependency_id)
+            alt_status = _completed_image_alt_status(
+                hits[0], operation["request_template"]["alt_text"])
+            if alt_status == "blank_nonblocking_followup":
+                followups.append({
+                    "code": "blank_image_alt_text_followup", "status": alt_status,
+                    "blocking": False, "metric_model": operation["metric_model"],
+                    "operation_key": operation["operation_key"],
+                    "image_resource_id": done["resource_id"], "product_id": dependency_id,
+                })
         elif hits:
             raise ConflictError("Imagen remota inesperada para una operación pendiente")
-    for operation, resource_id in detail_requirements:
-        if type(resource_id) is not int or resource_id <= 0 or client is None:
-            raise ConflictError("ID persistido inválido para detalle de producto")
-        detail = client.get(f"/api/products/{resource_id}")
-        _validate_product_sheet_detail(detail, operation, resource_id)
-    return decisions
+    return decisions, followups
 
 
 def _csv(path, fields, rows):
@@ -556,7 +596,8 @@ def report_data(data, decisions, operations, checkpoint, mode, writes=0):
         "products": {"approved": 36, "historical_existing": 2, "create_candidates": 34},
         "images": {"historical_existing": 2, "primary_planned": 34}, "total_operations": 68,
         "datasheets_omitted": 30, "specifications_omitted": 999, "secondary_images_omitted": True,
-        "publication_disabled": True, "prices_visible": 0}
+        "publication_disabled": True, "prices_visible": 0,
+        "nonblocking_followups": checkpoint.get("nonblocking_followups", [])}
     return {"product_fields": tuple(products[0]), "products": products, "image_fields": tuple(images[0]), "images": images,
             "operation_fields": tuple(op_rows[0]), "operations": op_rows, "conflicts": [], "summary": summary}
 
@@ -585,6 +626,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
     if len(decisions) != 36 or conflicts or not HISTORICAL_MODELS <= exact_models:
         raise ConflictError("CONFLICT: identidad remota incompatible con la cohorte cerrada")
     validate_sheet(historical["partial_sheet_id"], PARTIAL_SHEET_NAME, PARTIAL_SHEET_SHA256, PARTIAL_SHEET_SIZE)
+    followups = []
     if mode == "dry_run":
         decisions, computed = derive_core(data, state, categories, brand, historical, validate_sheet)
         if checkpoint.exists(): raise ConflictError("Dry-run exige checkpoint nuevo ausente")
@@ -596,7 +638,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
             raise ConflictError("Checkpoint reducido no cubre exactamente los 34 modelos restantes")
         progressive = cp["state"] == "core_apply_partial" and (mode == "verify" or (mode == "apply" and resume))
         if progressive:
-            decisions = validate_progress_snapshot(data, state, categories, brand, cp, client)
+            decisions, followups = validate_progress_snapshot(data, state, categories, brand, cp, client)
         elif exact_models != HISTORICAL_MODELS or sum(d["status"] == "create_candidate" for d in decisions) != 34:
             raise ConflictError("El snapshot remoto debe conservar 2 históricos, 34 ausentes y cero conflictos")
         if cp["api_base_url"] != origin or cp["source_checkpoint_sha256"] != sha(source_raw):
@@ -626,6 +668,7 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
                     "version": "1.0.2", "sha256": APPROVED_102_SHA256,
                     "size_bytes": APPROVED_102_SIZE, "approved": True}
                 cp["version"] = TOOL_VERSION
+            cp["nonblocking_followups"] = followups
             cp["state"] = "core_apply_in_progress"; atomic_checkpoint(checkpoint, cp); writes = 0
             done = {x["operation_key"] for x in cp["completed_operations"]}
             try:
@@ -660,7 +703,9 @@ def run(plan, audit, repaired, source_checkpoint, output, origin, checkpoint, mo
             cp["state"] = "core_rollback_complete"; atomic_checkpoint(checkpoint, cp); verdict = "CORE_ROLLBACK_COMPLETE"
     if (sha(base.regular_bytes(source_checkpoint, "source-checkpoint")), source_checkpoint.stat().st_size, source_checkpoint.stat().st_mtime_ns) != before:
         raise ConflictError("El source checkpoint fue modificado durante la ejecución")
-    write_outputs(output, report_data(data, decisions, cp["planned_operations"], cp, verdict, writes))
+    report_checkpoint = dict(cp)
+    report_checkpoint["nonblocking_followups"] = followups
+    write_outputs(output, report_data(data, decisions, cp["planned_operations"], report_checkpoint, verdict, writes))
     print(verdict)
     return 0
 
