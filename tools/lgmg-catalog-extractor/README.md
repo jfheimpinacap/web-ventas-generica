@@ -1311,7 +1311,7 @@ y no debe reanudarse.
 
 ## Transferencia cerrada del catálogo local LGMG a producción
 
-`transfer_lgmg_catalog_to_production.py` 1.0.1 implementa el perfil cerrado
+`transfer_lgmg_catalog_to_production.py` 1.0.2 implementa el perfil cerrado
 `lgmg_local_catalog_57`. Su único insumo válido es
 `JEM-LGMG-Transferencia-20260908-000450.zip` (57.713.145 bytes, SHA-256
 `6f986eb3784b7840ae35dfe1f2bd690a8f13cd1815dacc0c2b3342974efc8e2f`), con 112
@@ -1328,6 +1328,12 @@ Lee directamente el ZIP, normaliza separadores Windows y rechaza traversal, unid
 duplicados, enlaces, dispositivos, extensiones, cantidades, tamaños, hashes o entradas
 ajenas. La estructura cerrada contiene `Fichas tecnicas LGMG/` (54 PDF) y `Maquinas
 LGMG/` (57 imágenes: 56 JPEG y el PNG de M0810JE).
+Cada imagen debe estar directamente bajo esa carpeta y cumplir exactamente
+`Maquinas LGMG/LGMG-{modelo_fisico}.{extensión}`, donde la extensión sólo puede ser
+`jpg`, `jpeg` o `png`. El parser retira una sola vez el prefijo literal `LGMG-` y
+entrega el modelo físico a la resolución canónica, mientras conserva el basename
+completo para el multipart; no admite cambios de mayúsculas, prefijos adicionales,
+sufijos, subcarpetas ni modelos no aprobados.
 
 La cohorte son los 57 modelos, en orden canónico: A09JE, A09JE-2, A13JE, A14JE,
 A14JE-2, AR16JE-2, AR20JE, AR20JE-2, AR24JE, H625E, M0407TE, M0810JE, S0607,

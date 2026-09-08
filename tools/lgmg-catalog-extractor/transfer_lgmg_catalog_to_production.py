@@ -24,7 +24,7 @@ import uuid
 import zipfile
 
 TOOL_NAME = "transfer_lgmg_catalog_to_production"
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.0.2"
 SCHEMA_VERSION = "1.0"
 PROFILE = "lgmg_local_catalog_57"
 PACKAGE_NAME = "JEM-LGMG-Transferencia-20260908-000450.zip"
@@ -116,6 +116,12 @@ def canonical_model(physical):
     if physical in MODELS: return physical
     if physical in ALIASES: return ALIASES[physical]
     raise ConflictError("unapproved_model_alias")
+
+def parse_image_model(name):
+    """Extract the physical model from the closed canonical image path."""
+    match=re.fullmatch(r"Maquinas LGMG/LGMG-([^/]+)\.(jpg|jpeg|png)",name)
+    if not match: raise ConflictError("invalid_image_filename")
+    return match.group(1)
 
 def sanitize(value):
     if isinstance(value, dict):
@@ -273,7 +279,7 @@ def audit_package(path, expected=None):
     source=validate_capture(capture)
     image_files={}; sheet_files={}
     for name in imgs:
-        model=canonical_model(PurePosixPath(name).stem)
+        model=canonical_model(parse_image_model(name))
         if model in image_files: raise ConflictError("duplicate_model_image")
         validate_image(name,blobs[name],model); image_files[model]={"path":name,"filename":PurePosixPath(name).name,"data":blobs[name],"content_type":"image/png" if name.lower().endswith(".png") else "image/jpeg"}
     for name in pdfs:
