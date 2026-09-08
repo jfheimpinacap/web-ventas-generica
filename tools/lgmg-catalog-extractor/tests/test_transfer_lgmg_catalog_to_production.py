@@ -5,6 +5,7 @@ from pathlib import Path
 import stat
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 HERE=Path(__file__).resolve().parents[1]
@@ -28,7 +29,7 @@ def capture():
       "expected_without_sheet":list(t.WITHOUT_SHEET),"requests":[{"method":"GET","status":200} for _ in range(61)],"categories":cats,"brands":[{"id":9,"name":"LGMG","slug":"lgmg"}],"products":products,"technical_sheets":[{"id":i} for i in range(54)]}
 
 class Contracts(unittest.TestCase):
-    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.1","1.0","lgmg_local_catalog_57"))
+    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.2","1.0","lgmg_local_catalog_57"))
     def test_capture_has_exact_canonical_top_level_and_derives_nested_rows(self):
         d=capture(); self.assertNotIn("images",d); self.assertNotIn("specifications",d)
         source=t.validate_capture(d)
@@ -48,6 +49,65 @@ class Contracts(unittest.TestCase):
     def test_aliases_exact(self): self.assertEqual({t.canonical_model(k):k for k in t.ALIASES}, {v:k for k,v in t.ALIASES.items()})
     def test_alias_unknown_rejected(self):
         with self.assertRaises(t.ConflictError): t.canonical_model("S0607-III")
+    def test_prefixed_image_model_parser_and_canonicalization(self):
+        cases=(("Maquinas LGMG/LGMG-A09JE.jpg","A09JE","A09JE"),
+               ("Maquinas LGMG/LGMG-S0607-II.jpg","S0607-II","S0607"),
+               ("Maquinas LGMG/LGMG-M0810JE.png","M0810JE","M0810JE"))
+        for name,physical,canonical in cases:
+            with self.subTest(name=name):
+                self.assertTrue(Path(name).stem.startswith("LGMG-"))
+                self.assertEqual(t.parse_image_model(name),physical)
+                with mock.patch.object(t,"canonical_model",wraps=t.canonical_model) as resolve:
+                    self.assertEqual(resolve(t.parse_image_model(name)),canonical)
+                    resolve.assert_called_once_with(physical)
+    def test_invalid_image_model_contract_is_rejected(self):
+        invalid=("Maquinas LGMG/A09JE.jpg","Maquinas LGMG/lgmg-A09JE.jpg",
+                 "Maquinas LGMG/LGMG-.jpg","Maquinas LGMG/LGMG-LGMG-A09JE.jpg",
+                 "Maquinas LGMG/Principal-LGMG-A09JE.jpg","Maquinas LGMG/LGMG-X.jpg",
+                 "Maquinas LGMG/LGMG-A09JE-extra.jpg","Maquinas LGMG/LGMG-A09JE.webp",
+                 "Other/LGMG-A09JE.jpg","Maquinas LGMG/nested/LGMG-A09JE.jpg")
+        for name in invalid:
+            with self.subTest(name=name),self.assertRaises(t.ConflictError):
+                t.canonical_model(t.parse_image_model(name))
+    def test_all_prefixed_physical_image_names_resolve_to_exact_cohort(self):
+        inverse={canonical:physical for physical,canonical in t.ALIASES.items()}
+        names=[f"Maquinas LGMG/LGMG-{inverse.get(model,model)}.{('png' if model=='M0810JE' else 'jpg')}" for model in t.MODELS]
+        resolved=[t.canonical_model(t.parse_image_model(name)) for name in names]
+        self.assertEqual(len(names),57)
+        self.assertEqual(set(resolved),set(t.MODELS))
+        self.assertEqual(len(set(resolved)),57)
+        self.assertIn("A09JE-2",resolved)
+        self.assertEqual(len(t.ALIASES),12)
+    def test_synthetic_package_audit_accepts_all_57_prefixed_images(self):
+        inverse={canonical:physical for physical,canonical in t.ALIASES.items()}
+        capture_bytes=json.dumps(capture(),ensure_ascii=False,separators=(",",":")).encode()
+        with tempfile.TemporaryDirectory() as td:
+            package=Path(td)/t.PACKAGE_NAME
+            with zipfile.ZipFile(package,"w") as archive:
+                def write_regular(name,data):
+                    info=zipfile.ZipInfo(name); info.external_attr=(stat.S_IFREG|0o644)<<16
+                    archive.writestr(info,data)
+                write_regular(t.JSON_NAME,capture_bytes)
+                for model in t.MODELS:
+                    physical=inverse.get(model,model)
+                    ext="png" if model=="M0810JE" else "jpg"
+                    write_regular(f"Maquinas LGMG/LGMG-{physical}.{ext}",b"image")
+                    if model not in t.WITHOUT_SHEET:
+                        write_regular(f"Fichas tecnicas LGMG/Ficha-tecnica-LGMG-{physical}.pdf",b"pdf")
+            raw=package.read_bytes(); entries=[]
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                for info in archive.infolist():
+                    data=archive.read(info)
+                    entries.append((t.normalize_entry(info.filename),len(data),t.sha256(data)))
+            expected={"name":t.PACKAGE_NAME,"size":len(raw),"sha":t.sha256(raw),
+                      "entries":112,"json_size":len(capture_bytes),"json_sha":t.sha256(capture_bytes),
+                      "manifest":t.manifest_fingerprint(entries)}
+            with mock.patch.object(t,"validate_image"),mock.patch.object(t,"validate_pdf"):
+                audited=t.audit_package(package,expected)
+            self.assertEqual(set(audited["image_files"]),set(t.MODELS))
+            self.assertEqual(len(audited["image_files"]),57)
+            self.assertEqual(len(audited["sheet_files"]),54)
+            self.assertEqual(len(t.build_plan(audited["source"],audited)),234)
     def test_windows_separator(self): self.assertEqual(t.normalize_entry(r"a\b.pdf"),"a/b.pdf")
     def test_traversal_absolute_drive_rejected(self):
         for value in ("../x","/x",r"C:\x","a/../x"):
@@ -59,6 +119,10 @@ class Contracts(unittest.TestCase):
     def test_mutating_request_rejected(self):
         d=capture(); d["requests"][0]["method"]="POST"
         with self.assertRaises(t.ConflictError): t.validate_capture(d)
+    def test_simulated_dry_run_source_has_zero_mutating_requests(self):
+        source=capture()
+        self.assertEqual(source["counts"]["mutating_requests"],0)
+        self.assertEqual({request["method"] for request in source["requests"]},{"GET"})
     def test_secret_rejected(self):
         d=capture(); d["requests"][0]["note"]="Authorization: Bearer abc"
         with self.assertRaises(t.ConflictError): t.validate_capture(d)
