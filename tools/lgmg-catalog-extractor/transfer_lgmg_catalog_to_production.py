@@ -24,7 +24,7 @@ import uuid
 import zipfile
 
 TOOL_NAME = "transfer_lgmg_catalog_to_production"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.0.1"
 SCHEMA_VERSION = "1.0"
 PROFILE = "lgmg_local_catalog_57"
 PACKAGE_NAME = "JEM-LGMG-Transferencia-20260908-000450.zip"
@@ -184,7 +184,30 @@ def _rows(data, *names):
 
 def nested_id(value): return value.get("id") if isinstance(value,dict) else value
 
+def derive_nested_collections(products):
+    """Derive images and specifications only from each validated product."""
+    images=[]; specifications=[]; images_by_model={}; specs_by_model={}
+    for product in products:
+        if not isinstance(product,dict): raise ConflictError("invalid_product")
+        model=product.get("model"); product_id=product.get("id")
+        nested_images=product.get("images"); nested_specs=product.get("specs")
+        if not isinstance(nested_images,list): raise ConflictError("invalid_nested_images:"+str(model))
+        if not isinstance(nested_specs,list): raise ConflictError("invalid_nested_specs:"+str(model))
+        if any(not isinstance(row,dict) or nested_id(row.get("product"))!=product_id for row in nested_images):
+            raise ConflictError("image_relation_contract")
+        if any(not isinstance(row,dict) or nested_id(row.get("product"))!=product_id for row in nested_specs):
+            raise ConflictError("spec_relation")
+        images_by_model[model]=nested_images
+        specs_by_model[model]=nested_specs
+        images.extend(nested_images); specifications.extend(nested_specs)
+    return {"images":images,"specifications":specifications,
+            "images_by_model":images_by_model,"specs_by_model":specs_by_model}
+
 def validate_capture(data):
+    top_level={"brands","captured_at","categories","counts","expected_without_sheet",
+               "intended_destination","production_policy","products","requests","source",
+               "technical_sheets","tool","version"}
+    if not isinstance(data,dict) or set(data)!=top_level: raise ConflictError("capture_top_level_contract")
     exact={"tool":"JEM-LGMG-transferencia-local","version":"1.0","captured_at":"2026-09-08T03:01:43.619Z","source":"http://localhost:5000","intended_destination":API_BASE}
     if any(data.get(k)!=v for k,v in exact.items()): raise ConflictError("capture_header_contract")
     policy={"force_is_published_false":True,"force_is_featured_false":True,"force_price_visible_false":True}
@@ -193,9 +216,8 @@ def validate_capture(data):
     requests=_rows(data,"requests")
     if len(requests)!=61: raise ConflictError("request_count")
     if SECRET.search(json.dumps(requests,ensure_ascii=False)) or any(r.get("method")!="GET" or not (200<=int(r.get("status",0))<300) for r in requests): raise ConflictError("unsafe_source_requests")
-    products=_rows(data,"products"); images=_rows(data,"images","product_images"); specs=_rows(data,"specifications","product_specs")
-    cats=_rows(data,"categories"); brands=_rows(data,"brands"); sheets=_rows(data,"technical_sheets","datasheets")
-    if len(products)!=57 or len(images)!=57 or len(specs)!=58 or len(cats)!=7 or len(brands)!=1 or len(sheets)!=54: raise ConflictError("collection_counts")
+    products=_rows(data,"products"); cats=_rows(data,"categories"); brands=_rows(data,"brands"); sheets=_rows(data,"technical_sheets")
+    if len(products)!=57 or len(cats)!=7 or len(brands)!=1 or len(sheets)!=54: raise ConflictError("collection_counts")
     models=[p.get("model") for p in products]
     if len(set(models))!=57 or set(models)!=set(MODELS): raise ConflictError("product_models")
     ids=[p.get("id") for p in products]; slugs=[p.get("slug") for p in products]
@@ -205,11 +227,13 @@ def validate_capture(data):
     if brands[0].get("name")!="LGMG" or brands[0].get("slug")!="lgmg": raise ConflictError("brand_contract")
     brand_id=brands[0].get("id")
     by_product={p["id"]:p for p in products}
+    derived=derive_nested_collections(products); images=derived["images"]; specs=derived["specifications"]
+    if len(images)!=57 or len(specs)!=58: raise ConflictError("collection_counts")
     for p in products:
         if not p.get("name") or p["model"] not in p["name"] or nested_id(p.get("category")) not in category_ids or nested_id(p.get("brand"))!=brand_id: raise ConflictError("product_taxonomy_relation")
         required=(p.get("product_type")=="machinery" and p.get("condition")=="new" and p.get("stock_status")=="on_request" and p.get("price") is None and p.get("price_visible") is False and p.get("is_featured") is False and p.get("is_published") is True)
         if not required: raise ConflictError("source_product_contract")
-        own=[x for x in images if nested_id(x.get("product"))==p["id"]]
+        own=derived["images_by_model"][p["model"]]
         if len(own)!=1 or own[0].get("is_main") is not True or type(own[0].get("order")) is not int or own[0]["order"]!=0 or p.get("main_image")!=own[0]: raise ConflictError("image_relation_contract")
     if any(nested_id(s.get("product")) not in by_product for s in specs): raise ConflictError("spec_relation")
     spec_models=[by_product[nested_id(s["product"])]["model"] for s in specs]

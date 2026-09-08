@@ -1311,7 +1311,7 @@ y no debe reanudarse.
 
 ## Transferencia cerrada del catálogo local LGMG a producción
 
-`transfer_lgmg_catalog_to_production.py` 1.0.0 implementa el perfil cerrado
+`transfer_lgmg_catalog_to_production.py` 1.0.1 implementa el perfil cerrado
 `lgmg_local_catalog_57`. Su único insumo válido es
 `JEM-LGMG-Transferencia-20260908-000450.zip` (57.713.145 bytes, SHA-256
 `6f986eb3784b7840ae35dfe1f2bd690a8f13cd1815dacc0c2b3342974efc8e2f`), con 112
@@ -1319,6 +1319,11 @@ entradas, el JSON `JEM-LGMG-Transferencia-Local-20260908.json` (193.674 bytes,
 SHA-256 `b94ff6c681b95a362cc01909f9aa9442999852465ef0e9fcbb6d59457f17690e`) y
 fingerprint de manifiesto
 `36e0e5d6f6ad27c82780c6e148116f00e7bf946e0016f4febbcd09cc1528f10e`.
+La captura conserva exactamente sus trece propiedades superiores canónicas; no se
+esperan colecciones superiores `images` ni `specifications`. Las 57 imágenes y las 58
+especificaciones se derivan exclusivamente del recorrido validado de
+`products[].images` y `products[].specs`; `products[].main_image` sólo acredita la
+relación con la imagen principal y no se cuenta como otra imagen.
 Lee directamente el ZIP, normaliza separadores Windows y rechaza traversal, unidades,
 duplicados, enlaces, dispositivos, extensiones, cantidades, tamaños, hashes o entradas
 ajenas. La estructura cerrada contiene `Fichas tecnicas LGMG/` (54 PDF) y `Maquinas
