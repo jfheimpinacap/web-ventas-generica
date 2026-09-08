@@ -28,8 +28,14 @@ def capture():
       "counts":{"products":57,"images":57,"products_with_sheet":54,"products_without_sheet":3,"categories":7,"brands":1,"specifications":58,"published_local":57,"visible_prices":0,"get_requests":61,"mutating_requests":0},
       "expected_without_sheet":list(t.WITHOUT_SHEET),"requests":[{"method":"GET","status":200} for _ in range(61)],"categories":cats,"brands":[{"id":9,"name":"LGMG","slug":"lgmg"}],"products":products,"technical_sheets":[{"id":i} for i in range(54)]}
 
+def png_image(width,height):
+    return b"\x89PNG\r\n\x1a\n"+b"\0"*8+width.to_bytes(4,"big")+height.to_bytes(4,"big")
+
+def jpeg_image(width,height):
+    return b"\xff\xd8\xff\xc0\x00\x08\x08"+height.to_bytes(2,"big")+width.to_bytes(2,"big")+b"\x01\xff\xd9"
+
 class Contracts(unittest.TestCase):
-    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.2","1.0","lgmg_local_catalog_57"))
+    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.3","1.0","lgmg_local_catalog_57"))
     def test_capture_has_exact_canonical_top_level_and_derives_nested_rows(self):
         d=capture(); self.assertNotIn("images",d); self.assertNotIn("specifications",d)
         source=t.validate_capture(d)
@@ -91,7 +97,8 @@ class Contracts(unittest.TestCase):
                 for model in t.MODELS:
                     physical=inverse.get(model,model)
                     ext="png" if model=="M0810JE" else "jpg"
-                    write_regular(f"Maquinas LGMG/LGMG-{physical}.{ext}",b"image")
+                    image=png_image(600,451) if model=="M0810JE" else jpeg_image(600,451)
+                    write_regular(f"Maquinas LGMG/LGMG-{physical}.{ext}",image)
                     if model not in t.WITHOUT_SHEET:
                         write_regular(f"Fichas tecnicas LGMG/Ficha-tecnica-LGMG-{physical}.pdf",b"pdf")
             raw=package.read_bytes(); entries=[]
@@ -102,7 +109,7 @@ class Contracts(unittest.TestCase):
             expected={"name":t.PACKAGE_NAME,"size":len(raw),"sha":t.sha256(raw),
                       "entries":112,"json_size":len(capture_bytes),"json_sha":t.sha256(capture_bytes),
                       "manifest":t.manifest_fingerprint(entries)}
-            with mock.patch.object(t,"validate_image"),mock.patch.object(t,"validate_pdf"):
+            with mock.patch.object(t,"validate_pdf"):
                 audited=t.audit_package(package,expected)
             self.assertEqual(set(audited["image_files"]),set(t.MODELS))
             self.assertEqual(len(audited["image_files"]),57)
@@ -155,10 +162,26 @@ class Contracts(unittest.TestCase):
             with self.subTest(field=field),self.assertRaises(t.ConflictError): t.validate_capture(d)
         d=capture(); d["products"][0]["images"][0]["product"]=d["products"][1]["id"]
         with self.assertRaisesRegex(t.ConflictError,"image_relation"): t.validate_capture(d)
-    def test_image_signatures_and_dimensions(self):
-        png=b"\x89PNG\r\n\x1a\n"+b"\0"*8+(450).to_bytes(4,"big")+(600).to_bytes(4,"big")
-        t.validate_image("M0810JE.png",png,"M0810JE")
-        with self.assertRaises(t.ConflictError): t.validate_image("M0810JE.jpg",png,"M0810JE")
+    def test_png_image_size_is_width_height(self):
+        self.assertEqual(t._image_size(png_image(600,451)),("png",(600,451)))
+    def test_allowed_horizontal_image_dimensions(self):
+        for width,height in ((600,450),(600,451),(800,601)):
+            with self.subTest(size=(width,height)):
+                t.validate_image("LGMG-A09JE.jpg",jpeg_image(width,height),"A09JE")
+        t.validate_image("LGMG-M0810JE.png",png_image(600,451),"M0810JE")
+    def test_transposed_and_noncontract_image_dimensions_are_rejected(self):
+        dimensions=((450,600),(451,600),(601,800),(599,451),(600,449),(700,500),(801,601),(800,602))
+        for width,height in dimensions:
+            with self.subTest(size=(width,height)),self.assertRaisesRegex(
+                    t.ConflictError,rf"^image_dimensions:LGMG-A09JE\.jpg:{width}x{height}$"):
+                t.validate_image("/private/catalog/LGMG-A09JE.jpg",jpeg_image(width,height),"A09JE")
+    def test_image_format_model_extension_contracts(self):
+        png=png_image(600,451); jpeg=jpeg_image(600,451)
+        cases=(("LGMG-A09JE.png",png,"A09JE"),("LGMG-M0810JE.png",jpeg,"M0810JE"),
+               ("LGMG-M0810JE.jpg",png,"M0810JE"),("LGMG-A09JE.jpg",b"not-image","A09JE"))
+        for name,data,model in cases:
+            with self.subTest(name=name),self.assertRaises(t.ConflictError):
+                t.validate_image(name,data,model)
     def test_pdf_invalid_empty_encrypted(self):
         for raw in (b"",b"bad",b"%PDF /Encrypt %%EOF"):
             with self.assertRaises(t.ConflictError): t.validate_pdf("x.pdf",raw,"A09JE")

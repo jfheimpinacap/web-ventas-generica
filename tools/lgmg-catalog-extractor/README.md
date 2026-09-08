@@ -1311,7 +1311,7 @@ y no debe reanudarse.
 
 ## Transferencia cerrada del catálogo local LGMG a producción
 
-`transfer_lgmg_catalog_to_production.py` 1.0.2 implementa el perfil cerrado
+`transfer_lgmg_catalog_to_production.py` 1.0.3 implementa el perfil cerrado
 `lgmg_local_catalog_57`. Su único insumo válido es
 `JEM-LGMG-Transferencia-20260908-000450.zip` (57.713.145 bytes, SHA-256
 `6f986eb3784b7840ae35dfe1f2bd690a8f13cd1815dacc0c2b3342974efc8e2f`), con 112
@@ -1334,6 +1334,10 @@ Cada imagen debe estar directamente bajo esa carpeta y cumplir exactamente
 entrega el modelo físico a la resolución canónica, mientras conserva el basename
 completo para el multipart; no admite cambios de mayúsculas, prefijos adicionales,
 sufijos, subcarpetas ni modelos no aprobados.
+Las dimensiones se expresan siempre como ancho × alto. Las imágenes canónicas son
+horizontales y sólo se aceptan los contratos cerrados 600×450, 600×451 y 800×601;
+M0810JE es el único PNG y los otros 56 modelos son JPEG. Los medios canónicos no se
+modificaron ni regeneraron para esta corrección.
 
 La cohorte son los 57 modelos, en orden canónico: A09JE, A09JE-2, A13JE, A14JE,
 A14JE-2, AR16JE-2, AR20JE, AR20JE-2, AR24JE, H625E, M0407TE, M0810JE, S0607,
