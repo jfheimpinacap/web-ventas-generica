@@ -24,7 +24,7 @@ import uuid
 import zipfile
 
 TOOL_NAME = "transfer_lgmg_catalog_to_production"
-TOOL_VERSION = "1.0.2"
+TOOL_VERSION = "1.0.3"
 SCHEMA_VERSION = "1.0"
 PROFILE = "lgmg_local_catalog_57"
 PACKAGE_NAME = "JEM-LGMG-Transferencia-20260908-000450.zip"
@@ -40,6 +40,7 @@ TOKEN_ENV = "JEM_NEXUS_ACCESS_TOKEN"
 APPLY_CONFIRMATION = "IMPORTAR_57_LGMG_NO_PUBLICADOS"
 STATES = {"production_transfer_dry_run_ready", "production_transfer_in_progress",
           "production_transfer_partial", "production_transfer_complete", "production_transfer_verified"}
+ALLOWED_IMAGE_DIMENSIONS = {(600, 450), (600, 451), (800, 601)}
 MODELS = tuple("""A09JE A09JE-2 A13JE A14JE A14JE-2 AR16JE-2 AR20JE AR20JE-2 AR24JE H625E M0407TE M0810JE S0607 S0607E S0607E-2 S0808 S0808E S0808E-2 S0812 S0812E S0812E-2 S1012 S1012E S1012E-2 S1212 S1212E S1212E-2 S1413 S1413E S1413E-2 SC0407E SC0610E SR0818E SR0818E-2 SR1018E SR1018E-2 SR1218E SR1218E-2 SR1418E SR1623E SS0407ER SS0507E SS0607E T14JE-2 T16JE-2 T18JE-2 T20JE T20JE-2 T22JE T26JE T26JE-2 T28JE T28JE-2 T34JE-2 T38JE T38JE-2 T42JE-2""".split())
 WITHOUT_SHEET = ("AR24JE", "H625E", "T38JE")
 ALIASES = {x + "-II": x for x in ("S0607", "S0808", "S0812", "S1012", "S1212", "S1413",
@@ -100,7 +101,8 @@ def validate_image(name, data, model):
     ext = PurePosixPath(name).suffix.lower()
     if (kind == "png") != (ext == ".png") or ext not in (".jpg", ".jpeg", ".png"): raise ConflictError("image_signature_extension")
     if (kind == "png") != (model == "M0810JE"): raise ConflictError("unexpected_png_model")
-    if not (450 <= width <= 601 and 600 <= height <= 800): raise ConflictError("image_dimensions")
+    if (width, height) not in ALLOWED_IMAGE_DIMENSIONS:
+        raise ConflictError(f"image_dimensions:{PurePosixPath(name).name}:{width}x{height}")
 
 def validate_pdf(name, data, model):
     if not data or not data.startswith(b"%PDF") or b"%%EOF" not in data[-2048:]: raise ConflictError("invalid_pdf")
