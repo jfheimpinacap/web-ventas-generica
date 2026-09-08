@@ -16,18 +16,28 @@ def capture():
     products=[]; images=[]
     for i,m in enumerate(t.MODELS):
         p={"id":100+i,"name":"LGMG "+m,"slug":"lgmg-"+m.lower(),"model":m,"category":cats[i%7]["id"],"brand":9,"product_type":"machinery","condition":"new","stock_status":"on_request","price":None,"price_visible":False,"is_featured":False,"is_published":True}
-        image={"id":200+i,"product":p["id"],"image":"/local/"+m+".jpg","is_main":True,"order":0}; p["main_image"]=image; products.append(p); images.append(image)
+        image={"id":200+i,"product":p["id"],"image":"/local/"+m+".jpg","is_main":True,"order":0}; p["main_image"]=image; p["images"]=[image]; p["specs"]=[]; products.append(p); images.append(image)
     specs=[]
     for model in ("SR0818E-2","SR1018E-2"):
         pid=next(p["id"] for p in products if p["model"]==model)
-        specs += [{"id":500+len(specs),"product":pid,"name":"n"+str(i),"value":str(i),"unit":"mm","order":i} for i in range(29)]
+        nested=[{"id":500+len(specs)+i,"product":pid,"name":"n"+str(i),"value":str(i),"unit":"mm","order":i} for i in range(29)]
+        next(p for p in products if p["id"]==pid)["specs"]=nested; specs += nested
     return {"tool":"JEM-LGMG-transferencia-local","version":"1.0","captured_at":"2026-09-08T03:01:43.619Z","source":"http://localhost:5000","intended_destination":t.API_BASE,
       "production_policy":{"force_is_published_false":True,"force_is_featured_false":True,"force_price_visible_false":True},
       "counts":{"products":57,"images":57,"products_with_sheet":54,"products_without_sheet":3,"categories":7,"brands":1,"specifications":58,"published_local":57,"visible_prices":0,"get_requests":61,"mutating_requests":0},
-      "expected_without_sheet":list(t.WITHOUT_SHEET),"requests":[{"method":"GET","status":200} for _ in range(61)],"categories":cats,"brands":[{"id":9,"name":"LGMG","slug":"lgmg"}],"products":products,"images":images,"specifications":specs,"technical_sheets":[{"id":i} for i in range(54)]}
+      "expected_without_sheet":list(t.WITHOUT_SHEET),"requests":[{"method":"GET","status":200} for _ in range(61)],"categories":cats,"brands":[{"id":9,"name":"LGMG","slug":"lgmg"}],"products":products,"technical_sheets":[{"id":i} for i in range(54)]}
 
 class Contracts(unittest.TestCase):
-    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.0","1.0","lgmg_local_catalog_57"))
+    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.1","1.0","lgmg_local_catalog_57"))
+    def test_capture_has_exact_canonical_top_level_and_derives_nested_rows(self):
+        d=capture(); self.assertNotIn("images",d); self.assertNotIn("specifications",d)
+        source=t.validate_capture(d)
+        self.assertEqual((len(source["images"]),len(source["specifications"])),(57,58))
+    def test_top_level_derived_collection_is_rejected(self):
+        for name in ("images","specifications","specs","main_images","schema_version"):
+            d=capture(); d[name]=[]
+            with self.subTest(name=name),self.assertRaisesRegex(t.ConflictError,"top_level"):
+                t.validate_capture(d)
     def test_capture_and_plan_234(self):
         source=t.validate_capture(capture()); plan=t.build_plan(source)
         self.assertEqual([sum(x["type"]==k for x in plan) for k in ("category","brand","datasheet","product","image","specification")],[7,1,54,57,57,58]); self.assertEqual(len(set(x["operation_key"] for x in plan)),234)
@@ -61,17 +71,26 @@ class Contracts(unittest.TestCase):
             d=capture(); d["products"][0][field]=value
             with self.assertRaises(t.ConflictError): t.validate_capture(d)
     def test_multiple_or_nonmain_image(self):
-        d=capture(); d["images"].append(dict(d["images"][0])); d["counts"]["images"]=58
+        d=capture(); d["products"][0]["images"].append(dict(d["products"][0]["images"][0])); d["counts"]["images"]=58
         with self.assertRaises(t.ConflictError): t.validate_capture(d)
-        d=capture(); d["images"][0]["is_main"]=False; d["products"][0]["main_image"]=d["images"][0]
+        d=capture(); d["products"][0]["images"][0]["is_main"]=False; d["products"][0]["main_image"]=d["products"][0]["images"][0]
         with self.assertRaises(t.ConflictError): t.validate_capture(d)
     def test_order_bool_noninteger_nonzero(self):
         for value in (True,"0",1):
-            d=capture(); d["images"][0]["order"]=value; d["products"][0]["main_image"]=d["images"][0]
+            d=capture(); d["products"][0]["images"][0]["order"]=value; d["products"][0]["main_image"]=d["products"][0]["images"][0]
             with self.assertRaises(t.ConflictError): t.validate_capture(d)
     def test_specification_counts(self):
-        d=capture(); d["specifications"][0]["product"]=d["products"][0]["id"]
+        d=capture(); owner=next(p for p in d["products"] if p["model"]=="SR0818E-2"); spec=owner["specs"].pop(); spec["product"]=d["products"][0]["id"]; d["products"][0]["specs"].append(spec)
         with self.assertRaises(t.ConflictError): t.validate_capture(d)
+    def test_main_image_is_not_a_second_derived_image(self):
+        source=t.validate_capture(capture())
+        self.assertEqual(len(source["images"]),57)
+    def test_nested_collections_are_required_and_relations_are_local_to_product(self):
+        for field in ("images","specs"):
+            d=capture(); del d["products"][0][field]
+            with self.subTest(field=field),self.assertRaises(t.ConflictError): t.validate_capture(d)
+        d=capture(); d["products"][0]["images"][0]["product"]=d["products"][1]["id"]
+        with self.assertRaisesRegex(t.ConflictError,"image_relation"): t.validate_capture(d)
     def test_image_signatures_and_dimensions(self):
         png=b"\x89PNG\r\n\x1a\n"+b"\0"*8+(450).to_bytes(4,"big")+(600).to_bytes(4,"big")
         t.validate_image("M0810JE.png",png,"M0810JE")
