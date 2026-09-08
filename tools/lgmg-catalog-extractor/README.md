@@ -1308,3 +1308,82 @@ No se requiere otro dry-run ni debe usarse `--rollback`. Después del merge se n
 un JWT nuevo y se debe ejecutar `--apply --resume` con el checkpoint parcial original
 e intacto. El checkpoint histórico sustituido de 1.197 operaciones permanece intacto
 y no debe reanudarse.
+
+## Transferencia cerrada del catálogo local LGMG a producción
+
+`transfer_lgmg_catalog_to_production.py` 1.0.0 implementa el perfil cerrado
+`lgmg_local_catalog_57`. Su único insumo válido es
+`JEM-LGMG-Transferencia-20260908-000450.zip` (57.713.145 bytes, SHA-256
+`6f986eb3784b7840ae35dfe1f2bd690a8f13cd1815dacc0c2b3342974efc8e2f`), con 112
+entradas, el JSON `JEM-LGMG-Transferencia-Local-20260908.json` (193.674 bytes,
+SHA-256 `b94ff6c681b95a362cc01909f9aa9442999852465ef0e9fcbb6d59457f17690e`) y
+fingerprint de manifiesto
+`36e0e5d6f6ad27c82780c6e148116f00e7bf946e0016f4febbcd09cc1528f10e`.
+Lee directamente el ZIP, normaliza separadores Windows y rechaza traversal, unidades,
+duplicados, enlaces, dispositivos, extensiones, cantidades, tamaños, hashes o entradas
+ajenas. La estructura cerrada contiene `Fichas tecnicas LGMG/` (54 PDF) y `Maquinas
+LGMG/` (57 imágenes: 56 JPEG y el PNG de M0810JE).
+
+La cohorte son los 57 modelos, en orden canónico: A09JE, A09JE-2, A13JE, A14JE,
+A14JE-2, AR16JE-2, AR20JE, AR20JE-2, AR24JE, H625E, M0407TE, M0810JE, S0607,
+S0607E, S0607E-2, S0808, S0808E, S0808E-2, S0812, S0812E, S0812E-2, S1012,
+S1012E, S1012E-2, S1212, S1212E, S1212E-2, S1413, S1413E, S1413E-2,
+SC0407E, SC0610E, SR0818E, SR0818E-2, SR1018E, SR1018E-2, SR1218E,
+SR1218E-2, SR1418E, SR1623E, SS0407ER, SS0507E, SS0607E, T14JE-2, T16JE-2,
+T18JE-2, T20JE, T20JE-2, T22JE, T26JE, T26JE-2, T28JE, T28JE-2, T34JE-2,
+T38JE, T38JE-2 y T42JE-2. AR24JE, H625E y T38JE quedan sin ficha.
+
+Se resuelve semánticamente la raíz activa `Maquinarias`/`maquinarias`; jamás se copia
+su ID local. El plan crea las siete subcategorías aprobadas, la marca LGMG, 54 fichas,
+57 productos, 57 imágenes principales y 58 especificaciones (29 de SR0818E-2 y 29 de
+SR1018E-2): exactamente 234 operaciones con claves estables.
+
+Los doce nombres físicos S0607-II, S0808-II, S0812-II, S1012-II, S1212-II,
+S1413-II y sus seis equivalentes `E-II` se asocian sólo al modelo sin `-II`, conservando
+`-II` en nombre y filename. La referencia local errónea de S1212E se ignora: se exige
+el PDF S1212E-II de 1.064.335 bytes y SHA-256
+`53f6cac35264b2b261e511dfd0d15cacd4d4ae95f4b5d878e7e38b9938c839e7`, registrando
+`corrected_source_sheet_metadata` no bloqueante. Sólo
+`Ficha-técnica-LGMG-SR0818E-2.pdf` y `Ficha-técnica-LGMG-SR1218E-2.pdf` admiten tilde;
+el multipart usa el prefijo sin tilde y registra ambas normalizaciones. SS0607E admite
+el PDF escaneado válido sin texto útil.
+
+La política es inmutable: los 57 payloads fuerzan `price = null`,
+`price_visible = false`, `is_featured = false`, `is_published = false` y
+`stock_status = on_request`. No existe opción de publicación. Se conservan los null de
+altura, peso, energía, terreno, año y horómetro y se reportan como seguimientos.
+
+### Operación segura y checkpoints
+
+La única URL es `https://api.jem-nexus.cl`; se rechazan HTTP, localhost, credenciales,
+query, fragmentos y redirects fuera de origen. El JWT efímero procede únicamente de
+`JEM_NEXUS_ACCESS_TOKEN`, nunca de CLI ni archivos y jamás se persiste. Los siete
+reportes JSON son atómicos, deterministas y sanitizados.
+
+* `--dry-run` valida todo y usa sólo GET; termina en
+  `production_transfer_dry_run_ready`.
+* `--apply --confirm-apply IMPORTAR_57_LGMG_NO_PUBLICADOS` exige ese checkpoint exacto,
+  repite preflight y persiste cada operación.
+* `--apply --resume` acepta sólo estado en progreso/parcial, acredita el prefijo por
+  identidad e ID y no repite operaciones. Una respuesta ambigua se reconcilia por
+  contrato exacto, nunca por proximidad.
+* `--verify` usa sólo GET y acredita taxonomía, política, relaciones y conteos; termina
+  en `production_transfer_verified`.
+
+POST no se reintenta tras timeout o desconexión. 401/403 conserva estado parcial para
+un JWT nuevo. 429 respeta `Retry-After` con espera limitada. Después de
+`production_transfer_complete` se prohíben apply/resume. Deliberadamente no hay
+`--rollback`: una interrupción se recupera mediante reconciliación y resume.
+
+Ejemplos PowerShell para el operador, **sólo tras merge y autorización separada**:
+
+```powershell
+$env:JEM_NEXUS_ACCESS_TOKEN = '<JWT-efímero>'
+py -3 .\transfer_lgmg_catalog_to_production.py --package .\JEM-LGMG-Transferencia-20260908-000450.zip --api-base-url https://api.jem-nexus.cl --checkpoint .\checkpoint.json --output-dir .\dry-run --dry-run
+py -3 .\transfer_lgmg_catalog_to_production.py --package .\JEM-LGMG-Transferencia-20260908-000450.zip --api-base-url https://api.jem-nexus.cl --checkpoint .\checkpoint.json --output-dir .\apply --apply --confirm-apply IMPORTAR_57_LGMG_NO_PUBLICADOS
+py -3 .\transfer_lgmg_catalog_to_production.py --package .\JEM-LGMG-Transferencia-20260908-000450.zip --api-base-url https://api.jem-nexus.cl --checkpoint .\checkpoint.json --output-dir .\resume --apply --resume --confirm-apply IMPORTAR_57_LGMG_NO_PUBLICADOS
+py -3 .\transfer_lgmg_catalog_to_production.py --package .\JEM-LGMG-Transferencia-20260908-000450.zip --api-base-url https://api.jem-nexus.cl --checkpoint .\checkpoint.json --output-dir .\verify --verify
+```
+
+**Esta tarea no autoriza ejecutar esos comandos contra producción.** Debe revisarse
+primero el dry-run real de sólo lectura; apply requiere autorización humana posterior.
