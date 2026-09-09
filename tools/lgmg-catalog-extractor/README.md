@@ -1311,7 +1311,7 @@ y no debe reanudarse.
 
 ## Transferencia cerrada del catálogo local LGMG a producción
 
-`transfer_lgmg_catalog_to_production.py` 1.0.3 implementa el perfil cerrado
+`transfer_lgmg_catalog_to_production.py` 1.0.4 implementa el perfil cerrado
 `lgmg_local_catalog_57`. Su único insumo válido es
 `JEM-LGMG-Transferencia-20260908-000450.zip` (57.713.145 bytes, SHA-256
 `6f986eb3784b7840ae35dfe1f2bd690a8f13cd1815dacc0c2b3342974efc8e2f`), con 112
@@ -1374,6 +1374,23 @@ La única URL es `https://api.jem-nexus.cl`; se rechazan HTTP, localhost, creden
 query, fragmentos y redirects fuera de origen. El JWT efímero procede únicamente de
 `JEM_NEXUS_ACCESS_TOKEN`, nunca de CLI ni archivos y jamás se persiste. Los siete
 reportes JSON son atómicos, deterministas y sanitizados.
+
+La escritura atómica portable crea el temporal en el mismo directorio, escribe el JSON
+canónico completo, ejecuta `flush` y el `os.fsync()` obligatorio del archivo temporal,
+y después publica mediante `os.replace()` en todas las plataformas. En POSIX también
+abre, sincroniza con `os.fsync()` y cierra el directorio padre. En Windows omite
+explícitamente esa sincronización del directorio: abrir un directorio con
+`os.open(..., os.O_RDONLY)` no es portable allí; esto no debilita la sincronización del
+temporal ni la sustitución atómica.
+
+Un error esperado de persistencia detiene la herramienta como `atomic_write_error`, sin
+traceback ni rutas locales. Si falla una garantía posterior a `os.replace()`, el archivo
+final puede haber quedado persistido aunque la invocación haya informado error. Nunca se
+infiere entonces que el checkpoint no existe, ni se reintenta o elimina automáticamente.
+Antes de repetir un dry-run fallido, el operador debe inspeccionar manualmente si existe
+el checkpoint final, conservarlo separado como evidencia no aprobada y decidir fuera de
+la herramienta cómo proceder. `--dry-run` rechaza siempre sobrescribir un checkpoint
+existente; no se agregó ningún modo de limpieza o rollback.
 
 * `--dry-run` valida todo y usa sólo GET; termina en
   `production_transfer_dry_run_ready`.

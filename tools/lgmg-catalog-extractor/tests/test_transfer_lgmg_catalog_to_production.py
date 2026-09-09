@@ -35,7 +35,7 @@ def jpeg_image(width,height):
     return b"\xff\xd8\xff\xc0\x00\x08\x08"+height.to_bytes(2,"big")+width.to_bytes(2,"big")+b"\x01\xff\xd9"
 
 class Contracts(unittest.TestCase):
-    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.3","1.0","lgmg_local_catalog_57"))
+    def test_identity(self): self.assertEqual((t.TOOL_NAME,t.TOOL_VERSION,t.SCHEMA_VERSION,t.PROFILE),("transfer_lgmg_catalog_to_production","1.0.4","1.0","lgmg_local_catalog_57"))
     def test_capture_has_exact_canonical_top_level_and_derives_nested_rows(self):
         d=capture(); self.assertNotIn("images",d); self.assertNotIn("specifications",d)
         source=t.validate_capture(d)
@@ -197,6 +197,75 @@ class Contracts(unittest.TestCase):
     def test_atomic_checkpoint(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/"cp.json"; t.atomic_write(p,{"token":"x","state":"ok"}); self.assertEqual(json.loads(p.read_text()),{"state":"ok"}); self.assertEqual(list(Path(td).iterdir()),[p])
+    def test_atomic_checkpoint_windows_skips_directory_sync(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"cp.json"
+            real_fsync=t.os.fsync; fsync_fds=[]
+            real_sync=t.sync_parent_directory
+            def record_fsync(fd): fsync_fds.append(fd); return real_fsync(fd)
+            with mock.patch.object(t,"sync_parent_directory",side_effect=lambda path:real_sync(path,platform="nt")), \
+                 mock.patch.object(t.os,"open",wraps=t.os.open) as open_mock, \
+                 mock.patch.object(t.os,"fsync",side_effect=record_fsync) as fsync_mock, \
+                 mock.patch.object(t.os,"replace",wraps=t.os.replace) as replace_mock:
+                t.atomic_write(p,{"state":"ok"})
+            self.assertFalse(any(Path(call.args[0]) == p.parent for call in open_mock.call_args_list)); replace_mock.assert_called_once()
+            self.assertEqual(fsync_mock.call_count,1)
+            self.assertEqual(len(fsync_fds),1)
+            self.assertEqual(p.read_bytes(),t.canonical({"state":"ok"})+b"\n")
+            self.assertEqual(list(Path(td).iterdir()),[p])
+    def test_parent_directory_sync_posix_closes_descriptor_on_success_and_error(self):
+        p=Path("relative")/"cp.json"
+        with mock.patch.object(t.os,"open",return_value=41) as opened, \
+             mock.patch.object(t.os,"fsync") as fsynced, mock.patch.object(t.os,"close") as closed:
+            t.sync_parent_directory(p,platform="posix")
+        opened.assert_called_once_with(p.parent,t.os.O_RDONLY); fsynced.assert_called_once_with(41); closed.assert_called_once_with(41)
+        with mock.patch.object(t.os,"open",return_value=42), \
+             mock.patch.object(t.os,"fsync",side_effect=OSError("failure")), mock.patch.object(t.os,"close") as closed:
+            with self.assertRaises(OSError): t.sync_parent_directory(p,platform="posix")
+        closed.assert_called_once_with(42)
+    def test_atomic_error_before_replace_removes_temporary_and_does_not_publish(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"private"/"cp.json"
+            with mock.patch.object(t.os,"fsync",side_effect=PermissionError(str(p.parent))):
+                with self.assertRaisesRegex(t.TransferError,"^atomic_write_error$"): t.atomic_write(p,{"state":"ok"})
+            self.assertFalse(p.exists()); self.assertEqual(list(p.parent.iterdir()),[])
+    def test_atomic_replace_error_is_controlled_and_removes_temporary(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"cp.json"
+            with mock.patch.object(t.os,"replace",side_effect=PermissionError(str(p))):
+                with self.assertRaisesRegex(t.TransferError,"^atomic_write_error$"): t.atomic_write(p,{"state":"ok"})
+            self.assertFalse(p.exists()); self.assertEqual(list(Path(td).iterdir()),[])
+    def test_directory_sync_error_is_controlled_after_final_file_was_published_once(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"cp.json"
+            with mock.patch.object(t,"sync_parent_directory",side_effect=PermissionError(str(p.parent))) as sync, \
+                 mock.patch.object(t.os,"replace",wraps=t.os.replace) as replace:
+                with self.assertRaisesRegex(t.TransferError,"^atomic_write_error$"): t.atomic_write(p,{"state":"ok"})
+            self.assertTrue(p.is_file()); replace.assert_called_once(); sync.assert_called_once_with(p)
+            self.assertEqual(list(Path(td).iterdir()),[p])
+    def test_main_handles_atomic_error_without_traceback_or_absolute_path(self):
+        secret_path=str(Path(tempfile.gettempdir())/"Users"/"Franz"/"checkpoint.json")
+        stderr=io.StringIO()
+        with mock.patch.object(t,"run",side_effect=t.TransferError("atomic_write_error")), mock.patch.object(t.os.sys,"stderr",stderr):
+            self.assertEqual(t.main(),2)
+        message=stderr.getvalue(); self.assertEqual(message,"ERROR: atomic_write_error\n")
+        self.assertNotIn(secret_path,message); self.assertNotIn("Traceback",message); self.assertNotIn("PermissionError",message)
+    def test_synthetic_dry_run_writes_checkpoint_and_seven_reports_without_mutations(self):
+        root={"id":1,"name":"Maquinarias","slug":"maquinarias","product_type":"machinery","parent":None,"is_active":True}
+        responses={path:[] for path in t.ApiClient.READ_PATHS}; responses[t.ApiClient.READ_PATHS[0]]=[root]
+        class Client:
+            def __init__(self,*_): self.methods=[]
+            def get(self,path): self.methods.append("GET"); return responses[path]
+        client=Client(); plan=[{"operation_key":f"op:{i}"} for i in range(234)]
+        audit={"source":{},"package_sha256":"p","json_sha256":"j","manifest_fingerprint":"m","entries":[]}
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(t,"audit_package",return_value=audit), \
+             mock.patch.object(t,"build_plan",return_value=plan), mock.patch.object(t,"access_token",return_value="synthetic"):
+            checkpoint=Path(td)/"checkpoint.json"; reports=Path(td)/"reports"
+            cp=t.run(["--package",str(Path(td)/"unused.zip"),"--api-base-url",t.API_BASE,"--checkpoint",str(checkpoint),"--output-dir",str(reports),"--dry-run"],client_factory=lambda *_:client)
+            self.assertTrue(checkpoint.is_file()); self.assertEqual(len(list(reports.iterdir())),7)
+            self.assertEqual(cp["state"],"production_transfer_dry_run_ready"); self.assertEqual(cp["completed_operations"],[])
+            self.assertEqual(client.methods,["GET"]*6)
+            self.assertEqual(json.loads((reports/"summary.json").read_text())["mutating_requests"],0)
     def test_prefix_valid_invalid(self):
         plan=[t.operation("brand","lgmg",{})]; done=[{"operation_key":plan[0]["operation_key"],"index":0,"type":"brand","production_id":2}]; t.validate_prefix(plan,done)
         done[0]["index"]=1
