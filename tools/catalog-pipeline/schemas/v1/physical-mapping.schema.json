@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/physical-mapping.schema.json",
+  "title": "physical-mapping",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "root_label": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "resolved_canonical_identity_value": {
+            "type": ["string", "null"]
+          },
+          "kind": {
+            "enum": [
+              "brand",
+              "category",
+              "model",
+              "image",
+              "technical_sheet",
+              "document"
+            ]
+          },
+          "original_name": {
+            "type": "string"
+          },
+          "materialized_name": {
+            "type": "string"
+          },
+          "relative_path": {
+            "$ref": "common-definitions.schema.json#/$defs/portable_path"
+          }
+        },
+        "required": [
+          "kind",
+          "resolved_canonical_identity_value",
+          "original_name",
+          "materialized_name",
+          "relative_path"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_label",
+    "entries"
+  ],
+  "additionalProperties": false
+}

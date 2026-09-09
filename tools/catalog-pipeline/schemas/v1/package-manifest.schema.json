@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/package-manifest.schema.json",
+  "title": "package-manifest",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "package_id": {
+      "type": "string"
+    },
+    "approved": {
+      "const": true
+    },
+    "rules_version": {
+      "type": "string"
+    },
+    "content_fingerprint": {
+      "$ref": "common-definitions.schema.json#/$defs/sha256"
+    },
+    "universe_counts": {
+      "type": "object",
+      "properties": {
+        "raw_observation_count": { "type": "integer", "minimum": 0 },
+        "source_identity_count": { "type": "integer", "minimum": 0 },
+        "discovered_entry_count": { "type": "integer", "minimum": 0 },
+        "canonical_candidate_count": { "type": "integer", "minimum": 0 },
+        "resolved_canonical_product_count": { "type": "integer", "minimum": 0 },
+        "blocked_discovered_entry_count": { "type": "integer", "minimum": 0 },
+        "importable_canonical_product_count": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["raw_observation_count", "source_identity_count", "discovered_entry_count", "canonical_candidate_count", "resolved_canonical_product_count", "blocked_discovered_entry_count", "importable_canonical_product_count"],
+      "additionalProperties": false
+    },
+    "discovered_universe": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "canonical_candidate_universe": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "resolved_canonical_universe": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "importable_universe": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "blocked": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "enum": [
+              "raw",
+              "canonical",
+              "normalized",
+              "audit",
+              "mapping",
+              "media"
+            ]
+          },
+          "relative_path": {
+            "$ref": "common-definitions.schema.json#/$defs/portable_path"
+          },
+          "sha256": {
+            "$ref": "common-definitions.schema.json#/$defs/sha256"
+          },
+          "original_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "materialized_name": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mime": {
+            "type": "string"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canonical_identity_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "role",
+          "relative_path",
+          "sha256",
+          "original_name",
+          "materialized_name",
+          "source_url",
+          "size",
+          "mime",
+          "language",
+          "revision",
+          "canonical_identity_value"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "package_id",
+    "approved",
+    "rules_version",
+    "content_fingerprint",
+    "universe_counts",
+    "discovered_universe",
+    "canonical_candidate_universe",
+    "resolved_canonical_universe",
+    "importable_universe",
+    "blocked",
+    "artifacts"
+  ],
+  "additionalProperties": false
+}

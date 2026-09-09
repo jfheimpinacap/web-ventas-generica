@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "canonical_identity_value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source_identity_values": [
+    "source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "source-identity-v1:sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  ],
+  "source_roles": ["authoritative_existence", "supplemental"],
+  "discovered_universe": ["discovery-identity-v1:source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111"],
+  "resolved_canonical_universe": ["canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000"],
+  "provenance": [
+    {"source_namespace": "synthetic-a", "stable_source_key": "record-a"},
+    {"source_namespace": "synthetic-b", "stable_source_key": "record-b"}
+  ],
+  "physical_product_path": "SYNTHETIC/catalogo/machines/EFL 181",
+  "importable_universe": ["canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000"],
+  "separate_variant_case": {
+    "source_a_model": "EFL 181",
+    "source_b_model": "EFL 181 Long Range",
+    "canonical_identity_values": ["canonical-a", "canonical-b"],
+    "must_remain_separate": true
+  },
+  "ambiguous_alias_case": {
+    "alias": "EFL",
+    "resolution_status": "manual_approval_required",
+    "blocking": true
+  },
+  "series_page_case": {
+    "candidate_canonical_identity_values": ["candidate-a", "candidate-b"],
+    "canonical_identity_value": null,
+    "blocking": true
+  }
+}

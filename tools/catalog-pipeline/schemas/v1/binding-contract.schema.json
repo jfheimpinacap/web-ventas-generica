@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/binding-contract.schema.json",
+  "title": "binding-contract",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "external_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "enum": [
+              "root",
+              "category",
+              "brand",
+              "supplier",
+              "product"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "binding_type": {
+            "enum": [
+              "entity_id",
+              "entity_slug",
+              "resource_key"
+            ]
+          },
+          "value": {},
+          "producer_operation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "enum": [
+              "resolved",
+              "missing",
+              "pending"
+            ]
+          }
+        },
+        "required": [
+          "namespace",
+          "key",
+          "binding_type",
+          "value",
+          "producer_operation",
+          "resolution_status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "produced_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "enum": [
+              "root",
+              "category",
+              "brand",
+              "supplier",
+              "product"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "binding_type": {
+            "enum": [
+              "entity_id",
+              "entity_slug",
+              "resource_key"
+            ]
+          },
+          "value": {},
+          "producer_operation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "enum": [
+              "resolved",
+              "missing",
+              "pending"
+            ]
+          }
+        },
+        "required": [
+          "namespace",
+          "key",
+          "binding_type",
+          "value",
+          "producer_operation",
+          "resolution_status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required_references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "enum": [
+              "external",
+              "produced"
+            ]
+          },
+          "namespace": {
+            "enum": [
+              "root",
+              "category",
+              "brand",
+              "supplier",
+              "product"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "binding_type": {
+            "enum": [
+              "entity_id",
+              "entity_slug",
+              "resource_key"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "namespace",
+          "key",
+          "binding_type"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "dependency_errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "const": "MISSING_BINDING"
+          },
+          "reference": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "external",
+                  "produced"
+                ]
+              },
+              "namespace": {
+                "enum": [
+                  "root",
+                  "category",
+                  "brand",
+                  "supplier",
+                  "product"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "binding_type": {
+                "enum": [
+                  "entity_id",
+                  "entity_slug",
+                  "resource_key"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "namespace",
+              "key",
+              "binding_type"
+            ],
+            "additionalProperties": false
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "reference",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "external_bindings",
+    "produced_bindings",
+    "required_references",
+    "dependency_errors"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "source_identity": {
+    "value": "source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "rule_version": "source-identity-v1",
+    "source_namespace": "synthetic-a",
+    "stable_source_key": "record-1",
+    "key_strategy": "native-v1"
+  },
+  "canonical_identity_value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "candidate_canonical_identity_values": [],
+  "source_namespace": "synthetic-a",
+  "matching_rule_id": "approved-exact-model",
+  "matching_rule_version": "1.0.0",
+  "evidence_ids": ["ev-1"],
+  "resolution_status": "derived_by_approved_rule",
+  "human_decision_id": null,
+  "blocking": false,
+  "observed_at": "2026-01-01T00:00:00Z"
+}

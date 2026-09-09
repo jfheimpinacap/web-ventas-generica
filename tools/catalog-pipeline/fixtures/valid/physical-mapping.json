@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "root_label": "SYNTHETIC",
+  "entries": [
+    {
+      "kind": "model",
+      "resolved_canonical_identity_value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "original_name": "EFL/181",
+      "materialized_name": "EFL_181",
+      "relative_path": "SYNTHETIC/catalogo/category/EFL_181"
+    }
+  ]
+}

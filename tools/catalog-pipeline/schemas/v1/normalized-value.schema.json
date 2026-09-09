@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/normalized-value.schema.json",
+  "title": "normalized-value",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "field": {
+      "type": "string"
+    },
+    "raw_value": {},
+    "normalized_value": {},
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_field": {
+      "type": "string"
+    },
+    "extraction_rule": {
+      "type": "string"
+    },
+    "resolution_status": {
+      "$ref": "common-definitions.schema.json#/$defs/resolution_status"
+    },
+    "conflict": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {}
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "values",
+        "reason"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "field",
+    "raw_value",
+    "normalized_value",
+    "unit",
+    "source",
+    "source_url",
+    "source_field",
+    "extraction_rule",
+    "resolution_status",
+    "conflict"
+  ],
+  "additionalProperties": false
+}

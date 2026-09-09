@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "canonical_identity_value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "structured_fields": {
+    "name": "Synthetic lift"
+  },
+  "product_specs": [
+    {
+      "key": "maximum_lift_height_mm",
+      "value": 4800,
+      "unit": "mm"
+    }
+  ],
+  "issues": [],
+  "ready": false
+}

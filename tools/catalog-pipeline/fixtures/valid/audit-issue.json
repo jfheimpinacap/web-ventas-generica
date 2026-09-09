@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "code": "CATEGORY_MAPPING_REQUIRED",
+  "stage": "audit",
+  "subject": "synthetic:model-1",
+  "severity": "error",
+  "blocking": true,
+  "message": "Category requires approval",
+  "evidence": [
+    "ev-1"
+  ],
+  "required_action": "Human category mapping",
+  "resolution_status": "manual_approval_required",
+  "human_decision": null
+}

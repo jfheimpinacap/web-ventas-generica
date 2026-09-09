@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "discovered_entry_id": "discovery-identity-v1:source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "authoritative_source_identity": {
+    "value": "source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "rule_version": "source-identity-v1",
+    "source_namespace": "synthetic-authority",
+    "stable_source_key": "official-record-1",
+    "key_strategy": "native-v1"
+  },
+  "source_role": "authoritative_existence",
+  "raw_observation_ids": ["observation-1"],
+  "canonical_identity_value": null,
+  "canonical_candidate_identity_values": ["candidate-a", "candidate-b"],
+  "resolution_status": "manual_approval_required",
+  "blocking_issue_codes": ["AMBIGUOUS_CANONICAL_MATCH"],
+  "original_categories": ["Synthetic category"],
+  "evidence_ids": ["evidence-1"],
+  "supplemental_source_identity_values": ["source-identity-v1:sha256:2222222222222222222222222222222222222222222222222222222222222222"],
+  "review_status": "blocked"
+}

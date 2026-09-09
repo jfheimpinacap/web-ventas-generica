@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "synthetic-1",
+  "adapter": {
+    "id": "synthetic.fixture",
+    "version": "1.0.0",
+    "fingerprint": "synthetic.fixture@1.0.0",
+    "source_role": "authoritative_existence"
+  },
+  "stages": [
+    "raw",
+    "canonical",
+    "normalized",
+    "audit",
+    "package"
+  ]
+}

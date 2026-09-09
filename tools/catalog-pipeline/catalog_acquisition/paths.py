@@ -1,0 +1,80 @@
+"""Host-independent Windows-safe filesystem materialization."""
+from __future__ import annotations
+import hashlib, re, unicodedata
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from .errors import PathCollisionError, UnsafePathError
+
+_INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED = re.compile(r"^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.I)
+MAX_SEGMENT = 100
+
+def _reject_pathlike(value: str) -> None:
+    if not value or value in {".", ".."} or PureWindowsPath(value).is_absolute() or PurePosixPath(value).is_absolute():
+        raise UnsafePathError("A label, not a path, is required", value=value)
+    if value.startswith(("\\\\", "//")) or re.match(r"^[A-Za-z]:", value):
+        raise UnsafePathError("Absolute, UNC and drive paths are forbidden", value=value)
+
+def category_slug(label: str) -> str:
+    _reject_pathlike(label)
+    ascii_value = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode("ascii").lower()
+    result = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
+    if not result: raise UnsafePathError("Category has no materializable ASCII characters", value=label)
+    return result
+
+def model_key(model: str) -> str:
+    _reject_pathlike(model)
+    value = unicodedata.normalize("NFC", model)
+    value = _INVALID.sub("_", value).rstrip(" .")
+    if not value or value in {".", ".."}: raise UnsafePathError("Model produces an empty or traversal segment", value=model)
+    if _RESERVED.match(value): value = f"_{value}"
+    if len(value.encode("utf-8")) > MAX_SEGMENT:
+        digest = hashlib.sha256(value.encode()).hexdigest()[:16]
+        while len(value.encode()) > MAX_SEGMENT - 18: value = value[:-1]
+        value = f"{value}--{digest}"
+    return value
+
+def windows_collision_key(segment: str) -> str:
+    return unicodedata.normalize("NFC", segment).rstrip(" .").casefold()
+
+def safe_join(root: Path, relative: str | PurePosixPath) -> Path:
+    rel = PurePosixPath(str(relative).replace("\\", "/"))
+    if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+        raise UnsafePathError("Relative portable path is unsafe", path=str(relative))
+    root_resolved = root.resolve()
+    target = root_resolved.joinpath(*rel.parts).resolve()
+    if target != root_resolved and root_resolved not in target.parents:
+        raise UnsafePathError("Path escapes configured root", path=str(relative))
+    return target
+
+class LayoutRegistry:
+    """Collision registry also serving as reversible original->materialized manifest."""
+    def __init__(self) -> None: self.entries: list[dict[str, str | None]] = []; self._keys: dict[str, str] = {}
+    def add(self, kind: str, original: str, materialized: str, *, resolved_canonical_identity_value: str | None=None) -> dict[str, str | None]:
+        key = f"{kind}:{windows_collision_key(materialized)}"
+        owner=resolved_canonical_identity_value or original
+        if key in self._keys and self._keys[key] != owner:
+            raise PathCollisionError("Distinct owners collide under Windows comparison", first=self._keys[key], second=owner)
+        self._keys[key] = owner
+        entry = {"kind": kind, "resolved_canonical_identity_value": resolved_canonical_identity_value, "original_name": original, "materialized_name": materialized}
+        if entry not in self.entries: self.entries.append(entry)
+        return entry
+
+def create_layout(root: Path, brand: str, category: str, model: str, *, resolved_canonical_identity_value: str,
+                  registry: LayoutRegistry) -> dict[str, str]:
+    """Create only the controlled empty directory layout and return portable paths."""
+    brand_key=model_key(brand); category_key=category_slug(category); product_key=model_key(model)
+    registry.add("brand",brand,brand_key); registry.add("category",category,category_key)
+    registry.add("model",model,product_key,resolved_canonical_identity_value=resolved_canonical_identity_value)
+    relatives=[f"{brand_key}/catalogo/{category_key}/{product_key}/{leaf}" for leaf in ("imagenes","fichas-tecnicas","documentos")]
+    relatives += [f"{brand_key}/_pipeline/{leaf}" for leaf in ("snapshots","cache","manifests","mappings","reports","packages")]
+    for relative in relatives: safe_join(root,relative).mkdir(parents=True,exist_ok=True)
+    return {"brand_key":brand_key,"category_key":category_key,"model_key":product_key,"resolved_canonical_identity_value":resolved_canonical_identity_value,"product_path":f"{brand_key}/catalogo/{category_key}/{product_key}"}
+
+def image_filename(brand: str, model: str, order: int, extension: str, main: bool=False) -> str:
+    if order < 0 or not re.fullmatch(r"[A-Za-z0-9]+",extension): raise UnsafePathError("Invalid image order or extension")
+    return f"{model_key(brand)}-{model_key(model)}-{order}{'-principal' if main else ''}.{extension.lower()}"
+
+def technical_sheet_filename(brand: str, model: str, language: str, revision: str | None=None) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9-]+",language): raise UnsafePathError("Invalid language")
+    suffix=f"-{model_key(revision)}" if revision else ""
+    return f"{model_key(brand)}-{model_key(model)}-ficha-tecnica-{language.lower()}{suffix}.pdf"

@@ -1,0 +1,47 @@
+{
+  "case_a_official_ambiguous": {
+    "source_role": "authoritative_existence",
+    "source_identity_values": ["source-a"],
+    "discovered_universe": ["discovered-a"],
+    "canonical_candidate_universe": ["candidate-a1", "candidate-a2"],
+    "resolved_canonical_universe": [],
+    "importable_universe": [],
+    "blocked": {"discovered-a": ["AMBIGUOUS_CANONICAL_MATCH"]}
+  },
+  "case_b_not_representable": {
+    "source_role": "authoritative_existence",
+    "discovered_universe": ["discovered-b"],
+    "resolved_canonical_universe": ["canonical-b"],
+    "importable_universe": [],
+    "blocked": {"discovered-b": ["JEM_CATEGORY_NOT_APPROVED"]}
+  },
+  "case_c_supplemental": {
+    "source_role": "supplemental",
+    "source_identity_values": ["source-c"],
+    "raw_observation_ids": ["observation-c"],
+    "evidence_ids": ["evidence-c"],
+    "discovered_universe_additions": [],
+    "supplements_discovered_entry_id": "discovered-existing"
+  },
+  "case_d_two_sources_one_product": {
+    "source_roles": ["authoritative_existence", "supplemental"],
+    "source_identity_values": ["source-d1", "source-d2"],
+    "discovered_universe": ["discovered-d"],
+    "resolved_canonical_universe": ["canonical-d"],
+    "importable_universe": ["canonical-d"],
+    "physical_product_paths": ["SYNTHETIC/catalogo/machines/MODEL-D"]
+  },
+  "case_e_series_page": {
+    "discovered_universe": ["discovered-e"],
+    "canonical_candidate_universe": ["candidate-e1", "candidate-e2"],
+    "resolved_canonical_universe": [],
+    "importable_universe": [],
+    "blocked": {"discovered-e": ["SERIES_CANDIDATES_REQUIRE_REVIEW"]}
+  },
+  "case_f_approval": {
+    "candidate_only_importable": false,
+    "automatic_resolution": {"matching_rule_id": "exact-components", "matching_rule_version": "1.0.0"},
+    "manual_resolution": {"human_decision_id": "decision-f"},
+    "isolated_approval_boolean_allowed": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "canonical_identity_value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "values": [],
+  "readiness": "blocked",
+  "type_mapping_approved": false,
+  "category_mapping_approved": false,
+  "blocking_issue_codes": [
+    "CATEGORY_MAPPING_REQUIRED"
+  ]
+}
