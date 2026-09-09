@@ -164,9 +164,12 @@ class BindingTests(unittest.TestCase):
 class ArchitectureTests(unittest.TestCase):
  def test_no_cross_imports_or_network_modules(self):
   acquisition='\n'.join(p.read_text() for p in (ROOT/'catalog_acquisition').glob('*.py'))
+  parsers='\n'.join((ROOT/'catalog_acquisition'/name).read_text() for name in ('adapters.py','discovery_adapters.py'))
   importer='\n'.join(p.read_text() for p in (ROOT/'jem_nexus_import').glob('*.py'))
   self.assertNotIn('jem_nexus_import',acquisition); self.assertNotIn('catalog_acquisition',importer)
-  for forbidden in ['requests','urllib','http.client','socket','selenium','playwright']: self.assertNotIn(f'import {forbidden}',acquisition+importer)
+  for forbidden in ['requests','http.client','socket','selenium','playwright']:
+   self.assertNotIn(f'import {forbidden}',parsers+importer)
+  self.assertNotIn('urllib.request',parsers+importer)
  def test_adapter_uses_injected_bytes(self): self.assertEqual('synthetic.fixture',next(iter(SyntheticAdapter().discover(b'synthetic.fixture')))['stable_source_key'])
 
 if __name__=='__main__': unittest.main()

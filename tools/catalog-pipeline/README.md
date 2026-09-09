@@ -1,4 +1,4 @@
-# Catalog Pipeline Foundation (Prompt 267)
+# Catalog Pipeline Foundation and Discovery
 
 Fundación **offline**, Python 3/biblioteca estándar, separada en `catalog_acquisition` y
 `jem_nexus_import`. El flujo conserva `raw -> source identity -> discovered entry -> canonical
@@ -9,7 +9,9 @@ La identidad de registro de fuente y la identidad canónica aprobada son contrat
 vinculados de forma auditable mediante `identity-link.schema.json`.
 
 Véanse [arquitectura y políticas](docs/architecture.md), [contrato JEM](docs/jem-nexus-contract.md)
-y el contrato machine-readable `schemas/v1/jem-nexus-contract.json`.
+y el contrato machine-readable `schemas/v1/jem-nexus-contract.json`. La etapa segura de
+discovery EP/GAM, actualmente fail-closed hasta disponer de evidencia estructural verificable,
+se documenta en [discovery-ep-gam.md](docs/discovery-ep-gam.md).
 
 Validación posterior (no ejecutada durante Prompt 267):
 
