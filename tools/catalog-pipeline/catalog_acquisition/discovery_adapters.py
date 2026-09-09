@@ -71,7 +71,8 @@ class EPDiscoveryAdapter(BaseDiscoveryAdapter):
     category_path=re.compile(r"^/es/productos/[^/]+/?$")
 class GAMDiscoveryAdapter(BaseDiscoveryAdapter):
     adapter_id="gam.cl.catalog.discovery"; adapter_version="gam-discovery-v1"; source=SOURCES["gam"]
-    product_path=re.compile(r"^/cl/[^/]+-\d+\.html$")
+    # Synthetic fixture contract only; this is not a claim about GAM's live structure.
+    product_path=re.compile(r"^/cl/826-ep/productos/[^/]+-\d+\.html$")
     category_path=re.compile(r"^/cl/826-ep/?$")
 
 ADAPTERS={"ep":EPDiscoveryAdapter(),"gam":GAMDiscoveryAdapter()}

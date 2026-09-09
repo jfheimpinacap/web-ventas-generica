@@ -54,6 +54,18 @@ se lo invoca directamente, esta secuencia inalterable:
 4. volver a evaluar robots para la URL inicial y cada categoría/listado/paginación descubierta
    antes de incorporarla a la frontier o entregarla al transporte.
 
+La evaluación individual usa la regla coincidente más específica (y `Allow` en empates), por
+lo que un `Allow` general nunca prevalece accidentalmente sobre un `Disallow` de ruta más larga.
+Durante Prompt 270 no se realizó ninguna solicitud de red: los fixtures continuaron siendo
+exclusivamente sintéticos y no constituyen evidencia de estructura live.
+
+El alcance GAM está confinado a la entrada EP `/cl/826-ep` y a descendientes explícitos bajo
+ese prefijo; el resto de `/cl` no está autorizado. La ruta de producto subordinada usada por el
+fixture es sintética y prueba solamente parsing, canonicalización, procedencia y rol
+suplementario. Si evidencia live futura ubica productos en rutas hermanas, hará falta aprobar
+una regla nueva, estrecha, versionada y vinculada a esa evidencia antes de ampliar el alcance.
+GAM permanece bloqueado para live y Prompt 270A realizó cero solicitudes de red.
+
 Errores de proxy/TLS/DNS/conexión/transporte, status desconocidos, 401/403/5xx, parse fallido,
 `disallowed`, redirects inválidos y caché/evidencia incompatible bloquean la fuente sin fallback.
 Sitemaps no se siguen automáticamente y tampoco pueden evitar alcance y evaluación individual.

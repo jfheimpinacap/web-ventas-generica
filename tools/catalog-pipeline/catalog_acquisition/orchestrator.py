@@ -10,6 +10,7 @@ from .robots import evaluate,permits_catalog
 from .serialization import canonical_bytes
 from .storage import atomic_write,verify_hash
 from .paths import safe_join
+from .urls import UnsafeUrlError,canonicalize
 
 @dataclass(order=True)
 class FrontierItem:
@@ -75,13 +76,22 @@ def capture_source(source:SourceDefinition,adapter,transport,*,config_fingerprin
         target_url=source.start_url,user_agent=transport.policy.user_agent,fetched_at=response.fetched_at)
     result.robots=decision.__dict__|{"source":source.source,"config_fingerprint":config_fingerprint_value}
     if not permits_catalog(decision): result.reason=f"robots_{decision.state}"; result.urls_blocked=1; return result
-    pending=[(source.start_url,0)]; visited=set(); result.state="running"; result.reason=""
+    def authorized(reference,base_url):
+        try: canonical=canonicalize(reference,base_url=base_url,source=source).canonical
+        except UnsafeUrlError: result.urls_blocked+=1; return None
+        per_url=evaluate(robots_url=robots_url,status=response.status,body=response.body,
+            target_url=canonical,user_agent=transport.policy.user_agent,fetched_at=response.fetched_at)
+        if not permits_catalog(per_url): result.urls_blocked+=1; return None
+        return canonical
+    start=authorized(source.start_url,source.start_url)
+    if start is None: result.reason="start_url_blocked"; return result
+    pending=[(start,0)]; visited=set(); result.state="running"; result.reason=""
     while pending and len(visited)<max_pages:
         url,depth=pending.pop(0)
         if url in visited: continue
-        per_url=evaluate(robots_url=robots_url,status=response.status,body=response.body,
-            target_url=url,user_agent=transport.policy.user_agent,fetched_at=response.fetched_at)
-        if not permits_catalog(per_url): result.urls_blocked+=1; visited.add(url); continue
+        canonical=authorized(url,source.start_url)
+        if canonical is None: visited.add(url); continue
+        url=canonical
         result.requests_attempted+=1
         try: page=transport.fetch(url,source,method="GET")
         except Exception:
@@ -92,12 +102,10 @@ def capture_source(source:SourceDefinition,adapter,transport,*,config_fingerprin
         except Exception:
             result.state="blocked"; result.reason="catalog_parse_failed"; return result
         if depth<max_depth:
-            crawl=sorted({x.canonical_url for x in parsed.links if x.canonical_url and x.kind in ("category","listing","pagination")})
-            for discovered in crawl:
-                allowed=evaluate(robots_url=robots_url,status=response.status,body=response.body,
-                    target_url=discovered,user_agent=transport.policy.user_agent,fetched_at=response.fetched_at)
-                if permits_catalog(allowed): pending.append((discovered,depth+1))
-                else: result.urls_blocked+=1
+            crawl=sorted((x for x in parsed.links if x.canonical_url and x.kind in ("category","listing","pagination")),key=lambda x:x.canonical_url)
+            for link in crawl:
+                discovered=authorized(link.canonical_url,page.final_url)
+                if discovered is not None: pending.append((discovered,depth+1))
         for sitemap in decision.sitemaps:
             # Sitemaps never bypass URL scope or per-URL robots; adapters must explicitly classify them later.
             result.urls_blocked+=1

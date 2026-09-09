@@ -17,6 +17,18 @@ class UrlTests(unittest.TestCase):
  def test_relative_fragment_tracking_and_significant_query(self):
   u=canonicalize('?page=2&utm_source=x#top',base_url=SOURCES['gam'].start_url,source=SOURCES['gam'])
   self.assertEqual('https://online.gamrentals.com/cl/826-ep?page=2',u.canonical)
+ def test_gam_scope_is_only_the_explicit_ep_entry_and_descendants(self):
+  source=SOURCES['gam']; base=source.start_url
+  allowed=('/cl/826-ep','/cl/826-ep/productos/carretilla-ep-123.html',
+   '/cl/826-ep/productos/item.html?utm_source=test#fragment')
+  for value in allowed:
+   with self.subTest(allowed=value): self.assertTrue(canonicalize(value,base_url=base,source=source).canonical.startswith(base))
+  rejected=('/cl','/cl/','/cl/login','/cl/cuenta','/cl/otra-categoria','/cl/otra-marca',
+   '/cl/carretilla-no-validada.html','/es/','/admin','/cl/826-ep/%2e%2e/login',
+   '/cl/826-ep/productos%2f..%2fcuenta','https://evil.example/cl/826-ep',
+   '//online.gamrentals.com/cl/826-ep','https://online.gamrentals.com.evil.example/cl/826-ep')
+  for value in rejected:
+   with self.subTest(rejected=value),self.assertRaises(UnsafeUrlError): canonicalize(value,base_url=base,source=source)
  def test_unsafe_matrix(self):
   for value in ['http://ep-equipment.com/es/productos/','https://evil.example/es/productos/',
    'https://127.0.0.1/es/productos/','https://localhost/es/productos/',
@@ -38,6 +50,20 @@ class RobotsTests(unittest.TestCase):
  def test_unknown_or_forged_not_found_never_opens_gate(self):
   unknown=self.d(418,b''); forged=RobotsDecision('x','not_found',200,None,'x','a',None,True)
   self.assertFalse(permits_catalog(unknown)); self.assertFalse(permits_catalog(forged))
+ def test_longest_rule_wins_independent_of_order_and_allow_wins_only_a_tie(self):
+  target='https://ep-equipment.com/es/productos/private/item'
+  for body in (b'User-agent: *\nAllow: /es/productos/\nDisallow: /es/productos/private/',
+   b'User-agent: *\nDisallow: /es/productos/private/\nAllow: /es/productos/'):
+   with self.subTest(body=body):
+    decision=evaluate(robots_url='https://ep-equipment.com/robots.txt',status=200,body=body,target_url=target,user_agent='agent',fetched_at='x')
+    self.assertFalse(permits_catalog(decision)); self.assertEqual('Disallow: /es/productos/private/',decision.applicable_rule)
+  tied=b'User-agent: *\nDisallow: /es/productos/private/\nAllow: /es/productos/private/'
+  decision=evaluate(robots_url='https://ep-equipment.com/robots.txt',status=200,body=tied,target_url=target,user_agent='agent',fetched_at='x')
+  self.assertTrue(permits_catalog(decision)); self.assertEqual('Allow: /es/productos/private/',decision.applicable_rule)
+ def test_unsupported_robots_path_patterns_fail_closed(self):
+  for rule in (b'Disallow: /*.pdf$',b'Allow: /private/*'):
+   decision=self.d(200,b'User-agent: *\n'+rule)
+   self.assertEqual('parse_failed',decision.state); self.assertFalse(permits_catalog(decision))
 
 class ParseTests(unittest.TestCase):
  def test_ep_categories_candidates_pagination_jsonld_entities_unicode_external_unknown(self):
@@ -45,7 +71,15 @@ class ParseTests(unittest.TestCase):
   self.assertEqual({'category','product_candidate','pagination','blocked','unknown'},{x.kind for x in p.links}); self.assertEqual('EFL 181',next(x for x in p.links if x.kind=='product_candidate').model_hint); self.assertTrue(p.json_ld); self.assertIn('&',p.categories[0]['name_visible'])
  def test_gam_is_supplemental_and_never_official(self):
   p=ADAPTERS['gam'].parse((ROOT/'fixtures/discovery-structural/gam.html').read_bytes(),base_url=SOURCES['gam'].start_url,content_type='text/html',encoding='utf-8',snapshot_reference='snap/gam',expected_products=True)
-  record=candidate_record(SOURCES['gam'],next(x for x in p.links if x.kind=='product_candidate')); self.assertEqual('supplemental',record['source_role']); self.assertEqual('pending',record['review_status'])
+  link=next(x for x in p.links if x.kind=='product_candidate'); record=candidate_record(SOURCES['gam'],link)
+  self.assertEqual('/cl/826-ep/productos/carretilla-ep-123.html',link.original_url)
+  self.assertEqual('https://online.gamrentals.com/cl/826-ep/productos/carretilla-ep-123.html',link.canonical_url)
+  self.assertEqual(('snap/gam','a.product-miniature'),(link.evidence.snapshot_reference,link.evidence.locator))
+  self.assertEqual('supplemental',record['source_role']); self.assertEqual('pending',record['review_status'])
+  self.assertNotEqual('authoritative_existence',record['source_role'])
+ def test_gam_empty_still_fails_closed_when_products_expected(self):
+  with self.assertRaises(StructureChanged):
+   ADAPTERS['gam'].parse((ROOT/'fixtures/discovery-structural/empty.html').read_bytes(),base_url=SOURCES['gam'].start_url,content_type='text/html',encoding='utf-8',snapshot_reference='snap/empty',expected_products=True)
  def test_empty_and_changed_fail_closed_when_products_expected(self):
   for name in ('empty.html','changed.html'):
    with self.assertRaises(StructureChanged): ADAPTERS['ep'].parse((ROOT/'fixtures/discovery-structural'/name).read_bytes(),base_url=SOURCES['ep'].start_url,content_type='text/html',encoding='utf-8',snapshot_reference='x',expected_products=True)
@@ -72,11 +106,13 @@ class TransportUnitTests(unittest.TestCase):
 
 class _FakeTransport:
  policy=HttpPolicy(user_agent='offline-test-agent')
- def __init__(self,robots_status=200,robots_body=b'User-agent: *\nAllow: /',error=None,page=None):
+ def __init__(self,robots_status=200,robots_body=b'User-agent: *\nAllow: /',error=None,page=None,forbidden=()):
   self.calls=[]; self.status=robots_status; self.body=robots_body; self.error=error
+  self.forbidden=set(forbidden)
   self.page=page or (ROOT/'fixtures/discovery-structural/empty.html').read_bytes()
  def fetch(self,url,source,method='GET'):
   self.calls.append((method,url))
+  if url in self.forbidden: raise AssertionError(f'unauthorized URL reached transport: {url}')
   if len(self.calls)==1:
    if self.error: raise self.error
    return SimpleNamespace(status=self.status,body=self.body,fetched_at='2026-01-01T00:00:00Z',
@@ -137,8 +173,19 @@ class LivePreflightRegressionTests(unittest.TestCase):
  def test_discovered_url_and_sitemap_do_not_bypass_per_url_gate(self):
   body=b'User-agent: *\nAllow: /es/productos/\nDisallow: /es/productos/private/\nSitemap: https://ep-equipment.com/es/productos/private/map.xml'
   page=b'<a class="category" href="/es/productos/private/">Private</a>'
-  transport=_FakeTransport(200,body,page=page); result=self.capture(self.enabled(),transport,max_pages=3)
-  self.assertEqual(2,len(transport.calls)); self.assertGreaterEqual(result.urls_blocked,1)
+  private='https://ep-equipment.com/es/productos/private/'
+  sitemap='https://ep-equipment.com/es/productos/private/map.xml'
+  transport=_FakeTransport(200,body,page=page,forbidden=(private,sitemap)); result=self.capture(self.enabled(),transport,max_pages=3)
+  self.assertEqual([('GET','https://ep-equipment.com/robots.txt'),('GET',SOURCES['ep'].start_url)],transport.calls)
+  self.assertGreaterEqual(result.urls_blocked,1); self.assertNotIn(('GET',private),transport.calls)
+  self.assertNotIn(('GET',sitemap),transport.calls)
+ def test_sitemap_is_metadata_only_even_when_robots_allows_it(self):
+  sitemap='https://ep-equipment.com/es/productos/sitemap.xml'
+  body=f'User-agent: *\nAllow: /\nSitemap: {sitemap}'.encode()
+  transport=_FakeTransport(200,body,forbidden=(sitemap,)); result=self.capture(self.enabled(),transport,max_pages=3)
+  self.assertEqual([('GET','https://ep-equipment.com/robots.txt'),('GET',SOURCES['ep'].start_url)],transport.calls)
+  self.assertIn(sitemap,result.robots['sitemaps']); self.assertNotIn(('GET',sitemap),transport.calls)
+  self.assertGreaterEqual(result.urls_blocked,1)
  def test_resume_incompatible_evidence_blocks_before_caller_can_create_transport(self):
   cfg={'schema_version':'discovery-config-v1'}; previous={'config_fingerprint':config_fingerprint(cfg),'robots':{}}
   with self.assertRaises(ValueError): validate_resume_preflight(previous,cfg,{'ep':SOURCES['ep']},{'ep':ADAPTERS['ep']},'offline-test-agent')
