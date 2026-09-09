@@ -1,6 +1,6 @@
 """Host-independent Windows-safe filesystem materialization."""
 from __future__ import annotations
-import hashlib, re, unicodedata
+import hashlib, os, re, unicodedata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from .errors import PathCollisionError, UnsafePathError
 
@@ -37,13 +37,41 @@ def windows_collision_key(segment: str) -> str:
     return unicodedata.normalize("NFC", segment).rstrip(" .").casefold()
 
 def safe_join(root: Path, relative: str | PurePosixPath) -> Path:
-    rel = PurePosixPath(str(relative).replace("\\", "/"))
-    if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
-        raise UnsafePathError("Relative portable path is unsafe", path=str(relative))
-    root_resolved = root.resolve()
-    target = root_resolved.joinpath(*rel.parts).resolve()
-    if target != root_resolved and root_resolved not in target.parents:
-        raise UnsafePathError("Path escapes configured root", path=str(relative))
+    """Resolve an untrusted canonical POSIX manifest path below ``root``."""
+    try:
+        value = os.fspath(relative)
+    except TypeError as exc:
+        raise UnsafePathError("Portable path must be text") from exc
+    if not isinstance(value, str):
+        raise UnsafePathError("Portable path must be text")
+    if not value or any(unicodedata.category(character) == "Cc" for character in value):
+        raise UnsafePathError("Portable path is empty or contains control characters")
+
+    windows_path = PureWindowsPath(value)
+    posix_path = PurePosixPath(value)
+    if (posix_path.is_absolute() or windows_path.drive or windows_path.root
+            or windows_path.anchor):
+        raise UnsafePathError("Portable path must be relative and must not name a drive or share")
+    if "\\" in value:
+        raise UnsafePathError("Portable paths must use '/' separators")
+
+    segments = value.split("/")
+    if any(segment in {"", ".", ".."} for segment in segments):
+        raise UnsafePathError("Portable path contains an empty or traversal segment")
+    for segment in segments:
+        if ":" in segment:
+            raise UnsafePathError("Portable path segments must not contain ':'")
+        if segment.endswith((" ", ".")):
+            raise UnsafePathError("Portable path segments must not end in a space or dot")
+        if _RESERVED.fullmatch(segment):
+            raise UnsafePathError("Portable path contains a reserved Windows name")
+
+    try:
+        root_resolved = root.resolve()
+        target = root_resolved.joinpath(*segments).resolve()
+        target.relative_to(root_resolved)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise UnsafePathError("Portable path cannot be confined to the configured root") from exc
     return target
 
 class LayoutRegistry:

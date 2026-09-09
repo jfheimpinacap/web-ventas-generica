@@ -55,7 +55,9 @@ a una identidad de negocio derivada de la clave física.
 
 Layout portable: `<marca>/catalogo/<categoria>/<modelo>/{imagenes,fichas-tecnicas,documentos}` y
 `<marca>/_pipeline/{snapshots,cache,manifests,mappings,reports,packages}`. Las rutas manifestadas usan
-`/`; `safe_join` rechaza traversal, absolutas, UNC y unidades, y verifica confinamiento bajo raíz.
+`/`; `safe_join` valida léxicamente con gramáticas POSIX y Windows, rechaza traversal, segmentos no
+canónicos, controles, ADS, reservados, separadores `\\`, absolutas, UNC y unidades, y después
+verifica el confinamiento estructural de la ruta resuelta bajo la raíz resuelta.
 Nombres futuros: `<MARCA>-<MODELO>-<ORDEN>[-principal].<ext>` y
 `<MARCA>-<MODELO>-ficha-tecnica-<idioma>[-revision].pdf`; sus metadatos están en package-manifest.
 
