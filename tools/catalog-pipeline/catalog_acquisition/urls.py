@@ -1,6 +1,7 @@
 """Versioned technical URL canonicalisation and scope enforcement."""
 from __future__ import annotations
 import ipaddress
+import re
 from dataclasses import dataclass
 from hashlib import sha256
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
@@ -40,6 +41,8 @@ def canonicalize(reference: str, *, base_url: str, source: SourceDefinition, req
 
 def _allowed_path(source: SourceDefinition, path: str) -> bool:
     if path == "/robots.txt": return True
+    # Do not let an origin/proxy decode delimiters or dot segments after this gate.
+    if re.search(r"%(?:2e|2f|5c|25)",path,re.IGNORECASE): return False
     prefix=source.path_prefix.rstrip("/")
     return path == prefix or path.startswith(prefix+"/")
 

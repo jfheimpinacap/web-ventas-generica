@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
-from urllib.parse import urlsplit
+from urllib.parse import quote,unquote,urlsplit
 from urllib.robotparser import RobotFileParser
 
 @dataclass(frozen=True)
@@ -15,6 +15,25 @@ def permits_catalog(decision: RobotsDecision) -> bool:
     """Only an explicit allow or a genuine 404/410 absence opens the gate."""
     return (decision.state == "allowed" and decision.allowed) or (
         decision.state == "not_found" and decision.http_status in (404, 410) and decision.allowed)
+
+def _longest_match(parser: RobotFileParser, user_agent: str, target_url: str):
+    """Apply RFC longest-match precedence to the group selected by RobotFileParser.
+
+    RobotFileParser's public ``can_fetch`` stops at the first matching rule, so a broad
+    Allow placed before a narrower Disallow can incorrectly authorize a URL.
+    """
+    entry=next((item for item in parser.entries if item.applies_to(user_agent)),None)
+    if entry is None: entry=parser.default_entry
+    if entry is None: return True,None
+    path=urlsplit(quote(unquote(target_url))).path
+    matches=[rule for rule in entry.rulelines if rule.applies_to(path)]
+    if not matches: return True,None
+    longest=max(len(rule.path) for rule in matches)
+    selected=[rule for rule in matches if len(rule.path)==longest]
+    # At equal specificity Allow wins, as required by the robots exclusion protocol.
+    rule=next((item for item in selected if item.allowance),selected[0])
+    directive="Allow" if rule.allowance else "Disallow"
+    return rule.allowance,f"{directive}: {rule.path}"
 
 def evaluate(*, robots_url: str, status: int | None, body: bytes | None, target_url: str,
              user_agent: str, fetched_at: str, fetch_error: str | None = None) -> RobotsDecision:
@@ -29,11 +48,13 @@ def evaluate(*, robots_url: str, status: int | None, body: bytes | None, target_
     try:
         text=body.decode("utf-8-sig",errors="strict")
         if "\x00" in text: raise ValueError("NUL in robots")
+        rules=[line.split(":",1)[1].strip() for line in text.splitlines()
+            if ":" in line and line.split(":",1)[0].strip().casefold() in ("allow","disallow")]
+        if any("*" in rule or "$" in rule for rule in rules):
+            raise ValueError("unsupported robots path pattern")
         parser=RobotFileParser(); parser.set_url(robots_url); parser.parse(text.splitlines())
-        allowed=parser.can_fetch(user_agent,target_url)
+        allowed,applicable=_longest_match(parser,user_agent,target_url)
         sitemaps=tuple(x for x in (parser.site_maps() or ()) if urlsplit(x).scheme=="https")
-        path=urlsplit(target_url).path
-        applicable=next((line.strip() for line in text.splitlines() if line.strip().lower().startswith(("allow:","disallow:")) and line.split(":",1)[1].strip() and path.startswith(line.split(":",1)[1].strip())),None)
         return RobotsDecision(**common,state="allowed" if allowed else "disallowed",applicable_rule=applicable,allowed=allowed,sitemaps=sitemaps)
     except (UnicodeError,ValueError) as exc:
         return RobotsDecision(**common,state="parse_failed",applicable_rule=None,allowed=False,detail=str(exc))
