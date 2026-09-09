@@ -24,7 +24,7 @@ import uuid
 import zipfile
 
 TOOL_NAME = "transfer_lgmg_catalog_to_production"
-TOOL_VERSION = "1.0.3"
+TOOL_VERSION = "1.0.4"
 SCHEMA_VERSION = "1.0"
 PROFILE = "lgmg_local_catalog_57"
 PACKAGE_NAME = "JEM-LGMG-Transferencia-20260908-000450.zip"
@@ -348,17 +348,30 @@ def preflight(state, completed=()):
         if conflicts: raise ConflictError("preexisting_catalog_resources")
     return {"root_id":roots[0]["id"],"counts":{k:len(v) for k,v in state.items()},"completed_types":sorted(done_types)}
 
-def atomic_write(path, value):
-    path=Path(path); path.parent.mkdir(parents=True,exist_ok=True); raw=canonical(sanitize(value))+b"\n"
-    fd,tmp=tempfile.mkstemp(prefix="."+path.name+".",dir=path.parent)
+def sync_parent_directory(path, platform=None):
+    """Persist a directory entry where the standard OS API supports it."""
+    if (os.name if platform is None else platform) == "nt": return
+    dfd=os.open(Path(path).parent,os.O_RDONLY)
     try:
-        with os.fdopen(fd,"wb") as f: f.write(raw); f.flush(); os.fsync(f.fileno())
-        os.replace(tmp,path)
-        dfd=os.open(path.parent,os.O_RDONLY)
-        try: os.fsync(dfd)
-        finally: os.close(dfd)
+        os.fsync(dfd)
     finally:
-        if os.path.exists(tmp): os.unlink(tmp)
+        os.close(dfd)
+
+def atomic_write(path, value):
+    path=Path(path); tmp=None
+    try:
+        path.parent.mkdir(parents=True,exist_ok=True); raw=canonical(sanitize(value))+b"\n"
+        fd,tmp=tempfile.mkstemp(prefix="."+path.name+".",dir=path.parent)
+        with os.fdopen(fd,"wb") as f:
+            f.write(raw); f.flush(); os.fsync(f.fileno())
+        os.replace(tmp,path)
+        sync_parent_directory(path)
+    except OSError:
+        raise TransferError("atomic_write_error") from None
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try: os.unlink(tmp)
+            except OSError: raise TransferError("atomic_write_error") from None
 
 def validate_prefix(plan, completed):
     if len(completed)>len(plan): raise ConflictError("completed_prefix_length")
