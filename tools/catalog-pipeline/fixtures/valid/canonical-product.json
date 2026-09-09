@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "canonical_identity": {
+    "value": "canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_version": "canonical-identity-v1",
+    "brand": "SYNTHETIC",
+    "model": "EFL 181",
+    "variant": null,
+    "discriminator": null,
+    "supersedes_canonical_identity": null
+  },
+  "display_name": "Synthetic lift",
+  "family": "EFL",
+  "aliases": [],
+  "primary_category": null,
+  "additional_source_categories": ["Synthetic category"],
+  "source_identity_values": ["source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111"],
+  "blocking_issue_codes": ["CATEGORY_MAPPING_REQUIRED"]
+}

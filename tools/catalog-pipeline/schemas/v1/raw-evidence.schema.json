@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/raw-evidence.schema.json",
+  "title": "raw-evidence",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_role": { "$ref": "common-definitions.schema.json#/$defs/source_role" },
+    "source_identity": { "$ref": "common-definitions.schema.json#/$defs/source_identity" },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "media_type": {
+      "type": "string"
+    },
+    "sha256": {
+      "$ref": "common-definitions.schema.json#/$defs/sha256"
+    },
+    "relative_path": {
+      "$ref": "common-definitions.schema.json#/$defs/portable_path"
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_field": {
+            "type": "string"
+          },
+          "raw_value": {},
+          "extraction_rule": {
+            "type": "string"
+          },
+          "resolution_status": {
+            "$ref": "common-definitions.schema.json#/$defs/resolution_status"
+          }
+        },
+        "required": [
+          "source_field",
+          "raw_value",
+          "extraction_rule",
+          "resolution_status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "source",
+    "source_role",
+    "source_identity",
+    "media_type",
+    "sha256",
+    "relative_path",
+    "observations"
+  ],
+  "additionalProperties": false
+}

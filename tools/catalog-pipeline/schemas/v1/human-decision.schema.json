@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/human-decision.schema.json",
+  "title": "human-decision",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "decision_id": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "rejected",
+        "deferred"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reviewer": {
+      "type": "string"
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "decision_id",
+    "subject",
+    "decision",
+    "reason",
+    "reviewer",
+    "decided_at",
+    "supersedes"
+  ],
+  "additionalProperties": false
+}

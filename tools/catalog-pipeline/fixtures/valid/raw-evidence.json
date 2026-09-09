@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "evidence_id": "ev-1",
+  "source": "synthetic",
+  "source_role": "authoritative_existence",
+  "source_identity": {
+    "value": "source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "rule_version": "source-identity-v1",
+    "source_namespace": "synthetic-a",
+    "stable_source_key": "record-1",
+    "key_strategy": "native-v1"
+  },
+  "source_url": null,
+  "media_type": "application/json",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "relative_path": "snapshots/ev-1.json",
+  "observations": [
+    {
+      "source_field": "model",
+      "raw_value": "EFL 181",
+      "extraction_rule": "fixture-v1",
+      "resolution_status": "exact"
+    }
+  ]
+}

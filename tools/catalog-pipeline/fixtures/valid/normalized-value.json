@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "field": "maximum_lift_height_mm",
+  "raw_value": "4800 mm",
+  "normalized_value": 4800,
+  "unit": "mm",
+  "source": "synthetic",
+  "source_url": null,
+  "source_field": "lift height",
+  "extraction_rule": "fixture-v1",
+  "resolution_status": "manual_approval_required",
+  "conflict": null
+}

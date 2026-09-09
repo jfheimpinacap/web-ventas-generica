@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/identity-link.schema.json",
+  "schema_version": "1.0.0",
+  "title": "source-to-canonical-identity-link",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "source_identity": { "$ref": "common-definitions.schema.json#/$defs/source_identity" },
+    "canonical_identity_value": { "type": ["string", "null"] },
+    "candidate_canonical_identity_values": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "source_namespace": { "type": "string" },
+    "matching_rule_id": { "type": "string", "minLength": 1 },
+    "matching_rule_version": { "type": "string", "minLength": 1 },
+    "evidence_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+    "resolution_status": { "$ref": "common-definitions.schema.json#/$defs/resolution_status" },
+    "human_decision_id": { "type": ["string", "null"] },
+    "blocking": { "type": "boolean" },
+    "observed_at": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["schema_version", "source_identity", "canonical_identity_value", "candidate_canonical_identity_values", "source_namespace", "matching_rule_id", "matching_rule_version", "evidence_ids", "resolution_status", "human_decision_id", "blocking", "observed_at"],
+  "additionalProperties": false
+}

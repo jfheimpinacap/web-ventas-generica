@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/run-manifest.schema.json",
+  "title": "run-manifest",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adapter": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "source_role": {
+          "$ref": "common-definitions.schema.json#/$defs/source_role"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "fingerprint",
+        "source_role"
+      ],
+      "additionalProperties": false
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "raw",
+          "canonical",
+          "normalized",
+          "audit",
+          "package"
+        ]
+      },
+      "minItems": 1
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "$ref": "common-definitions.schema.json#/$defs/extensions"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "adapter",
+    "stages"
+  ],
+  "additionalProperties": false
+}

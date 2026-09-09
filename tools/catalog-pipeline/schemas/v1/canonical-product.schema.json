@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/canonical-product.schema.json",
+  "schema_version": "1.0.0",
+  "title": "canonical-product",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "canonical_identity": { "$ref": "common-definitions.schema.json#/$defs/canonical_identity" },
+    "display_name": { "type": "string", "minLength": 1 },
+    "family": { "type": ["string", "null"] },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "string" },
+          "match_kind": { "enum": ["exact", "ambiguous"] },
+          "resolution_status": { "$ref": "common-definitions.schema.json#/$defs/resolution_status" },
+          "human_decision_id": { "type": ["string", "null"] }
+        },
+        "required": ["value", "match_kind", "resolution_status", "human_decision_id"],
+        "additionalProperties": false
+      }
+    },
+    "primary_category": { "type": ["string", "null"] },
+    "additional_source_categories": { "type": "array", "items": { "type": "string" } },
+    "source_identity_values": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "blocking_issue_codes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  },
+  "required": ["schema_version", "canonical_identity", "display_name", "family", "aliases", "primary_category", "additional_source_categories", "source_identity_values", "blocking_issue_codes"],
+  "additionalProperties": false
+}

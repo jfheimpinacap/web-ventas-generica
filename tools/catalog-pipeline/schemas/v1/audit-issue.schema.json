@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/audit-issue.schema.json",
+  "title": "audit-issue",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]+$"
+    },
+    "stage": {
+      "enum": [
+        "raw",
+        "canonical",
+        "normalized",
+        "audit",
+        "package",
+        "projection",
+        "binding"
+      ]
+    },
+    "subject": {
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "blocking": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_action": {
+      "type": "string"
+    },
+    "resolution_status": {
+      "$ref": "common-definitions.schema.json#/$defs/resolution_status"
+    },
+    "human_decision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "code",
+    "stage",
+    "subject",
+    "severity",
+    "blocking",
+    "message",
+    "evidence",
+    "required_action",
+    "resolution_status",
+    "human_decision"
+  ],
+  "additionalProperties": false
+}

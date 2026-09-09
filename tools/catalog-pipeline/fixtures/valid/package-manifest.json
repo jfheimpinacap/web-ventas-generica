@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "package-1",
+  "approved": true,
+  "rules_version": "rules-v1",
+  "content_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "universe_counts": {
+    "raw_observation_count": 2,
+    "source_identity_count": 2,
+    "discovered_entry_count": 1,
+    "canonical_candidate_count": 1,
+    "resolved_canonical_product_count": 1,
+    "blocked_discovered_entry_count": 1,
+    "importable_canonical_product_count": 0
+  },
+  "discovered_universe": ["discovery-identity-v1:source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111"],
+  "canonical_candidate_universe": ["canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000"],
+  "resolved_canonical_universe": ["canonical-identity-v1:sha256:0000000000000000000000000000000000000000000000000000000000000000"],
+  "importable_universe": [],
+  "blocked": {
+    "discovery-identity-v1:source-identity-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111": ["CATEGORY_MAPPING_REQUIRED"]
+  },
+  "artifacts": []
+}

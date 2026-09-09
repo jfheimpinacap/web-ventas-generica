@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/common-definitions.schema.json",
+  "title": "common-definitions",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    }
+  },
+  "required": [
+    "schema_version"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "resolution_status": {
+      "enum": [
+        "exact",
+        "normalized",
+        "derived_by_approved_rule",
+        "conflict",
+        "missing",
+        "manual_approval_required",
+        "manual_approved"
+      ]
+    },
+    "source_role": {
+      "enum": ["authoritative_existence", "supplemental"]
+    },
+    "source_identity": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string", "pattern": "^source-identity-v1:sha256:[0-9a-f]{64}$" },
+        "rule_version": { "const": "source-identity-v1" },
+        "source_namespace": { "type": "string", "minLength": 1 },
+        "stable_source_key": { "type": "string", "minLength": 1 },
+        "key_strategy": { "type": "string", "minLength": 1 }
+      },
+      "required": ["value", "rule_version", "source_namespace", "stable_source_key", "key_strategy"],
+      "additionalProperties": false
+    },
+    "canonical_identity": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string", "pattern": "^canonical-identity-v1:sha256:[0-9a-f]{64}$" },
+        "rule_version": { "const": "canonical-identity-v1" },
+        "brand": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "variant": { "type": ["string", "null"] },
+        "discriminator": { "type": ["string", "null"] },
+        "supersedes_canonical_identity": { "type": ["string", "null"] }
+      },
+      "required": ["value", "rule_version", "brand", "model", "variant", "discriminator", "supersedes_canonical_identity"],
+      "additionalProperties": false
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "portable_path": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

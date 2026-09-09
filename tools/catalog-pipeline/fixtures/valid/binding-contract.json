@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "external_bindings": [
+    {
+      "namespace": "root",
+      "key": "maquinarias",
+      "binding_type": "entity_id",
+      "value": 1,
+      "producer_operation": null,
+      "resolution_status": "resolved"
+    }
+  ],
+  "produced_bindings": [],
+  "required_references": [
+    {
+      "scope": "external",
+      "namespace": "root",
+      "key": "maquinarias",
+      "binding_type": "entity_id"
+    }
+  ],
+  "dependency_errors": []
+}
