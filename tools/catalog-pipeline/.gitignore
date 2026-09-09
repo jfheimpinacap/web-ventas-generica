@@ -1,0 +1,6 @@
+/_pipeline/
+/runs/
+/snapshots/
+/cache/
+/reports/
+*.tmp
