@@ -79,11 +79,29 @@ class PathTests(unittest.TestCase):
   with self.assertRaises(PathCollisionError): r.add('category','Camion',category_slug('Camion'))
  def test_reject_unsafe(self):
   for value in ['', '.', '..', '/abs', r'C:\\temp', r'\\server\\share']:
-   with self.assertRaises(UnsafePathError): model_key(value)
+   with self.subTest(label=repr(value)):
+    with self.assertRaises(UnsafePathError): model_key(value)
   with tempfile.TemporaryDirectory() as d:
-   for rel in ['../escape','/absolute','C:/drive','safe/../escape']:
-    with self.assertRaises(UnsafePathError): safe_join(pathlib.Path(d),rel)
-   self.assertTrue(safe_join(pathlib.Path(d),'safe/file').is_relative_to(pathlib.Path(d)))
+   root=pathlib.Path(d)
+   unsafe=['', '.', '..', '../escape', 'safe/../escape', 'safe/../../escape',
+    '/absolute', '//server/share', r'\rooted', r'\\server\share', r'C:\absolute',
+    'C:relative', r'\\?\C:\escape', r'\\.\NUL', r'safe\child',
+    r'safe\..\escape', 'file:stream', 'safe//child', 'safe/./child', 'segment.',
+    'segment ', 'nul\0name', 'control\x1fname', 'CON', 'con.txt', 'AUX.json',
+    'COM1', 'LPT9.log', 'D:/different-drive', 'C:/drive']
+   for relative in unsafe:
+    with self.subTest(relative=repr(relative)):
+     with self.assertRaises(UnsafePathError): safe_join(root,relative)
+
+ def test_accept_canonical_portable_paths(self):
+  valid=['catalogo', 'catalogo/electricas', 'catalogo/electricas/EFL-181/producto.json',
+   '_pipeline/manifests/run.json', 'modelo+plus/imagenes/archivo.webp',
+   'modelo con espacio/documentos/ficha.pdf', 'catálogo/máquinas/ficha-técnica.pdf']
+  with tempfile.TemporaryDirectory() as d:
+   root=pathlib.Path(d).resolve()
+   for relative in valid:
+    with self.subTest(relative=repr(relative)):
+     self.assertEqual(root.joinpath(*relative.split('/')),safe_join(root,relative))
  def test_manifest_round_trip(self):
   r=LayoutRegistry(); entry=r.add('model','EFL/181',model_key('EFL/181')); self.assertEqual('EFL/181',entry['original_name'])
   decomposed=unicodedata.normalize('NFD','Tijéra'); traced=r.add('model-unicode',decomposed,model_key(decomposed))
