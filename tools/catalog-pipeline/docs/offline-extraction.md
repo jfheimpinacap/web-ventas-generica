@@ -16,13 +16,13 @@ Standard-library HTML parsing is passive and bounded by deterministic byte/node/
 
 The closed page enum is `product`, `series`, `family`, `listing`, `document_landing`, `unknown`, `structure_changed`, and `parse_failed`. Unknown pages get no aggressive fallback. Changed/failed pages enter review; a listing received as product and an empty expected product block. Series/family pages never become products.
 
-Tables retain captions, row/cell coordinates, kind, locators, raw value/unit, rowspan/colspan, explicit model scope and irregularity. Duplicate/contradictory values remain distinct, missing cells are never invented, and ambiguous merged/irregular grids enter review. Explicit model columns stay separate without adoption; unscoped values are not copied, and family values remain `series_shared`.
+Tables retain captions, physical and logical row/cell coordinates, kind, locators, raw value/unit, rowspan/colspan, explicit model scope and irregularity. Duplicate/contradictory values remain distinct, missing cells are never invented, and merged cells spanning multiple model columns enter deterministic `ambiguous_merged_cell` review without inventing a mapping. Explicit model columns stay separate without adoption; unscoped values are not copied, and family values remain `series_shared`.
 
 Fields are raw evidence, not JEM mappings. EP lift height is never `WorkingHeightM` (the fixture hint is only `ProductSpec`). Voltage, Ah, chemistry, unknown enums, year/hours and power source remain raw. EP authoritative and GAM supplemental observations remain separate; GAM creates no official entry and canonical identity may be null. GAM price/stock/availability are retained as excluded commercial evidence, never projected. Conflicts remain for humans.
 
 ## URL candidates
 
-Image candidates retain original/resolved candidate URL, referrer, provenance, locator/attribute, alt/title, relationship, scope, host, apparent extension, rule and review state. Nothing selects a primary. Logos/banners/icons remain rejected/audited; external hosts remain pending and never expand allowlists. Document candidates similarly retain link text, apparent filename, provisional kind, explicit language/revision hints, scope and evidence. Extensions confirm neither MIME nor technical-sheet status. No bytes are downloaded.
+Image candidates found passively in HTML or JSON-LD retain original/resolved candidate URL, referrer, provenance, locator/attribute, alt/title, relationship, scope, normalized host, apparent extension, rule and review state. Nothing selects a primary. Logos/banners/icons and non-HTTP(S) schemes remain rejected/audited; valid external hosts remain `pending_host_review` and never expand allowlists. Pending review is evidence, not authorization to access or download. Document candidates similarly retain link text, apparent filename, provisional kind, explicit language/revision hints, scope and evidence. Extensions confirm neither MIME nor technical-sheet status. No bytes are downloaded.
 
 ## Synthetic gate, outputs, CLI, and comparison
 
@@ -40,4 +40,4 @@ python catalog_extract.py compare --old-manifest OLD.json --new-manifest NEW.jso
 
 ## Explicit limits and pending decisions
 
-No network was used; no live/media/PDF resource was downloaded; no unit was converted; no JEM field/category/enum was mapped; no alias/conflict was resolved; no final description/payload was generated; no product was created/imported/published; and LGMG was not modified. Fixture locators are provisional. Approved live evidence/selectors, mappings, normalization, conflict policy, hosts, downloads, and primary selection remain separate future decisions.
+Prompt 275 made zero network or API requests and enabled no live capture. No live/media/PDF resource was downloaded; no unit was converted; no JEM field/category/enum was mapped; no alias/conflict was resolved; no final description/payload was generated; no product was created/imported/published; and LGMG was not modified or executed. Fixture locators are provisional. Approved live evidence/selectors, mappings, normalization, conflict policy, hosts, downloads, and primary selection remain separate future decisions.

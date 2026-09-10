@@ -50,6 +50,16 @@ def _json_depth(value,depth=0):
 def _candidate_url(raw,base):
     split=urlsplit(urljoin(base,raw)); return urlunsplit((split.scheme.lower(),split.netloc.lower(),split.path,split.query,""))
 
+def _approved_host(host,approved):
+    """Compare DNS host names only; ports and URL spelling never grant authority."""
+    if not host: return False
+    normalized=host.casefold().rstrip(".")
+    for value in approved:
+        parsed=urlsplit(value if "://" in value else "//"+value)
+        candidate=parsed.hostname
+        if candidate and candidate.casefold().rstrip(".")==normalized: return True
+    return False
+
 class FixtureHtmlExtractionAdapter:
     """Conservative fixture-only rules, never approved as live selectors."""
     adapter_id="generic-passive-html"; adapter_version="1.0.0"; structure_verified=False
@@ -87,7 +97,9 @@ class FixtureHtmlExtractionAdapter:
             if node.tag=="a" and node.attrs.get("href") and ("document" in _classes(node) or node.attrs.get("data-document-kind")):
                 documents.append(self._document(node,metadata))
             if node.tag=="script" and node.attrs.get("type","").lower()=="application/ld+json":
-                try: value=json.loads(_text(node)); _json_depth(value); jsonld.append({"locator":node.locator,"value":value})
+                try:
+                    value=json.loads(_text(node)); _json_depth(value); jsonld.append({"locator":node.locator,"value":value})
+                    media.extend(self._jsonld_media(value,node,metadata))
                 except (json.JSONDecodeError,ValueError): issues.append(self._issue("invalid_json_ld",node.locator))
             if node.tag=="table": tables.append(self._table(node,issues))
         if metadata.get("expected_page_type")=="product" and page_type=="listing": issues.append(self._issue("listing_received_as_product",marker.locator if marker else "/",True))
@@ -98,34 +110,64 @@ class FixtureHtmlExtractionAdapter:
                 "fields":fields,"tables":tables,"media":media,"documents":documents,"json_ld":jsonld,"issues":issues}
 
     def _table(self,node,issues):
-        rows=[]
+        rows=[]; occupied={}
         for r,row in enumerate((x for x in _walk(node) if x.tag=="tr")):
-            cells=[]
-            for c,cell in enumerate(x for x in row.children if x.tag in {"th","td"}):
+            cells=[]; logical_column=0
+            for physical_column,cell in enumerate(x for x in row.children if x.tag in {"th","td"}):
+                while (r,logical_column) in occupied: logical_column+=1
                 rowspan=int(cell.attrs.get("rowspan","1")) if cell.attrs.get("rowspan","1").isdigit() else 1
                 colspan=int(cell.attrs.get("colspan","1")) if cell.attrs.get("colspan","1").isdigit() else 1
-                cells.append({"row":r,"column":c,"kind":"header" if cell.tag=="th" else "value","raw_value":_text(cell),
+                cells.append({"row":r,"physical_column":physical_column,"column":logical_column,"kind":"header" if cell.tag=="th" else "value","raw_value":_text(cell),
                               "raw_unit":cell.attrs.get("data-unit"),"rowspan":rowspan,"colspan":colspan,"locator":cell.locator,
                               "model_scope":cell.attrs.get("data-model")})
-                if (rowspan>1 or colspan>1) and not cell.attrs.get("data-scope"):
-                    issues.append(self._issue("ambiguous_merged_cell",cell.locator))
+                for logical_row in range(r,r+rowspan):
+                    for column in range(logical_column,logical_column+colspan): occupied[(logical_row,column)]=cell.locator
+                logical_column+=colspan
             rows.append({"row":r,"cells":cells})
-        column_models={cell["column"]:cell["model_scope"] for raw_row in rows for cell in raw_row["cells"] if cell["model_scope"]}
+        column_models={column:cell["model_scope"] for raw_row in rows for cell in raw_row["cells"] if cell["model_scope"]
+                       for column in range(cell["column"],cell["column"]+cell["colspan"])}
+        ambiguous=[]
         for raw_row in rows:
             for cell in raw_row["cells"]:
-                if cell["kind"]=="value" and cell["model_scope"] is None:
+                covered_models={column_models.get(column) for column in range(cell["column"],cell["column"]+cell["colspan"])}-{None}
+                explicit_scope=next((x for x in _walk(node) if x.locator==cell["locator"]),None)
+                if cell["colspan"]>1 and len(covered_models)>1 and not (explicit_scope and (explicit_scope.attrs.get("data-scope") or explicit_scope.attrs.get("data-model"))):
+                    ambiguous.append(cell["locator"])
+                if cell["kind"]=="value" and cell["model_scope"] is None and len(covered_models)==1:
+                    cell["model_scope"]=next(iter(covered_models))
+                elif cell["kind"]=="value" and cell["model_scope"] is None and cell["colspan"]==1:
                     cell["model_scope"]=column_models.get(cell["column"])
-        widths={sum(c["colspan"] for c in r["cells"]) for r in rows}
+        for locator in sorted(set(ambiguous)): issues.append(self._issue("ambiguous_merged_cell",locator))
+        widths={max((c["column"]+c["colspan"] for c in r["cells"]),default=0) for r in rows}
+        irregular=len(widths)>1 or bool(ambiguous)
         if len(widths)>1: issues.append(self._issue("irregular_table",node.locator))
-        return {"caption":next((_text(x) for x in node.children if x.tag=="caption"),None),"locator":node.locator,"rows":rows,"irregular":len(widths)>1}
+        return {"caption":next((_text(x) for x in node.children if x.tag=="caption"),None),"locator":node.locator,"rows":rows,"irregular":irregular}
 
     def _media(self,node,raw,attribute,meta):
         resolved=_candidate_url(raw,meta["canonical_url"]); host=urlsplit(resolved).hostname
         classes=_classes(node); kind=next((x for x in ("logo","banner","icon","thumbnail") if x in classes),node.attrs.get("data-image-kind","unknown"))
-        status="rejected_audited" if kind in {"logo","banner","icon"} else "pending_host_review" if host not in meta.get("approved_hosts",[]) else "candidate"
+        scheme=urlsplit(resolved).scheme
+        status="rejected_audited" if scheme not in {"http","https"} or kind in {"logo","banner","icon"} else "candidate" if _approved_host(host,meta.get("approved_hosts",[])) else "pending_host_review"
         return {"original_url":raw,"candidate_url":resolved,"referrer":meta["canonical_url"],"locator":node.locator,"source_attribute":attribute,
                 "alt_raw":node.attrs.get("alt"),"title_raw":node.attrs.get("title"),"relationship":kind,"model_scope":node.attrs.get("data-model"),
                 "host":host,"apparent_extension":resolved.rsplit(".",1)[-1].lower() if "." in urlsplit(resolved).path else None,"scope_status":status}
+    def _jsonld_media(self,value,node,meta,path="$"):
+        found=[]
+        if isinstance(value,dict):
+            for key,item in value.items():
+                child_path=f"{path}.{key}"
+                if key in {"image","thumbnailUrl","contentUrl"}:
+                    candidates=item if isinstance(item,list) else [item]
+                    for index,candidate in enumerate(candidates):
+                        raw=candidate.get("contentUrl") or candidate.get("url") if isinstance(candidate,dict) else candidate
+                        if isinstance(raw,str) and raw:
+                            synthetic=Node("script",{"data-image-kind":"json_ld"},f"{node.locator}/{child_path}[{index}]")
+                            found.append(self._media(synthetic,raw,key,meta))
+                    continue
+                found.extend(self._jsonld_media(item,node,meta,child_path))
+        elif isinstance(value,list):
+            for index,item in enumerate(value): found.extend(self._jsonld_media(item,node,meta,f"{path}[{index}]"))
+        return found
     def _document(self,node,meta):
         raw=node.attrs["href"]; url=_candidate_url(raw,meta["canonical_url"]); filename=urlsplit(url).path.rsplit("/",1)[-1] or None
         return {"original_url":raw,"candidate_url":url,"referrer":meta["canonical_url"],"locator":node.locator,"link_text_raw":_text(node),

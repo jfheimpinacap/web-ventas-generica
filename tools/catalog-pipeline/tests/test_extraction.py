@@ -28,7 +28,26 @@ class ExtractionTests(unittest.TestCase):
  def test_json_ld_media_documents_and_external_host_are_passive(self):
   value=self.parse(); self.assertEqual(1,len(value["json_ld"])); self.assertTrue(any(x["code"]=="invalid_json_ld" for x in value["issues"]))
   self.assertEqual({"logo","banner","icon"},{x["relationship"] for x in value["media"] if x["scope_status"]=="rejected_audited"})
-  self.assertTrue(any(x["scope_status"]=="pending_host_review" for x in value["media"])); self.assertEqual(4,len(value["documents"]))
+  external=[x for x in value["media"] if x["scope_status"]=="pending_host_review"]
+  self.assertEqual(["https://media.external.invalid/e20.jpg"],[x["candidate_url"] for x in external])
+  self.assertEqual("image",external[0]["source_attribute"]); self.assertEqual(4,len(value["documents"]))
+ def test_media_host_scheme_and_duplicate_evidence_are_fail_closed(self):
+  body=b'''<body data-page-type="product"><img src="https://FIXTURES.INVALID:443/a.png"><img src="javascript:alert(1)"><img src="https://external.invalid/shared.png"><script type="application/ld+json">{"image":"https://external.invalid/shared.png"}</script></body>'''
+  first=FixtureHtmlExtractionAdapter().parse(body,META); second=FixtureHtmlExtractionAdapter().parse(body,META)
+  self.assertEqual(first["media"],second["media"])
+  self.assertEqual("candidate",first["media"][0]["scope_status"])
+  self.assertEqual("rejected_audited",first["media"][1]["scope_status"])
+  shared=[x for x in first["media"] if x["candidate_url"]=="https://external.invalid/shared.png"]
+  self.assertEqual(2,len(shared)); self.assertEqual({"pending_host_review"},{x["scope_status"] for x in shared})
+  self.assertEqual(2,len({x["locator"] for x in shared}))
+ def test_table_span_ambiguity_uses_logical_model_columns(self):
+  simple=FixtureHtmlExtractionAdapter().parse(b'<body data-page-type="product"><table><tr><th>Campo</th><th data-model="A">A</th></tr><tr><td>x</td><td>1</td></tr></table></body>',META)
+  unambiguous=FixtureHtmlExtractionAdapter().parse(b'<body data-page-type="product"><table><tr><th rowspan="2">Campo</th><th data-model="A">A</th></tr><tr><th>Valor</th></tr></table></body>',META)
+  ambiguous_body=b'<body data-page-type="product"><table><tr><th>Campo</th><th data-model="A">A</th><th data-model="B">B</th></tr><tr><td>x</td><td colspan="2">compartido sin scope</td></tr></table></body>'
+  ambiguous=FixtureHtmlExtractionAdapter().parse(ambiguous_body,META)
+  self.assertFalse(any(x["code"]=="ambiguous_merged_cell" for x in simple["issues"]+unambiguous["issues"]))
+  self.assertEqual(1,sum(x["code"]=="ambiguous_merged_cell" for x in ambiguous["issues"]))
+  self.assertEqual(ambiguous["issues"],FixtureHtmlExtractionAdapter().parse(ambiguous_body,META)["issues"])
  def test_supplemental_price_and_stock_are_preserved_for_orchestrator_exclusion(self):
   value=self.parse("synthetic-gam.html",expected_page_type="product"); self.assertEqual(["Precio","Stock","Título"],sorted(x["source_field_raw"] for x in value["fields"]))
  def test_invalid_utf8_is_structured_and_lift_height_never_maps_to_working_height(self):
