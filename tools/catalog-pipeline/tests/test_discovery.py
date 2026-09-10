@@ -64,6 +64,37 @@ class RobotsTests(unittest.TestCase):
   for rule in (b'Disallow: /*.pdf$',b'Allow: /private/*'):
    decision=self.d(200,b'User-agent: *\n'+rule)
    self.assertEqual('parse_failed',decision.state); self.assertFalse(permits_catalog(decision))
+ def test_supported_parser_normalizes_case_whitespace_comments_and_global_block(self):
+  body=b'\n # heading\n UsEr-AgEnT : * # all\n dIsAlLoW : / # stop everything\n'
+  decision=self.d(200,body)
+  self.assertEqual('disallowed',decision.state); self.assertEqual('Disallow: /',decision.applicable_rule)
+  self.assertEqual(('*',),decision.applicable_group); self.assertFalse(permits_catalog(decision))
+ def test_public_allow_and_more_specific_allow(self):
+  public=self.d(200,b'User-agent: *\nAllow: /es/productos/')
+  self.assertTrue(permits_catalog(public)); self.assertEqual('Allow: /es/productos/',public.applicable_rule)
+  body=b'User-agent: *\nDisallow: /es/productos/\nAllow: /es/productos/public/'
+  decision=evaluate(robots_url='https://ep-equipment.com/robots.txt',status=200,body=body,
+   target_url='https://ep-equipment.com/es/productos/public/item',user_agent='agent',fetched_at='x')
+  self.assertTrue(permits_catalog(decision)); self.assertEqual('Allow: /es/productos/public/',decision.applicable_rule)
+ def test_empty_disallow_is_not_global_block_and_only_applicable_group_counts(self):
+  body=(b'User-agent: other-bot\nDisallow: /\n'
+   b'User-agent: agent\nDisallow:\nAllow: /es/productos/')
+  decision=self.d(200,body)
+  self.assertTrue(permits_catalog(decision)); self.assertEqual('Allow: /es/productos/',decision.applicable_rule)
+  self.assertEqual(('agent',),decision.applicable_group)
+ def test_wildcard_group_is_fallback_to_more_specific_user_agent_group(self):
+  body=(b'User-agent: *\nDisallow: /\n'
+   b'User-agent: offline-test-agent\nAllow: /es/productos/')
+  decision=evaluate(robots_url='https://ep-equipment.com/robots.txt',status=200,body=body,
+   target_url=SOURCES['ep'].start_url,user_agent='offline-test-agent/1.0',fetched_at='x')
+  self.assertTrue(permits_catalog(decision)); self.assertEqual(('offline-test-agent',),decision.applicable_group)
+ def test_invalid_or_ambiguous_content_fails_closed(self):
+  bodies=(b'nonsense',b'Allow: /\nUser-agent: *',b'User-agent:\nDisallow: /',
+   b'User-agent: *\nAllow: relative',b'User-agent: *\nUnknown: value')
+  for body in bodies:
+   with self.subTest(body=body):
+    decision=self.d(200,body)
+    self.assertEqual('parse_failed',decision.state); self.assertFalse(permits_catalog(decision))
 
 class ParseTests(unittest.TestCase):
  def test_ep_categories_candidates_pagination_jsonld_entities_unicode_external_unknown(self):
@@ -159,7 +190,7 @@ class LivePreflightRegressionTests(unittest.TestCase):
    with self.subTest(status=status,body=body):
     transport=_FakeTransport(status,body); result=self.capture(self.enabled(),transport)
     self.assertEqual(1,len(transport.calls)); self.assertEqual('blocked',result.state)
-    self.assertEqual(1,result.urls_blocked)
+    self.assertEqual(1,result.urls_blocked); self.assertTrue(result.reason.startswith('robots_'))
  def test_404_410_and_explicit_allow_put_robots_first(self):
   for status,body in ((404,b''),(410,b''),(200,b'User-agent: *\nAllow: /')):
    with self.subTest(status=status):
@@ -169,7 +200,9 @@ class LivePreflightRegressionTests(unittest.TestCase):
  def test_start_url_disallowed_is_never_requested(self):
   transport=_FakeTransport(200,b'User-agent: *\nDisallow: /es/productos/')
   result=self.capture(self.enabled(),transport)
-  self.assertEqual(1,len(transport.calls)); self.assertEqual('robots_disallowed',result.reason)
+  self.assertEqual([('GET','https://ep-equipment.com/robots.txt')],transport.calls)
+  self.assertEqual('blocked',result.state); self.assertEqual('robots_disallowed',result.reason)
+  self.assertEqual('Disallow: /es/productos/',result.robots['applicable_rule'])
  def test_discovered_url_and_sitemap_do_not_bypass_per_url_gate(self):
   body=b'User-agent: *\nAllow: /es/productos/\nDisallow: /es/productos/private/\nSitemap: https://ep-equipment.com/es/productos/private/map.xml'
   page=b'<a class="category" href="/es/productos/private/">Private</a>'
@@ -179,6 +212,8 @@ class LivePreflightRegressionTests(unittest.TestCase):
   self.assertEqual([('GET','https://ep-equipment.com/robots.txt'),('GET',SOURCES['ep'].start_url)],transport.calls)
   self.assertGreaterEqual(result.urls_blocked,1); self.assertNotIn(('GET',private),transport.calls)
   self.assertNotIn(('GET',sitemap),transport.calls)
+  self.assertTrue(any(item['url']==private and item['reason']=='robots_disallowed' and
+   item['applicable_rule']=='Disallow: /es/productos/private/' for item in result.robots_blocks))
  def test_sitemap_is_metadata_only_even_when_robots_allows_it(self):
   sitemap='https://ep-equipment.com/es/productos/sitemap.xml'
   body=f'User-agent: *\nAllow: /\nSitemap: {sitemap}'.encode()

@@ -39,6 +39,7 @@ class CaptureResult:
     source:str; adapter:str; adapter_version:str; structure_verified:bool
     state:str; reason:str; requests_attempted:int=0; origin_responses:int=0
     urls_blocked:int=0; snapshots_persisted:int=0; robots:dict|None=None
+    robots_blocks:list=field(default_factory=list)
     responses:list=field(default_factory=list)
 
 def structure_gate(source:SourceDefinition,adapter)->str|None:
@@ -81,7 +82,11 @@ def capture_source(source:SourceDefinition,adapter,transport,*,config_fingerprin
         except UnsafeUrlError: result.urls_blocked+=1; return None
         per_url=evaluate(robots_url=robots_url,status=response.status,body=response.body,
             target_url=canonical,user_agent=transport.policy.user_agent,fetched_at=response.fetched_at)
-        if not permits_catalog(per_url): result.urls_blocked+=1; return None
+        if not permits_catalog(per_url):
+            result.urls_blocked+=1
+            result.robots_blocks.append({"url":canonical,"state":per_url.state,
+                "reason":f"robots_{per_url.state}","applicable_rule":per_url.applicable_rule})
+            return None
         return canonical
     start=authorized(source.start_url,source.start_url)
     if start is None: result.reason="start_url_blocked"; return result
@@ -108,7 +113,10 @@ def capture_source(source:SourceDefinition,adapter,transport,*,config_fingerprin
                 if discovered is not None: pending.append((discovered,depth+1))
         for sitemap in decision.sitemaps:
             # Sitemaps never bypass URL scope or per-URL robots; adapters must explicitly classify them later.
-            result.urls_blocked+=1
+            if authorized(sitemap,source.start_url) is not None:
+                result.urls_blocked+=1
+                result.robots_blocks.append({"url":sitemap,"state":"metadata_only",
+                    "reason":"sitemap_metadata_only","applicable_rule":None})
     if pending: result.state="incomplete"; result.reason="page_or_depth_limit_reached"
     else: result.state="incomplete"; result.reason="capture_requires_snapshot_persistence"
     return result
