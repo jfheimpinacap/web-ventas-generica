@@ -37,3 +37,8 @@ materializa archivos públicos.
 La [adquisición autorizada y reanudable](docs/authorized-acquisition.md) añade planificación
 fail-closed, transporte de assets aislado, robots por host, redirects manuales, checkpoints,
 receipts y entrega al mismo `payload-manifest`; EP/GAM permanecen estructuralmente bloqueados.
+# Selección de assets
+
+La selección y materialización determinista, estrictamente offline, se documenta en
+[`docs/asset-selection-materialization.md`](docs/asset-selection-materialization.md). La CLI separada es
+`catalog_select.py` y no contiene transporte ni comandos de aprobación.
