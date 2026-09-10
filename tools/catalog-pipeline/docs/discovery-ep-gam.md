@@ -56,6 +56,13 @@ se lo invoca directamente, esta secuencia inalterable:
 
 La evaluación individual usa la regla coincidente más específica (y `Allow` en empates), por
 lo que un `Allow` general nunca prevalece accidentalmente sobre un `Disallow` de ruta más larga.
+Prompt 271 consolidó esa semántica en el evaluador puro usado para todas las URLs: los nombres
+de directiva no distinguen mayúsculas, se tolera whitespace alrededor de `:`, se ignoran
+comentarios y líneas vacías, y solo se consideran los grupos aplicables al User-Agent. Los
+patrones todavía no soportados (`*` o `$`), las directivas ambiguas y la sintaxis inválida
+producen `parse_failed` y bloquean, en vez de autorizar por ausencia accidental de reglas.
+Prompt 271 realizó cero solicitudes de red y no observó ni modificó evidencia de estructura
+live.
 Durante Prompt 270 no se realizó ninguna solicitud de red: los fixtures continuaron siendo
 exclusivamente sintéticos y no constituyen evidencia de estructura live.
 
