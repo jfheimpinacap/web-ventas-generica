@@ -28,3 +28,8 @@ los artefactos locales de discovery y conserva EP como autoridad y GAM como comp
 transporte ni produce imports JEM.
 
 Detailed local-snapshot extraction is documented in [offline-extraction.md](docs/offline-extraction.md). It is fixture-only and keeps EP/GAM live extraction fail-closed.
+
+La etapa siguiente de [validación binaria offline](docs/offline-assets.md) vincula candidatos con
+payloads locales explícitos, valida contenedores JPEG/PNG/WebP/PDF y genera objetos content-addressed,
+relaciones, reviews y manifiestos. No descarga, no autoriza, no selecciona principales y no
+materializa archivos públicos.

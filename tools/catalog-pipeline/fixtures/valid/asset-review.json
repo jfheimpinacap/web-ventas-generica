@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","review_id":"review:synthetic","code":"pending_payload","severity":"info","object_id":null,"candidate_id":"media:synthetic","relation_id":null,"reason":"invented candidate has no payload","evidence":{"offline":true},"locator":null,"status":"pending","rule_id":"pending_payload","rule_version":"asset-validation-v1"}

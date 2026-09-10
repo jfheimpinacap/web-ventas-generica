@@ -5,7 +5,7 @@ from catalog_acquisition.schema_validation import SchemaValidationError, validat
 class SchemaTests(unittest.TestCase):
  def test_every_schema_has_valid_synthetic_fixture(self):
   schemas=sorted((ROOT/'schemas/v1').glob('*.schema.json'))
-  self.assertEqual(30,len(schemas))
+  self.assertEqual(35,len(schemas))
   for schema in schemas:
    fixture=ROOT/'fixtures/valid'/schema.name.replace('.schema.json','.json')
    self.assertTrue(fixture.exists(),schema.name)
@@ -59,5 +59,13 @@ class SchemaTests(unittest.TestCase):
   value=json.loads((ROOT/'fixtures/valid/package-manifest.json').read_text(encoding="utf-8"))
   discovered_entry=value['discovered_universe'][0]
   self.assertNotIn(discovered_entry,value['importable_universe']); self.assertIn(discovered_entry,value['blocked'])
+ def test_asset_contracts_reject_unknown_fields_and_enums(self):
+  cases=[('payload-manifest.schema.json','payload-manifest.json','provenance_type','invented_source'),('asset-record.schema.json','asset-record.json','validation_status','decoded_ok'),('asset-relation.schema.json','asset-relation.json','eligibility_status','selected')]
+  for schema_name,fixture_name,field,bad in cases:
+   value=json.loads((ROOT/'fixtures/valid'/fixture_name).read_text(encoding='utf-8'))
+   target=value['bindings'][0] if 'bindings' in value else value; target[field]=bad
+   with self.assertRaises(SchemaValidationError): validate(value,ROOT/'schemas/v1'/schema_name)
+  value=json.loads((ROOT/'fixtures/valid/asset-review.json').read_text(encoding='utf-8')); value['unexpected']=True
+  with self.assertRaises(SchemaValidationError): validate(value,ROOT/'schemas/v1/asset-review.schema.json')
 
 if __name__=='__main__': unittest.main()

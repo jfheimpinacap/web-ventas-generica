@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","bindings":[{"candidate_id":"media:synthetic","relative_path":"invented/tiny.png","expected_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expected_size":1,"provenance_type":"synthetic_fixture","audit_reference":null,"authorization_status":"unknown","declared_mime":"image/png","http_metadata":null}]}
