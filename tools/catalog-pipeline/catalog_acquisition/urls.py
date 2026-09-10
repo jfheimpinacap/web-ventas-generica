@@ -37,7 +37,7 @@ def canonicalize(reference: str, *, base_url: str, source: SourceDefinition, req
     query=urlencode([(k,v) for k,v in parse_qsl(parsed.query, keep_blank_values=True) if k.casefold() not in TRACKING], doseq=True)
     path=parsed.path or "/"; netloc=host
     canonical=urlunsplit(("https",netloc,path,query,""))
-    return CanonicalUrl(reference,materialized,canonical,sha256((URL_RULE_VERSION+"\0"+canonical).encode()).hexdigest())
+    return CanonicalUrl(reference,materialized,canonical,sha256((URL_RULE_VERSION+"\0"+canonical).encode("utf-8")).hexdigest())
 
 def _allowed_path(source: SourceDefinition, path: str) -> bool:
     if path == "/robots.txt": return True

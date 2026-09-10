@@ -264,7 +264,7 @@ def resolve(discovery_manifest: Path, output_dir: Path, *, rules_path: Path|None
     for name,rows in collections.items(): write_once(safe_join(output_dir,name),b"".join(canonical_bytes(x) for x in rows),output_hashes[name])
     atomic_write(safe_join(output_dir,"matching-manifest.json"),canonical_bytes(result))
     report="Catalog identity matching (offline)\n"+"\n".join(f"{k}: {v}" for k,v in sorted(semantic["universes"].items()))+f"\nstatus: {semantic['status']}\nfingerprint: {semantic['semantic_fingerprint']}\n"
-    write_once(safe_join(output_dir,"matching-report.txt"),report.encode())
+    write_once(safe_join(output_dir,"matching-report.txt"),report.encode("utf-8"))
     return result
 
 def validate_domain(manifest:dict, collections:dict[str,list[dict]]) -> None:

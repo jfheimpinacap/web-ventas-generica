@@ -27,11 +27,11 @@ class SnapshotStore:
 
 class VerifiedCache:
     def __init__(self,root:Path): self.root=root.resolve()
-    def key(self,source,url,variant="identity"): return sha256(f"cache-v1\0{source}\0{url}\0{variant}".encode()).hexdigest()
+    def key(self,source,url,variant="identity"): return sha256(f"cache-v1\0{source}\0{url}\0{variant}".encode("utf-8")).hexdigest()
     def load(self,key):
         meta_path=safe_join(self.root,f"_pipeline/cache/{key}.json"); body_path=safe_join(self.root,f"_pipeline/cache/{key}.raw")
         if not meta_path.exists() or not body_path.exists(): return None
-        meta=json.loads(meta_path.read_text("utf-8")); verify_hash(body_path.read_bytes(),meta["sha256"]); return body_path.read_bytes(),meta
+        meta=json.loads(meta_path.read_text(encoding="utf-8")); verify_hash(body_path.read_bytes(),meta["sha256"]); return body_path.read_bytes(),meta
     def store(self,key,body,*,etag=None,last_modified=None):
         digest=sha256(body).hexdigest(); write_once(safe_join(self.root,f"_pipeline/cache/{key}.raw"),body,digest)
         atomic_write(safe_join(self.root,f"_pipeline/cache/{key}.json"),canonical_bytes({"schema_version":"cache-v1","sha256":digest,"etag":etag,"last_modified":last_modified}))

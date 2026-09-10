@@ -1,4 +1,4 @@
-import importlib.util, json, pathlib, sys, tempfile, unittest, unicodedata
+import ast, importlib.util, json, pathlib, sys, tempfile, unittest, unicodedata
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from catalog_acquisition.errors import IdentityCollisionError, ImmutableEvidenceError, PathCollisionError, UnsafePathError, HashMismatchError
 from catalog_acquisition.identity import (AmbiguousIdentityLinkError, CanonicalIdentityRegistry,
@@ -55,7 +55,7 @@ class DiscoveryTests(unittest.TestCase):
  def test_supplemental_source_cannot_create_discovered_entry(self):
   with self.assertRaises(SupplementalDiscoveryError): discovered_product_entry(source_identity('supplement','record'),source_role='supplemental',raw_observation_ids=('obs',))
  def test_cases_a_through_f_preserve_layer_boundaries(self):
-  cases=json.loads((ROOT/'fixtures/discovery-lifecycle-cases.json').read_text())
+  cases=json.loads((ROOT/'fixtures/discovery-lifecycle-cases.json').read_text(encoding="utf-8"))
   self.assertEqual(set('abcdef'),{name[5] for name in cases})
   self.assertIn('discovered-a',cases['case_a_official_ambiguous']['discovered_universe'])
   self.assertEqual([],cases['case_c_supplemental']['discovered_universe_additions'])
@@ -121,7 +121,7 @@ class PathTests(unittest.TestCase):
    one=create_layout(pathlib.Path(d),'SYNTHETIC','Machines','EFL 181',resolved_canonical_identity_value=canonical.value,registry=registry)
    two=create_layout(pathlib.Path(d),'SYNTHETIC','Machines','EFL 181',resolved_canonical_identity_value=canonical.value,registry=registry)
    self.assertEqual(one['product_path'],two['product_path'])
-  fixture=json.loads((ROOT/'fixtures/multi-source-one-product.json').read_text())
+  fixture=json.loads((ROOT/'fixtures/multi-source-one-product.json').read_text(encoding="utf-8"))
   self.assertEqual(2,len(fixture['source_identity_values'])); self.assertEqual(1,len(fixture['discovered_universe']))
   self.assertEqual(1,len(fixture['resolved_canonical_universe'])); self.assertEqual(1,len(fixture['importable_universe']))
 
@@ -131,6 +131,12 @@ class SerializationTests(unittest.TestCase):
   b={'relative_path':'a/b','name':'Café','aliases':['a','b'],'rules_version':'1','schema_version':'1','created_at':'two'}
   self.assertEqual(content_fingerprint(a),content_fingerprint(b)); self.assertEqual(canonical_bytes(a),canonical_bytes(a))
   self.assertNotEqual(content_fingerprint(a),content_fingerprint(a|{'name':'Other'}))
+  unicode_value={'schema_version':'1','rules_version':'1','text':'guion ‐, tildes áéíóú, ñ y 漢字'}
+  first=canonical_bytes(unicode_value); second=canonical_bytes(dict(unicode_value))
+  self.assertEqual(first,second); self.assertTrue(first.endswith(b"\n")); self.assertNotIn(b"\r\n",first)
+  with tempfile.TemporaryDirectory() as directory:
+   path=pathlib.Path(directory)/'unicode.jsonl'; path.write_bytes(first)
+   self.assertEqual(unicode_value,json.loads(path.read_text(encoding="utf-8")))
  def test_requires_versions(self):
   with self.assertRaises(ValueError): content_fingerprint({'name':'x'})
 
@@ -163,13 +169,23 @@ class BindingTests(unittest.TestCase):
 
 class ArchitectureTests(unittest.TestCase):
  def test_no_cross_imports_or_network_modules(self):
-  acquisition='\n'.join(p.read_text() for p in (ROOT/'catalog_acquisition').glob('*.py'))
-  parsers='\n'.join((ROOT/'catalog_acquisition'/name).read_text() for name in ('adapters.py','discovery_adapters.py'))
-  importer='\n'.join(p.read_text() for p in (ROOT/'jem_nexus_import').glob('*.py'))
+  acquisition='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_acquisition').glob('*.py'))
+  parsers='\n'.join((ROOT/'catalog_acquisition'/name).read_text(encoding="utf-8") for name in ('adapters.py','discovery_adapters.py'))
+  importer='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'jem_nexus_import').glob('*.py'))
   self.assertNotIn('jem_nexus_import',acquisition); self.assertNotIn('catalog_acquisition',importer)
   for forbidden in ['requests','http.client','socket','selenium','playwright']:
    self.assertNotIn(f'import {forbidden}',parsers+importer)
   self.assertNotIn('urllib.request',parsers+importer)
+  for path in ROOT.rglob('*.py'):
+   source=path.read_text(encoding="utf-8"); tree=ast.parse(source)
+   for call in (node for node in ast.walk(tree) if isinstance(node,ast.Call)):
+    error_values={keyword.value.value for keyword in call.keywords if keyword.arg=='errors' and isinstance(keyword.value,ast.Constant)}
+    self.assertFalse({'ignore','replace'} & error_values,f'{path}:{call.lineno}')
+    if isinstance(call.func,ast.Attribute) and call.func.attr in {'read_text','write_text'}:
+     self.assertIn('encoding',{keyword.arg for keyword in call.keywords},f'{path}:{call.lineno}')
+    if isinstance(call.func,ast.Name) and call.func.id=='open':
+     mode=call.args[1].value if len(call.args)>1 and isinstance(call.args[1],ast.Constant) else 'r'
+     if 'b' not in mode: self.assertIn('encoding',{keyword.arg for keyword in call.keywords},f'{path}:{call.lineno}')
  def test_adapter_uses_injected_bytes(self): self.assertEqual('synthetic.fixture',next(iter(SyntheticAdapter().discover(b'synthetic.fixture')))['stable_source_key'])
 
 if __name__=='__main__': unittest.main()
