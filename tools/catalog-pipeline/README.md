@@ -22,3 +22,7 @@ python -m unittest tests.test_schemas -v
 cd ../..
 git diff --check HEAD^ HEAD
 ```
+
+La etapa posterior de [matching de identidad offline](docs/identity-matching.md) consume únicamente
+los artefactos locales de discovery y conserva EP como autoridad y GAM como complemento. No activa
+transporte ni produce imports JEM.

@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","rules_version":"synthetic-1","rules":[{"rule_id":"exact-components","version":"1.0.0","approved":true},{"rule_id":"exact-entry-association","version":"1.0.0","approved":true},{"rule_id":"conservative-comparison","version":"1.0.0","approved":false}],"aliases":[]}

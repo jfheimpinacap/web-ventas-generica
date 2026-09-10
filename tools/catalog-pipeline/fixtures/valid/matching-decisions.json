@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","decisions":[{"human_decision_id":"synthetic-decision-1","source_identity_value":"source-1","candidate_canonical_identity_values":["canonical-1"],"canonical_identity_value":"canonical-1","decision":"approve","supersedes":null}]}
