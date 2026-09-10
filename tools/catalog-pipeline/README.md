@@ -26,3 +26,5 @@ git diff --check HEAD^ HEAD
 La etapa posterior de [matching de identidad offline](docs/identity-matching.md) consume únicamente
 los artefactos locales de discovery y conserva EP como autoridad y GAM como complemento. No activa
 transporte ni produce imports JEM.
+
+Detailed local-snapshot extraction is documented in [offline-extraction.md](docs/offline-extraction.md). It is fixture-only and keeps EP/GAM live extraction fail-closed.
