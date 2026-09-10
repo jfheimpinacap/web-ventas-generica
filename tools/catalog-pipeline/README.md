@@ -33,3 +33,7 @@ La etapa siguiente de [validación binaria offline](docs/offline-assets.md) vinc
 payloads locales explícitos, valida contenedores JPEG/PNG/WebP/PDF y genera objetos content-addressed,
 relaciones, reviews y manifiestos. No descarga, no autoriza, no selecciona principales y no
 materializa archivos públicos.
+
+La [adquisición autorizada y reanudable](docs/authorized-acquisition.md) añade planificación
+fail-closed, transporte de assets aislado, robots por host, redirects manuales, checkpoints,
+receipts y entrega al mismo `payload-manifest`; EP/GAM permanecen estructuralmente bloqueados.

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acquisition-checkpoint.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "relation_id",
+    "authorization_id",
+    "authorization_fingerprint",
+    "input_fingerprints",
+    "original_url",
+    "current_url",
+    "redirects_completed",
+    "host",
+    "part_relative_path",
+    "bytes_present",
+    "partial_sha256",
+    "total_expected",
+    "strong_etag",
+    "last_modified",
+    "content_type",
+    "state",
+    "next_action",
+    "request_count",
+    "operational_timestamps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "acquisition-checkpoint-v1"
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "authorization_id": {
+      "type": "string"
+    },
+    "authorization_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "input_fingerprints": {
+      "type": "object"
+    },
+    "original_url": {
+      "type": "string"
+    },
+    "current_url": {
+      "type": "string"
+    },
+    "redirects_completed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "host": {
+      "type": "string"
+    },
+    "part_relative_path": {
+      "type": "string"
+    },
+    "bytes_present": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "partial_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "total_expected": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "strong_etag": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_modified": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "content_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "enum": [
+        "interrupted",
+        "resume_blocked",
+        "failed_transport",
+        "blocked_redirect",
+        "blocked_robots"
+      ]
+    },
+    "next_action": {
+      "enum": [
+        "resume_or_restart"
+      ]
+    },
+    "request_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "operational_timestamps": {
+      "type": "object"
+    }
+  }
+}
