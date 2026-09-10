@@ -33,11 +33,20 @@ bindings de bytes, identidad de contenido ni assessments binarios.
   `/Encrypt`, `/JavaScript`, `/JS`, `/Launch`, `/EmbeddedFile`, `/OpenAction` y `/AA` sin abrir,
   renderizar, descifrar, extraer texto ni ejecutar contenido. Cifrado y contenido activo requieren
   review; corrupción o truncamiento son inválidos. Validación contenedora no es aprobación humana.
-* **SVG y firmas desconocidas:** no se renderizan ni aceptan por MIME/extensión; quedan unsupported.
+* **Identidad declarada incompatible:** si la clase de candidate, el MIME o la extensión presentan
+  el payload como PDF (o como otro formato soportado), pero sus bytes carecen de la firma esperada
+  o contienen HTML u otro contenido incompatible, queda `invalid`. Las señales estables
+  `class_signature_mismatch`, `mime_signature_mismatch`, `extension_signature_mismatch` y la firma
+  detectada conservan la contradicción para auditoría.
+* **Formatos genuinamente no soportados:** `unsupported` se reserva para contenido reconocible que
+  esta versión no admite y que no se presenta como un formato soportado. Por ejemplo, SVG permanece
+  `unsupported`: no se renderiza ni se acepta por MIME o extensión.
 
 La firma decide formato, MIME detectado y extensión canónica. MIME declarado, filename y extensión
-aparente se conservan solo como evidencia; una discordancia genera review/bloqueo. El filename nunca
-forma una ruta. Los límites configurables cubren bytes, ancho, alto y píxeles.
+aparente se conservan solo como evidencia; una discordancia material genera review/bloqueo y nunca
+queda elegible. Un payload inválido puede conservarse exactamente en el cache content-addressed para
+auditoría, pero no se registra como PDF válido ni se materializa en una carpeta de producto. El
+filename nunca forma una ruta. Los límites configurables cubren bytes, ancho, alto y píxeles.
 
 ## Deduplicación, asociación y autorización
 
@@ -68,5 +77,5 @@ completo, 1 input/error, 2 verificación bloqueada, 3 versión incompatible. No 
 confianza o aprobación.
 
 Los fixtures son inventados y no son evidencia live. No hubo descargas, selección de imagen/ficha
-principal ni materialización final. Prompt 277 incorporará adquisición autorizada/reanudable y la
-selección correspondiente.
+principal ni materialización final. La adquisición autorizada/reanudable y la selección
+correspondiente quedan para una etapa futura.

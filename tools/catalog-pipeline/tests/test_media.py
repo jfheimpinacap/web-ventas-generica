@@ -1,6 +1,6 @@
 import binascii, pathlib, struct, sys, unittest
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
-from catalog_acquisition.media import validate_binary
+from catalog_acquisition.media import _eligibility, validate_binary
 
 LIMITS={"max_bytes":1024*1024,"max_width":1000,"max_height":1000,"max_pixels":1000000}
 
@@ -35,7 +35,14 @@ class BinaryValidationTests(unittest.TestCase):
   self.assertEqual("invalid",self.check(pdf()[:-8],"document","application/pdf","invented.pdf")["status"])
   self.assertEqual("encrypted_review_required",self.check(pdf(b"/Encrypt "),"document","application/pdf","invented.pdf")["status"])
   self.assertEqual("active_content_review_required",self.check(pdf(b"/JavaScript /OpenAction "),"document","application/pdf","invented.pdf")["status"])
-  self.assertEqual("unsupported",self.check(b"<html>invented</html>","document","application/pdf","invented.pdf")["status"])
+  disguised=self.check(b"<html>invented</html>","document","application/pdf","invented.pdf")
+  self.assertEqual("invalid",disguised["status"])
+  self.assertEqual("unknown",disguised["format"])
+  self.assertEqual("application/octet-stream",disguised["mime_detected"])
+  self.assertIsNone(disguised["canonical_extension"])
+  self.assertTrue({"unknown_signature","class_signature_mismatch","mime_signature_mismatch","extension_signature_mismatch"}<=set(disguised["risks"]))
+  self.assertEqual("ineligible",_eligibility(disguised,{"scope_status":"candidate"},"authorized_capture_receipt","authorized_with_evidence","unambiguous"))
+  self.assertNotIn("object_path",disguised)
  def test_same_filename_different_bytes_and_exact_bytes_only(self):
   first=self.check(png(),"image","image/png","same.png"); second=self.check(png(2,1),"image","image/png","same.png")
   self.assertNotEqual(first["dimensions"],second["dimensions"])
