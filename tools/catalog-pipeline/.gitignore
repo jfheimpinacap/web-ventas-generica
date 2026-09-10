@@ -4,3 +4,5 @@
 /cache/
 /reports/
 *.tmp
+*.zip
+*.receipt.json
