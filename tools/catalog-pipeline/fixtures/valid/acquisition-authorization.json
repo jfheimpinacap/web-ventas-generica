@@ -1,0 +1,54 @@
+{
+  "schema_version": "acquisition-authorization-v1",
+  "authorization_id": "synthetic-auth",
+  "authorization_fingerprint": "79132b3fd563dfc9539c8d31765efbd0a087a313f8412c7e489b6b314948308b",
+  "policy_version": "asset-acquisition-v1",
+  "source_namespace": "synthetic",
+  "source_definition_version": "discovery-config-v1",
+  "source_definition_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "adapter_version": "synthetic-v1",
+  "extraction_manifest_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "asset_manifest_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_set_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "structure_evidence_reference": "synthetic/structure.txt",
+  "structure_evidence_sha256": "0c1201151bc23d5af2b9cf5072c43915b7630c4183e2b6bf4f316a44e0dac8f5",
+  "rights_evidence_reference": "synthetic/rights.txt",
+  "rights_evidence_sha256": "5cd1538f0dffa9631610352a57b08589fcbe2f5afc93a9b98c23e82271ad27c4",
+  "state": "approved",
+  "user_agent": "Synthetic-Acquisition/1.0",
+  "authorized_methods": [
+    "GET"
+  ],
+  "authorized_schemes": [
+    "https"
+  ],
+  "host_scopes": [
+    {
+      "host": "assets.example.test",
+      "port": 443,
+      "path_prefixes": [
+        "/media"
+      ],
+      "exact_paths": []
+    }
+  ],
+  "resource_types": [
+    "image",
+    "document"
+  ],
+  "limits": {
+    "max_requests": 10,
+    "max_assets": 2,
+    "max_bytes_per_asset": 1024,
+    "max_total_bytes": 2048,
+    "max_redirects": 2,
+    "timeout_seconds": 5,
+    "max_headers_bytes": 4096,
+    "max_chunk_bytes": 256,
+    "max_robots_bytes": 1024
+  },
+  "query_policy": {
+    "allowed_names": []
+  },
+  "fixture_only": true
+}
