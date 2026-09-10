@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","review_id":"review-fixture","policy_version":"selection-v1","canonical_identity":"fixture:MODEL","review_type":"selection_tie","status":"manual_review_required","candidate_sha256":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"reason":"synthetic tie","fixture_only":true}

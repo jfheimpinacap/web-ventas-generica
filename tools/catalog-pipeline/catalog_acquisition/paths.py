@@ -106,3 +106,18 @@ def technical_sheet_filename(brand: str, model: str, language: str, revision: st
     if not re.fullmatch(r"[A-Za-z0-9-]+",language): raise UnsafePathError("Invalid language")
     suffix=f"-{model_key(revision)}" if revision else ""
     return f"{model_key(brand)}-{model_key(model)}-ficha-tecnica-{language.lower()}{suffix}.pdf"
+
+def document_filename(brand: str, model: str, document_type: str, language: str | None=None,
+                      revision: str | None=None, ordinal: int | None=None) -> str:
+    """Return an evidence-based, generic PDF name (never a collision suffix)."""
+    if document_type not in {"technical_sheet", "brochure", "manual", "additional_document"}:
+        raise UnsafePathError("Unsupported document type")
+    parts = [model_key(brand), model_key(model), document_type.replace("_", "-")]
+    if language:
+        if not re.fullmatch(r"[A-Za-z0-9-]+", language): raise UnsafePathError("Invalid language")
+        parts.append(language.lower())
+    if revision: parts.append(model_key(revision))
+    if ordinal is not None:
+        if ordinal < 1: raise UnsafePathError("Invalid document ordinal")
+        parts.append(str(ordinal))
+    return "-".join(parts) + ".pdf"
