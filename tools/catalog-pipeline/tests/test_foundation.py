@@ -4,7 +4,7 @@ from catalog_acquisition.errors import IdentityCollisionError, ImmutableEvidence
 from catalog_acquisition.identity import (AmbiguousIdentityLinkError, CanonicalIdentityRegistry,
  IdentityLink, SourceIdentityRegistry, canonical_identity, source_identity)
 from catalog_acquisition.discovered import SupplementalDiscoveryError, discovered_product_entry
-from catalog_acquisition.paths import category_slug, create_layout, image_filename, model_key, safe_join, technical_sheet_filename, LayoutRegistry, windows_collision_key
+from catalog_acquisition.paths import category_slug, create_layout, document_filename, image_filename, model_key, safe_join, technical_sheet_filename, LayoutRegistry, windows_collision_key
 from catalog_acquisition.serialization import canonical_bytes, content_fingerprint
 from catalog_acquisition.storage import atomic_write, sha256_bytes, write_once
 from catalog_acquisition.adapters import SyntheticAdapter
@@ -65,10 +65,10 @@ class DiscoveryTests(unittest.TestCase):
 
 class PathTests(unittest.TestCase):
  def test_windows_cases_stable(self):
-  cases=['EFL 181','EFL+181','EFL/181','EFL:181','CON','con.txt','AUX','LPT1','Modelo.','Modelo ','Tijera Ⅱ','Máquina ágil']
+  cases=['EFL 181','EFL+181','EFL:181','CON','con.txt','AUX','LPT1','Modelo.','Modelo ','Tijera Ⅱ','Máquina ágil']
   self.assertEqual([model_key(x) for x in cases],[model_key(x) for x in cases])
   self.assertEqual('_CON',model_key('CON')); self.assertEqual('_con.txt',model_key('con.txt'))
-  self.assertNotEqual(model_key('EFL+181'),model_key('EFL/181'))
+  self.assertEqual('EFL_181',model_key('EFL:181'))
  def test_unicode_collision_and_case_insensitive_collision(self):
   a='Café'; b=unicodedata.normalize('NFD',a); self.assertEqual(windows_collision_key(model_key(a)),windows_collision_key(model_key(b)))
   r=LayoutRegistry(); r.add('model','Model','Model')
@@ -78,7 +78,9 @@ class PathTests(unittest.TestCase):
   r=LayoutRegistry(); r.add('category','Camión',category_slug('Camión'))
   with self.assertRaises(PathCollisionError): r.add('category','Camion',category_slug('Camion'))
  def test_reject_unsafe(self):
-  for value in ['', '.', '..', '/abs', r'C:\\temp', r'\\server\\share']:
+  for value in ['', '.', '..', '/abs', r'C:\\temp', r'\\server\\share', 'C:/drive',
+                '../escape', 'safe/../escape', r'safe\..\escape', '//host/path',
+                r'\\?\C:\escape', 'nul\0name', 'control\x1fname']:
    with self.subTest(label=repr(value)):
     with self.assertRaises(UnsafePathError): model_key(value)
   with tempfile.TemporaryDirectory() as d:
@@ -102,8 +104,25 @@ class PathTests(unittest.TestCase):
    for relative in valid:
     with self.subTest(relative=repr(relative)):
      self.assertEqual(root.joinpath(*relative.split('/')),safe_join(root,relative))
+ def test_semantic_labels_are_distinct_from_relative_paths(self):
+  for label in ('M:1','r:1','serie:alpha','EFL+181','modelo con espacio','Máquina ágil','safe-key'):
+   with self.subTest(label=label):
+    key=model_key(label); self.assertNotIn(':',key); self.assertNotIn('/',key); self.assertNotIn('\\',key)
+  self.assertEqual('M_1',model_key('M:1'))
+  with tempfile.TemporaryDirectory() as d:
+   root=pathlib.Path(d); filename=document_filename('ZZ','M:1','manual','es','r:1')
+   self.assertEqual('ZZ-M_1-manual-es-r_1.pdf',filename)
+   self.assertEqual(root/filename,safe_join(root,filename))
+   for path in ('M:1','C:foo','file:stream'):
+    with self.assertRaises(UnsafePathError): safe_join(root,path)
+ def test_transformed_semantic_label_collision_preserves_both_originals(self):
+  registry=LayoutRegistry(); registry.add('model','M:1',model_key('M:1'))
+  with self.assertRaises(PathCollisionError) as collision:
+   registry.add('model','M?1',model_key('M?1'))
+  self.assertEqual('M:1',collision.exception.context['first'])
+  self.assertEqual('M?1',collision.exception.context['second'])
  def test_manifest_round_trip(self):
-  r=LayoutRegistry(); entry=r.add('model','EFL/181',model_key('EFL/181')); self.assertEqual('EFL/181',entry['original_name'])
+  r=LayoutRegistry(); entry=r.add('model','EFL:181',model_key('EFL:181')); self.assertEqual('EFL:181',entry['original_name'])
   decomposed=unicodedata.normalize('NFD','Tijéra'); traced=r.add('model-unicode',decomposed,model_key(decomposed))
   self.assertEqual(decomposed,traced['original_name']); self.assertNotEqual(unicodedata.normalize('NFC',decomposed),traced['original_name'])
  def test_layout_and_future_names(self):

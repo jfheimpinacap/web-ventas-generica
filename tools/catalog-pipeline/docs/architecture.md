@@ -48,6 +48,9 @@ largos se acortan con sufijo SHA-256 determinista (no aleatorio). **La clave fí
 autodecodificable**: la recuperación exacta requiere el par `original_name`/`materialized_name`
 conservado en el manifiesto. Comparación de colisión siempre NFC + casefold +
 recorte Windows. Una colisión aborta, incluidos dos nombres transliterados iguales.
+Las etiquetas semánticas son texto de un solo componente: caracteres como `:` se codifican con
+la política anterior, mientras que `/`, `\\`, controles, vacío, `.` y `..` se rechazan antes de
+codificar porque expresan estructura de ruta. El resultado se revalida como segmento Windows-safe.
 `create_layout` exige un `LayoutRegistry`: las colisiones se planifican antes de escribir. Cada
 carpeta definitiva de producto se crea solo después de adoptar `canonical_identity_value`, nunca para
 una entrada descubierta no resuelta, una identidad de fuente ni

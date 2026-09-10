@@ -8,21 +8,37 @@ _INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = re.compile(r"^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.I)
 MAX_SEGMENT = 100
 
-def _reject_pathlike(value: str) -> None:
-    if not value or value in {".", ".."} or PureWindowsPath(value).is_absolute() or PurePosixPath(value).is_absolute():
-        raise UnsafePathError("A label, not a path, is required", value=value)
-    if value.startswith(("\\\\", "//")) or re.match(r"^[A-Za-z]:", value):
-        raise UnsafePathError("Absolute, UNC and drive paths are forbidden", value=value)
+def _raw_semantic_label(value: str) -> str:
+    """Validate naming text without interpreting it as a filesystem path."""
+    if not isinstance(value, str):
+        raise UnsafePathError("Semantic label must be text")
+    if (not value or value in {".", ".."}
+            or any(unicodedata.category(character) == "Cc" for character in value)):
+        raise UnsafePathError("Semantic label is empty, traversal, or contains controls", value=value)
+    if "/" in value or "\\" in value:
+        raise UnsafePathError("Semantic label must not contain path separators", value=value)
+    return value
+
+def _filesystem_segment(value: str) -> str:
+    """Validate an already encoded, Windows-safe single filesystem segment."""
+    if (not isinstance(value, str) or not value or value in {".", ".."}
+            or "/" in value or "\\" in value or ":" in value
+            or any(unicodedata.category(character) == "Cc" for character in value)
+            or _INVALID.search(value) or value.endswith((" ", "."))
+            or _RESERVED.fullmatch(value)
+            or len(value.encode("utf-8")) > MAX_SEGMENT):
+        raise UnsafePathError("Value is not a Windows-safe filesystem segment", value=value)
+    return value
 
 def category_slug(label: str) -> str:
-    _reject_pathlike(label)
+    label = _raw_semantic_label(label)
     ascii_value = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode("ascii").lower()
     result = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
     if not result: raise UnsafePathError("Category has no materializable ASCII characters", value=label)
-    return result
+    return _filesystem_segment(result)
 
 def model_key(model: str) -> str:
-    _reject_pathlike(model)
+    model = _raw_semantic_label(model)
     value = unicodedata.normalize("NFC", model)
     value = _INVALID.sub("_", value).rstrip(" .")
     if not value or value in {".", ".."}: raise UnsafePathError("Model produces an empty or traversal segment", value=model)
@@ -31,7 +47,7 @@ def model_key(model: str) -> str:
         digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
         while len(value.encode("utf-8")) > MAX_SEGMENT - 18: value = value[:-1]
         value = f"{value}--{digest}"
-    return value
+    return _filesystem_segment(value)
 
 def windows_collision_key(segment: str) -> str:
     return unicodedata.normalize("NFC", segment).rstrip(" .").casefold()
@@ -76,13 +92,16 @@ def safe_join(root: Path, relative: str | PurePosixPath) -> Path:
 
 class LayoutRegistry:
     """Collision registry also serving as reversible original->materialized manifest."""
-    def __init__(self) -> None: self.entries: list[dict[str, str | None]] = []; self._keys: dict[str, str] = {}
+    def __init__(self) -> None: self.entries: list[dict[str, str | None]] = []; self._keys: dict[str, tuple[str, str]] = {}
     def add(self, kind: str, original: str, materialized: str, *, resolved_canonical_identity_value: str | None=None) -> dict[str, str | None]:
         key = f"{kind}:{windows_collision_key(materialized)}"
         owner=resolved_canonical_identity_value or original
-        if key in self._keys and self._keys[key] != owner:
-            raise PathCollisionError("Distinct owners collide under Windows comparison", first=self._keys[key], second=owner)
-        self._keys[key] = owner
+        if key in self._keys and self._keys[key] != (owner, original):
+            first_owner, first_original = self._keys[key]
+            raise PathCollisionError("Distinct labels collide under Windows comparison",
+                                     first=first_original, second=original,
+                                     first_owner=first_owner, second_owner=owner)
+        self._keys[key] = (owner, original)
         entry = {"kind": kind, "resolved_canonical_identity_value": resolved_canonical_identity_value, "original_name": original, "materialized_name": materialized}
         if entry not in self.entries: self.entries.append(entry)
         return entry
@@ -100,12 +119,12 @@ def create_layout(root: Path, brand: str, category: str, model: str, *, resolved
 
 def image_filename(brand: str, model: str, order: int, extension: str, main: bool=False) -> str:
     if order < 0 or not re.fullmatch(r"[A-Za-z0-9]+",extension): raise UnsafePathError("Invalid image order or extension")
-    return f"{model_key(brand)}-{model_key(model)}-{order}{'-principal' if main else ''}.{extension.lower()}"
+    return _filesystem_segment(f"{model_key(brand)}-{model_key(model)}-{order}{'-principal' if main else ''}.{extension.lower()}")
 
 def technical_sheet_filename(brand: str, model: str, language: str, revision: str | None=None) -> str:
     if not re.fullmatch(r"[A-Za-z0-9-]+",language): raise UnsafePathError("Invalid language")
     suffix=f"-{model_key(revision)}" if revision else ""
-    return f"{model_key(brand)}-{model_key(model)}-ficha-tecnica-{language.lower()}{suffix}.pdf"
+    return _filesystem_segment(f"{model_key(brand)}-{model_key(model)}-ficha-tecnica-{language.lower()}{suffix}.pdf")
 
 def document_filename(brand: str, model: str, document_type: str, language: str | None=None,
                       revision: str | None=None, ordinal: int | None=None) -> str:
@@ -120,4 +139,4 @@ def document_filename(brand: str, model: str, document_type: str, language: str 
     if ordinal is not None:
         if ordinal < 1: raise UnsafePathError("Invalid document ordinal")
         parts.append(str(ordinal))
-    return "-".join(parts) + ".pdf"
+    return _filesystem_segment("-".join(parts) + ".pdf")
