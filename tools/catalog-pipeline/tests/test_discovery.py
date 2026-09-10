@@ -216,7 +216,7 @@ class LivePreflightRegressionTests(unittest.TestCase):
    item['applicable_rule']=='Disallow: /es/productos/private/' for item in result.robots_blocks))
  def test_sitemap_is_metadata_only_even_when_robots_allows_it(self):
   sitemap='https://ep-equipment.com/es/productos/sitemap.xml'
-  body=f'User-agent: *\nAllow: /\nSitemap: {sitemap}'.encode()
+  body=f'User-agent: *\nAllow: /\nSitemap: {sitemap}'.encode("utf-8")
   transport=_FakeTransport(200,body,forbidden=(sitemap,)); result=self.capture(self.enabled(),transport,max_pages=3)
   self.assertEqual([('GET','https://ep-equipment.com/robots.txt'),('GET',SOURCES['ep'].start_url)],transport.calls)
   self.assertIn(sitemap,result.robots['sitemaps']); self.assertNotIn(('GET',sitemap),transport.calls)
@@ -248,7 +248,7 @@ class LivePreflightRegressionTests(unittest.TestCase):
 
 class ArchitectureTests(unittest.TestCase):
  def test_parsers_do_not_import_transport_and_importer_does_not_import_adapters(self):
-  parser=(ROOT/'catalog_acquisition/discovery_adapters.py').read_text(); importer='\n'.join(x.read_text() for x in (ROOT/'jem_nexus_import').glob('*.py'))
+  parser=(ROOT/'catalog_acquisition/discovery_adapters.py').read_text(encoding="utf-8"); importer='\n'.join(x.read_text(encoding="utf-8") for x in (ROOT/'jem_nexus_import').glob('*.py'))
   self.assertNotIn('http_transport',parser); self.assertNotIn('discovery_adapters',importer)
  def test_no_matching_or_media_fixture(self):
   files=list((ROOT/'fixtures/discovery-structural').iterdir()); self.assertFalse(any(x.suffix.lower() in ('.pdf','.jpg','.png','.webp') for x in files))

@@ -31,7 +31,7 @@ class BaseDiscoveryAdapter:
     product_path:re.Pattern[str]; category_path:re.Pattern[str]
     def parse(self,body:bytes,*,base_url:str,content_type:str,encoding:str|None,snapshot_reference:str,expected_products:bool=False)->ParseResult:
         if content_type.split(";",1)[0].casefold() not in ("text/html","application/xhtml+xml"): raise StructureChanged("HTML snapshot required")
-        parser=_Document(); parser.feed(body.decode(encoding or "utf-8",errors="replace")); result=ParseResult("listing")
+        parser=_Document(); parser.feed(body.decode(encoding or "utf-8")); result=ParseResult("listing")
         for attrs,label in parser.links:
             href=attrs["href"]; locator=self._locator(attrs); kind=self._classify(href,attrs)
             evidence=LinkEvidence(base_url,locator,href,snapshot_reference,self.adapter_id+".links",self.adapter_version)

@@ -64,7 +64,7 @@ class ParseResult:
 
 def source_key(source: str, canonical_url: str) -> str:
     """URL-derived source key; labels/models never participate."""
-    return f"url-v1:sha256:{sha256((source+'\0'+canonical_url).encode()).hexdigest()}"
+    return f"url-v1:sha256:{sha256((source+'\0'+canonical_url).encode('utf-8')).hexdigest()}"
 
 def candidate_record(source: SourceDefinition, link: DiscoveryLink) -> dict[str, object]:
     if link.canonical_url is None:

@@ -41,9 +41,9 @@ def main(argv=None):
    print(json.dumps({"network_requests":0,"snapshots":0,"source_preflight":gates,
     "configuration":cfg,"config_fingerprint":config_fingerprint(cfg)},indent=2,sort_keys=True)); return EXIT_OK
   if a.command=="replay":
-   manifest=json.loads(Path(a.snapshot_manifest).read_text()); replay(manifest,Path(a.snapshot_root),Path(a.output_dir),ADAPTERS); return EXIT_OK
+   manifest=json.loads(Path(a.snapshot_manifest).read_text(encoding="utf-8")); replay(manifest,Path(a.snapshot_root),Path(a.output_dir),ADAPTERS); return EXIT_OK
   if a.command=="compare":
-   old=json.loads(Path(a.old_manifest).read_text()); new=json.loads(Path(a.new_manifest).read_text()); result=compare(old,new,a.old_manifest,a.new_manifest)
+   old=json.loads(Path(a.old_manifest).read_text(encoding="utf-8")); new=json.loads(Path(a.new_manifest).read_text(encoding="utf-8")); result=compare(old,new,a.old_manifest,a.new_manifest)
    if a.output: atomic_write(Path(a.output),canonical_bytes(result))
    else: print(json.dumps(result,indent=2,sort_keys=True))
    return EXIT_INCOMPATIBLE if result["status"]=="comparison_blocked" else EXIT_OK
@@ -51,7 +51,7 @@ def main(argv=None):
   root=_root(a.output_root); selected=_selected(a.source); cfg=semantic_config(selected,root,a.max_pages,a.max_depth,HttpPolicy().user_agent); manifest_path=safe_join(root,f"_pipeline/manifests/{a.run_id}.json")
   if a.continue_run:
    if not manifest_path.exists(): raise ValueError("continued run manifest does not exist")
-   validate_resume_preflight(json.loads(manifest_path.read_text()),cfg,
+   validate_resume_preflight(json.loads(manifest_path.read_text(encoding="utf-8")),cfg,
     {k:SOURCES[k] for k in selected},{k:ADAPTERS[k] for k in selected},HttpPolicy().user_agent)
   transport=SafeHttpTransport(); robots={}; states={}; source_results={}
   for key in selected:

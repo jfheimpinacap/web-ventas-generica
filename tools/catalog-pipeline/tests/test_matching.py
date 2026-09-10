@@ -26,10 +26,10 @@ class RegistryTests(unittest.TestCase):
  def test_alias_cycle_and_collision_are_blocked(self):
   with tempfile.TemporaryDirectory() as d:
    path=pathlib.Path(d)/'rules.json'
-   base=json.loads((ROOT/'fixtures/matching/rules-valid.json').read_text()); base['rules_version']='x'
+   base=json.loads((ROOT/'fixtures/matching/rules-valid.json').read_text(encoding="utf-8")); base['rules_version']='x'
    for aliases in ([{'source_namespace':'s','alias':'a','canonical_identity_value':'b'},{'source_namespace':'s','alias':'b','canonical_identity_value':'a'}],
     [{'source_namespace':'s','alias':'A','canonical_identity_value':'x'},{'source_namespace':'s','alias':'a','canonical_identity_value':'y'}]):
-    base['aliases']=aliases; path.write_text(json.dumps(base))
+    base['aliases']=aliases; path.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8", newline="\n")
     with self.assertRaises(MatchingBlockedError): _load_rules(path)
  def test_manual_decision_requires_auditable_id(self):
   with self.assertRaises(MatchingInputError): _load_decisions(ROOT/'fixtures/matching/decision-invalid-missing-id.json')
@@ -62,7 +62,7 @@ class SupplementalAssociationTests(unittest.TestCase):
    'discovery_page':'https://example.invalid/list','evidence_reference':f'evidence/{key}',
    'locator':f'item-{key}','rule_version':'synthetic-v1','warnings':list(warnings),'review_status':'pending'}
  def run_case(self,rows):
-  directory=tempfile.TemporaryDirectory(); root=pathlib.Path(directory.name)
+  directory=tempfile.TemporaryDirectory(); self.addCleanup(directory.cleanup); root=pathlib.Path(directory.name)
   body=b''.join(canonical_bytes(x) for x in rows); (root/'product-candidates.jsonl').write_bytes(body)
   sources=sorted({x['source'] for x in rows}); manifest={'schema_version':'discovery-manifest-v1',
    'sources':sources,'adapters':{x:'synthetic-v1' for x in sources},'states':{x:'complete' for x in sources},
@@ -70,49 +70,48 @@ class SupplementalAssociationTests(unittest.TestCase):
   manifest['content_fingerprint']=sha256(canonical_bytes(manifest)).hexdigest()
   path=root/'discovery-manifest.json'; path.write_bytes(canonical_bytes(manifest)); output=root/'out'
   result=resolve(path,output)
-  def read(name): return [json.loads(x) for x in (output/name).read_text().splitlines()]
-  return directory,result,{name:read(name) for name in OUTPUTS}
+  def read(name): return [json.loads(x) for x in (output/name).read_text(encoding="utf-8").splitlines()]
+  return result,{name:read(name) for name in OUTPUTS}
  def test_exact_gam_associates_to_unresolved_ep_without_resolving_it(self):
   ep=self.candidate('ep','authoritative_existence','ep-a','SERIES 10',warnings=('series_page',))
   gam=self.candidate('gam','supplemental','gam-a','SERIES 10')
-  hold,result,rows=self.run_case([gam,ep]); association=rows['supplemental-associations.jsonl'][0]
+  result,rows=self.run_case([gam,ep]); association=rows['supplemental-associations.jsonl'][0]
   supplemental_link=next(x for x in rows['identity-links.jsonl'] if x['source_namespace']=='gam')
   self.assertEqual('confirmed',association['association_status'])
   self.assertEqual('unresolved',association['canonical_resolution_status']); self.assertIsNone(supplemental_link['canonical_identity_value'])
   self.assertEqual(1,result['universes']['discovered_universe']); self.assertEqual(2,result['universes']['source_identity_universe'])
-  self.assertEqual({'evidence/ep-a','evidence/gam-a'},set(association['evidence_ids'])); hold.cleanup()
+  self.assertEqual({'evidence/ep-a','evidence/gam-a'},set(association['evidence_ids']))
  def test_normalized_match_is_review_not_orphan(self):
   ep=self.candidate('ep','authoritative_existence','ep-a','MODEL-10',warnings=('manual',))
   gam=self.candidate('gam','supplemental','gam-a','model‐10')
-  hold,result,rows=self.run_case([ep,gam]); link=next(x for x in rows['identity-links.jsonl'] if x['source_namespace']=='gam')
+  result,rows=self.run_case([ep,gam]); link=next(x for x in rows['identity-links.jsonl'] if x['source_namespace']=='gam')
   self.assertEqual('normalized_candidate',link['resolution_status']); self.assertIsNone(link['canonical_identity_value'])
-  self.assertEqual('proposed_for_review',rows['supplemental-associations.jsonl'][0]['association_status']); hold.cleanup()
+  self.assertEqual('proposed_for_review',rows['supplemental-associations.jsonl'][0]['association_status'])
  def test_multiple_authoritative_entries_are_ambiguous_and_orphan_is_only_none(self):
   ep1=self.candidate('ep','authoritative_existence','ep-a','MODEL 10'); ep2=self.candidate('ep','authoritative_existence','ep-b','MODEL 10')
   gam=self.candidate('gam','supplemental','gam-a','MODEL 10')
-  hold,result,rows=self.run_case([ep1,ep2,gam]); association=rows['supplemental-associations.jsonl'][0]
-  self.assertEqual('ambiguous',association['association_status']); self.assertEqual(2,len(association['candidate_discovered_entry_ids'])); self.assertIsNone(association['discovered_entry_id']); hold.cleanup()
+  result,rows=self.run_case([ep1,ep2,gam]); association=rows['supplemental-associations.jsonl'][0]
+  self.assertEqual('ambiguous',association['association_status']); self.assertEqual(2,len(association['candidate_discovered_entry_ids'])); self.assertIsNone(association['discovered_entry_id'])
   orphan=self.candidate('gam','supplemental','gam-b','UNRELATED')
-  hold,result,rows=self.run_case([ep1,orphan]); link=next(x for x in rows['identity-links.jsonl'] if x['source_namespace']=='gam')
-  self.assertEqual('supplemental_orphan',link['resolution_status']); self.assertEqual([],rows['supplemental-associations.jsonl'][0]['candidate_discovered_entry_ids']); self.assertEqual(1,result['universes']['discovered_universe']); hold.cleanup()
+  result,rows=self.run_case([ep1,orphan]); link=next(x for x in rows['identity-links.jsonl'] if x['source_namespace']=='gam')
+  self.assertEqual('supplemental_orphan',link['resolution_status']); self.assertEqual([],rows['supplemental-associations.jsonl'][0]['candidate_discovered_entry_ids']); self.assertEqual(1,result['universes']['discovered_universe'])
  def test_repeated_resolution_has_identical_semantic_outputs(self):
   candidates=[self.candidate('ep','authoritative_existence','ep-a','MODEL 10'),self.candidate('gam','supplemental','gam-a','MODEL 10')]
-  hold_a,result_a,rows_a=self.run_case(candidates); hold_b,result_b,rows_b=self.run_case(candidates)
+  result_a,rows_a=self.run_case(candidates); result_b,rows_b=self.run_case(candidates)
   self.assertEqual(result_a['semantic_fingerprint'],result_b['semantic_fingerprint']); self.assertEqual(rows_a,rows_b)
-  hold_a.cleanup(); hold_b.cleanup()
 
 class ArchitectureTests(unittest.TestCase):
  def test_matching_and_cli_have_no_network_imports_or_fuzzy_algorithm(self):
   prohibited={'urllib.request','http.client','requests','socket','selenium','playwright','Levenshtein'}
   for path in (ROOT/'catalog_acquisition/matching.py',ROOT/'catalog_identity.py'):
-   source=path.read_text(); tree=ast.parse(source)
+   source=path.read_text(encoding="utf-8"); tree=ast.parse(source)
    imports={x.name for n in ast.walk(tree) if isinstance(n,(ast.Import,ast.ImportFrom)) for x in n.names}
    self.assertFalse(prohibited & imports); self.assertNotIn('confidence',source.casefold())
  def test_supplemental_cannot_enter_discovered_universe_contract(self):
-  schema=json.loads((ROOT/'schemas/v1/discovered-product-entry.schema.json').read_text())
+  schema=json.loads((ROOT/'schemas/v1/discovered-product-entry.schema.json').read_text(encoding="utf-8"))
   self.assertEqual('authoritative_existence',schema['properties']['source_role']['const'])
  def test_synthetic_fixture_inventory_has_all_required_cases(self):
-  scenarios=json.loads((ROOT/'fixtures/matching/scenarios.json').read_text())['scenarios']
+  scenarios=json.loads((ROOT/'fixtures/matching/scenarios.json').read_text(encoding="utf-8"))['scenarios']
   self.assertEqual(18,len(scenarios))
 
 if __name__=='__main__': unittest.main()

@@ -23,4 +23,4 @@ def canonical_bytes(value: object) -> bytes:
 def content_fingerprint(value: dict[str, object]) -> str:
     if "schema_version" not in value or "rules_version" not in value:
         raise ValueError("Fingerprints require schema_version and rules_version")
-    return hashlib.sha256((json.dumps(_normalize(value, fingerprint=True), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+    return hashlib.sha256((json.dumps(_normalize(value, fingerprint=True), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")).hexdigest()

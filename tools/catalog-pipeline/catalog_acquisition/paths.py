@@ -28,8 +28,8 @@ def model_key(model: str) -> str:
     if not value or value in {".", ".."}: raise UnsafePathError("Model produces an empty or traversal segment", value=model)
     if _RESERVED.match(value): value = f"_{value}"
     if len(value.encode("utf-8")) > MAX_SEGMENT:
-        digest = hashlib.sha256(value.encode()).hexdigest()[:16]
-        while len(value.encode()) > MAX_SEGMENT - 18: value = value[:-1]
+        digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+        while len(value.encode("utf-8")) > MAX_SEGMENT - 18: value = value[:-1]
         value = f"{value}--{digest}"
     return value
 
