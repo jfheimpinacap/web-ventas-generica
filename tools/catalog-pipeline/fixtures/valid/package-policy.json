@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","policy_version":"package-synthetic-v1","brand_scope":["SYN"],"source_adapters":["synthetic"],"max_entries":100,"max_entry_size":1000000,"max_total_size":10000000,"max_compression_ratio":20,"forbid_nested_zip":true,"fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}

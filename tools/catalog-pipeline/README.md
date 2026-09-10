@@ -49,3 +49,11 @@ La etapa offline siguiente se documenta en
 [`docs/deterministic-normalization.md`](docs/deterministic-normalization.md). `catalog_normalize.py`
 ofrece solamente `plan`, `normalize` y `verify`; produce `producto.json` para auditoría, nunca un
 payload importable, y conserva EP/GAM live bloqueados mientras `structure_verified` sea falso.
+
+# Auditoría y paquete canónico
+
+La etapa cerrada de [auditoría integral y packaging reproducible](docs/catalog-audit-package.md)
+consume solo artefactos locales allowlisted. `catalog_package.py` separa `audit`, `plan`, `build`
+y `verify`, conserva explícitamente universos descubiertos/auditados/elegibles/excluidos/bloqueados y verifica
+el ZIP por streaming sin extraer. El paquete sigue siendo evidencia de auditoría: no es payload API,
+aprobación ni autorización de importación/publicación. EP/GAM live permanecen bloqueados.
