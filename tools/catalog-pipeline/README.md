@@ -42,3 +42,10 @@ receipts y entrega al mismo `payload-manifest`; EP/GAM permanecen estructuralmen
 La selección y materialización determinista, estrictamente offline, se documenta en
 [`docs/asset-selection-materialization.md`](docs/asset-selection-materialization.md). La CLI separada es
 `catalog_select.py` y no contiene transporte ni comandos de aprobación.
+
+# Normalización para auditoría
+
+La etapa offline siguiente se documenta en
+[`docs/deterministic-normalization.md`](docs/deterministic-normalization.md). `catalog_normalize.py`
+ofrece solamente `plan`, `normalize` y `verify`; produce `producto.json` para auditoría, nunca un
+payload importable, y conserva EP/GAM live bloqueados mientras `structure_verified` sea falso.
