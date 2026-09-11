@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://schemas.jem-nexus.invalid/catalog-pipeline/v1/import-dry-run-manifest.schema.json",
+  "title":"import-dry-run-manifest","type":"object",
+  "properties":{
+    "schema_version":{"const":"1.0.0"},
+    "rules_version":{"type":"string"},
+    "fixture_only":{"type":"boolean"},
+    "local_development":{"type":"boolean"},
+    "fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "state":{"enum":["invalid_package","invalid_snapshot","preflight_failed","manual_review_required","dry_run_ready"]},
+    "apply_supported":{"const":false},"mutation_supported":{"const":false},
+    "mutations_attempted":{"const":0},"mutations_completed":{"const":0},
+    "publication_authorized":{"const":false},"import_authorized":{"const":false},
+    "data":{"type":"object","additionalProperties":false}
+  },
+  "required":["schema_version","rules_version","fixture_only","local_development","fingerprint","state","apply_supported","mutation_supported","mutations_attempted","mutations_completed","publication_authorized","import_authorized","data"],
+  "additionalProperties":false
+}
