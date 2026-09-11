@@ -10,6 +10,7 @@ from jem_nexus_import.package_input import read_verified_package,ImportInputErro
 from jem_nexus_import.reconciliation import build_operations
 from jem_nexus_import.planning import build_plan,simulate
 from jem_nexus_import.output import write_output_set
+from jem_nexus_local_transport import get_json_bytes
 
 def parser():
     root=argparse.ArgumentParser(); commands=root.add_subparsers(dest="command",required=True)
@@ -37,12 +38,13 @@ def plan_outputs(plan,snapshot):
     operations=b"".join(canonical_bytes(x) for x in plan["operations"]); reviews=b"".join(canonical_bytes(x) for x in plan["reviews"])
     preflight={"state":"manual_review_required" if plan["reviews"] else "dry_run_ready","blocking":bool(plan["reviews"]),"apply_supported":False,"mutation_supported":False,"mutations_attempted":0,"mutations_completed":0}
     return {"jem-state-snapshot.json":snapshot,"import-preflight.json":preflight,"import-bindings.json":{"external":plan["external_bindings"],"produced":[b for op in plan["operations"] for b in op["produced_bindings"]]},"import-operations.jsonl":operations,"import-plan.json":plan,"import-reviews.jsonl":reviews}
-def main(argv=None,reader_factory=LocalJemJsonReader,verifier=verify_package):
+def main(argv=None,reader_factory=None,verifier=verify_package):
     args=parser().parse_args(argv)
     try:
         if args.command=="snapshot-local":
             # Capture orchestration is deliberately explicit; callers provide real contract metadata in Prompt 285.
-            reader=reader_factory(args.base_url); result=capture_snapshot(reader,args.contract_fingerprint)
+            reader=reader_factory(args.base_url) if reader_factory is not None else LocalJemJsonReader(args.base_url,transport=get_json_bytes)
+            result=capture_snapshot(reader,args.contract_fingerprint)
             write_output_set(args.output,{"jem-state-snapshot.json":result}); return 0
         if args.command=="plan":
             result=create_plan(args.package,args.receipt,args.snapshot,args.policy,verifier); write_output_set(args.output,plan_outputs(result,_read(args.snapshot)))

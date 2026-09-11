@@ -7,8 +7,8 @@ selección, materialización y verificación del ZIP canónico. `jem_nexus_impor
 verificada y no importa adapters EP/GAM, discovery, matching ni fuentes live. Un paquete válido para
 inspección puede ser válido para dry-run aun cuando `import_authorized=false`; esto **nunca** autoriza
 aplicar. Esta fase fija `apply_supported=false`, `mutation_supported=false`, contadores de mutación en
-cero y `publication_authorized=false`. Prompt 286 queda reservado para un apply/verify local
-controlado; preparación productiva permanece fuera de alcance.
+cero y `publication_authorized=false`. El apply/verify local controlado se aplaza al Prompt 287;
+preparación productiva permanece fuera de alcance.
 
 Solo se admite ZIP canónico con receipt externo recalculado, manifest completo, fingerprints de
 contenido/auditoría/decisión, hash y tamaño, al menos un incluido y cero bloqueados, junto con snapshot,
@@ -25,12 +25,14 @@ fichas; evidencia por endpoint/página (status, MIME, hash, completitud), clasif
 fingerprint. IDs duplicados, colisiones case-insensitive, relaciones huérfanas, páginas truncadas,
 MIME/shape inesperado o evidencia faltante bloquean.
 
-`local_client.py` es la única frontera de red: lectura JSON específica mediante GET, puerto explícito,
-sin redirects/cookies/reintentos, timeout y tamaño acotados. Solo acepta `localhost`, `127.0.0.1` y
+`jem_nexus_import/local_client.py` es núcleo puro: valida la política local y consume exclusivamente
+un callable GET inyectado; sin transporte produce `LOCAL_TRANSPORT_MISSING`. La única frontera de red
+es `jem_nexus_local_transport.py`, compuesta por `catalog_import.py`: GET con puerto explícito,
+sin redirects/cookies/proxies/reintentos, timeout y tamaño acotados. Solo acepta `localhost`, `127.0.0.1` y
 `[::1]`; prohíbe producción, DNS/IP externos, credenciales, fragmentos y queries fuera de paginación.
 La autenticación protegida procede exclusivamente de `JEM_NEXUS_LOCAL_READ_TOKEN`. Su valor, hash,
 prefijo o sufijo no se registra ni serializa; ausencia falla antes de consultar. Las pruebas inyectan
-transporte falso y no abren sockets.
+transporte falso y no abren sockets. La frontera vuelve a validar el target loopback aun ante uso directo.
 
 ## Proyección, reconciliación y grafo
 
