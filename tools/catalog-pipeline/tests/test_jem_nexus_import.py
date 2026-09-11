@@ -1,5 +1,5 @@
 """Offline behavioral tests for Prompt 284. No test in this module opens a socket."""
-import copy,errno,hashlib,json,os,pathlib,sys,tempfile,unittest
+import copy,errno,hashlib,inspect,json,os,pathlib,sys,tempfile,unittest
 from unittest import mock
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from jem_nexus_import.bindings import BindingResolver,MissingBindingError
@@ -14,6 +14,7 @@ from catalog_acquisition.schema_validation import validate,SchemaValidationError
 from catalog_import import create_plan,plan_outputs,capture_snapshot
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations,reconcile_category,reconcile_brand,reconcile_supplier,reconcile_product,reconcile_assets
+from jem_nexus_local_transport import _NoRedirect,get_json_bytes
 
 def ref(scope,namespace,key): return {"scope":scope,"namespace":namespace,"key":key,"binding_type":"entity_id"}
 def binding(namespace,key,value=1): return {**ref("external",namespace,key),"value":value}
@@ -61,8 +62,46 @@ class LocalClientTests(unittest.TestCase):
   with self.assertRaises(LocalReadError) as caught: reader.read_collection("categories")
   self.assertEqual("READ_STATUS",caught.exception.code); self.assertEqual(1,len(calls))
  def test_token_absence_is_structured_and_never_disclosed(self):
-  with self.assertRaises(LocalReadError) as caught: LocalJemJsonReader("http://localhost:1")
+  with self.assertRaises(LocalReadError) as caught: LocalJemJsonReader("http://localhost:1",transport=lambda *unused:None)
   self.assertEqual("LOCAL_TOKEN_MISSING",caught.exception.code); self.assertNotIn("Bearer",str(caught.exception))
+ def test_reader_requires_an_explicit_get_transport(self):
+  with self.assertRaises(LocalReadError) as caught: LocalJemJsonReader("http://localhost:1",requires_auth=False)
+  self.assertEqual("LOCAL_TRANSPORT_MISSING",caught.exception.code)
+
+class LocalTransportTests(unittest.TestCase):
+ class Response:
+  status=200
+  class Headers:
+   def get_content_type(self): return "application/json"
+  headers=Headers()
+  def __init__(self,body): self.body=body; self.read_limit=None; self.closed=False
+  def __enter__(self): return self
+  def __exit__(self,*unused): self.closed=True
+  def read(self,limit): self.read_limit=limit; return self.body[:limit]
+ def test_interface_is_get_specific_and_request_is_always_get(self):
+  self.assertEqual(("url","headers","timeout","max_bytes"),tuple(inspect.signature(get_json_bytes).parameters))
+  response=self.Response(b"{}")
+  opener=mock.Mock(); opener.open.return_value=response
+  with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener),mock.patch("jem_nexus_local_transport.Request") as request:
+   self.assertEqual((200,"application/json",b"{}"),get_json_bytes("http://localhost:1/api/products",{"Authorization":"Bearer secret"},3,8))
+  self.assertEqual("GET",request.call_args.kwargs["method"]); self.assertNotIn("method",inspect.signature(get_json_bytes).parameters)
+  self.assertEqual(9,response.read_limit); self.assertTrue(response.closed)
+ def test_redirects_and_proxies_are_disabled(self):
+  self.assertIsNone(_NoRedirect().redirect_request(None,None,None,None,None,None))
+  response=self.Response(b"[]"); opener=mock.Mock(); opener.open.return_value=response
+  with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener) as builder: get_json_bytes("http://127.0.0.1:2/api/brands",{},1,2)
+  handlers=builder.call_args.args; self.assertEqual({},handlers[0].proxies); self.assertIsInstance(handlers[1],_NoRedirect)
+ def test_direct_calls_reject_external_or_unapproved_targets_before_open(self):
+  targets=("https://api.jem-nexus.cl:443/api/products","http://localhost/api/products","//localhost:1/api/products","http://u:p@localhost:1/api/products","http://localhost:1/api/products?x=1","http://localhost:1/other")
+  with mock.patch("jem_nexus_local_transport.build_opener") as builder:
+   for target in targets:
+    with self.subTest(target=target),self.assertRaises(LocalReadError): get_json_bytes(target,{},1,1)
+   builder.assert_not_called()
+ def test_direct_calls_allow_each_exact_loopback_form_without_network(self):
+  for target in ("http://localhost:1/api/categories","http://127.0.0.1:2/api/products","http://[::1]:3/api/technical-sheets/"):
+   response=self.Response(b"[]"); opener=mock.Mock(); opener.open.return_value=response
+   with self.subTest(target=target),mock.patch("jem_nexus_local_transport.build_opener",return_value=opener):
+    self.assertEqual(b"[]",get_json_bytes(target,{},1,2)[2])
 
 class SnapshotTests(unittest.TestCase):
  def test_complete_snapshot_validates(self): self.assertIsNotNone(validate_snapshot(snapshot(),"c"*64))
@@ -244,6 +283,12 @@ class FunctionalFlowTests(unittest.TestCase):
    def read_collection(self,name): return []
   with tempfile.TemporaryDirectory() as directory:
    self.assertEqual(0,main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output",directory],reader_factory=Reader)); self.assertTrue((pathlib.Path(directory)/"jem-state-snapshot.json").exists())
+ def test_cli_normal_path_composes_the_dedicated_transport(self):
+  from catalog_import import main
+  reader=mock.Mock(); reader.read_collection.return_value=[]
+  with tempfile.TemporaryDirectory() as directory,mock.patch("catalog_import.LocalJemJsonReader",return_value=reader) as factory:
+   self.assertEqual(0,main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output",directory]))
+  self.assertIs(get_json_bytes,factory.call_args.kwargs["transport"])
  def test_cli_does_not_disguise_unexpected_filesystem_errors(self):
   from catalog_import import main
   class Reader:

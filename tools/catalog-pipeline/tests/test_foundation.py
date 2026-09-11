@@ -212,6 +212,17 @@ class ArchitectureTests(unittest.TestCase):
     if isinstance(call.func,ast.Name) and call.func.id=='open':
      mode=call.args[1].value if len(call.args)>1 and isinstance(call.args[1],ast.Constant) else 'r'
      if 'b' not in mode: self.assertIn('encoding',{keyword.arg for keyword in call.keywords},f'{path}:{call.lineno}')
+ def test_local_get_transport_has_one_explicit_composition_boundary(self):
+  transport=(ROOT/'jem_nexus_local_transport.py').read_text(encoding="utf-8")
+  composition=(ROOT/'catalog_import.py').read_text(encoding="utf-8")
+  importer='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'jem_nexus_import').glob('*.py'))
+  acquisition='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_acquisition').glob('*.py'))
+  common='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_pipeline_common').glob('*.py'))
+  production=[*ROOT.glob('*.py'),*(p for directory in ('catalog_pipeline_common','jem_nexus_import') for p in (ROOT/directory).glob('*.py'))]
+  self.assertIn('urllib.request',transport); self.assertEqual([ROOT/'jem_nexus_local_transport.py'],[p for p in production if 'urllib.request' in p.read_text(encoding="utf-8")])
+  self.assertIn('from jem_nexus_local_transport import get_json_bytes',composition)
+  self.assertNotIn('jem_nexus_local_transport',importer); self.assertNotIn('jem_nexus_import',acquisition); self.assertNotIn('jem_nexus_local_transport',acquisition)
+  self.assertNotIn('jem_nexus_import',common); self.assertNotIn('jem_nexus_local_transport',common)
  def test_adapter_uses_injected_bytes(self): self.assertEqual('synthetic.fixture',next(iter(SyntheticAdapter().discover(b'synthetic.fixture')))['stable_source_key'])
 
 if __name__=='__main__': unittest.main()

@@ -88,3 +88,10 @@ varias filas comparten un método solamente cuando este contiene assertions dife
 |78|case A excluded count|create_plan|plan allowed|package|covered|
 |79|builder blocked variant|build_package/create_plan|blocked|package|covered|
 |80|all_dry_run_guarantees|simulate|zero network/mutation/auth|manifest|covered|
+|81|reader_requires_transport|LocalJemJsonReader|LOCAL_TRANSPORT_MISSING|GET core|covered|
+|82|transport interface and request|get_json_bytes|four arguments, method GET|GET boundary|covered|
+|83|redirects/proxies disabled|get_json_bytes|NoRedirect and empty ProxyHandler|GET boundary|covered|
+|84|direct unsafe targets|get_json_bytes|UNSAFE_LOCAL_TARGET before opener|GET boundary|covered|
+|85|three direct loopbacks|get_json_bytes|localhost/IPv4/IPv6 accepted with fake opener|GET boundary|covered|
+|86|normal CLI composition|main|dedicated transport injected|CLI|covered|
+|87|unique boundary|module sources/import graph|urllib only in explicit transport|architecture|covered|
