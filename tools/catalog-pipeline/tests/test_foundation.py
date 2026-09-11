@@ -6,6 +6,7 @@ from catalog_acquisition.identity import (AmbiguousIdentityLinkError, CanonicalI
 from catalog_acquisition.discovered import SupplementalDiscoveryError, discovered_product_entry
 from catalog_acquisition.paths import category_slug, create_layout, document_filename, image_filename, model_key, safe_join, technical_sheet_filename, LayoutRegistry, windows_collision_key
 from catalog_acquisition.serialization import canonical_bytes, content_fingerprint
+from catalog_pipeline_common.serialization import canonical_bytes as neutral_bytes, content_fingerprint as neutral_fingerprint
 from catalog_acquisition.storage import atomic_write, sha256_bytes, write_once
 from catalog_acquisition.adapters import SyntheticAdapter
 from jem_nexus_import.bindings import BindingResolver, MissingBindingError
@@ -145,6 +146,10 @@ class PathTests(unittest.TestCase):
   self.assertEqual(1,len(fixture['resolved_canonical_universe'])); self.assertEqual(1,len(fixture['importable_universe']))
 
 class SerializationTests(unittest.TestCase):
+ def test_acquisition_serialization_reexports_the_neutral_implementation(self):
+  self.assertIs(canonical_bytes,neutral_bytes); self.assertIs(content_fingerprint,neutral_fingerprint)
+  value={'schema_version':'1','rules_version':'1','name':'Cafe\u0301','aliases':['b','a']}
+  self.assertEqual(canonical_bytes(value),neutral_bytes(value)); self.assertEqual(content_fingerprint(value),neutral_fingerprint(value))
  def test_determinism_and_semantics(self):
   a={'schema_version':'1','rules_version':'1','aliases':['b','a'],'name':'Cafe\u0301','created_at':'one','relative_path':'a\\b'}
   b={'relative_path':'a/b','name':'Café','aliases':['a','b'],'rules_version':'1','schema_version':'1','created_at':'two'}
@@ -195,6 +200,8 @@ class ArchitectureTests(unittest.TestCase):
   for forbidden in ['requests','http.client','socket','selenium','playwright']:
    self.assertNotIn(f'import {forbidden}',parsers+importer)
   self.assertNotIn('urllib.request',parsers+importer)
+  common='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_pipeline_common').glob('*.py'))
+  self.assertNotIn('catalog_acquisition',common); self.assertNotIn('jem_nexus_import',common)
   for path in ROOT.rglob('*.py'):
    source=path.read_text(encoding="utf-8"); tree=ast.parse(source)
    for call in (node for node in ast.walk(tree) if isinstance(node,ast.Call)):

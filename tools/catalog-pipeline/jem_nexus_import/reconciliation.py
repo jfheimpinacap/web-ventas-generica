@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib,json
 from .planning import operation
-from .projection import project_candidate
+from .projection import build_safe_product_payload, project_candidate
 
 STATES=frozenset({"create","reuse_exact","noop_exact","manual_review_required","blocked","retained_not_imported"})
 def result(entity,identity,state,reason,evidence,**extra):
@@ -78,9 +78,11 @@ def build_operations(package_view,snapshot,policy):
             elif rec["state"]=="reuse_exact": external.append({"scope":"external","namespace":entity,"key":key,"binding_type":"entity_id","value":rec["observed_id"]}); refs.append({"scope":"external","namespace":entity,"key":key,"binding_type":"entity_id"})
             else: reviews.append(rec)
         projected=project_candidate({**product.get("structured_fields",{}),"name":product.get("canonical_model"),"model":product.get("canonical_model"),"slug":product["canonical_identity"],"product_type":category["product_type"]})
-        desired={"canonical_identity":product["canonical_identity"],"product_type":category["product_type"],"slug":product["canonical_identity"],"model":product.get("canonical_model"),"sku":product.get("sku"),"payload":{**projected["structured_fields"],"category_id":refs[0] if refs else None,"brand_id":refs[1] if len(refs)>1 else None,"supplier_id":sr.get("observed_id")}}
+        if projected["issues"]: reviews.extend(projected["issues"]); continue
+        safe=build_safe_product_payload(projected)
+        desired={"canonical_identity":product["canonical_identity"],"product_type":category["product_type"],"slug":product["canonical_identity"],"model":product.get("canonical_model"),"sku":product.get("sku"),"payload":{**safe["payload"],"category_id":refs[0] if refs else None,"brand_id":refs[1] if len(refs)>1 else None,"supplier_id":sr.get("observed_id")},"safety_evidence":safe["safety_evidence"]}
         pr=reconcile_product(desired,snapshot["collections"]["products"]); reconciliations.append(pr)
-        if projected["issues"] or pr["state"] in ("blocked","manual_review_required"): reviews.extend(projected["issues"] or [pr]); continue
+        if pr["state"] in ("blocked","manual_review_required"): reviews.append(pr); continue
         if pr["state"]=="create":
             pop=operation("product","create",product["canonical_identity"],"/api/products",desired["payload"],refs,[{"scope":"produced","namespace":"product","key":product["canonical_identity"],"binding_type":"entity_id"}],deps,[path]); operations.append(pop); product_ref={"scope":"produced","namespace":"product","key":product["canonical_identity"],"binding_type":"entity_id"}; pdeps=[pop["operation_id"]]
             ar,media=reconcile_assets(product,package_view["entries"]); reconciliations.append(ar)

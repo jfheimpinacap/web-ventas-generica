@@ -1,11 +1,12 @@
 """Offline behavioral tests for Prompt 284. No test in this module opens a socket."""
-import copy,hashlib,json,pathlib,sys,tempfile,unittest
+import copy,errno,hashlib,json,os,pathlib,sys,tempfile,unittest
+from unittest import mock
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from jem_nexus_import.bindings import BindingResolver,MissingBindingError
 from jem_nexus_import.local_client import LocalJemJsonReader,LocalReadError,validate_base_url
-from jem_nexus_import.output import write_output_set
+from jem_nexus_import.output import _fsync_directory_if_supported,write_output_set
 from jem_nexus_import.planning import operation,simulate,topological
-from jem_nexus_import.projection import project_candidate
+from jem_nexus_import.projection import build_safe_product_payload,project_candidate
 from jem_nexus_import.snapshot import COLLECTIONS,semantic_fingerprint,validate_snapshot,SnapshotError
 from catalog_acquisition.packaging import build_package,fingerprint,PackageError
 from catalog_acquisition.serialization import canonical_bytes
@@ -84,7 +85,18 @@ class SnapshotTests(unittest.TestCase):
 class ProjectionTests(unittest.TestCase):
  def test_safe_commercial_defaults_cannot_be_overridden(self):
   value=project_candidate({"name":"Synthetic","price":99,"is_published":True})
-  self.assertIsNone(value["structured_fields"]["price"]); self.assertFalse(value["structured_fields"]["is_published"]); self.assertFalse(value["ready"])
+  self.assertEqual(99,value["structured_fields"]["price"]); self.assertTrue(value["structured_fields"]["is_published"]); self.assertFalse(value["ready"])
+ def test_projection_does_not_invent_absent_fields(self):
+  self.assertEqual({"name":"x"},project_candidate({"name":"x"})["structured_fields"])
+ def test_safe_payload_defaults_are_separate_and_input_is_immutable(self):
+  projected=project_candidate({"name":"x"}); before=copy.deepcopy(projected); safe=build_safe_product_payload(projected)
+  self.assertEqual(before,projected); self.assertEqual({"name":"x","price":None,"price_visible":False,"is_featured":False,"is_published":False},safe["payload"])
+  self.assertEqual(4,len(safe["safety_evidence"])); self.assertTrue(all(x["rule_version"]=="jem-import-safety-v1" for x in safe["safety_evidence"]))
+ def test_explicit_safe_values_are_accepted_and_unsafe_values_rejected(self):
+  safe={"price":None,"price_visible":False,"is_featured":False,"is_published":False}
+  self.assertEqual(safe,build_safe_product_payload(project_candidate(safe))["payload"])
+  for field,value in (("price",1),("price_visible",True),("is_featured",True),("is_published",True)):
+   with self.subTest(field=field),self.assertRaises(ValueError): build_safe_product_payload(project_candidate({field:value}))
  def test_lift_height_remains_a_spec(self):
   value=project_candidate({"maximum_lift_height_mm":8000}); self.assertEqual("maximum_lift_height_mm",value["product_specs"][0]["key"]); self.assertNotIn("working_height_m",value["structured_fields"])
  def test_unknown_enum_is_a_blocker(self): self.assertEqual("UNKNOWN_ENUM",project_candidate({"condition":"almost_new"})["issues"][0]["code"])
@@ -125,6 +137,29 @@ class OutputTests(unittest.TestCase):
    self.assertEqual(first,(pathlib.Path(directory)/"import-plan.json").read_bytes())
    with self.assertRaises(FileExistsError): write_output_set(directory,{"import-plan.json":{"x":2}})
    self.assertFalse(any(pathlib.Path(directory).glob("*.tmp")))
+ def test_directory_sync_supported_closes_handle(self):
+  with mock.patch("jem_nexus_import.output.os.open",return_value=71),mock.patch("jem_nexus_import.output.os.fsync") as sync,mock.patch("jem_nexus_import.output.os.close") as close:
+   _fsync_directory_if_supported("destination"); sync.assert_called_once_with(71); close.assert_called_once_with(71)
+ def test_directory_sync_unsupported_is_ignored_but_unexpected_is_propagated(self):
+  with mock.patch("jem_nexus_import.output.os.open",side_effect=PermissionError(errno.EACCES,"denied")): _fsync_directory_if_supported("destination")
+  with mock.patch("jem_nexus_import.output.os.open",return_value=72),mock.patch("jem_nexus_import.output.os.fsync",side_effect=OSError(errno.EIO,"broken")),mock.patch("jem_nexus_import.output.os.close") as close:
+   with self.assertRaises(OSError): _fsync_directory_if_supported("destination")
+   close.assert_called_once_with(72)
+ def test_intermediate_publish_failure_rolls_back_only_new_files(self):
+  real_replace=os.replace
+  with tempfile.TemporaryDirectory() as directory:
+   root=pathlib.Path(directory); existing=root/"existing.json"; existing.write_bytes(b"same"); foreign=root/"foreign.tmp"; foreign.write_bytes(b"foreign"); calls=[]
+   def fail_second(source,target):
+    calls.append(target)
+    if len(calls)==2: raise OSError(errno.EIO,"injected")
+    return real_replace(source,target)
+   with mock.patch("jem_nexus_import.output.os.replace",side_effect=fail_second):
+    with self.assertRaises(OSError): write_output_set(root,{"existing.json":b"same","a.json":b"a","import-plan.json":b"plan"})
+   self.assertEqual(b"same",existing.read_bytes()); self.assertEqual(b"foreign",foreign.read_bytes()); self.assertFalse((root/"a.json").exists()); self.assertFalse((root/"import-plan.json").exists()); self.assertFalse(any(root.glob(".*.writing-*.tmp")))
+ def test_file_fsync_remains_mandatory(self):
+  with tempfile.TemporaryDirectory() as directory,mock.patch("jem_nexus_import.output.os.fsync",side_effect=OSError(errno.EIO,"file sync failed")):
+   with self.assertRaises(OSError): write_output_set(directory,{"import-plan.json":b"value"})
+   self.assertFalse((pathlib.Path(directory)/"import-plan.json").exists())
  def test_cli_surface_contains_only_read_only_commands(self):
   source=(ROOT/"catalog_import.py").read_text(encoding="utf-8")
   for command in ('"snapshot-local"','"plan"','"dry-run"'): self.assertIn(command,source)
@@ -137,6 +172,8 @@ class FunctionalFlowTests(unittest.TestCase):
    sp=pathlib.Path(directory)/"snapshot.json"; pp=pathlib.Path(directory)/"policy.json"; sp.write_bytes(canonical_bytes(snap)); pp.write_bytes(canonical_bytes(policy))
    value=create_plan(package,receipt,sp,pp); kinds=[x["kind"] for x in value["operations"]]
    self.assertEqual(["brand","category"],sorted(kinds[:2])); self.assertIn("product",kinds); self.assertEqual(2,kinds.count("image")); self.assertIn("spec",kinds); self.assertIn("technical_sheet",kinds)
+   product_payload=next(x for x in value["operations"] if x["kind"]=="product")["payload_template"]
+   self.assertEqual({"price":None,"price_visible":False,"is_featured":False,"is_published":False},{key:product_payload[key] for key in ("price","price_visible","is_featured","is_published")})
    self.assertEqual("retained_not_imported",value["retained_documents"][0]["state"]); self.assertEqual("dry_run_ready",simulate(value)["state"])
    images=sorted((x for x in value["operations"] if x["kind"]=="image"),key=lambda x:x["payload_template"]["multipart"]["order"]); self.assertEqual([True,False],[x["payload_template"]["multipart"]["is_main"] for x in images]); self.assertEqual({"product_id","file_entry","sha256","size","mime","alt_text","is_main","order","source_filename"},set(images[0]["payload_template"]["multipart"]))
    outputs=plan_outputs(value,snap); outputs.update({"import-dry-run-manifest.json":simulate(value),"import-dry-run-report.txt":b"synthetic\n"}); self.assertEqual({"jem-state-snapshot.json","import-preflight.json","import-bindings.json","import-operations.jsonl","import-plan.json","import-reviews.jsonl","import-dry-run-manifest.json","import-dry-run-report.txt"},set(outputs))
@@ -207,5 +244,12 @@ class FunctionalFlowTests(unittest.TestCase):
    def read_collection(self,name): return []
   with tempfile.TemporaryDirectory() as directory:
    self.assertEqual(0,main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output",directory],reader_factory=Reader)); self.assertTrue((pathlib.Path(directory)/"jem-state-snapshot.json").exists())
+ def test_cli_does_not_disguise_unexpected_filesystem_errors(self):
+  from catalog_import import main
+  class Reader:
+   def __init__(self,url): pass
+   def read_collection(self,name): return []
+  with mock.patch("catalog_import.write_output_set",side_effect=OSError(errno.EIO,"unexpected")):
+   with self.assertRaises(OSError): main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output","unused"],reader_factory=Reader)
 
 if __name__=="__main__": unittest.main()

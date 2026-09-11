@@ -1,6 +1,6 @@
 """Closed, order-independent representation of an observed local JEM API."""
 from __future__ import annotations
-from catalog_acquisition.serialization import content_fingerprint
+from catalog_pipeline_common.serialization import content_fingerprint
 
 SCHEMA_VERSION="1.0.0"; RULES_VERSION="jem-snapshot-v1"
 COLLECTIONS=("categories","brands","suppliers","products","product_images","product_specs","technical_sheets")
