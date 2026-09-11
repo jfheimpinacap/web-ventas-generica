@@ -14,7 +14,7 @@ from catalog_acquisition.schema_validation import validate,SchemaValidationError
 from catalog_import import create_plan,plan_outputs,capture_snapshot
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations,reconcile_category,reconcile_brand,reconcile_supplier,reconcile_product,reconcile_assets
-from jem_nexus_local_transport import _NoRedirect,get_json_bytes
+from jem_nexus_local_transport import get_json_bytes
 
 def ref(scope,namespace,key): return {"scope":scope,"namespace":namespace,"key":key,"binding_type":"entity_id"}
 def binding(namespace,key,value=1): return {**ref("external",namespace,key),"value":value}
@@ -87,10 +87,12 @@ class LocalTransportTests(unittest.TestCase):
   self.assertEqual("GET",request.call_args.kwargs["method"]); self.assertNotIn("method",inspect.signature(get_json_bytes).parameters)
   self.assertEqual(9,response.read_limit); self.assertTrue(response.closed)
  def test_redirects_and_proxies_are_disabled(self):
-  self.assertIsNone(_NoRedirect().redirect_request(None,None,None,None,None,None))
   response=self.Response(b"[]"); opener=mock.Mock(); opener.open.return_value=response
-  with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener) as builder: get_json_bytes("http://127.0.0.1:2/api/brands",{},1,2)
-  handlers=builder.call_args.args; self.assertEqual({},handlers[0].proxies); self.assertIsInstance(handlers[1],_NoRedirect)
+  with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener) as builder,mock.patch("jem_nexus_local_transport.Request") as request:
+   get_json_bytes("http://127.0.0.1:2/api/brands",{},1,2)
+  handlers=builder.call_args.args; self.assertEqual({},handlers[0].proxies)
+  redirect_handler=handlers[1](); self.assertIsNone(redirect_handler.redirect_request(None,None,None,None,None,None))
+  self.assertEqual("GET",request.call_args.kwargs["method"])
  def test_direct_calls_reject_external_or_unapproved_targets_before_open(self):
   targets=("https://api.jem-nexus.cl:443/api/products","http://localhost/api/products","//localhost:1/api/products","http://u:p@localhost:1/api/products","http://localhost:1/api/products?x=1","http://localhost:1/other")
   with mock.patch("jem_nexus_local_transport.build_opener") as builder:
@@ -229,7 +231,7 @@ class FunctionalFlowTests(unittest.TestCase):
  def test_receipt_and_package_corruption_are_rejected_by_real_verifier(self):
   from catalog_acquisition.packaging import verify_package
   with tempfile.TemporaryDirectory() as directory:
-   package,receipt,_=canonical_package(directory); bad=pathlib.Path(directory)/"bad-receipt.json"; value=json.loads(receipt.read_text()); value["zip_size"]+=1; bad.write_bytes(canonical_bytes(value))
+   package,receipt,_=canonical_package(directory); bad=pathlib.Path(directory)/"bad-receipt.json"; value=json.loads(receipt.read_text(encoding="utf-8")); value["zip_size"]+=1; bad.write_bytes(canonical_bytes(value))
    with self.assertRaises(ImportInputError) as caught: read_verified_package(package,bad,{},verify_package)
    self.assertEqual("INVALID_PACKAGE",caught.exception.code)
  def test_blocked_or_empty_package_cannot_be_built_but_exclusions_can(self):
