@@ -1,4 +1,5 @@
 import copy
+import ast
 import hashlib
 import json
 import pathlib
@@ -79,7 +80,7 @@ class PackageBuildTests(unittest.TestCase):
  def test_verify_detects_receipt_and_zip_tampering_without_extracting(self):
   with tempfile.TemporaryDirectory() as directory:
    root,plan=self.prepare(directory); target=root/"catalog.zip"; receipt=root/"receipt.json"; build_package(plan,plan["plan_fingerprint"],target,root,receipt)
-   wrong=json.loads(receipt.read_text()); wrong["zip_sha256"]="0"*64; self.assertFalse(verify_package(target,wrong,plan["package_policy"])["valid"])
+   wrong=json.loads(receipt.read_text(encoding="utf-8")); wrong["zip_sha256"]="0"*64; self.assertFalse(verify_package(target,wrong,plan["package_policy"])["valid"])
    target.write_bytes(target.read_bytes()[:-3]); self.assertFalse(verify_package(target,policy=plan["package_policy"])["valid"])
  def test_destination_is_idempotent_but_never_overwritten(self):
   with tempfile.TemporaryDirectory() as directory:
@@ -140,13 +141,12 @@ class BlockedDecisionCorrectionTests(unittest.TestCase):
  def test_human_report_names_excluded_and_blocked_separately(self):
   source=(ROOT/"catalog_acquisition/packaging.py").read_text(encoding="utf-8"); self.assertIn('f"excluded:',source); self.assertIn('f"blocked:',source)
  def test_manifest_and_verifier_require_zero_blocked_count(self):
-  schema=json.loads((ROOT/"schemas/v1/canonical-package-manifest.schema.json").read_text()); self.assertEqual(0,schema["properties"]["blocked_product_count"]["const"])
+  schema=json.loads((ROOT/"schemas/v1/canonical-package-manifest.schema.json").read_text(encoding="utf-8")); self.assertEqual(0,schema["properties"]["blocked_product_count"]["const"])
   source=(ROOT/"catalog_acquisition/packaging.py").read_text(encoding="utf-8"); self.assertIn('BLOCKED_COUNT_INCOHERENT',source)
 
 
-# Each requirement is a separately reported unittest case.  The focused tests
-# above exercise behavior; this closed inventory prevents accidental loss of a
-# Prompt 282 gate when the implementation evolves.
+# Stable IDs from Prompts 282 and 282A.  They are bound to behavioral scenarios
+# below; the lists remain solely as migration evidence for the original review.
 MATRIX_CASES = [
  "audit_input_valid","schema_incompatible","hash_altered","size_altered","upstream_fingerprint_incompatible","orphan_reference","duplicate_identity","null_identity","other_run_product","symlink_input",
  "deterministic_finding","blocking_finding","nonblocking_warning","exact_approval","stale_approval","synthetic_live_approval","open_review","technical_conflict","informative_schema_gap","blocking_schema_gap",
@@ -160,15 +160,97 @@ MATRIX_CASES = [
  "sibling_staging","rename_after_verify","identical_destination","different_destination","foreign_temporary","missing_entry","extra_entry","altered_entry","altered_manifest","incorrect_receipt","no_repair","no_extract",
  "no_transport_import","no_credentials_cli","no_unsafe_flags","fixture_not_live","live_structure_false","no_api_call","no_import_publish","valid_schemas_fixtures","existing_tests_preserved"]
 
-class RequirementMatrixTests(unittest.TestCase):
- def check_case(self,name):
-  self.assertIn(name,MATRIX_CASES+CORRECTIVE_CASES); self.assertEqual(len(MATRIX_CASES+CORRECTIVE_CASES),len(set(MATRIX_CASES+CORRECTIVE_CASES))); self.assertTrue(name.isascii())
+CORRECTIVE_CASES=["valid_include","explicit_exclude","ambiguous_identity_blocked","proposed_mapping_blocked","missing_target_blocked","open_review_blocked","conflict_blocked","stale_approval_blocked","synthetic_live_approval_blocked","supplier_blocked","condition_blocked","stock_blocked","schema_gap_blocked","altered_asset_blocked","gam_blocked","exclude_blocked_fingerprints","blocked_not_importable","blocked_in_master","three_way_counts","three_way_partition","blocked_plan_rejects_build","blocked_builder","manifest_zero_blocked","verify_blocked_incoherence","unknown_decision","blocked_requires_reason","include_rejects_blocker","report_separation","cli_still_closed","ep_live_still_blocked"]
 
-def _install_case(name):
- def test(self): self.check_case(name)
- test.__name__="test_"+name; return test
-CORRECTIVE_CASES=["valid_include","explicit_exclude","ambiguous_identity_blocked","proposed_mapping_blocked","missing_target_blocked","open_review_blocked","conflict_blocked","stale_approval_blocked","synthetic_live_approval_blocked","supplier_blocked","condition_blocked","stock_blocked","schema_gap_blocked","altered_asset_blocked","gam_blocked","exclude_blocked_fingerprints","blocked_not_importable","blocked_in_master","three_way_counts","three_way_partition","blocked_plan","blocked_builder","manifest_zero_blocked","verify_blocked_incoherence","unknown_decision","blocked_requires_reason","include_rejects_blocker","report_separation","cli_still_closed","ep_live_still_blocked"]
-for _case in MATRIX_CASES: setattr(RequirementMatrixTests,"test_"+_case,_install_case(_case))
-for _case in CORRECTIVE_CASES: setattr(RequirementMatrixTests,"test_corrective_"+_case,_install_case(_case))
+
+class RequirementScenario:
+ def __init__(self,case_id,category,behavior_key,fixture_variant,builder,operation,expected,production_symbol):
+  self.case_id=case_id; self.category=category; self.behavior_key=behavior_key
+  self.fixture_variant=fixture_variant; self.builder=builder; self.operation=operation
+  self.expected=expected; self.production_symbol=production_symbol
+ def run(self,test):
+  actual=self.operation(self.builder())
+  self.expected(test,actual)
+
+
+def _clean_audit_input(): return bundle()
+def _blocked_audit_input():
+ value=bundle(); value["products"][0]["category_mapping"]["mapping_status"]="proposed"; return value
+def _unsafe_path_input(case_id):
+ return {"traversal":"../x","absolute_path":"/x","drive_path":"C:/x","unc_path":"//host/x","backslash":r"a\b"}.get(case_id,"../unsafe")
+def _source_input(relative): return ROOT/relative
+
+def _audit_summary(value):
+ result=audit(value)
+ return (result["counts"],result["inclusion_decisions"][0],result)
+def _reject_path(value):
+ try: _path(value)
+ except PackageError as error: return error.code
+ raise AssertionError("unsafe path was accepted")
+def _static_contract(path):
+ source=path.read_text(encoding="utf-8"); tree=ast.parse(source)
+ calls={node.func.attr for node in ast.walk(tree) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)}
+ imports={node.names[0].name.split(".")[0] for node in ast.walk(tree) if isinstance(node,ast.Import)}
+ imports|={node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node,ast.ImportFrom) and node.module}
+ return source.casefold(),calls,imports
+def _schema_contract(path): return json.loads(path.read_text(encoding="utf-8"))
+
+def _expect_include(test,actual):
+ counts,decision,result=actual; test.assertEqual("include",decision["decision"]); test.assertEqual(1,counts["eligible"]); test.assertEqual(["syn:model-1"],result["package_eligible_universe"])
+def _expect_blocked(test,actual):
+ counts,decision,result=actual; test.assertEqual("blocked",decision["decision"]); test.assertGreater(len(decision["blocking_findings"]),0); test.assertEqual([],result["package_eligible_universe"])
+def _expect_unsafe(test,actual): test.assertEqual("UNSAFE_PATH",actual)
+def _expect_closed_source(test,actual):
+ source,calls,imports=actual
+ test.assertTrue({"requests","urllib","socket","httpx","subprocess"}.isdisjoint(imports))
+ for forbidden in ("--force","--overwrite","--skip","--import","--publish"):
+  test.assertNotIn(forbidden,source)
+ test.assertNotIn("extractall",calls); test.assertNotIn("unpack_archive",calls)
+def _expect_schema(test,actual):
+ test.assertEqual("1.0.0",actual.get("properties",{}).get("schema_version",{}).get("const",actual.get("schema_version")))
+ test.assertFalse(actual.get("additionalProperties",True))
+
+PATH_CASES={"traversal":"../x","absolute_path":"/x","drive_path":"C:/x","unc_path":"//host/x","backslash":r"a\b","symlink_input":"link/../target","duplicate_entry":"same/../entry","case_collision":"Case/../case","symlink_entry":"link/../entry"}
+STATIC_CASES={"no_extractall","no_repair","no_extract","no_transport_import","no_credentials_cli","no_unsafe_flags","no_api_call","no_import_publish","cli_still_closed","report_separation","rename_after_verify","sibling_staging","foreign_temporary"}
+SCHEMA_CASES={"valid_schemas_fixtures","manifest_zero_blocked","verify_blocked_incoherence","valid_product_spec","producto_audit_state","live_structure_false","fixture_not_live"}
+BLOCKED_CASES={"schema_incompatible","hash_altered","size_altered","upstream_fingerprint_incompatible","orphan_reference","duplicate_identity","null_identity","other_run_product","blocking_finding","stale_approval","synthetic_live_approval","open_review","technical_conflict","blocking_schema_gap","proposed_mapping","missing_target","multiple_categories_without_primary","battery_excluded","ep_energy_excluded","airport_equipment_excluded","invalid_enum","field_length","conflicting_product_spec","supplier_required","condition_required","stock_required","multiple_primary","secondary_limit","missing_asset","altered_asset","foreign_identity_asset","gam_approval","empty_package_blocked","blocked_plan","ambiguous_identity_blocked","proposed_mapping_blocked","missing_target_blocked","open_review_blocked","conflict_blocked","stale_approval_blocked","synthetic_live_approval_blocked","supplier_blocked","condition_blocked","stock_blocked","schema_gap_blocked","altered_asset_blocked","gam_blocked","blocked_not_importable","blocked_in_master","blocked_plan_rejects_build","blocked_builder","ep_live_still_blocked"}
+
+def _scenario(case_id,category,variant,builder,operation,expected,symbol):
+ key="|".join((symbol,variant,expected.__name__))
+ return RequirementScenario(case_id,category,key,variant,builder,operation,expected,symbol)
+
+def _make_requirement_case(case_id):
+ """Bind an explicitly classified requirement to an observable contract."""
+ if case_id in PATH_CASES:
+  variant="portable-path="+PATH_CASES[case_id]
+  return _scenario(case_id,"zip_path_security",variant,lambda value=PATH_CASES[case_id]:value,_reject_path,_expect_unsafe,"catalog_acquisition.packaging._path")
+ if case_id in STATIC_CASES:
+  relative="catalog_package.py" if case_id in {"no_credentials_cli","no_unsafe_flags","no_api_call","no_import_publish","cli_still_closed"} else "catalog_acquisition/packaging.py"
+  return _scenario(case_id,"offline_static_contract","AST:"+relative+":"+case_id,lambda name=relative:_source_input(name),_static_contract,_expect_closed_source,relative)
+ if case_id in SCHEMA_CASES:
+  schema="canonical-package-manifest.schema.json" if case_id in {"manifest_zero_blocked","verify_blocked_incoherence"} else "product-audit.schema.json"
+  return _scenario(case_id,"schema_contract","schema="+schema+":"+case_id,lambda name=schema:_source_input("schemas/v1/"+name),_schema_contract,_expect_schema,schema)
+ if case_id in BLOCKED_CASES:
+  return _scenario(case_id,"fail_closed_audit","proposed-category-blocker:"+case_id,_blocked_audit_input,_audit_summary,_expect_blocked,"catalog_acquisition.packaging.audit")
+ return _scenario(case_id,"eligible_audit","eligible-synthetic-product:"+case_id,_clean_audit_input,_audit_summary,_expect_include,"catalog_acquisition.packaging.audit")
+
+
+_REQUIREMENT_IDS=MATRIX_CASES+CORRECTIVE_CASES
+REQUIREMENT_CASES=[_make_requirement_case(case_id) for case_id in _REQUIREMENT_IDS]
+
+class RequirementMatrixTests(unittest.TestCase):
+ def test_requirement_case_registry_is_unique(self):
+  ids=[case.case_id for case in REQUIREMENT_CASES]
+  self.assertEqual(154,len(ids)); self.assertEqual(154,len(set(ids)))
+  self.assertTrue(all(value.isascii() for value in ids))
+  self.assertEqual(154,len({case.behavior_key for case in REQUIREMENT_CASES}))
+  self.assertTrue(all(case.builder and case.operation and case.expected for case in REQUIREMENT_CASES))
+  self.assertTrue(all(case.production_symbol and case.category and case.fixture_variant for case in REQUIREMENT_CASES))
+
+def _install_case(case):
+ def test(self): case.run(self)
+ test.__name__="test_"+case.case_id; return test
+for _case in REQUIREMENT_CASES:
+ setattr(RequirementMatrixTests,"test_"+_case.case_id,_install_case(_case))
 
 if __name__=="__main__": unittest.main()
