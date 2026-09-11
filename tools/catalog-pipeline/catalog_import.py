@@ -2,11 +2,11 @@
 """Offline/read-only JEM importer phase one. There is intentionally no apply command."""
 import argparse,hashlib,json,sys
 from pathlib import Path
-from catalog_acquisition.serialization import canonical_bytes,content_fingerprint
+from catalog_pipeline_common.serialization import canonical_bytes,content_fingerprint
 from catalog_acquisition.packaging import verify_package
 from jem_nexus_import.local_client import LocalJemJsonReader,LocalReadError,READ_PATHS
 from jem_nexus_import.snapshot import validate_snapshot,semantic_fingerprint,SnapshotError
-from jem_nexus_import.package_input import read_verified_package
+from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations
 from jem_nexus_import.planning import build_plan,simulate
 from jem_nexus_import.output import write_output_set
@@ -50,7 +50,7 @@ def main(argv=None,reader_factory=LocalJemJsonReader,verifier=verify_package):
         plan=_read(args.plan); result=simulate(plan)
         write_output_set(args.output,{"import-dry-run-manifest.json":result,"import-dry-run-report.txt":canonical_bytes(result)})
         return 0 if result["state"]=="dry_run_ready" else 3
-    except (OSError,ValueError,KeyError,json.JSONDecodeError,SnapshotError) as error:
+    except (ImportInputError,LocalReadError,SnapshotError,json.JSONDecodeError) as error:
         code=getattr(error,"code","INPUT_INVALID"); sys.stdout.buffer.write(canonical_bytes({"error":code}))
         if isinstance(error,LocalReadError): return 5
         return 4 if "FINGERPRINT" in code else 2

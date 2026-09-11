@@ -1,7 +1,7 @@
 """Deterministic future-operation graph and mutation-free simulation."""
 from __future__ import annotations
 import hashlib, json
-from catalog_acquisition.serialization import canonical_bytes, content_fingerprint
+from catalog_pipeline_common.serialization import canonical_bytes, content_fingerprint
 from .bindings import BindingResolver, MissingBindingError
 
 def _hash(value): return hashlib.sha256(canonical_bytes(value)).hexdigest()

@@ -7,7 +7,7 @@ selección, materialización y verificación del ZIP canónico. `jem_nexus_impor
 verificada y no importa adapters EP/GAM, discovery, matching ni fuentes live. Un paquete válido para
 inspección puede ser válido para dry-run aun cuando `import_authorized=false`; esto **nunca** autoriza
 aplicar. Esta fase fija `apply_supported=false`, `mutation_supported=false`, contadores de mutación en
-cero y `publication_authorized=false`. Prompt 285 queda reservado para un apply/verify local
+cero y `publication_authorized=false`. Prompt 286 queda reservado para un apply/verify local
 controlado; preparación productiva permanece fuera de alcance.
 
 Solo se admite ZIP canónico con receipt externo recalculado, manifest completo, fingerprints de
@@ -35,8 +35,8 @@ transporte falso y no abren sockets.
 ## Proyección, reconciliación y grafo
 
 La proyección sigue DTOs/endpoints .NET documentados en `jem-nexus-contract.md`, genera evidencia por
-campo y no trata `producto.json` (`normalized_for_audit_not_api_payload`) como DTO. Mantiene precio
-null, publicación/visibilidad/destacado falsos y no inventa stock, disponibilidad, proveedor,
+campo, conserva solo campos recibidos y no trata `producto.json` (`normalized_for_audit_not_api_payload`) como DTO. Una construcción separada del payload aplica con regla y evidencia precio
+null y publicación/visibilidad/destacado falsos; no inventa stock, disponibilidad, proveedor,
 condición ni texto comercial. Altura de elevación/mástil permanece `ProductSpec`, nunca
 `WorkingHeightM`; enums desconocidos bloquean.
 
@@ -64,8 +64,13 @@ simbólicos. Estados: `invalid_package`, `invalid_snapshot`, `preflight_failed`,
 Los outputs previstos son `jem-state-snapshot.json`, `import-preflight.json`, `import-bindings.json`,
 `import-operations.jsonl`, `import-plan.json`, `import-reviews.jsonl`,
 `import-dry-run-manifest.json` e `import-dry-run-report.txt`. Escritura UTF-8/LF canónica usa staging
-hermano, flush/fsync y rename; contenido idéntico es idempotente y contenido distinto bloquea sin
-overwrite/force. Fingerprints excluyen paths absolutos, directorio de salida, timestamps y token.
+hermano, flush/fsync de archivo y rename; el sync del directorio es best-effort solo ante errores
+portables de operación no soportada. Los conflictos se comprueban antes de publicar, el marcador se
+publica al final y un fallo intermedio revierte solo archivos nuevos del intento. Contenido idéntico
+es idempotente y contenido distinto bloquea sin overwrite/force. Fingerprints excluyen paths absolutos, directorio de salida, timestamps y token.
+
+La serialización canónica vive en la capa neutral `catalog_pipeline_common`; adquisición conserva su
+API histórica mediante reexportación y el importador no depende de adquisición.
 
 `catalog_import.py` expone únicamente `snapshot-local`, `plan` y `dry-run`; solo el primero puede hacer
 GET loopback. No hay apply/resume/publish/update/delete/approve/bypass. EP/GAM live siguen bloqueados
