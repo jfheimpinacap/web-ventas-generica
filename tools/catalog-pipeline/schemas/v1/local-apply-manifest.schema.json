@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-apply-manifest.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixture_only",
+    "schema_version",
+    "state",
+    "counters",
+    "publication_allowed",
+    "target_fingerprint",
+    "classification"
+  ],
+  "properties": {
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "state": {
+      "type": "string",
+      "minLength": 1
+    },
+    "counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intents_registered",
+        "requests_dispatched",
+        "mutations_confirmed",
+        "operations_completed",
+        "operations_reconciled"
+      ],
+      "properties": {
+        "intents_registered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests_dispatched": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mutations_confirmed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operations_completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operations_reconciled": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "publication_allowed": {
+      "const": false
+    },
+    "target_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "classification": {
+      "enum": [
+        "fixture_only",
+        "local_development"
+      ]
+    }
+  }
+}

@@ -78,3 +78,72 @@ API histórica mediante reexportación y el importador no depende de adquisició
 GET loopback. No hay apply/resume/publish/update/delete/approve/bypass. EP/GAM live siguen bloqueados
 mientras `structure_verified=false`. El checkpoint LGMG y `jem docs\\temp` permanecen congelados,
 sin lectura, modificación ni reanudación.
+
+## Controlled local apply, resume, and verify (Prompt 288)
+
+The execution phase is **local-only** and production remains structurally unavailable. `apply-local` and
+`resume-local` reverify the canonical package, exact external receipt, plan, dry-run, policy, authorization,
+and a freshly captured complete snapshot before the mutation transport is constructed. An exact external
+`local-apply-authorization` binds all fingerprints, target, operation count and kinds; the CLI has no approval
+command. `fixture_only` authorizations are limited to injected fake mutators, while the concrete boundary
+requires `local_development` and `JEM_NEXUS_LOCAL_MUTATION_TOKEN`. Tokens and authorization headers are
+never serialized, fingerprinted, reported, or accepted as arguments.
+
+The pure execution preflight seals the topological operation order, external bindings, POST endpoint and
+payload templates. The concrete boundary accepts only explicit loopback origins with ports, disables proxies
+and redirects, and exposes typed JSON/multipart POST operations rather than an arbitrary HTTP method.
+Multipart bodies use package bytes after size/hash validation and a deterministic request-derived boundary;
+`retained_not_imported` documents are never sent. Products are checked immediately before dispatch for
+`price=null`, `price_visible=false`, `is_featured=false`, and `is_published=false`.
+
+A canonical UTF-8 checkpoint is fsynced and atomically replaced before the first POST and before every
+request as an `in_flight` intent. Execution is serial. Valid closed responses produce minimal receipts and
+bindings before the completed prefix advances. A post-dispatch timeout, disconnect, truncated/ambiguous
+response, or persistence failure retains `in_flight`, enters `local_apply_reconciliation_required`, and is
+never retried automatically. Resume requires identical inputs and target; completed resources and any
+in-flight resource must reconcile exactly through GET. Missing, duplicate, divergent, or incompletely
+observable resources remain blocked. Complete or verified checkpoints never repeat POSTs.
+
+`verify-local` is GET-only and compares only plan-managed entities, relationships, IDs, natural keys,
+counts, duplicates, specs, media, sheet, and commercial safe defaults. Unmanaged products are ignored.
+Where the backend cannot expose byte/hash evidence, the result is `manual_verification_required`, never
+`local_apply_verified`; verify never repairs. The output set contains preflight, checkpoint, JSONL receipts,
+apply manifest/report and verification JSON/text without secrets or unnecessary absolute paths.
+
+This design converts the frozen LGMG partial-apply incident into regressions: intention precedes transport,
+completed IDs are a strict prefix, unknown outcomes require observation, and blind replay is prohibited.
+No LGMG code, historical checkpoint, `jem docs\\temp`, backend, frontend, database, publication, or production
+path is changed. Prompt 289 is reserved for later Windows 3.13.5 validation and local integration. Production
+preparation remains out of scope.
+
+### Positive in-flight reconciliation (Prompt 288C)
+
+The Prompt 288 implementation detected `in_flight` at the beginning of `execute` and
+unconditionally raised `IN_FLIGHT_RECONCILIATION_REQUIRED`; it had no observer-driven
+classification path. Resume now validates the sealed checkpoint and its completed-prefix,
+accepts a fresh snapshot whose only additions are explained by recorded receipts or the
+current intent, and classifies the intent purely as `exact_match`, `absent`, `divergent`,
+`ambiguous`, or `unobservable` before a mutation transport is constructed.
+
+Identity is contractual per entity (slug for category/brand/product, exact supplier name,
+and product/key for ProductSpec). Every managed scalar is compared exactly after binding
+materialization. Products must still match all four commercial defaults. Images and
+technical sheets additionally require snapshot SHA-256 evidence; filename, URL, MIME, or
+size alone yields manual reconciliation. Base resources must remain byte-for-byte equal as
+canonical snapshot objects, completed additions must have receipt-bound IDs, and every
+other addition is drift (`LOCAL_STATE_CHANGED`).
+
+An exact observation creates a minimal receipt with
+`confirmation_source=snapshot_reconciliation`, records its produced binding, extends the
+completed prefix, increments `mutations_confirmed`, `operations_completed`, and
+`operations_reconciled` exactly once, clears `in_flight`, and atomically stages receipts
+before publishing the checkpoint marker. Existing intent/request counters are not
+incremented. Only after this persistence may composition construct a mutator for the next
+operation. A final reconciled operation becomes `local_apply_completed_pending_verify`;
+only `verify-local` can set `local_apply_verified`. Absent, divergent, duplicate, partially
+identified, drifted, or unobservable results never resend the uncertain POST.
+
+The companion `jem-local-execution-test-matrix.md` maps exactly 95 independently
+discoverable behavioral cases (21 retained plus 74 stable generated cases). The projected
+suite is 489 + 95 = 584 tests; execution remains reserved for Prompt 289 on Windows with
+Python 3.13.5.

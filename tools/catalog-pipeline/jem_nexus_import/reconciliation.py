@@ -96,7 +96,7 @@ def build_operations(package_view,snapshot,policy):
             if sheet:
                 sheet_result=reconcile_document(sheet,package_view["entries"],True); reconciliations.append(sheet_result)
                 if sheet_result["state"]=="blocked":reviews.append(sheet_result)
-                else: operations.append(operation("technical_sheet","create",sheet["sha256"],"/api/technical-sheets/",{"multipart":{"name":sheet.get("name"),"file_entry":sheet["entry_path"],"sha256":sheet["sha256"],"mime":sheet["mime"]}},depends_on=pdeps,sources=[sheet["entry_path"]]))
+                else: operations.append(operation("technical_sheet","create",sheet["sha256"],"/api/technical-sheets",{"multipart":{"name":sheet.get("name"),"file_entry":sheet["entry_path"],"sha256":sheet["sha256"],"mime":sheet["mime"]}},depends_on=pdeps,sources=[sheet["entry_path"]]))
         for document in product.get("additional_documents",[]):
             document_result=reconcile_document(document,package_view["entries"],False); retained.append(document_result)
             if document_result["state"]=="blocked":reviews.append(document_result)

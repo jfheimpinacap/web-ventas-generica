@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "operation_id": "op-fixture",
+  "request_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "endpoint": "/api/products",
+  "kind": "product",
+  "status": 201,
+  "response_body_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "resource_id": 1,
+  "produced_bindings": [],
+  "outcome": "applied",
+  "previous_checkpoint_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "evidence": {
+    "id": 1
+  },
+  "fixture_only": true,
+  "confirmation_source": "response_201"
+}
