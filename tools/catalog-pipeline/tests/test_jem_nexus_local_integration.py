@@ -109,6 +109,7 @@ class _SyntheticBackend:
         self.responses_delivered = {}
         self.responses_lost = {}
         self.asset_bytes = {}
+        self.multipart_calls = {}
         self.fail_before = None
         self.lose_after = None
 
@@ -147,12 +148,16 @@ class _SyntheticBackend:
         self.commits[operation_id] = self.commits.get(operation_id, 0) + 1
         return {"status": 201, "body": copy.deepcopy(resource)}
 
-    def dispatch(self, operation_id, kind, payload, data=None):
+    def dispatch(self, operation_id, kind, payload, data=None, filename=None, mime=None, sha256=None, size=None):
         if self.fail_before == operation_id:
             self.fail_before = None
             raise RuntimeError("fixture pre-dispatch failure")
         self.posts[operation_id] = self.posts.get(operation_id, 0) + 1
         self.events.append("post:" + operation_id)
+        if data is not None:
+            self.multipart_calls[operation_id] = {"kind": kind, "fields": {key: copy.deepcopy(value) for key, value in payload.items() if key != "sha256"},
+                                                  "filename": filename, "mime": mime, "data": data,
+                                                  "sha256": sha256, "size": size}
         response = self._commit(operation_id, kind, payload, data)
         if self.lose_after == operation_id:
             self.lose_after = None
@@ -167,13 +172,11 @@ class _PlannedMutator:
         self.bundle = bundle
         self.backend = backend
         self.index = (checkpoint or {}).get("next_operation", 0)
+        self.operation_ids = tuple(operation["operation_id"] for operation in bundle["operations"])
         produced = (checkpoint or {}).get("produced_bindings", [])
         self.resolver = BindingResolver(bundle["external_bindings"], produced)
 
-    def _expected(self, kind, payload):
-        operation = self.bundle["operations"][self.index]
-        if operation["kind"] != kind or operation["endpoint"] != ALLOWED_ENDPOINTS.get(kind):
-            raise AssertionError("operation kind/order mismatch")
+    def _materialized(self, operation):
         expected = copy.deepcopy(operation["payload_template"])
 
         def materialize(value):
@@ -183,9 +186,46 @@ class _PlannedMutator:
             if isinstance(value, list): return [materialize(item) for item in value]
             return value
 
-        expected = materialize(expected)
+        return materialize(expected)
+
+    def _expected_operation(self, kind):
+        operation = self.bundle["operations"][self.index]
+        if operation["kind"] != kind or operation["endpoint"] != ALLOWED_ENDPOINTS.get(kind):
+            raise AssertionError("operation kind/order mismatch")
+        if operation["operation_id"] != self.operation_ids[self.index]:
+            raise AssertionError("operation id/order mismatch")
+        return operation
+
+    def _expected(self, kind, payload):
+        operation = self._expected_operation(kind)
+        expected = self._materialized(operation)
         if request_fingerprint(operation["endpoint"], payload) != request_fingerprint(operation["endpoint"], expected):
             raise AssertionError("materialized request mismatch")
+        self.index += 1
+        return operation
+
+    def _expected_multipart(self, kind, fields, filename, mime, data, expected_hash, expected_size,
+                            supplied_fingerprint):
+        operation = self._expected_operation(kind)
+        payload = self._materialized(operation)
+        descriptor = copy.deepcopy(payload["multipart"])
+        entry = descriptor.pop("file_entry")
+        planned_size = descriptor.pop("size", len(data))
+        planned_hash = descriptor.pop("sha256")
+        planned_mime = descriptor.pop("mime")
+        planned_filename = "upload" + {"image": ".bin", "technical_sheet": ".pdf"}[kind]
+        planned_data = self.bundle["package_entries"][entry]
+        if fields != descriptor: raise AssertionError("multipart structured fields mismatch")
+        if filename != planned_filename: raise AssertionError("multipart filename mismatch")
+        if mime != planned_mime: raise AssertionError("multipart MIME mismatch")
+        if data != planned_data: raise AssertionError("multipart bytes mismatch")
+        actual_hash = hashlib.sha256(data).hexdigest()
+        if actual_hash != planned_hash or expected_hash != planned_hash:
+            raise AssertionError("multipart SHA-256 mismatch")
+        if len(data) != planned_size or expected_size != planned_size:
+            raise AssertionError("multipart size mismatch")
+        if supplied_fingerprint != request_fingerprint(operation["endpoint"], payload):
+            raise AssertionError("multipart request fingerprint mismatch")
         self.index += 1
         return operation
 
@@ -199,15 +239,11 @@ class _PlannedMutator:
         return self._produce(operation, self.backend.dispatch(operation["operation_id"], kind, payload))
 
     def post_multipart(self, kind, fields, filename, mime, data, expected_hash, expected_size, supplied_fingerprint):
-        if len(data) != expected_size or hashlib.sha256(data).hexdigest() != expected_hash:
-            raise AssertionError("asset integrity")
-        payload = {"multipart": {**fields, "file_entry": next(
-            entry for entry, value in self.bundle["package_entries"].items() if value == data),
-            "sha256": expected_hash, "size": expected_size, "mime": mime}}
-        operation = self._expected(kind, payload)
-        if supplied_fingerprint != request_fingerprint(operation["endpoint"], payload):
-            raise AssertionError("multipart request fingerprint mismatch")
-        response = self.backend.dispatch(operation["operation_id"], kind, {**fields, "sha256": expected_hash}, data)
+        operation = self._expected_multipart(kind, fields, filename, mime, data, expected_hash,
+                                             expected_size, supplied_fingerprint)
+        public_fields = {**fields, "sha256": expected_hash}
+        response = self.backend.dispatch(operation["operation_id"], kind, public_fields, data,
+                                         filename, mime, expected_hash, expected_size)
         return self._produce(operation, response)
 
 
@@ -293,15 +329,38 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
 
     def test_006_image_bytes_are_intact(self):
         with tempfile.TemporaryDirectory() as d:
-            h = _Harness(d); h.execute(); self.assertEqual([IMAGE_PRIMARY, IMAGE_SECONDARY], [v for (k, unused), v in h.backend.asset_bytes.items() if k == "image"])
+            h = _Harness(d); cp = h.execute(); self.assertEqual([IMAGE_PRIMARY, IMAGE_SECONDARY], [v for (k, unused), v in h.backend.asset_bytes.items() if k == "image"])
+            binary = [operation for operation in h.bundle["operations"] if operation["kind"] in ("image", "technical_sheet")]
+            self.assertEqual([operation["operation_id"] for operation in binary], list(h.backend.multipart_calls))
+            image = binary[0]; call = h.backend.multipart_calls[image["operation_id"]]
+            position = h.bundle["operations"].index(image)
+            args = [call[key] for key in ("kind", "fields", "filename", "mime", "data", "sha256", "size")]
+            args.append(request_fingerprint(image["endpoint"], _PlannedMutator(h.bundle, h.backend, {"next_operation": position, "produced_bindings": cp["produced_bindings"]})._materialized(image)))
+            valid = _PlannedMutator(h.bundle, h.backend, {"next_operation": position, "produced_bindings": cp["produced_bindings"]})
+            valid._expected_multipart(*args); self.assertEqual(position + 1, valid.index)
+            changes = ((1, {**call["fields"], "ordinal": 99}), (2, "changed.bin"), (3, "application/octet-stream"),
+                       (4, call["data"] + b"changed"), (5, "0" * 64), (6, call["size"] + 1), (7, "0" * 64))
+            for argument, changed in changes:
+                altered = list(args); altered[argument] = changed
+                candidate = _PlannedMutator(h.bundle, h.backend, {"next_operation": position, "produced_bindings": cp["produced_bindings"]})
+                with self.assertRaises(AssertionError): candidate._expected_multipart(*altered)
+                self.assertEqual(position, candidate.index)
 
     def test_007_pdf_bytes_are_intact(self):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); h.execute(); self.assertEqual(SHEET, next(v for (k, unused), v in h.backend.asset_bytes.items() if k == "technical_sheet"))
+            sheet = next(operation for operation in h.bundle["operations"] if operation["kind"] == "technical_sheet")
+            call = h.backend.multipart_calls[sheet["operation_id"]]
+            self.assertEqual(("upload.pdf", "application/pdf", SHEET, hashlib.sha256(SHEET).hexdigest(), len(SHEET)),
+                             (call["filename"], call["mime"], call["data"], call["sha256"], call["size"]))
 
     def test_008_final_checkpoint_and_receipts_are_exact(self):
         with tempfile.TemporaryDirectory() as d:
-            h = _Harness(d); cp = h.execute(); self.assertEqual((8, 8, None, 8), (cp["next_operation"], len(cp["receipts"]), cp["in_flight"], cp["counters"]["mutations_confirmed"])); validate(cp)
+            h = _Harness(d); cp = h.execute(); total = len(h.bundle["operations"])
+            self.assertEqual((total, total, None, total), (cp["next_operation"], len(cp["receipts"]), cp["in_flight"], cp["counters"]["mutations_confirmed"])); validate(cp)
+            self.assertEqual({"brand": 1, "category": 1, "product": 1, "spec": 2, "image": 2, "technical_sheet": 1},
+                             {kind: sum(operation["kind"] == kind for operation in h.bundle["operations"])
+                              for kind in {operation["kind"] for operation in h.bundle["operations"]}})
             operation_ids = [operation["operation_id"] for operation in h.bundle["operations"]]
             for counters in (h.backend.intents, h.backend.posts, h.backend.commits, h.backend.responses_delivered):
                 self.assertEqual({operation_id: 1 for operation_id in operation_ids}, counters)
