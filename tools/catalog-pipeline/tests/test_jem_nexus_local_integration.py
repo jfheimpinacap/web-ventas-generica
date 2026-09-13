@@ -17,13 +17,15 @@ from catalog_import import capture_snapshot, create_plan, main
 from jem_nexus_import.authorization import AuthorizationError, fingerprint_without
 from jem_nexus_import.checkpoint import initial, seal, validate
 from jem_nexus_import.execution import (
-    ExecutionError, execute, operation_set_fingerprint, persist_reconciliation,
-    prepare_execution_bundle, reconcile_in_flight, validate_resume_snapshot,
+    ALLOWED_ENDPOINTS, ExecutionError, execute, operation_set_fingerprint, persist_reconciliation,
+    prepare_execution_bundle, reconcile_in_flight, request_fingerprint,
+    validate_resume_snapshot,
 )
+from jem_nexus_import.bindings import BindingResolver
 from jem_nexus_import.output import write_output_set
 from jem_nexus_import.package_input import read_verified_package
 from jem_nexus_import.planning import simulate
-from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
+from jem_nexus_import.snapshot import COLLECTIONS, SnapshotError, semantic_fingerprint
 from jem_nexus_import.verification import SnapshotObserver, verify_managed
 
 CONTRACT = "c" * 64
@@ -102,6 +104,10 @@ class _SyntheticBackend:
         self.next_id = 10
         self.events = []
         self.posts = {}
+        self.intents = {}
+        self.commits = {}
+        self.responses_delivered = {}
+        self.responses_lost = {}
         self.asset_bytes = {}
         self.fail_before = None
         self.lose_after = None
@@ -121,7 +127,10 @@ class _SyntheticBackend:
                 value["product"] = value.pop("product_id"); value["name"] = value.pop("key")
         return values
 
-    def _commit(self, kind, payload, data=None):
+    def observe_intent(self, operation_id):
+        self.intents.setdefault(operation_id, 1)
+
+    def _commit(self, operation_id, kind, payload, data=None):
         collection = {"category": "categories", "brand": "brands", "supplier": "suppliers", "product": "products",
                       "spec": "product_specs", "image": "product_images", "technical_sheet": "technical_sheets"}[kind]
         resource = {"id": self.next_id}
@@ -135,33 +144,79 @@ class _SyntheticBackend:
         if data is not None:
             self.asset_bytes[(kind, resource["id"])] = data
         self.collections[collection].append(resource)
+        self.commits[operation_id] = self.commits.get(operation_id, 0) + 1
         return {"status": 201, "body": copy.deepcopy(resource)}
 
-    def _dispatch(self, kind, payload, data=None):
-        operation_id = self.current_operation
+    def dispatch(self, operation_id, kind, payload, data=None):
         if self.fail_before == operation_id:
             self.fail_before = None
             raise RuntimeError("fixture pre-dispatch failure")
         self.posts[operation_id] = self.posts.get(operation_id, 0) + 1
         self.events.append("post:" + operation_id)
-        response = self._commit(kind, payload, data)
+        response = self._commit(operation_id, kind, payload, data)
         if self.lose_after == operation_id:
             self.lose_after = None
+            self.responses_lost[operation_id] = self.responses_lost.get(operation_id, 0) + 1
             raise RuntimeError("fixture response lost")
+        self.responses_delivered[operation_id] = self.responses_delivered.get(operation_id, 0) + 1
+        return response
+
+class _PlannedMutator:
+    """Test-only adapter assigning transport-shaped calls to sealed operations."""
+    def __init__(self, bundle, backend, checkpoint=None):
+        self.bundle = bundle
+        self.backend = backend
+        self.index = (checkpoint or {}).get("next_operation", 0)
+        produced = (checkpoint or {}).get("produced_bindings", [])
+        self.resolver = BindingResolver(bundle["external_bindings"], produced)
+
+    def _expected(self, kind, payload):
+        operation = self.bundle["operations"][self.index]
+        if operation["kind"] != kind or operation["endpoint"] != ALLOWED_ENDPOINTS.get(kind):
+            raise AssertionError("operation kind/order mismatch")
+        expected = copy.deepcopy(operation["payload_template"])
+
+        def materialize(value):
+            if isinstance(value, dict) and {"scope", "namespace", "key", "binding_type"} <= set(value):
+                return self.resolver.resolve(value)
+            if isinstance(value, dict): return {key: materialize(item) for key, item in value.items()}
+            if isinstance(value, list): return [materialize(item) for item in value]
+            return value
+
+        expected = materialize(expected)
+        if request_fingerprint(operation["endpoint"], payload) != request_fingerprint(operation["endpoint"], expected):
+            raise AssertionError("materialized request mismatch")
+        self.index += 1
+        return operation
+
+    def _produce(self, operation, response):
+        resource_id = response["body"]["id"]
+        for binding in operation["produced_bindings"]: self.resolver.produce(binding, resource_id)
         return response
 
     def post_json(self, kind, payload):
-        return self._dispatch(kind, payload)
+        operation = self._expected(kind, payload)
+        return self._produce(operation, self.backend.dispatch(operation["operation_id"], kind, payload))
 
-    def post_multipart(self, kind, fields, filename, mime, data, expected_hash, expected_size, request_fingerprint):
+    def post_multipart(self, kind, fields, filename, mime, data, expected_hash, expected_size, supplied_fingerprint):
         if len(data) != expected_size or hashlib.sha256(data).hexdigest() != expected_hash:
             raise AssertionError("asset integrity")
-        return self._dispatch(kind, {**fields, "sha256": expected_hash}, data)
+        payload = {"multipart": {**fields, "file_entry": next(
+            entry for entry, value in self.bundle["package_entries"].items() if value == data),
+            "sha256": expected_hash, "size": expected_size, "mime": mime}}
+        operation = self._expected(kind, payload)
+        if supplied_fingerprint != request_fingerprint(operation["endpoint"], payload):
+            raise AssertionError("multipart request fingerprint mismatch")
+        response = self.backend.dispatch(operation["operation_id"], kind, {**fields, "sha256": expected_hash}, data)
+        return self._produce(operation, response)
 
 
-class _ObservableObserver(SnapshotObserver):
-    def bytes_observable(self, kind):
-        return kind in ("image", "technical_sheet")
+class _ObservableBinaryFixtureObserver(SnapshotObserver):
+    def __init__(self, snapshot, asset_bytes):
+        super().__init__(snapshot); self.asset_bytes = asset_bytes
+    def binary_sha256(self, kind, resource_id):
+        data = self.asset_bytes.get((kind, resource_id))
+        return hashlib.sha256(data).hexdigest() if data is not None else None
 
 
 class _Harness:
@@ -197,8 +252,11 @@ class _Harness:
         def persist(value):
             self.persisted.append(copy.deepcopy(value))
             if value.get("in_flight"):
-                self.backend.current_operation = value["in_flight"]["operation_id"]
-        return execute(self.bundle, self.backend, persist, checkpoint)
+                self.backend.observe_intent(value["in_flight"]["operation_id"])
+        return execute(self.bundle, _PlannedMutator(self.bundle, self.backend, checkpoint), persist, checkpoint)
+
+    def observable(self):
+        return _ObservableBinaryFixtureObserver(self.updated_snapshot(), self.backend.asset_bytes)
 
     def updated_snapshot(self):
         return capture_snapshot(self.backend, CONTRACT, "fixture_only")
@@ -207,7 +265,7 @@ class _Harness:
 class JemNexusLocalIntegrationTests(unittest.TestCase):
     def test_001_complete_package_reaches_verified_with_observable_binaries(self):
         with tempfile.TemporaryDirectory() as d:
-            h = _Harness(d); cp = h.execute(); report = verify_managed(h.plan, cp, _ObservableObserver(h.updated_snapshot()))
+            h = _Harness(d); cp = h.execute(); report = verify_managed(h.plan, cp, h.observable())
             self.assertEqual("verified", report["result"]); self.assertEqual("local_apply_verified", {**cp, "state": "local_apply_verified"}["state"])
 
     def test_002_real_dto_shape_requires_manual_binary_verification(self):
@@ -244,6 +302,10 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
     def test_008_final_checkpoint_and_receipts_are_exact(self):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); self.assertEqual((8, 8, None, 8), (cp["next_operation"], len(cp["receipts"]), cp["in_flight"], cp["counters"]["mutations_confirmed"])); validate(cp)
+            operation_ids = [operation["operation_id"] for operation in h.bundle["operations"]]
+            for counters in (h.backend.intents, h.backend.posts, h.backend.commits, h.backend.responses_delivered):
+                self.assertEqual({operation_id: 1 for operation_id in operation_ids}, counters)
+            self.assertEqual({}, h.backend.responses_lost)
 
     def test_009_cli_apply_local_returns_zero(self):
         with tempfile.TemporaryDirectory() as d:
@@ -255,11 +317,14 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): h.execute()
             self._write_inputs(h); (h.root / "out").mkdir(); (h.root / "out" / "local-apply-checkpoint.json").write_bytes(canonical_bytes(h.persisted[-1])); (h.root / "out" / "local-operation-receipts.jsonl").write_bytes(b"")
             self.assertEqual(0, self._cli(h, "resume-local", write=False)); self.assertEqual(1, h.backend.posts[op])
+            self.assertEqual(1, h.backend.commits[op]); self.assertEqual(1, h.backend.responses_lost[op]); self.assertNotIn(op, h.backend.responses_delivered)
+            self.assertEqual({operation["operation_id"] for operation in h.bundle["operations"]}, set(h.backend.posts))
 
     def test_011_cli_verify_observable_returns_zero(self):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); self._write_inputs(h); (h.root / "checkpoint.json").write_bytes(canonical_bytes(cp))
-            code = main(["verify-local", "--plan", str(h.root / "plan.json"), "--checkpoint", str(h.root / "checkpoint.json"), "--base-url", BASE_URL, "--output", str(h.root / "verify")], reader_factory=h.backend, observer_factory=_ObservableObserver)
+            observer_factory = lambda snapshot: _ObservableBinaryFixtureObserver(snapshot, h.backend.asset_bytes)
+            code = main(["verify-local", "--plan", str(h.root / "plan.json"), "--checkpoint", str(h.root / "checkpoint.json"), "--base-url", BASE_URL, "--output", str(h.root / "verify")], reader_factory=h.backend, observer_factory=observer_factory)
             self.assertEqual(0, code); self.assertEqual("local_apply_verified", json.loads((h.root / "local-apply-checkpoint.json").read_text(encoding="utf-8"))["state"])
 
     def test_012_fixture_only_without_injected_mutator_is_rejected(self):
@@ -304,8 +369,8 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
             def fail_after_receipt(value):
                 calls.append(copy.deepcopy(value))
                 if value["receipts"]: raise OSError("fixture persistence failure")
-                if value.get("in_flight"): h.backend.current_operation = value["in_flight"]["operation_id"]
-            with self.assertRaises(OSError): execute(h.bundle, h.backend, fail_after_receipt)
+                if value.get("in_flight"): h.backend.observe_intent(value["in_flight"]["operation_id"])
+            with self.assertRaises(OSError): execute(h.bundle, _PlannedMutator(h.bundle, h.backend), fail_after_receipt)
             self.assertEqual(1, sum(h.backend.posts.values())); self.assertEqual(1, len(calls[-1]["receipts"]))
 
     def test_021_missing_managed_resource_fails_verify(self): self._assert_verify_mutation("missing", "verification_failed")
@@ -317,7 +382,7 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
 
     def test_025_repeated_verify_is_idempotent(self):
         with tempfile.TemporaryDirectory() as d:
-            h = _Harness(d); cp = h.execute(); snapshot = h.updated_snapshot(); first = verify_managed(h.plan, cp, _ObservableObserver(snapshot)); second = verify_managed(h.plan, cp, _ObservableObserver(snapshot)); self.assertEqual(first, second)
+            h = _Harness(d); cp = h.execute(); snapshot = h.updated_snapshot(); observer = _ObservableBinaryFixtureObserver(snapshot, h.backend.asset_bytes); first = verify_managed(h.plan, cp, observer); second = verify_managed(h.plan, cp, observer); self.assertEqual(first, second)
 
     def test_026_fake_has_no_network_or_concrete_transport(self):
         source = pathlib.Path(__file__).read_text(encoding="utf-8", errors="strict")
@@ -351,7 +416,12 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
                 "--dry-run-manifest", str(h.root / "dry.json"), "--snapshot", str(h.snapshot_path), "--policy", str(h.policy_path),
                 "--authorization", str(h.root / "authorization.json"), "--base-url", BASE_URL, "--checkpoint-dir", str(h.root / "out"),
                 "--confirm-plan-fingerprint", h.plan["plan_fingerprint"], "--confirm-dry-run-fingerprint", h.dry["dry_run_fingerprint"]]
-        return main(args, reader_factory=h.backend, mutator_factory=(factory or (lambda bundle: h.backend)) if mutator else None)
+        def planned(bundle):
+            target = factory(bundle) if factory else h.backend
+            checkpoint_path = h.root / "out" / "local-apply-checkpoint.json"
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8")) if checkpoint_path.is_file() else None
+            return _PlannedMutator(bundle, target, checkpoint)
+        return main(args, reader_factory=h.backend, mutator_factory=planned if mutator else None)
 
     def _assert_blocked_resume(self, variant, code):
         with tempfile.TemporaryDirectory() as d:
@@ -360,17 +430,29 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
             if variant == "absent": h.backend.collections["brands"].clear()
             elif variant == "divergent": h.backend.collections["brands"][0]["name"] = "Divergente"
             else: h.backend.collections["brands"].append({**h.backend.collections["brands"][0], "id": 99})
-            result = reconcile_in_flight(h.bundle, h.persisted[-1], h.updated_snapshot()); posts = dict(h.backend.posts)
+            posts = dict(h.backend.posts)
+            if variant == "duplicate":
+                with self.assertRaises(SnapshotError) as raised: h.updated_snapshot()
+                self.assertEqual("IDENTITY_COLLISION", raised.exception.code)
+                self.assertEqual(posts, h.backend.posts)
+                return
+            result = reconcile_in_flight(h.bundle, h.persisted[-1], h.updated_snapshot())
             with self.assertRaisesRegex(ExecutionError, code): persist_reconciliation(h.bundle, h.persisted[-1], result, lambda x: None)
             self.assertEqual(posts, h.backend.posts)
 
     def _assert_verify_mutation(self, variant, result):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); collection = h.backend.collections["brands"]
+            posts = dict(h.backend.posts)
             if variant == "missing": collection.clear()
             elif variant == "divergent": collection[0]["slug"] = "otro"
             else: collection.append(copy.deepcopy(collection[0]))
-            self.assertEqual(result, verify_managed(h.plan, cp, _ObservableObserver(h.updated_snapshot()))["result"])
+            if variant == "duplicate":
+                with self.assertRaises(SnapshotError) as raised: h.updated_snapshot()
+                self.assertEqual("DUPLICATE_ID", raised.exception.code)
+                self.assertEqual(posts, h.backend.posts)
+                return
+            self.assertEqual(result, verify_managed(h.plan, cp, h.observable())["result"])
 
 
 if __name__ == "__main__":

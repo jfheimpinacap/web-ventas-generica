@@ -13,17 +13,22 @@ class SnapshotObserver:
         # any other managed-field comparison.
         aliases={"spec":{"key":"name"}}
         return [item for item in candidates if all(item.get(key,item.get(aliases.get(kind,{}).get(key)))==value for key,value in comparable.items())]
-    def bytes_observable(self,kind): return False
+    def binary_sha256(self,kind,resource_id):
+        """Real GET DTOs expose neither bytes nor a digest for binary resources."""
+        return None
 
 def verify_managed(plan,checkpoint,observed):
     failures=[]; manual=[]
-    by_binding={(x["namespace"],x["key"]):x["value"] for x in checkpoint["produced_bindings"]}
+    resource_ids={receipt["operation_id"]:receipt["resource_id"] for receipt in checkpoint.get("receipts",[])}
     for op in plan["operations"]:
-        for binding in op["produced_bindings"]:
-            resource_id=by_binding.get((binding["namespace"],binding["key"]))
-            matches=observed.find_exact(op["kind"],resource_id,op["payload_template"])
-            if len(matches)!=1: failures.append({"operation_id":op["operation_id"],"code":"MISSING_DUPLICATE_OR_DIVERGENT"})
-            if op["kind"] in ("image","technical_sheet") and not observed.bytes_observable(op["kind"]): manual.append(op["operation_id"])
+        resource_id=resource_ids.get(op["operation_id"])
+        matches=observed.find_exact(op["kind"],resource_id,op["payload_template"])
+        if len(matches)!=1: failures.append({"operation_id":op["operation_id"],"code":"MISSING_DUPLICATE_OR_DIVERGENT"})
+        if op["kind"] in ("image","technical_sheet"):
+            expected=op["payload_template"].get("multipart",{}).get("sha256")
+            actual=observed.binary_sha256(op["kind"],resource_id)
+            if actual is None: manual.append(op["operation_id"])
+            elif actual!=expected: failures.append({"operation_id":op["operation_id"],"code":"BINARY_CONTENT_DIVERGENT"})
     result="verification_failed" if failures else ("manual_verification_required" if manual else "verified")
     report={"schema_version":"1.0.0","fixture_only":checkpoint.get("fixture_only",False),"rules_version":"jem-local-verify-v1","result":result,"plan_fingerprint":plan["plan_fingerprint"],"checkpoint_fingerprint":checkpoint["checkpoint_fingerprint"],"failures":failures,"manual_verification_operation_ids":manual,"publication_allowed":False,"publication_performed":False,"managed_operation_count":len(plan["operations"])}
     report["verification_fingerprint"]=content_fingerprint(report); return report
