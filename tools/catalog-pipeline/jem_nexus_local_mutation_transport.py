@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler,ProxyHandler,Request,build_opener
 from catalog_pipeline_common.serialization import canonical_bytes,content_fingerprint
 from jem_nexus_import.authorization import validate_authorization
-from jem_nexus_import.execution import ALLOWED_ENDPOINTS
+from jem_nexus_import.execution import ALLOWED_ENDPOINTS,FINGERPRINT_RULES_VERSION
 from jem_nexus_import.local_client import validate_base_url
 
 TOKEN_ENV="JEM_NEXUS_LOCAL_MUTATION_TOKEN"
@@ -16,11 +16,14 @@ class _NoRedirect(HTTPRedirectHandler):
 def target_fingerprint(base_url):
     validate_base_url(base_url); parsed=urlsplit(base_url)
     if parsed.path not in ("", "/") or parsed.query or parsed.fragment or parsed.username or parsed.password: raise MutationTransportError("UNSAFE_LOCAL_TARGET")
-    return content_fingerprint({"scheme":parsed.scheme,"host":parsed.hostname,"port":parsed.port})
+    return content_fingerprint({"schema_version":"jem-local-target-v1","rules_version":FINGERPRINT_RULES_VERSION,"target":{"scheme":parsed.scheme,"host":parsed.hostname,"port":parsed.port}})
+
+def multipart_boundary_fingerprint(request_fingerprint):
+    return content_fingerprint({"schema_version":"jem-local-multipart-v1","rules_version":FINGERPRINT_RULES_VERSION,"request_fingerprint":request_fingerprint})
 
 def deterministic_multipart(fields,file_field,filename,mime,data,request_fingerprint,max_bytes):
     if len(data)>max_bytes or "/" in filename or "\\" in filename or filename in (".",".."): raise MutationTransportError("UNSAFE_MULTIPART_FILE")
-    boundary="jem-"+request_fingerprint[:48]; chunks=[]
+    boundary="jem-"+multipart_boundary_fingerprint(request_fingerprint)[:48]; chunks=[]
     for key in sorted(fields): chunks.extend([f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n{fields[key]}\r\n".encode()])
     chunks.extend([f"--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n".encode(),data,f"\r\n--{boundary}--\r\n".encode()])
     return "multipart/form-data; boundary="+boundary,b"".join(chunks)

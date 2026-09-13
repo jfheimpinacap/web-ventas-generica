@@ -5,12 +5,15 @@ from catalog_acquisition.schema_validation import SchemaValidationError, validat
 class SchemaTests(unittest.TestCase):
  def test_every_schema_has_valid_synthetic_fixture(self):
   schemas=sorted((ROOT/'schemas/v1').glob('*.schema.json'))
-  self.assertEqual(74,len(schemas))
+  self.assertEqual(79,len(schemas))
   for schema in schemas:
    fixture=ROOT/'fixtures/valid'/schema.name.replace('.schema.json','.json')
    self.assertTrue(fixture.exists(),schema.name)
    validate(json.loads(fixture.read_text(encoding="utf-8")),schema)
    validate_schema_keywords(schema)
+  local_names={'local-apply-authorization','local-operation-receipt','local-apply-checkpoint','local-apply-manifest','local-verification-report'}
+  self.assertEqual(local_names,{path.name.removesuffix('.schema.json') for path in schemas if path.name.startswith('local-')})
+  self.assertTrue(all(json.loads((ROOT/'schemas/v1'/(name+'.schema.json')).read_text(encoding='utf-8')).get('additionalProperties') is False for name in local_names))
  def test_required_unknown_version_and_property_are_rejected(self):
   schema=ROOT/'schemas/v1/run-manifest.schema.json'; value=json.loads((ROOT/'fixtures/valid/run-manifest.json').read_text(encoding="utf-8"))
   for mutation in ('missing','version','extra'):

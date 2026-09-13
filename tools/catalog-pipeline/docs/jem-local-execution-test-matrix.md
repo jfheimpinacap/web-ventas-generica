@@ -80,7 +80,7 @@ Exactly 95 independently discoverable `unittest` cases are mapped below. Generat
 | 74 | `reconcile_absent` | reconcile | `reconcile_absent` | `deterministic_reconcile` | `reconcile_in_flight` | absent | `absent` | `test_074_reconcile_absent` |
 | 75 | `reconcile_divergent` | reconcile | `reconcile_divergent` | `deterministic_reconcile` | `reconcile_in_flight` | divergent | `divergent` | `test_075_reconcile_divergent` |
 | 76 | `reconcile_duplicate` | reconcile | `reconcile_duplicate` | `deterministic_reconcile` | `reconcile_in_flight` | duplicate | `ambiguous` | `test_076_reconcile_duplicate` |
-| 77 | `reconcile_partial_identity` | reconcile | `reconcile_partial_identity` | `deterministic_reconcile` | `reconcile_in_flight` | partial | `absent` | `test_077_reconcile_partial_identity` |
+| 77 | `reconcile_incomplete_identity` | reconcile | `reconcile_incomplete_identity` | `deterministic_reconcile` | `reconcile_in_flight` | incomplete identity | `unobservable` | `test_077_reconcile_incomplete_identity` |
 | 78 | `reconcile_image_unobservable` | reconcile | `reconcile_image_unobservable` | `deterministic_reconcile` | `reconcile_in_flight` | image | `unobservable` | `test_078_reconcile_image_unobservable` |
 | 79 | `reconcile_sheet_unobservable` | reconcile | `reconcile_sheet_unobservable` | `deterministic_reconcile` | `reconcile_in_flight` | technical_sheet | `unobservable` | `test_079_reconcile_sheet_unobservable` |
 | 80 | `reconcile_bad_request_fp` | reconcile | `reconcile_bad_request_fp` | `deterministic_reconcile` | `reconcile_in_flight` | request_tamper | `blocked` | `test_080_reconcile_bad_request_fp` |
