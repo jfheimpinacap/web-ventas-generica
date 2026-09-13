@@ -10,7 +10,8 @@ vinculados de forma auditable mediante `identity-link.schema.json`.
 
 Véanse [arquitectura y políticas](docs/architecture.md), [contrato JEM](docs/jem-nexus-contract.md)
 y el contrato machine-readable `schemas/v1/jem-nexus-contract.json`. La etapa segura de
-discovery EP/GAM, actualmente fail-closed hasta disponer de evidencia estructural verificable,
+certificación de capturas locales se documenta en [readiness GET local](docs/jem-local-readiness.md).
+El discovery EP/GAM, actualmente fail-closed hasta disponer de evidencia estructural verificable,
 se documenta en [discovery-ep-gam.md](docs/discovery-ep-gam.md).
 
 Validación posterior (no ejecutada durante Prompt 267):
