@@ -61,10 +61,13 @@ class VerificationTests(unittest.TestCase):
     class Observed:
         def __init__(self,count=1,observable=True): self.count=count; self.observable=observable; self.calls=[]
         def find_exact(self,*args): self.calls.append(args); return [object()]*self.count
-        def bytes_observable(self,kind): return self.observable
+        def binary_sha256(self,kind,resource_id): return H if self.observable else None
     def fixture(self,kind="product"):
-        op={"operation_id":"op","kind":kind,"payload_template":SAFE_PRODUCT if kind=="product" else {},"produced_bindings":[{"namespace":kind,"key":"one"}]}
-        return {"plan_fingerprint":H,"operations":[op]},{"checkpoint_fingerprint":H,"produced_bindings":[{"namespace":kind,"key":"one","value":1}]}
+        payload=SAFE_PRODUCT if kind=="product" else ({"multipart":{"sha256":H}} if kind in ("image","technical_sheet") else {})
+        op={"operation_id":"op","kind":kind,"payload_template":payload,"produced_bindings":[{"namespace":kind,"key":"one"}]}
+        checkpoint={"checkpoint_fingerprint":H,"produced_bindings":[{"namespace":kind,"key":"one","value":1}],
+                    "receipts":[{"operation_id":"op","resource_id":1}]}
+        return {"plan_fingerprint":H,"operations":[op]},checkpoint
     def test_verify_exact_managed_resource(self):
         p,c=self.fixture(); self.assertEqual(verify_managed(p,c,self.Observed())["result"],"verified")
     def test_duplicate_managed_resource_fails(self):

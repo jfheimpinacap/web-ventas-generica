@@ -24,8 +24,13 @@ reconciliación ni verificación.
 
 El fake privado `_SyntheticBackend` es `fixture_only`, determinista, stateful y vive en memoria y
 temporales propiedad de cada prueba. Asigna enteros positivos crecientes, actualiza colecciones tras
-cada operación, registra lecturas, dispatches, payloads y bytes, y permite fallar antes del dispatch
-o perder la respuesta después del commit. No crea servidor, no abre sockets, no consulta variables
+cada operación y registra por `operation_id` intents, dispatches, commits y respuestas entregadas o
+perdidas. `_PlannedMutator`, construido para el bundle sellado y el índice `next_operation` del
+checkpoint, valida orden, kind, endpoint y payload materializado con el `request_fingerprint`
+productivo antes de asociar un dispatch. Así no inventa un `operation_id` en la interfaz real
+`kind + payload` ni depende del anterior `current_operation`, que era estado externo inexistente en
+el contrato y atribuía operaciones diferentes a un único ID. El fake permite fallar antes del
+dispatch o perder la respuesta después del commit. No crea servidor, no abre sockets, no consulta variables
 de entorno, no guarda credenciales y no importa transportes concretos. Las reglas de negocio siguen
 en los módulos productivos.
 
@@ -47,12 +52,20 @@ representa los DTO reales para hacer verificable lo que JEM no expone.
 
 ## Dos modos de observabilidad
 
-* `real_dto_shape` omite `sha256` en imágenes y fichas, como los DTO GET actuales. El resultado
-  obligatorio es `manual_verification_required` y el checkpoint permanece
-  `local_apply_completed_pending_verify`; jamás se declara un falso verified.
-* `observable_binary_fixture` añade el hash exclusivamente como evidencia sintética del fixture.
-  Solo ese modo permite certificar el camino `local_apply_verified` y la conservación exacta de los
-  bytes y hashes.
+* `real_dto_shape` elimina de la respuesta pública `sha256` y no expone bytes de imágenes o fichas,
+  exactamente como los DTO GET actuales. `SnapshotObserver` no sintetiza hashes desde filename,
+  URL, MIME o tamaño. El resultado obligatorio es `manual_verification_required`, enumera los IDs
+  de operación binarios y el checkpoint permanece `local_apply_completed_pending_verify`; jamás
+  se declara un falso verified.
+* `observable_binary_fixture` conserva los bytes solo en almacenamiento privado del fake y los
+  entrega a `_ObservableBinaryFixtureObserver`, un observer test-only explícito que calcula SHA-256
+  desde esos bytes actuales. Solo ese modo permite certificar el camino `local_apply_verified`.
+
+La falsa observabilidad anterior combinaba un `sha256` del payload POST guardado en los recursos
+internos del fake con un observer sintético que declaraba los bytes observables mediante un booleano
+sin aportar evidencia actual. `verify_managed()` confiaba en ese booleano y nunca comparaba un hash
+observado. Ahora exige el SHA-256 actual del observer para cada imagen y ficha; plan, checkpoint,
+receipt, source hash, filename y metadatos de carga no sustituyen esa evidencia.
 
 ## Dataset y garantías
 
@@ -68,7 +81,12 @@ cada mutación; receipt/checkpoint antes de continuar; staging propio, destino i
 y conflicto fail-closed. También cubren pérdida de respuesta: el snapshot fresco reconcilia el
 recurso exacto, crea receipt `snapshot_reconciliation` y continúa sin un segundo dispatch.
 Ausencia, divergencia, duplicado, identidad no observable, deriva ajena y error de persistencia no
-provocan retry automático. Verify repetido es determinista y no repara ni publica.
+provocan retry automático. Las colisiones integrales se detienen todavía antes: `capture_snapshot()`
+preserva `validate_snapshot()`, por lo que una identidad duplicada en vuelo produce
+`IDENTITY_COLLISION` y un ID administrado duplicado produce `DUPLICATE_ID`, ambos antes de
+reconcile/verify y sin invocar el mutator ni reintentar. Las pruebas unitarias de reconciliación
+pueden seguir construyendo entradas controladas para cubrir `ambiguous`. Verify repetido es
+determinista y no repara ni publica.
 
 La composición CLI continúa ofreciendo exactamente `snapshot-local`, `plan`, `dry-run`,
 `apply-local`, `resume-local` y `verify-local`. Sus factories permiten el fixture únicamente en
@@ -83,7 +101,7 @@ EP/GAM ni otros catálogos congelados. Conserva el inventario de 79 schemas. El 
 584 pruebas previamente confirmadas + 30 nuevas = 614; debe ejecutarse después en Windows con
 Python 3.13.5.
 
-Solo tras ese retest podrá solicitarse por separado el nivel 2: una captura GET read-only del
-backend local real. Esa inspección deberá seguir siendo explícitamente autorizada y no habilitará
+El nivel 2 queda expresamente pendiente para el Prompt 293: una captura GET read-only del backend
+local real. Esa inspección deberá seguir siendo explícitamente autorizada y no habilitará
 mutaciones. Los niveles 3 y 4 necesitan autorizaciones posteriores independientes; el nivel 5
 permanece prohibido.
