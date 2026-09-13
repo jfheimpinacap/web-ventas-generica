@@ -220,7 +220,9 @@ class ArchitectureTests(unittest.TestCase):
   acquisition='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_acquisition').glob('*.py'))
   common='\n'.join(p.read_text(encoding="utf-8") for p in (ROOT/'catalog_pipeline_common').glob('*.py'))
   production=[*ROOT.glob('*.py'),*(p for directory in ('catalog_pipeline_common','jem_nexus_import') for p in (ROOT/directory).glob('*.py'))]
-  self.assertEqual([reader,mutator],[p for p in production if 'urllib.request' in p.read_text(encoding="utf-8")])
+  expected={'jem_nexus_local_transport.py','jem_nexus_local_mutation_transport.py'}
+  actual={p.relative_to(ROOT).as_posix() for p in production if 'urllib.request' in p.read_text(encoding="utf-8")}
+  self.assertEqual(2,len(actual)); self.assertSetEqual(expected,actual)
   methods=lambda source:{node.keywords[-1].value.value for node in ast.walk(ast.parse(source)) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=='Request' and node.keywords and node.keywords[-1].arg=='method'}
   self.assertEqual(methods(transport),{'GET'}); self.assertEqual(methods(mutation_transport),{'POST'})
   for source in (transport,mutation_transport):
