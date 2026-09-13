@@ -97,5 +97,5 @@ Exactly 95 independently discoverable `unittest` cases are mapped below. Generat
 | 91 | `verify_managed_count` | verify | `verify_managed_count` | `deterministic_verify` | `verify_managed` | count | `one` | `test_091_verify_managed_count` |
 | 92 | `architecture_checkpoint_receipts` | architecture | `architecture_checkpoint_receipts` | `deterministic_architecture` | `write_checkpoint` | receipt_file | `two_files` | `test_092_architecture_checkpoint_receipts` |
 | 93 | `architecture_no_arbitrary_method` | architecture | `architecture_no_arbitrary_method` | `deterministic_architecture` | `LocalMutationTransport` | method | `typed_only` | `test_093_architecture_no_arbitrary_method` |
-| 94 | `architecture_schema_inventory` | architecture | `architecture_schema_inventory` | `deterministic_architecture` | `filesystem` | schemas | `seventy_nine` | `test_094_architecture_schema_inventory` |
+| 94 | `architecture_schema_inventory` | architecture | `architecture_schema_inventory` | `deterministic_architecture` | `filesystem` | schemas | `eighty` | `test_094_architecture_schema_inventory` |
 | 95 | `resume_foreign_drift` | drift | `resume_foreign_drift` | `deterministic_drift` | `validate_resume_snapshot` | foreign_addition | `blocked` | `test_095_resume_foreign_drift` |

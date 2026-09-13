@@ -172,7 +172,7 @@ GENERATED_CASES=[
 ("091_verify_managed_count","verify","count","verify_managed","one"),
 ("092_architecture_checkpoint_receipts","architecture","receipt_file","write_checkpoint","two_files"),
 ("093_architecture_no_arbitrary_method","architecture","method","LocalMutationTransport","typed_only"),
-("094_architecture_schema_inventory","architecture","schemas","filesystem","seventy_nine"),
+("094_architecture_schema_inventory","architecture","schemas","filesystem","eighty"),
 ("095_resume_foreign_drift","drift","foreign_addition","validate_resume_snapshot","blocked"),
 ]
 
@@ -289,7 +289,7 @@ def _exercise_generated(test,case):
         elif variant=="method":
             from jem_nexus_local_mutation_transport import LocalMutationTransport
             test.assertEqual({name for name in dir(LocalMutationTransport) if name.startswith("post_")},{"post_json","post_multipart"})
-        elif variant=="schemas": test.assertEqual(len(list((root/"schemas/v1").glob("*.schema.json"))),79)
+        elif variant=="schemas": test.assertEqual(len(list((root/"schemas/v1").glob("*.schema.json"))),80)
         else: test.assertEqual(len(list((root/"fixtures/valid").glob("local-*.json"))),5)
 
 def _generated_test(case):
