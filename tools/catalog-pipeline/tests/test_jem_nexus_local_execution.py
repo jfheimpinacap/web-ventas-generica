@@ -1,8 +1,8 @@
 import copy,inspect,json,tempfile,unittest
 from pathlib import Path
-from jem_nexus_import.authorization import AuthorizationError,fingerprint_without,validate_authorization
+from jem_nexus_import.authorization import AUTHORIZATION_BINDINGS,AuthorizationError,fingerprint_without,validate_authorization
 from jem_nexus_import.checkpoint import CheckpointError,initial,seal,validate,write_checkpoint
-from jem_nexus_import.execution import SAFE_PRODUCT,operation_set_fingerprint
+from jem_nexus_import.execution import SAFE_PRODUCT,operation_set_fingerprint,request_fingerprint
 from jem_nexus_import.verification import verify_managed
 
 H="0"*64
@@ -11,25 +11,39 @@ def authorization(**changes):
     value={"schema_version":"1.0.0","rules_version":"jem-local-apply-v1","classification":"fixture_only","fixture_only":True,"local_only":True,"production_allowed":False,"publication_allowed":False,"allow_apply":True,"allow_resume":True,"allow_verify":True,"package_sha256":H,"plan_fingerprint":H,"dry_run_fingerprint":H,"snapshot_fingerprint":H,"contract_fingerprint":H,"policy_fingerprint":H,"operation_set_fingerprint":H,"operation_count":0,"allowed_operation_kinds":[],"target_fingerprint":H,"authorization_fingerprint":""}
     value.update(changes); value["authorization_fingerprint"]=fingerprint_without(value,"authorization_fingerprint"); return value
 
+def expected_bindings(value): return {key:copy.deepcopy(value[key]) for key in AUTHORIZATION_BINDINGS}
+
+def checkpoint_bundle(): return {"package_sha256":H,"plan_fingerprint":H,"dry_run_fingerprint":H,"authorization_fingerprint":H,"snapshot_fingerprint":H,"target_fingerprint":H,"operation_set_fingerprint":H,"operations":[{"operation_id":"op-fixture"},{"operation_id":"second"}],"external_bindings":[]}
+
 class AuthorizationTests(unittest.TestCase):
-    def test_exact_fixture_authorization(self): self.assertEqual(validate_authorization(authorization(),{},action="apply")["classification"],"fixture_only")
+    def test_exact_fixture_authorization(self):
+        value=authorization(); self.assertEqual(validate_authorization(value,expected_bindings(value),action="apply")["classification"],"fixture_only")
     def test_fixture_cannot_enable_real_transport(self):
-        with self.assertRaises(AuthorizationError): validate_authorization(authorization(),{},real_transport=True)
+        value=authorization()
+        with self.assertRaises(AuthorizationError): validate_authorization(value,expected_bindings(value),real_transport=True)
     def test_production_is_closed(self):
-        with self.assertRaises(AuthorizationError): validate_authorization(authorization(production_allowed=True),{})
+        value=authorization(production_allowed=True)
+        with self.assertRaises(AuthorizationError): validate_authorization(value,expected_bindings(value))
     def test_publication_is_closed(self):
-        with self.assertRaises(AuthorizationError): validate_authorization(authorization(publication_allowed=True),{})
+        value=authorization(publication_allowed=True)
+        with self.assertRaises(AuthorizationError): validate_authorization(value,expected_bindings(value))
     def test_every_bound_value_is_exact(self):
-        for field in ("package_sha256","plan_fingerprint","dry_run_fingerprint","snapshot_fingerprint","contract_fingerprint","policy_fingerprint","operation_set_fingerprint","operation_count","allowed_operation_kinds","target_fingerprint"):
-            with self.subTest(field=field),self.assertRaises(AuthorizationError): validate_authorization(authorization(),{field:"different"})
+        value=authorization()
+        for field in sorted(AUTHORIZATION_BINDINGS):
+            expected=expected_bindings(value); expected[field]=1 if field=="operation_count" else (["category"] if field=="allowed_operation_kinds" else "1"*64)
+            with self.subTest(field=field),self.assertRaisesRegex(AuthorizationError,"AUTHORIZATION_MISMATCH:"+field): validate_authorization(value,expected)
+        invalid_expected=( {}, {key:value[key] for key in AUTHORIZATION_BINDINGS if key!="target_fingerprint"}, expected_bindings(value)|{"unknown_fingerprint":H} )
+        for expected in invalid_expected:
+            with self.subTest(expected_keys=sorted(expected)),self.assertRaisesRegex(AuthorizationError,"AUTHORIZATION_EXPECTED_BINDINGS_INVALID"): validate_authorization(value,expected)
     def test_action_must_be_explicit(self):
-        with self.assertRaises(AuthorizationError): validate_authorization(authorization(allow_resume=False),{},action="resume")
+        value=authorization(allow_resume=False)
+        with self.assertRaisesRegex(AuthorizationError,"ACTION_NOT_AUTHORIZED"): validate_authorization(value,expected_bindings(value),action="resume")
     def test_closed_contract_rejects_secret(self):
         value=authorization(); value["token"]="secret"; value["authorization_fingerprint"]=fingerprint_without(value,"authorization_fingerprint")
-        with self.assertRaises(AuthorizationError): validate_authorization(value,{})
+        with self.assertRaisesRegex(AuthorizationError,"AUTHORIZATION_SCHEMA_INVALID"): validate_authorization(value,expected_bindings(authorization()))
 
 class CheckpointTests(unittest.TestCase):
-    def bundle(self): return {"package_sha256":H,"plan_fingerprint":H,"dry_run_fingerprint":H,"authorization_fingerprint":H,"snapshot_fingerprint":H,"target_fingerprint":H,"operation_set_fingerprint":H,"operations":[{"operation_id":"a"},{"operation_id":"b"}],"external_bindings":[]}
+    def bundle(self): return checkpoint_bundle()
     def test_initial_is_before_first_post(self): self.assertEqual(initial(self.bundle())["counters"],{"intents_registered":0,"requests_dispatched":0,"mutations_confirmed":0,"operations_completed":0,"operations_reconciled":0})
     def test_completed_must_be_prefix(self):
         value=initial(self.bundle()); value["completed_operation_ids"]=["b"]
@@ -70,6 +84,7 @@ class ArchitectureTests(unittest.TestCase):
     def test_operation_set_is_order_sensitive_and_stable(self):
         values=[{"fingerprint":"a"},{"fingerprint":"b"}]
         self.assertEqual(operation_set_fingerprint(values),operation_set_fingerprint(copy.deepcopy(values))); self.assertNotEqual(operation_set_fingerprint(values),operation_set_fingerprint(list(reversed(values))))
+        self.assertNotEqual(operation_set_fingerprint(values),request_fingerprint("/api/categories",["a","b"]))
     def test_five_local_schemas_and_fixtures_exist(self):
         root=Path(__file__).parents[1]; names=("local-apply-authorization","local-operation-receipt","local-apply-checkpoint","local-apply-manifest","local-verification-report")
         for name in names:
@@ -77,9 +92,8 @@ class ArchitectureTests(unittest.TestCase):
 
 # Prompt 288 behavioral registry.  The 21 explicit methods above plus these 74
 # generated methods are exactly 95 independently discoverable unittest cases.
-from catalog_pipeline_common.serialization import content_fingerprint
 from jem_nexus_import.execution import ExecutionError,reconcile_in_flight,persist_reconciliation,validate_resume_snapshot
-from jem_nexus_local_mutation_transport import MutationTransportError,deterministic_multipart,target_fingerprint
+from jem_nexus_local_mutation_transport import MutationTransportError,deterministic_multipart,multipart_boundary_fingerprint,target_fingerprint
 from jem_nexus_import.local_client import LocalReadError
 
 GENERATED_CASES=[
@@ -138,7 +152,7 @@ GENERATED_CASES=[
 ("074_reconcile_absent","reconcile","absent","reconcile_in_flight","absent"),
 ("075_reconcile_divergent","reconcile","divergent","reconcile_in_flight","divergent"),
 ("076_reconcile_duplicate","reconcile","duplicate","reconcile_in_flight","ambiguous"),
-("077_reconcile_partial_identity","reconcile","partial","reconcile_in_flight","absent"),
+("077_reconcile_incomplete_identity","reconcile","incomplete_identity","reconcile_in_flight","unobservable"),
 ("078_reconcile_image_unobservable","reconcile","image","reconcile_in_flight","unobservable"),
 ("079_reconcile_sheet_unobservable","reconcile","technical_sheet","reconcile_in_flight","unobservable"),
 ("080_reconcile_bad_request_fp","reconcile","request_tamper","reconcile_in_flight","blocked"),
@@ -166,16 +180,16 @@ def _reconciliation_fixture(variant):
     operation={"operation_id":"op-fixture","fingerprint":H,"kind":kind,"endpoint":{"category":"/api/categories","brand":"/api/brands","supplier":"/api/suppliers","product":"/api/products","spec":"/api/product-specs","image":"/api/product-images","technical_sheet":"/api/technical-sheets"}[kind],"payload_template":payloads[kind],"produced_bindings":[binding],"required_bindings":[]}
     bundle={"package_sha256":H,"plan_fingerprint":H,"dry_run_fingerprint":H,"authorization_fingerprint":H,"snapshot_fingerprint":H,"target_fingerprint":H,"operation_set_fingerprint":H,"classification":"fixture_only","operations":[operation],"external_bindings":[]}
     checkpoint=initial(bundle); checkpoint["counters"]["intents_registered"]=1; checkpoint["counters"]["requests_dispatched"]=1
-    checkpoint["in_flight"]={"operation_id":operation["operation_id"],"request_fingerprint":content_fingerprint({"endpoint":operation["endpoint"],"payload":payloads[kind]}),"endpoint":operation["endpoint"],"operation_kind":kind}; checkpoint=seal(checkpoint)
+    checkpoint["in_flight"]={"operation_id":operation["operation_id"],"request_fingerprint":request_fingerprint(operation["endpoint"],payloads[kind]),"endpoint":operation["endpoint"],"operation_kind":kind}; checkpoint=seal(checkpoint)
     resource={"id":31}; source=payloads[kind].get("multipart",payloads[kind]); resource.update(source)
     collections={name:[] for name in ("categories","brands","suppliers","products","product_specs","product_images","technical_sheets")}; collections[{"category":"categories","brand":"brands","supplier":"suppliers","product":"products","spec":"product_specs","image":"product_images","technical_sheet":"technical_sheets"}[kind]]=[resource]
     if variant in ("image","technical_sheet"): resource.pop("sha256",None)
     if variant=="absent": collections["categories"]=[]
     if variant=="divergent": resource["name"]="Different"
     if variant=="duplicate": collections["categories"].append(dict(resource,id=32))
-    if variant=="partial": resource["slug"]="lif"
+    if variant=="incomplete_identity": operation["payload_template"]={"name":"Lift"}; checkpoint["in_flight"]["request_fingerprint"]=request_fingerprint(operation["endpoint"],operation["payload_template"]); checkpoint=seal(checkpoint)
     if variant=="invalid_id": resource["id"]="31"
-    if variant=="no_identity": operation["payload_template"]={}; checkpoint["in_flight"]["request_fingerprint"]=content_fingerprint({"endpoint":operation["endpoint"],"payload":{}}); checkpoint=seal(checkpoint)
+    if variant=="no_identity": operation["payload_template"]={}; checkpoint["in_flight"]["request_fingerprint"]=request_fingerprint(operation["endpoint"],{}); checkpoint=seal(checkpoint)
     if variant=="request_tamper": checkpoint["in_flight"]["request_fingerprint"]=H; checkpoint=seal(checkpoint)
     if variant=="operation_tamper": checkpoint["in_flight"]["operation_id"]="other"; checkpoint=seal(checkpoint)
     return bundle,checkpoint,{"collections":collections}
@@ -188,10 +202,14 @@ def _exercise_generated(test,case):
         elif variant in ("allow_resume","allow_verify"): value[variant]=False; action=variant[6:]; value["authorization_fingerprint"]=fingerprint_without(value,"authorization_fingerprint")
         elif variant=="password": value[variant]="x"; value["authorization_fingerprint"]=fingerprint_without(value,"authorization_fingerprint")
         else:
-            with test.assertRaises(AuthorizationError): validate_authorization(value,{variant:"different"}); return
-        if expected=="accepted": test.assertEqual(validate_authorization(value,{})["classification"],"local_development")
+            wanted=expected_bindings(value); wanted[variant]="1"*64
+            unchanged={key:value[key] for key in AUTHORIZATION_BINDINGS if key!=variant}
+            with test.assertRaisesRegex(AuthorizationError,"AUTHORIZATION_MISMATCH:"+variant): validate_authorization(value,wanted)
+            test.assertEqual(unchanged,{key:wanted[key] for key in AUTHORIZATION_BINDINGS if key!=variant}); return
+        wanted=expected_bindings(value)
+        if expected=="accepted": test.assertEqual(validate_authorization(value,wanted)["classification"],"local_development")
         else:
-            with test.assertRaises(AuthorizationError): validate_authorization(value,{},action=action)
+            with test.assertRaises(AuthorizationError): validate_authorization(value,wanted,action=action)
     elif category=="target":
         if expected=="fingerprint": test.assertEqual(len(target_fingerprint(variant)),64)
         else:
@@ -199,12 +217,12 @@ def _exercise_generated(test,case):
     elif category=="multipart":
         args=({"product_id":1},"file","safe.bin","application/octet-stream",b"abc",H,10)
         if variant=="deterministic": test.assertEqual(deterministic_multipart(*args),deterministic_multipart(*args))
-        elif variant=="boundary": test.assertIn(("jem-"+H[:48]).encode(),deterministic_multipart(*args)[1])
+        elif variant=="boundary": test.assertIn(("jem-"+multipart_boundary_fingerprint(H)[:48]).encode(),deterministic_multipart(*args)[1])
         else:
             changed=list(args); changed[2]="../x" if variant=="path_filename" else "safe.bin"; changed[4]=b"01234567890" if variant=="oversize" else b"abc"
             with test.assertRaises(MutationTransportError): deterministic_multipart(*changed)
     elif category=="checkpoint":
-        bundle,_,_=_reconciliation_fixture("category"); cp=initial(bundle)
+        cp=initial(checkpoint_bundle())
         if variant=="counter_tamper": cp["counters"]["requests_dispatched"]=1
         elif variant=="binding_tamper": cp["produced_bindings"].append({"value":1})
         elif variant=="prefix_one": cp["completed_operation_ids"]=["op-fixture"]; cp["receipts"]=[{}]; cp["next_operation"]=1; cp["counters"]["operations_completed"]=1; cp["counters"]["mutations_confirmed"]=1; cp=seal(cp)
@@ -264,8 +282,7 @@ def _exercise_generated(test,case):
     else:
         root=Path(__file__).parents[1]
         if variant=="receipt_file":
-            bundle,_,_=_reconciliation_fixture("category")
-            with tempfile.TemporaryDirectory() as directory: write_checkpoint(directory,initial(bundle)); test.assertEqual({p.name for p in Path(directory).iterdir()},{"local-apply-checkpoint.json","local-operation-receipts.jsonl"})
+            with tempfile.TemporaryDirectory() as directory: write_checkpoint(directory,initial(checkpoint_bundle())); test.assertEqual({p.name for p in Path(directory).iterdir()},{"local-apply-checkpoint.json","local-operation-receipts.jsonl"})
         elif variant=="method":
             from jem_nexus_local_mutation_transport import LocalMutationTransport
             test.assertEqual({name for name in dir(LocalMutationTransport) if name.startswith("post_")},{"post_json","post_multipart"})

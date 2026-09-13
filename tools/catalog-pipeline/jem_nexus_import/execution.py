@@ -12,7 +12,6 @@ ALLOWED_ENDPOINTS={"category":"/api/categories","brand":"/api/brands","supplier"
 class ExecutionError(ValueError):
     def __init__(self,code): self.code=code; super().__init__(code)
 
-def operation_set_fingerprint(operations): return content_fingerprint([x["fingerprint"] for x in operations])
 def prepare_execution_bundle(package,plan,dry_run,snapshot,policy,authorization,target_fingerprint,real_transport=False,resume=False):
     ordered=topological(plan["operations"]); operation_set=operation_set_fingerprint(ordered)
     if plan.get("reviews") or dry_run.get("errors") or dry_run.get("state")!="dry_run_ready": raise ExecutionError("DRY_RUN_NOT_READY")
@@ -35,11 +34,23 @@ def _materialize(value,resolver):
 COLLECTIONS={"category":"categories","brand":"brands","supplier":"suppliers","product":"products","spec":"product_specs","image":"product_images","technical_sheet":"technical_sheets"}
 BINARY_KINDS=frozenset(("image","technical_sheet"))
 RECONCILIATION_RESULTS=frozenset(("exact_match","absent","divergent","ambiguous","unobservable"))
+FINGERPRINT_RULES_VERSION="jem-import-safety-v1"
+
+def operation_set_fingerprint(operations):
+    return content_fingerprint({"schema_version":"jem-local-operation-set-v1","rules_version":FINGERPRINT_RULES_VERSION,"operation_fingerprints":[x["fingerprint"] for x in operations]})
+
+def request_fingerprint(endpoint,payload):
+    return content_fingerprint({"schema_version":"jem-local-mutation-request-v1","rules_version":FINGERPRINT_RULES_VERSION,"endpoint":endpoint,"payload":payload})
+
+def reconciliation_fingerprint(evidence):
+    return content_fingerprint({"schema_version":"jem-local-reconciliation-v1","rules_version":FINGERPRINT_RULES_VERSION,"evidence":evidence})
 
 def _identity_fields(operation,payload):
     by_kind={"category":("slug",),"brand":("slug",),"supplier":("name",),"product":("slug",),"spec":("product_id","key"),"image":("product_id",),"technical_sheet":("name",)}
     fields=by_kind[operation["kind"]]; source=payload.get("multipart",{}) if operation["kind"] in BINARY_KINDS else payload
-    return {key:source.get(key) for key in fields if source.get(key) is not None}
+    identity={key:source.get(key) for key in fields}
+    if any((type(value) is not int or value<1) if key.endswith("_id") else (type(value) is not str or not value) for key,value in identity.items()): return {}
+    return identity
 
 def validate_resume_checkpoint(bundle,checkpoint):
     cp=validate(checkpoint)
@@ -86,7 +97,7 @@ def reconcile_in_flight(bundle,checkpoint,snapshot):
     if intent!={"operation_id":operation["operation_id"],"request_fingerprint":intent.get("request_fingerprint"),"endpoint":operation["endpoint"],"operation_kind":operation["kind"]}: raise ExecutionError("IN_FLIGHT_OPERATION_MISMATCH")
     resolver=BindingResolver(cp["external_bindings"],cp["produced_bindings"])
     payload=_materialize(deepcopy(operation["payload_template"]),resolver)
-    request_fp=content_fingerprint({"endpoint":operation["endpoint"],"payload":payload})
+    request_fp=request_fingerprint(operation["endpoint"],payload)
     if request_fp!=intent["request_fingerprint"]: raise ExecutionError("IN_FLIGHT_REQUEST_MISMATCH")
     collection=snapshot["collections"][COLLECTIONS[operation["kind"]]]
     identity=_identity_fields(operation,payload)
@@ -110,7 +121,7 @@ def persist_reconciliation(bundle,checkpoint,reconciliation,persist_checkpoint):
     cp=deepcopy(validate(checkpoint)); operation=reconciliation["operation"]; rid=reconciliation["resource_id"]
     resolver=BindingResolver(cp["external_bindings"],cp["produced_bindings"]); produced=[]
     for binding in operation["produced_bindings"]: resolver.produce(binding,rid); produced.append({**binding,"value":rid})
-    receipt={"schema_version":"1.0.0","fixture_only":bundle.get("classification")=="fixture_only","operation_id":operation["operation_id"],"request_fingerprint":cp["in_flight"]["request_fingerprint"],"endpoint":operation["endpoint"],"kind":operation["kind"],"status":200,"response_body_sha256":content_fingerprint(reconciliation["evidence"]),"resource_id":rid,"produced_bindings":produced,"outcome":"reconciled","confirmation_source":"snapshot_reconciliation","previous_checkpoint_fingerprint":cp["checkpoint_fingerprint"],"evidence":reconciliation["evidence"]}
+    receipt={"schema_version":"1.0.0","fixture_only":bundle.get("classification")=="fixture_only","operation_id":operation["operation_id"],"request_fingerprint":cp["in_flight"]["request_fingerprint"],"endpoint":operation["endpoint"],"kind":operation["kind"],"status":200,"response_body_sha256":reconciliation_fingerprint(reconciliation["evidence"]),"resource_id":rid,"produced_bindings":produced,"outcome":"reconciled","confirmation_source":"snapshot_reconciliation","previous_checkpoint_fingerprint":cp["checkpoint_fingerprint"],"evidence":reconciliation["evidence"]}
     cp["receipts"].append(receipt); cp["produced_bindings"].extend(produced); cp["completed_operation_ids"].append(operation["operation_id"]); cp["next_operation"]+=1
     cp["counters"]["mutations_confirmed"]+=1; cp["counters"]["operations_completed"]+=1; cp["counters"]["operations_reconciled"]=cp["counters"].get("operations_reconciled",0)+1
     cp["in_flight"]=None; cp["state"]="local_apply_completed_pending_verify" if cp["next_operation"]==len(bundle["operations"]) else "local_apply_in_progress"; cp=seal(cp)
@@ -129,7 +140,7 @@ def execute(bundle,mutator,persist_checkpoint,checkpoint=None):
         payload=_materialize(deepcopy(op["payload_template"]),resolver)
         for ref in op["required_bindings"]: resolver.resolve(ref)
         if op["kind"]=="product" and any(payload.get(k)!=v for k,v in SAFE_PRODUCT.items()): raise ExecutionError("UNSAFE_PRODUCT_DEFAULTS")
-        request_fp=content_fingerprint({"endpoint":op["endpoint"],"payload":payload})
+        request_fp=request_fingerprint(op["endpoint"],payload)
         cp["in_flight"]={"operation_id":op["operation_id"],"request_fingerprint":request_fp,"endpoint":op["endpoint"],"operation_kind":op["kind"]}; cp["state"]="local_apply_in_progress"; cp["counters"]["intents_registered"]+=1; cp=seal(cp); persist_checkpoint(cp)
         try:
             if op["kind"] in ("image","technical_sheet"):
