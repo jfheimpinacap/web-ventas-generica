@@ -1,0 +1,39 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-readiness-report.schema.json",
+  "title":"local-readiness-report",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","rules_version","report_fingerprint","result","snapshot_fingerprint","contract_fingerprint","assessment_mode","source_mode","snapshot_capture_mode","mutation_authorized","checks","counts","root_category","relation_checks","dto_compatibility","binary_observability","blockers","warnings","next_permitted_step","zero_mutation_manifest"],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},
+    "rules_version":{"const":"jem-local-readiness-v1"},
+    "report_fingerprint":{"$ref":"#/$defs/fingerprint"},
+    "result":{"enum":["read_compatible","read_compatible_manual_binary_verification","read_incompatible"]},
+    "snapshot_fingerprint":{"$ref":"#/$defs/fingerprint"},
+    "contract_fingerprint":{"$ref":"#/$defs/fingerprint"},
+    "assessment_mode":{"const":"offline"},
+    "source_mode":{"const":"local_get_snapshot"},
+    "snapshot_capture_mode":{"const":"local_get_read_only"},
+    "mutation_authorized":{"const":false},
+    "checks":{"type":"array","items":{"$ref":"#/$defs/collection_check"}},
+    "counts":{"type":"object","additionalProperties":false,"required":["collections_required","collections_present","resources_observed","blockers","warnings"],"properties":{"collections_required":{"type":"integer","minimum":0},"collections_present":{"type":"integer","minimum":0},"resources_observed":{"type":"integer","minimum":0},"blockers":{"type":"integer","minimum":0},"warnings":{"type":"integer","minimum":0}}},
+    "root_category":{"type":"object","additionalProperties":false,"required":["identity","count","unique","positive_integer_id","valid"],"properties":{"identity":{"const":"maquinarias"},"count":{"type":"integer","minimum":0},"unique":{"type":"boolean"},"positive_integer_id":{"type":"boolean"},"valid":{"type":"boolean"}}},
+    "relation_checks":{"type":"array","items":{"$ref":"#/$defs/relation_check"}},
+    "dto_compatibility":{"type":"array","items":{"$ref":"#/$defs/dto"}},
+    "binary_observability":{"type":"array","items":{"$ref":"#/$defs/binary"}},
+    "blockers":{"type":"array","items":{"$ref":"#/$defs/issue"}},
+    "warnings":{"type":"array","items":{"$ref":"#/$defs/issue"}},
+    "next_permitted_step":{"enum":["correct_snapshot_or_contract","manual_binary_verification","planning_or_dry_run"]},
+    "zero_mutation_manifest":{"$ref":"#/$defs/zero_mutation"}
+  },
+  "$defs":{
+    "fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "collection_check":{"type":"object","additionalProperties":false,"required":["collection","source_endpoint","present","valid_type","count","ids_unique","canonical_identity_valid","relations_valid","required_fields_present"],"properties":{"collection":{"type":"string"},"source_endpoint":{"type":"string","pattern":"^GET /api/"},"present":{"type":"boolean"},"valid_type":{"type":"boolean"},"count":{"type":"integer","minimum":0},"ids_unique":{"type":"boolean"},"canonical_identity_valid":{"type":"boolean"},"relations_valid":{"type":"boolean"},"required_fields_present":{"type":"boolean"}}},
+    "relation_check":{"type":"object","additionalProperties":false,"required":["collection","field","target_collection","observable","valid","orphan_count"],"properties":{"collection":{"type":"string"},"field":{"type":"string"},"target_collection":{"type":"string"},"observable":{"type":"boolean"},"valid":{"type":"boolean"},"orphan_count":{"type":"integer","minimum":0}}},
+    "dto":{"type":"object","additionalProperties":false,"required":["collection","source_endpoint","fields_received","fields_consumed","types","identity","relations","unknown_fields_ignored","compatibility"],"properties":{"collection":{"type":"string"},"source_endpoint":{"type":"string"},"fields_received":{"type":"array","items":{"type":"string"}},"fields_consumed":{"type":"array","items":{"type":"string"}},"types":{"type":"object","additionalProperties":{"type":"string"}},"identity":{"type":["string","null"]},"relations":{"type":"array","items":{"type":"string"}},"unknown_fields_ignored":{"const":true},"compatibility":{"enum":["compatible","incompatible"]}}},
+    "binary":{"type":"object","additionalProperties":false,"required":["class","count","relation_observable","filename_observable","mime_observable","size_observable","sha256_observable","bytes_observable","exact_verification_capable"],"properties":{"class":{"enum":["images","technical_sheets"]},"count":{"type":"integer","minimum":0},"relation_observable":{"type":"boolean"},"filename_observable":{"type":"boolean"},"mime_observable":{"type":"boolean"},"size_observable":{"type":"boolean"},"sha256_observable":{"type":"boolean"},"bytes_observable":{"type":"boolean"},"exact_verification_capable":{"type":"boolean"}}},
+    "issue":{"type":"object","additionalProperties":false,"required":["code"],"properties":{"code":{"type":"string","pattern":"^[A-Z0-9_]+$"},"collection":{"type":"string"},"field":{"type":"string"},"detail":{"type":"string"}}},
+    "zero_mutation":{"type":"object","additionalProperties":false,"required":["assessment_network_requests","mutation_requests","resources_created","resources_updated","resources_deleted","content_published","mutation_authorized"],"properties":{"assessment_network_requests":{"const":0},"mutation_requests":{"const":0},"resources_created":{"const":0},"resources_updated":{"const":0},"resources_deleted":{"const":0},"content_published":{"const":false},"mutation_authorized":{"const":false}}}
+  }
+}
