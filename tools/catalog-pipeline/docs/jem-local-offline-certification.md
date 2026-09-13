@@ -26,13 +26,51 @@ El fake privado `_SyntheticBackend` es `fixture_only`, determinista, stateful y 
 temporales propiedad de cada prueba. Asigna enteros positivos crecientes, actualiza colecciones tras
 cada operación y registra por `operation_id` intents, dispatches, commits y respuestas entregadas o
 perdidas. `_PlannedMutator`, construido para el bundle sellado y el índice `next_operation` del
-checkpoint, valida orden, kind, endpoint y payload materializado con el `request_fingerprint`
-productivo antes de asociar un dispatch. Así no inventa un `operation_id` en la interfaz real
+checkpoint, valida orden, operation ID, kind y endpoint antes de asociar un dispatch. Para JSON
+compara el payload materializado completo con el `request_fingerprint` productivo. Para multipart
+usa una validación específica del contrato descrita abajo. Así no inventa un `operation_id` en la interfaz real
 `kind + payload` ni depende del anterior `current_operation`, que era estado externo inexistente en
 el contrato y atribuía operaciones diferentes a un único ID. El fake permite fallar antes del
 dispatch o perder la respuesta después del commit. No crea servidor, no abre sockets, no consulta variables
 de entorno, no guarda credenciales y no importa transportes concretos. Las reglas de negocio siguen
 en los módulos productivos.
+
+### Descriptor multipart y causa del retest del Prompt 292
+
+El retest de la base fusionada del Prompt 292 (`88e12a9`, cuyo cambio funcional es `3ae34aa`)
+registró 614 pruebas, 596 correctas, 18 failures y cero errors. Las 18 rutas end-to-end no eran
+causas independientes: todas alcanzaban por primera vez una imagen y `_PlannedMutator` reconstruía
+el descriptor completo, pero lo entregaba a `_expected()` como si fuera el JSON recibido. El primer
+campo diferente era la envoltura: el argumento `fields` ya era la parte estructurada interior,
+mientras `_expected()` esperaba `{"multipart": ...}`; además el executor ya había separado
+`file_entry`, `sha256`, `size` y `mime`.
+
+El descriptor planificado de cada imagen es `{"multipart": {"product_id": <binding de producto>,
+"file_entry": <path>, "sha256": <hash del objeto>, "size": <tamaño>, "mime": "image/png",
+"alt_text": "", "is_main": <bool>, "order": <ordinal>, "source_filename": <nombre fuente>}}`.
+Tras materializar bindings, `product_id` es el entero producido; todo lo demás permanece idéntico.
+`execute()` calcula el fingerprint sobre ese descriptor materializado completo y el endpoint
+`/api/product-images`. Luego entrega al mutator solamente los campos `product_id`, `alt_text`,
+`is_main`, `order` y `source_filename`, más `upload.bin`, `image/png`, los bytes, y hash y tamaño
+esperados como argumentos separados.
+
+La ficha se planifica como `{"multipart": {"name": "Ficha sintética", "file_entry":
+"products/sintetico/ficha.pdf", "sha256": <hash PDF>, "mime": "application/pdf"}}`; no contiene
+binding de producto, ordinal, role, source filename ni tamaño explícito. El executor obtiene el
+tamaño por defecto desde los bytes, calcula el fingerprint del descriptor completo con
+`/api/technical-sheets` y entrega `{"name": "Ficha sintética"}`, `upload.pdf`, MIME, bytes, hash y
+tamaño por separado. En ambos tipos el path y la metadata de integridad forman parte del payload
+fingerprinted aunque no sean campos del formulario; `role` no forma parte del descriptor y, para
+las imágenes, se proyecta a `is_main`.
+
+La validación multipart test-only ahora vuelve a materializar el descriptor planificado y compara,
+sin confiar solo en el fingerprint, campos estructurados, filename contractual, MIME, bytes exactos,
+SHA-256 recalculado, hash esperado, tamaño real y tamaño esperado. Finalmente recalcula
+`request_fingerprint(endpoint, payload_materializado_completo)` con el helper productivo —la única
+fuente del algoritmo— y solo entonces avanza el cursor. El wrapper despacha al fake con el
+`operation_id` seleccionado y conserva toda la evidencia multipart por operación. La cobertura
+existente comprueba también alteraciones individuales de cada componente, y que las dos imágenes y
+la ficha quedan asociadas a sus propias operaciones.
 
 ## Correspondencia con el contrato inspeccionado
 
@@ -44,7 +82,7 @@ en los módulos productivos.
 | `product` | `POST /api/products` | `ProductWriteDto` JSON | `201` detalle de producto, `id` entero | `products` | clave natural y `id` | campos estructurados y relaciones `_id` |
 | `spec` | `POST /api/product-specs` | `ProductSpecWriteDto` JSON | `201 ProductSpecReadDto`, `id` entero | `product_specs` | request `product_id` + `key`; response `product` + `name` | valor, unidad y orden; lectura denomina `Name` a la key |
 | `image` | `POST /api/product-images` multipart | form fields + archivo | `201 ProductImageReadDto`, `id` entero | `product_images` | request `product_id`; response `product` (y `id` confirmado) | URL/imagen, alt, principal y orden; no hash binario |
-| `technical_sheet` | `POST /api/technical-sheets/` multipart | `name` + `file` | `201 TechnicalSheetResponse`, `id` entero | `technical_sheets` | nombre (y `id` confirmado) | nombre, filename, content type, tamaño y file URL; no hash binario |
+| `technical_sheet` | `POST /api/technical-sheets` multipart | `name` + `file` | `201 TechnicalSheetResponse`, `id` entero | `technical_sheets` | nombre (y `id` confirmado) | nombre, filename, content type, tamaño y file URL; no hash binario |
 
 Las rutas proceden de `CommercialWriteEndpoints`, `CommercialReadEndpoints` y
 `TechnicalSheetEndpoints`; los nombres proceden de sus DTOs. El fake no añade campos al modo que
@@ -74,6 +112,10 @@ observable en el snapshot base, un producto, dos especificaciones, imagen primar
 una ficha PDF. Los bytes son constantes pequeños generados en el helper; tamaños y SHA-256 se
 calculan sobre esos bytes. Ningún nombre, modelo o archivo representa equipos reales. El producto
 se persiste con `price=null`, `price_visible=false`, `is_featured=false` e `is_published=false`.
+El plan tiene por ello ocho mutaciones: categoría, marca, producto, dos ProductSpec, dos imágenes y
+una ficha. El proveedor no genera la novena porque ya existe en el snapshot y se resuelve como
+binding externo. Las aserciones de checkpoint, receipts y mutaciones derivan el total de
+`len(bundle["operations"])` y validan por separado esta distribución, sin conservar el literal `8`.
 
 Las 30 pruebas certifican orden topológico, propagación de IDs, hashes/bytes, fingerprints,
 contadores, receipts y prefijo completado; checkpoint inicial e `in_flight` persistidos antes de
@@ -101,7 +143,7 @@ EP/GAM ni otros catálogos congelados. Conserva el inventario de 79 schemas. El 
 584 pruebas previamente confirmadas + 30 nuevas = 614; debe ejecutarse después en Windows con
 Python 3.13.5.
 
-El nivel 2 queda expresamente pendiente para el Prompt 293: una captura GET read-only del backend
+El nivel 2 queda expresamente pendiente para el Prompt 294: una captura GET read-only del backend
 local real. Esa inspección deberá seguir siendo explícitamente autorizada y no habilitará
 mutaciones. Los niveles 3 y 4 necesitan autorizaciones posteriores independientes; el nivel 5
 permanece prohibido.
