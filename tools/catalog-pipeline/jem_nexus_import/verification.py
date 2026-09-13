@@ -8,7 +8,11 @@ class SnapshotObserver:
     def find_exact(self,kind,resource_id,payload):
         candidates=[item for item in self.collections[self.COLLECTIONS[kind]] if item.get("id")==resource_id]
         comparable={key:value for key,value in payload.items() if not isinstance(value,(dict,list))}
-        return [item for item in candidates if all(item.get(key)==value for key,value in comparable.items())]
+        # ProductSpecWriteDto accepts ``key`` while ProductSpecReadDto exposes it
+        # as ``name``.  Preserve the inspected API asymmetry without weakening
+        # any other managed-field comparison.
+        aliases={"spec":{"key":"name"}}
+        return [item for item in candidates if all(item.get(key,item.get(aliases.get(kind,{}).get(key)))==value for key,value in comparable.items())]
     def bytes_observable(self,kind): return False
 
 def verify_managed(plan,checkpoint,observed):

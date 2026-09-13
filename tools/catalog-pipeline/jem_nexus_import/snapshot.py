@@ -36,7 +36,9 @@ def validate_snapshot(value,contract_fingerprint=None):
     for product in collections["products"]:
         if product.get("category_id") not in ids["categories"]: raise SnapshotError("ORPHAN_RELATION","product.category_id")
     for name in ("product_images","product_specs"):
-        if any(item.get("product_id") not in ids["products"] for item in collections[name]): raise SnapshotError("ORPHAN_RELATION",name+".product_id")
+        # Inspected read DTOs expose ``Product`` while write DTOs also accept
+        # ``product_id``.  Snapshot validation accepts either real read shape.
+        if any(item.get("product_id",item.get("product")) not in ids["products"] for item in collections[name]): raise SnapshotError("ORPHAN_RELATION",name+".product_id")
     actual=semantic_fingerprint(value)
     if value.get("semantic_fingerprint")!=actual: raise SnapshotError("SNAPSHOT_FINGERPRINT","semantic fingerprint differs")
     return value

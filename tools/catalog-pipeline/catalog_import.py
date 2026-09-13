@@ -49,7 +49,7 @@ def plan_outputs(plan,snapshot):
     operations=b"".join(canonical_bytes(x) for x in plan["operations"]); reviews=b"".join(canonical_bytes(x) for x in plan["reviews"])
     preflight={"state":"manual_review_required" if plan["reviews"] else "dry_run_ready","blocking":bool(plan["reviews"]),"apply_supported":False,"mutation_supported":False,"mutations_attempted":0,"mutations_completed":0}
     return {"jem-state-snapshot.json":snapshot,"import-preflight.json":preflight,"import-bindings.json":{"external":plan["external_bindings"],"produced":[b for op in plan["operations"] for b in op["produced_bindings"]]},"import-operations.jsonl":operations,"import-plan.json":plan,"import-reviews.jsonl":reviews}
-def main(argv=None,reader_factory=None,verifier=verify_package,mutator_factory=None):
+def main(argv=None,reader_factory=None,verifier=verify_package,mutator_factory=None,observer_factory=SnapshotObserver):
     args=parser().parse_args(argv)
     try:
         if args.command=="snapshot-local":
@@ -67,8 +67,8 @@ def main(argv=None,reader_factory=None,verifier=verify_package,mutator_factory=N
         if args.command=="verify-local":
             plan=_read(args.plan); checkpoint=_read(args.checkpoint)
             reader=reader_factory(args.base_url) if reader_factory else LocalJemJsonReader(args.base_url,transport=get_json_bytes)
-            snapshot=capture_snapshot(reader,plan["inputs"]["contract_fingerprint"])
-            report=verify_managed(plan,checkpoint,SnapshotObserver(snapshot))
+            snapshot=capture_snapshot(reader,plan["inputs"]["contract_fingerprint"],"fixture_only" if checkpoint.get("fixture_only") else "local_development")
+            report=verify_managed(plan,checkpoint,observer_factory(snapshot))
             if report["result"]=="verified":
                 checkpoint["state"]="local_apply_verified"; write_checkpoint(Path(args.checkpoint).parent,checkpoint)
             write_output_set(args.output,{"local-verification-report.json":report,"local-verification-report.txt":canonical_bytes(report)})
@@ -79,7 +79,7 @@ def main(argv=None,reader_factory=None,verifier=verify_package,mutator_factory=N
         package=read_verified_package(args.package,args.receipt,policy.get("package_policy",{}),verifier)
         baseline=validate_snapshot(_read(args.snapshot),policy["contract_fingerprint"])
         reader=reader_factory(args.base_url) if reader_factory else LocalJemJsonReader(args.base_url,transport=get_json_bytes)
-        current=capture_snapshot(reader,policy["contract_fingerprint"])
+        current=capture_snapshot(reader,policy["contract_fingerprint"],authorization["classification"])
         target=target_fingerprint(args.base_url)
         destination=Path(args.checkpoint_dir)
         checkpoint=_read(destination/"local-apply-checkpoint.json") if args.command=="resume-local" else None
