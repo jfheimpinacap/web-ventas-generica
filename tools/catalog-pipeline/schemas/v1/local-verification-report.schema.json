@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-verification-report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixture_only",
+    "schema_version",
+    "result",
+    "publication_allowed",
+    "managed_operation_count",
+    "verification_fingerprint",
+    "rules_version",
+    "plan_fingerprint",
+    "checkpoint_fingerprint",
+    "failures",
+    "manual_verification_operation_ids",
+    "publication_performed"
+  ],
+  "properties": {
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "result": {
+      "enum": [
+        "verified",
+        "verification_failed",
+        "manual_verification_required"
+      ]
+    },
+    "publication_allowed": {
+      "const": false
+    },
+    "managed_operation_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verification_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rules_version": {
+      "const": "jem-local-verify-v1"
+    },
+    "plan_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "checkpoint_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "failures": {
+      "type": "array"
+    },
+    "manual_verification_operation_ids": {
+      "type": "array"
+    },
+    "publication_performed": {
+      "const": false
+    }
+  }
+}

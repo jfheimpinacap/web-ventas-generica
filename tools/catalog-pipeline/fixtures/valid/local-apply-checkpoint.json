@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "rules_version": "fixture-v1",
+  "state": "local_apply_ready",
+  "operation_order": [],
+  "completed_operation_ids": [],
+  "in_flight": null,
+  "counters": {
+    "intents_registered": 0,
+    "requests_dispatched": 0,
+    "mutations_confirmed": 0,
+    "operations_completed": 0,
+    "operations_reconciled": 0
+  },
+  "checkpoint_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "fixture_only": true,
+  "package_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "dry_run_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "authorization_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "snapshot_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "target_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "operation_set_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "external_bindings": [],
+  "produced_bindings": [],
+  "receipts": [],
+  "next_operation": 0
+}

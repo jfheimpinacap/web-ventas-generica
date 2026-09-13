@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-apply-checkpoint.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixture_only",
+    "schema_version",
+    "rules_version",
+    "state",
+    "operation_order",
+    "completed_operation_ids",
+    "in_flight",
+    "counters",
+    "checkpoint_fingerprint",
+    "package_sha256",
+    "plan_fingerprint",
+    "dry_run_fingerprint",
+    "authorization_fingerprint",
+    "snapshot_fingerprint",
+    "target_fingerprint",
+    "operation_set_fingerprint",
+    "external_bindings",
+    "produced_bindings",
+    "receipts",
+    "next_operation"
+  ],
+  "properties": {
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "rules_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "enum": [
+        "local_apply_ready",
+        "local_apply_in_progress",
+        "local_apply_reconciliation_required",
+        "local_apply_partial",
+        "local_apply_completed_pending_verify",
+        "local_apply_verified",
+        "already_complete"
+      ]
+    },
+    "operation_order": {
+      "type": "array"
+    },
+    "completed_operation_ids": {
+      "type": "array"
+    },
+    "in_flight": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intents_registered",
+        "requests_dispatched",
+        "mutations_confirmed",
+        "operations_completed",
+        "operations_reconciled"
+      ],
+      "properties": {
+        "intents_registered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requests_dispatched": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mutations_confirmed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operations_completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operations_reconciled": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "checkpoint_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "package_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "plan_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "dry_run_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorization_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "snapshot_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "target_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "operation_set_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "external_bindings": {
+      "type": "array"
+    },
+    "produced_bindings": {
+      "type": "array"
+    },
+    "receipts": {
+      "type": "array"
+    },
+    "next_operation": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

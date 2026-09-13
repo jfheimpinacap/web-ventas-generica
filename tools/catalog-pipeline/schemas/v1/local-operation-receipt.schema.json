@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-operation-receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixture_only",
+    "schema_version",
+    "operation_id",
+    "request_fingerprint",
+    "endpoint",
+    "kind",
+    "status",
+    "response_body_sha256",
+    "resource_id",
+    "produced_bindings",
+    "outcome",
+    "previous_checkpoint_fingerprint",
+    "evidence",
+    "confirmation_source"
+  ],
+  "properties": {
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "operation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^/api/"
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        200,
+        201
+      ]
+    },
+    "response_body_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resource_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "produced_bindings": {
+      "type": "array"
+    },
+    "outcome": {
+      "enum": [
+        "applied",
+        "reconciled"
+      ]
+    },
+    "previous_checkpoint_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "confirmation_source": {
+      "enum": [
+        "response_201",
+        "snapshot_reconciliation"
+      ]
+    }
+  }
+}

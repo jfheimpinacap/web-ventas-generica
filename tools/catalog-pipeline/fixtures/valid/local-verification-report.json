@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "result": "manual_verification_required",
+  "publication_allowed": false,
+  "managed_operation_count": 0,
+  "verification_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "fixture_only": true,
+  "rules_version": "jem-local-verify-v1",
+  "plan_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "checkpoint_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "failures": [],
+  "manual_verification_operation_ids": [],
+  "publication_performed": false
+}

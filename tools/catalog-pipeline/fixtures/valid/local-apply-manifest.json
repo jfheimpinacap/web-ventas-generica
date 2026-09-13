@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "state": "local_apply_ready",
+  "counters": {
+    "intents_registered": 0,
+    "requests_dispatched": 0,
+    "mutations_confirmed": 0,
+    "operations_completed": 0,
+    "operations_reconciled": 0
+  },
+  "publication_allowed": false,
+  "target_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "classification": "fixture_only",
+  "fixture_only": true
+}
