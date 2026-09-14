@@ -1,4 +1,5 @@
-import copy, hashlib, json, pathlib, sys, tempfile, unittest
+import ast, copy, hashlib, json, pathlib, sys, tempfile, unittest
+from unittest import mock
 
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from catalog_binary_observation import OUTPUTS, main, parser, write_new_output
@@ -23,6 +24,40 @@ def inputs():
  s=snapshot(); r=assess(s,contract()); return s,r,contract(),"a"*64,"b"*64
 def plan(value=None, report=None, c=None):
  s,r,base,sh,rh=inputs(); return build_plan(value or s,report or r,c or base,"http://localhost:5000",sh,rh)
+
+
+FORBIDDEN_MODULES=("urllib.request","http.client","requests","httpx","aiohttp","socket",
+                   "jem_nexus_local_transport","jem_nexus_local_mutation_transport")
+def architectural_violations(source):
+ tree=ast.parse(source); violations=[]; module_aliases={}; os_names=set(); import_module_names=set()
+ def forbidden(module): return any(module==name or module.startswith(name+".") for name in FORBIDDEN_MODULES)
+ for node in ast.walk(tree):
+  if isinstance(node,ast.Import):
+   for alias in node.names:
+    if forbidden(alias.name): violations.append((node.lineno,"forbidden import",alias.name))
+    module_aliases[alias.asname or alias.name.split(".")[0]]=alias.name
+  elif isinstance(node,ast.ImportFrom):
+   module=node.module or ""
+   for alias in node.names:
+    imported=module+("." if module else "")+alias.name
+    if forbidden(module) or forbidden(imported): violations.append((node.lineno,"forbidden import",imported))
+    local=alias.asname or alias.name
+    if module=="os" and alias.name in ("environ","getenv"): os_names.add(local)
+    if module=="importlib" and alias.name=="import_module": import_module_names.add(local)
+ for node in ast.walk(tree):
+  if isinstance(node,ast.Attribute) and isinstance(node.value,ast.Name):
+   if module_aliases.get(node.value.id)=="os" and node.attr in ("environ","getenv"):
+    violations.append((node.lineno,"environment access",node.attr))
+  if isinstance(node,ast.Name) and node.id in os_names:
+   violations.append((node.lineno,"environment access",node.id))
+  if not isinstance(node,ast.Call): continue
+  dynamic=(isinstance(node.func,ast.Name) and (node.func.id=="__import__" or node.func.id in import_module_names))
+  dynamic=dynamic or (isinstance(node.func,ast.Attribute) and node.func.attr=="import_module"
+                      and isinstance(node.func.value,ast.Name)
+                      and module_aliases.get(node.func.value.id)=="importlib")
+  if dynamic and node.args and isinstance(node.args[0],ast.Constant) and isinstance(node.args[0].value,str) and forbidden(node.args[0].value):
+   violations.append((node.lineno,"forbidden dynamic import",node.args[0].value))
+ return violations
 
 
 class BinaryObservationTests(unittest.TestCase):
@@ -88,15 +123,37 @@ class BinaryObservationTests(unittest.TestCase):
   source=(ROOT/"catalog_binary_observation.py").read_text(encoding="utf-8"); self.assertEqual("plan",parser().parse_args(["plan","--snapshot","s","--readiness","r","--contract","c","--base-url","http://localhost:1","--output-dir","o"]).command)
   self.assertFalse(any(flag in source for flag in ("--token","--force","--overwrite","--skip",'add_parser("capture")','add_parser("fetch")','add_parser("apply")')))
  def test_18_core_has_no_transport_or_environment(self):
-  source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8"); self.assertFalse(any(word in source for word in ("urllib.request","http.client","requests","httpx","aiohttp","socket","os.environ","getenv","jem_nexus_local_transport")))
+  for path in (ROOT/"jem_nexus_import/binary_observation.py",ROOT/"catalog_binary_observation.py"):
+   with self.subTest(path=path): self.assertEqual([],architectural_violations(path.read_text(encoding="utf-8")))
+  rejected={
+   "import requests":"import requests", "from requests import get":"from requests import get",
+   "socket alias":"import socket as s", "urllib from import":"from urllib import request",
+   "urllib dotted import":"import urllib.request", "os environ":"import os\nvalue = os.environ",
+   "os getenv":"import os as operating\nvalue = operating.getenv('TOKEN')",
+   "imported getenv":"from os import getenv as read_env\nvalue = read_env('TOKEN')",
+   "imported environ":"from os import environ as env\nvalue = env['TOKEN']",
+   "dynamic import":"import importlib as loader\nmodule = loader.import_module('http.client')",
+   "builtin dynamic import":"module = __import__('jem_nexus_local_transport')"}
+  for label,source in rejected.items():
+   with self.subTest(rejected=label): self.assertTrue(architectural_violations(source))
+  accepted={
+   "contract fields":"assessment_network_requests = mutation_requests = network_requests = requests_dispatched = 0",
+   "contract string":"message = 'zero requests; network requests were not dispatched'",
+   "documentation":'"""Do not import requests, socket, or urllib.request in this module."""'}
+  for label,source in accepted.items():
+   with self.subTest(accepted=label): self.assertEqual([],architectural_violations(source))
  def test_19_output_is_atomic_new_only_and_altered_destination_blocks(self):
   with tempfile.TemporaryDirectory() as directory:
    target=pathlib.Path(directory)/"out"; docs={name:b"synthetic\n" for name in OUTPUTS}; write_new_output(target,docs); self.assertEqual(set(OUTPUTS),{x.name for x in target.iterdir()})
    with self.assertRaises(FileExistsError): write_new_output(target,docs)
  def test_20_symlink_destination_blocks(self):
   with tempfile.TemporaryDirectory() as directory:
-   root=pathlib.Path(directory); (root/"real").mkdir(); (root/"link").symlink_to(root/"real",target_is_directory=True)
-   with self.assertRaises(FileExistsError): write_new_output(root/"link",{name:b"x" for name in OUTPUTS})
+   root=pathlib.Path(directory); target=root/"out"; unrelated=root/"unrelated.txt"; unrelated.write_bytes(b"preserve me")
+   with mock.patch.object(pathlib.Path,"is_symlink",autospec=True,side_effect=lambda candidate: candidate==target) as is_symlink:
+    with self.assertRaises(FileExistsError) as raised: write_new_output(target,{name:b"x" for name in OUTPUTS})
+   self.assertEqual("OUTPUT_DIRECTORY_MUST_BE_NEW",str(raised.exception)); is_symlink.assert_called_once_with(target)
+   self.assertFalse(target.exists()); self.assertEqual(b"preserve me",unrelated.read_bytes())
+   self.assertEqual([],list(root.glob(".out.writing-*")))
  def test_21_cli_writes_canonical_json_and_text(self):
   with tempfile.TemporaryDirectory() as directory:
    root=pathlib.Path(directory); s=snapshot(); r=assess(s,contract())
