@@ -1,6 +1,6 @@
 import copy, json, pathlib, sys, tempfile, unittest
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
-from catalog_acquisition.schema_validation import SchemaValidationError, validate, validate_schema_keywords
+from catalog_acquisition.schema_validation import SUPPORTED_KEYWORDS, SchemaValidationError, validate, validate_schema_keywords
 
 class SchemaTests(unittest.TestCase):
  def test_every_schema_has_valid_synthetic_fixture(self):
@@ -14,6 +14,19 @@ class SchemaTests(unittest.TestCase):
   local_names={'local-apply-authorization','local-operation-receipt','local-apply-checkpoint','local-apply-manifest','local-verification-report','local-readiness-report','local-binary-observation-plan','local-binary-observation-report'}
   self.assertEqual(local_names,{path.name.removesuffix('.schema.json') for path in schemas if path.name.startswith('local-')})
   self.assertTrue(all(json.loads((ROOT/'schemas/v1'/(name+'.schema.json')).read_text(encoding='utf-8')).get('additionalProperties') is False for name in local_names))
+  plan_schema=ROOT/'schemas/v1/local-binary-observation-plan.schema.json'; v2=json.loads((ROOT/'fixtures/valid/local-binary-observation-plan.json').read_text(encoding='utf-8'))
+  v1=copy.deepcopy(v2); v1.update(schema_version='1.0.0',rules_version='jem-local-binary-observation-plan-v1',capture_supported=False,next_permitted_step='prompt_302_limited_local_get_capture'); v1.pop('capture_policy')
+  validate(v1,plan_schema); validate(v2,plan_schema)
+  invalid=[]
+  candidate=copy.deepcopy(v1); candidate['capture_supported']=True; invalid.append(candidate)
+  candidate=copy.deepcopy(v1); candidate['capture_policy']=copy.deepcopy(v2['capture_policy']); invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate['capture_supported']=False; invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate['next_permitted_step']='prompt_302_limited_local_get_capture'; invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate.pop('capture_policy'); invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate['capture_policy'].pop('allowed_method'); invalid.append(candidate)
+  for candidate in invalid:
+   with self.subTest(rules_version=candidate['rules_version'],capture=candidate['capture_supported'],step=candidate['next_permitted_step'],policy=candidate.get('capture_policy')):
+    with self.assertRaises(SchemaValidationError): validate(candidate,plan_schema)
  def test_required_unknown_version_and_property_are_rejected(self):
   schema=ROOT/'schemas/v1/run-manifest.schema.json'; value=json.loads((ROOT/'fixtures/valid/run-manifest.json').read_text(encoding="utf-8"))
   for mutation in ('missing','version','extra'):
@@ -49,9 +62,31 @@ class SchemaTests(unittest.TestCase):
    with self.assertRaises(SchemaValidationError): validate({'x':1},cycle)
  def test_unsupported_keyword_fails_schema_audit(self):
   with tempfile.TemporaryDirectory(dir=ROOT/'schemas/v1') as directory:
-   schema=pathlib.Path(directory)/'unsupported.schema.json'; schema.write_text(json.dumps({'$schema':'https://json-schema.org/draft/2020-12/schema','$id':'urn:test','type':'string','oneOf':[]}), encoding="utf-8", newline="\n")
-   with self.assertRaises(SchemaValidationError) as cm: validate_schema_keywords(schema)
-   self.assertEqual('oneOf',cm.exception.keyword)
+   schema=pathlib.Path(directory)/'structural.schema.json'
+   supported={'$schema':'https://json-schema.org/draft/2020-12/schema','$id':'urn:test','type':'object','properties':{'image':{'type':'string'},'pdf':{'items':{'const':{'notAKeyword':1}}},'arbitrary-field':{'enum':[{'alsoNotAKeyword':2}] }},'$defs':{'target':{'oneOf':[{'const':'a'},{'const':'b'}]}}}
+   schema.write_text(json.dumps(supported),encoding='utf-8',newline='\n'); original_keywords=frozenset(SUPPORTED_KEYWORDS)
+   validate_schema_keywords(schema); validate_schema_keywords(schema)
+   self.assertEqual(original_keywords,SUPPORTED_KEYWORDS)
+   for location,expected_path in [({'definitelyUnsupportedKeyword':True},'$.definitelyUnsupportedKeyword'),({'properties':{'image':{'definitelyUnsupportedKeyword':True}}},'$.properties.image.definitelyUnsupportedKeyword'),({'$defs':{'pdf':{'definitelyUnsupportedKeyword':True}}},'$.$defs.pdf.definitelyUnsupportedKeyword')]:
+    candidate=dict(supported); candidate.update(location); schema.write_text(json.dumps(candidate),encoding='utf-8',newline='\n')
+    with self.subTest(path=expected_path),self.assertRaises(SchemaValidationError) as cm: validate_schema_keywords(schema)
+    self.assertEqual('definitelyUnsupportedKeyword',cm.exception.keyword); self.assertEqual(expected_path,cm.exception.instance_path)
+   semantic_cases=[
+    ({'const':1},1,True),({'const':1},True,False),({'enum':[1]},True,False),
+    ({'if':{'properties':{'kind':{'const':'a'}}},'then':{'properties':{'value':{'const':1}}},'else':{'properties':{'value':{'const':2}}}},{'kind':'a','value':1},True),
+    ({'if':{'properties':{'kind':{'const':'a'}}},'then':{'properties':{'value':{'const':1}}},'else':{'properties':{'value':{'const':2}}}},{'kind':'a','value':2},False),
+    ({'if':{'properties':{'kind':{'const':'a'}}},'then':{'properties':{'value':{'const':1}}},'else':{'properties':{'value':{'const':2}}}},{'kind':'b','value':2},True),
+    ({'allOf':[{'type':'integer'},{'minimum':1}]},1,True),({'allOf':[{'type':'integer'},{'minimum':1}]},0,False),
+    ({'anyOf':[{'const':'x'},{'const':'y'}]},'y',True),({'anyOf':[{'const':'x'},{'const':'y'}]},'z',False),
+    ({'oneOf':[{'type':'integer'},{'const':'x'}]},1,True),({'oneOf':[{'const':'x'},{'const':'y'}]},'z',False),
+    ({'oneOf':[{'type':'integer'},{'const':1}]},1,False),({'oneOf':[{'const':1},{'type':'integer'}]},1,False),
+    ({'not':{'const':'blocked'}},'allowed',True),({'not':{'const':'blocked'}},'blocked',False)]
+   for index,(document,value,valid) in enumerate(semantic_cases):
+    schema.write_text(json.dumps({'$schema':'https://json-schema.org/draft/2020-12/schema','$id':f'urn:test:{index}',**document}),encoding='utf-8',newline='\n')
+    with self.subTest(semantic=index):
+     if valid: validate(value,schema); validate(value,schema)
+     else:
+      with self.assertRaises(SchemaValidationError): validate(value,schema)
  def test_conflict_missing_and_manual_states_are_representable(self):
   schema=ROOT/'schemas/v1/normalized-value.schema.json'; base=json.loads((ROOT/'fixtures/valid/normalized-value.json').read_text(encoding="utf-8"))
   for state in ['conflict','missing','manual_approval_required','manual_approved']:

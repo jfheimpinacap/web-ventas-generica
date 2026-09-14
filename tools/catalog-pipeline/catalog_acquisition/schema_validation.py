@@ -5,9 +5,12 @@ import json, math, re
 from pathlib import Path, PurePosixPath
 from .errors import PipelineError
 
-ANNOTATION_KEYWORDS=frozenset({"$schema","$id","$defs","title","description","schema_version"})
-VALIDATION_KEYWORDS=frozenset({"$ref","type","properties","required","additionalProperties","enum","const","items","minItems","uniqueItems","minLength","maxLength","minimum","maximum","pattern","format","oneOf","not"})
-SUPPORTED_KEYWORDS=ANNOTATION_KEYWORDS|VALIDATION_KEYWORDS
+ANNOTATION_KEYWORDS=frozenset({"$schema","$id","title","description","schema_version"})
+SCHEMA_MAP_KEYWORDS=frozenset({"$defs","properties"})
+SINGLE_SCHEMA_KEYWORDS=frozenset({"items","additionalProperties","if","then","else","not"})
+SCHEMA_ARRAY_KEYWORDS=frozenset({"allOf","anyOf","oneOf"})
+DATA_KEYWORDS=frozenset({"$ref","type","required","enum","const","minItems","uniqueItems","minLength","maxLength","minimum","maximum","pattern","format"})
+SUPPORTED_KEYWORDS=ANNOTATION_KEYWORDS|SCHEMA_MAP_KEYWORDS|SINGLE_SCHEMA_KEYWORDS|SCHEMA_ARRAY_KEYWORDS|DATA_KEYWORDS
 
 class SchemaValidationError(PipelineError):
     code="SCHEMA_INVALID"
@@ -23,15 +26,23 @@ def _schema_root(path: Path) -> Path: return path.parent.resolve()
 def validate_schema_keywords(schema_path: Path) -> None:
     root=json.loads(schema_path.read_text(encoding="utf-8"))
     def scan(node: object, path: str) -> None:
-        if isinstance(node,dict):
-            for key,value in node.items():
-                # Property names and $defs member names are data, not schema keywords.
-                if path.endswith(".properties") or path.endswith(".$defs"): scan(value,f"{path}.{key}"); continue
-                if key not in SUPPORTED_KEYWORDS: _fail(f"Unsupported schema keyword: {key}",schema_path,path,key)
-                scan(value,f"{path}.{key}")
-        elif isinstance(node,list):
-            for index,value in enumerate(node): scan(value,f"{path}[{index}]")
+        if not isinstance(node,dict): return
+        for key,value in node.items():
+            keyword_path=f"{path}.{key}"
+            if key not in SUPPORTED_KEYWORDS: _fail(f"Unsupported schema keyword: {key}",schema_path,keyword_path,key)
+            if key in SCHEMA_MAP_KEYWORDS and isinstance(value,dict):
+                for name,nested in value.items(): scan(nested,f"{keyword_path}.{name}")
+            elif key in SINGLE_SCHEMA_KEYWORDS and isinstance(value,dict): scan(value,keyword_path)
+            elif key in SCHEMA_ARRAY_KEYWORDS and isinstance(value,list):
+                for index,nested in enumerate(value): scan(nested,f"{keyword_path}[{index}]")
     scan(root,"$")
+
+def _json_equal(left: object, right: object) -> bool:
+    """Compare JSON values without Python's bool/int or int/float equivalence."""
+    if type(left) is not type(right): return False
+    if isinstance(left,list): return len(left)==len(right) and all(_json_equal(a,b) for a,b in zip(left,right))
+    if isinstance(left,dict): return left.keys()==right.keys() and all(_json_equal(left[key],right[key]) for key in left)
+    return left==right
 
 def validate(instance: object, schema_path: Path) -> None:
     schema_path=schema_path.resolve(); allowed_root=_schema_root(schema_path)
@@ -62,17 +73,20 @@ def validate(instance: object, schema_path: Path) -> None:
         if not isinstance(node,dict): _fail("Schema reference target is not a schema object",current,instance_path,"$ref")
         return node,target.resolve()
     def walk(value: object, schema: dict[str,object], path: str, current: Path) -> None:
+        for alternative in schema.get("allOf",[]): walk(value,alternative,path,current)
+        if "anyOf" in schema:
+            if not any(_matches(value,alternative,path,current) for alternative in schema["anyOf"]):
+                _fail("Value must match at least one alternative",current,path,"anyOf")
         if "oneOf" in schema:
-            matches=0
-            for alternative in schema["oneOf"]:
-                try: walk(value,alternative,path,current)
-                except SchemaValidationError: continue
-                matches+=1
+            matches=sum(_matches(value,alternative,path,current) for alternative in schema["oneOf"])
             if matches!=1: _fail("Value must match exactly one alternative",current,path,"oneOf")
         if "not" in schema:
             try: walk(value,schema["not"],path,current)
             except SchemaValidationError: pass
             else: _fail("Value matches forbidden schema",current,path,"not")
+        if "if" in schema:
+            branch="then" if _matches(value,schema["if"],path,current) else "else"
+            if branch in schema: walk(value,schema[branch],path,current)
         if "$ref" in schema:
             marker=(current,str(schema["$ref"]))
             if marker in active_refs: _fail("Cyclic schema reference is unsupported",current,path,"$ref")
@@ -81,8 +95,8 @@ def validate(instance: object, schema_path: Path) -> None:
                 referenced,target=resolve(str(schema["$ref"]),current,path); walk(value,referenced,path,target)
             finally: active_refs.remove(marker)
             return
-        if "const" in schema and value != schema["const"]: _fail("Value differs from required constant",current,path,"const")
-        if "enum" in schema and value not in schema["enum"]: _fail("Unknown enum value",current,path,"enum")
+        if "const" in schema and not _json_equal(value,schema["const"]): _fail("Value differs from required constant",current,path,"const")
+        if "enum" in schema and not any(_json_equal(value,item) for item in schema["enum"]): _fail("Unknown enum value",current,path,"enum")
         expected=schema.get("type")
         actual=("null" if value is None else "boolean" if isinstance(value,bool) else "integer" if isinstance(value,int) else "number" if isinstance(value,float) else "string" if isinstance(value,str) else "array" if isinstance(value,list) else "object" if isinstance(value,dict) else "unknown")
         if expected:
@@ -116,4 +130,8 @@ def validate(instance: object, schema_path: Path) -> None:
             if isinstance(value,float) and not math.isfinite(value): _fail("Number must be finite",current,path,"type")
             if "minimum" in schema and value<schema["minimum"]: _fail("Number is below minimum",current,path,"minimum")
             if "maximum" in schema and value>schema["maximum"]: _fail("Number is above maximum",current,path,"maximum")
+    def _matches(value: object, candidate: dict[str,object], path: str, current: Path) -> bool:
+        try: walk(value,candidate,path,current)
+        except SchemaValidationError: return False
+        return True
     root=load(schema_path); walk(instance,root,"$",schema_path)
