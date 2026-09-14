@@ -1,0 +1,118 @@
+import copy, hashlib, json, pathlib, sys, tempfile, unittest
+
+ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
+from catalog_binary_observation import OUTPUTS, main, parser, write_new_output
+from catalog_pipeline_common.serialization import canonical_bytes
+from jem_nexus_import.binary_observation import BinaryObservationError, build_plan, normalize_base_url, normalize_reference
+from jem_nexus_import.readiness import assess, contract_fingerprint
+from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
+
+
+def contract(): return json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8"))
+def snapshot():
+ c=contract(); value={"schema_version":"1.0.0","complete":True,"classification":"local_development","contract_fingerprint":contract_fingerprint(c),"collections":{
+  "categories":[{"id":1,"name":"Maquinaria","slug":"maquinaria","parent":None,"product_type":"machinery"},{"id":2,"name":"Sintética","slug":"sintetica","parent":1,"product_type":"machinery"}],
+  "brands":[{"id":3,"name":"Marca","slug":"marca"}],"suppliers":[{"id":4,"name":"Proveedor"}],
+  "products":[{"id":5,"name":"Producto","slug":"producto","category":{"id":2},"brand":{"id":3},"model":"S","product_type":"machinery"}],
+  "product_images":[{"id":6,"product":5,"image":"/media/synthetic.jpg","alt_text":"x","is_main":True,"order":0}],
+  "product_specs":[{"id":7,"product":5,"name":"altura","value":"1","unit":"m","order":0}],
+  "technical_sheets":[{"id":8,"name":"Ficha","original_file_name":"unrelated-name.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/files/opaque"}]},
+  "endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
+ value["semantic_fingerprint"]=semantic_fingerprint(value); return value
+def inputs():
+ s=snapshot(); r=assess(s,contract()); return s,r,contract(),"a"*64,"b"*64
+def plan(value=None, report=None, c=None):
+ s,r,base,sh,rh=inputs(); return build_plan(value or s,report or r,c or base,"http://localhost:5000",sh,rh)
+
+
+class BinaryObservationTests(unittest.TestCase):
+ def test_01_valid_inputs_and_productive_contract_fingerprint(self):
+  value=plan(); self.assertEqual(contract_fingerprint(contract()),value["contract_fingerprint"]); self.assertEqual("planned",value["state"])
+ def test_02_snapshot_gates(self):
+  for mutation in ("incomplete","fixture"):
+   s,r,c,sh,rh=inputs()
+   if mutation=="incomplete": s["complete"]=False
+   else: s["classification"]="fixture_only"; s["semantic_fingerprint"]=semantic_fingerprint(s)
+   with self.subTest(mutation=mutation), self.assertRaises((BinaryObservationError,ValueError)): build_plan(s,r,c,"http://localhost:1",sh,rh)
+ def test_03_readiness_result_blocker_and_mutation_gates(self):
+  for mutation in ("result","blocker","mutation"):
+   s,r,c,sh,rh=inputs()
+   if mutation=="result": r["result"]="read_incompatible"
+   elif mutation=="blocker": r["blockers"]=[{"code":"SYNTHETIC"}]
+   else: r["mutation_authorized"]=True
+   semantic=dict(r); semantic.pop("report_fingerprint"); from catalog_pipeline_common.serialization import content_fingerprint; r["report_fingerprint"]=content_fingerprint(semantic)
+   with self.subTest(mutation=mutation), self.assertRaises(BinaryObservationError): build_plan(s,r,c,"http://localhost:1",sh,rh)
+ def test_04_contradictory_contract_and_snapshot_links(self):
+  for field in ("contract_fingerprint","snapshot_fingerprint"):
+   s,r,c,sh,rh=inputs(); r[field]="0"*64; semantic=dict(r); semantic.pop("report_fingerprint"); from catalog_pipeline_common.serialization import content_fingerprint; r["report_fingerprint"]=content_fingerprint(semantic)
+   with self.subTest(field=field), self.assertRaises(BinaryObservationError): build_plan(s,r,c,"http://localhost:1",sh,rh)
+ def test_05_loopback_base_urls(self):
+  for value in ("http://localhost:5000","http://127.0.0.1:1","http://[::1]:8080"):
+   with self.subTest(value=value): self.assertEqual(value,normalize_base_url(value))
+ def test_06_unsafe_base_urls(self):
+  values=("https://localhost:1","http://example.invalid:1","http://localhost","http://u:p@localhost:1","http://localhost:1?x=1","http://localhost:1/#x","//localhost:1")
+  for value in values:
+   with self.subTest(value=value), self.assertRaises(BinaryObservationError): normalize_base_url(value)
+ def test_07_safe_root_relative_references(self):
+  for value in ("/uploads/example.jpg","/files/example"):
+   with self.subTest(value=value): self.assertEqual(value,normalize_reference(value))
+ def test_08_unsafe_reference_matrix(self):
+  values=("","relative","http://x/a","//x/a","/a?x=1","/a#x","/a\\b","/../a","/a/./b","/%2e%2e/a","/a%2fb","/a%5cb","/a%252fb","/C:/a","C:\\a","\\\\host\\a","/a\0b","/a\x1fb","/a//b","/a./")
+  for value in values:
+   with self.subTest(value=repr(value)), self.assertRaises(BinaryObservationError): normalize_reference(value)
+ def test_09_image_binding_is_relational_and_declared_only(self):
+  binding=plan()["targets"][1 if plan()["targets"][0]["media_class"]=="technical_sheet" else 0]["bindings"][0]
+  self.assertTrue(binding["relation_observable"]); self.assertEqual((5,".jpg",None),(binding["product_id"],binding["declared_extension"],binding["declared_content_type"]))
+ def test_10_extensionless_pdf_is_manual_without_inference(self):
+  value=next(target for target in plan()["targets"] if target["media_class"]=="technical_sheet")["bindings"][0]
+  self.assertEqual((None,"application/pdf",9),(value["declared_extension"],value["declared_content_type"],value["declared_size_bytes"])); self.assertIsNone(value["product_id"]); self.assertTrue(value["manual_relation_verification_required"])
+ def test_11_id_or_filename_coincidence_does_not_infer_product(self):
+  s=snapshot(); s["collections"]["technical_sheets"][0].update(id=5,original_file_name="product-5.pdf"); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
+  self.assertIsNone(next(t for t in value["targets"] if t["media_class"]=="technical_sheet")["bindings"][0]["product_id"])
+ def test_12_duplicates_group_and_preserve_sorted_bindings(self):
+  s=snapshot(); duplicate=copy.deepcopy(s["collections"]["product_images"][0]); duplicate["id"]=9; s["collections"]["product_images"].append(duplicate); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract())); target=next(t for t in value["targets"] if t["media_class"]=="image")
+  self.assertEqual([6,9],[x["row_id"] for x in target["bindings"]]); self.assertEqual(2,value["counts"]["targets_total"])
+ def test_13_media_class_conflict_blocks(self):
+  s=snapshot(); s["collections"]["technical_sheets"][0]["file_url"]="/media/synthetic.jpg"; s["semantic_fingerprint"]=semantic_fingerprint(s)
+  with self.assertRaisesRegex(BinaryObservationError,"/media/synthetic.jpg"): plan(s,assess(s,contract()))
+ def test_14_order_independent_and_reproducible(self):
+  first=plan(); s=snapshot()
+  for values in s["collections"].values(): values.reverse()
+  s["endpoints"].reverse(); s["semantic_fingerprint"]=semantic_fingerprint(s); second=plan(s,assess(s,contract()))
+  self.assertEqual(canonical_bytes(first),canonical_bytes(second))
+ def test_15_exact_counters_and_manual_state(self):
+  value=plan(); self.assertEqual({"targets_total":2,"image_targets":1,"technical_sheet_targets":1,"bindings_total":2,"relations_observable":1,"manual_relations":1,"blockers":0,"warnings":1},value["counts"])
+ def test_16_safety_flags_are_all_false(self):
+  value=plan(); self.assertTrue(all(value[key] is False for key in ("network_executed","bytes_observed","capture_supported","mutation_authorized","content_published")))
+ def test_17_cli_has_only_plan_and_no_unsafe_flags(self):
+  source=(ROOT/"catalog_binary_observation.py").read_text(encoding="utf-8"); self.assertEqual("plan",parser().parse_args(["plan","--snapshot","s","--readiness","r","--contract","c","--base-url","http://localhost:1","--output-dir","o"]).command)
+  self.assertFalse(any(flag in source for flag in ("--token","--force","--overwrite","--skip",'add_parser("capture")','add_parser("fetch")','add_parser("apply")')))
+ def test_18_core_has_no_transport_or_environment(self):
+  source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8"); self.assertFalse(any(word in source for word in ("urllib.request","http.client","requests","httpx","aiohttp","socket","os.environ","getenv","jem_nexus_local_transport")))
+ def test_19_output_is_atomic_new_only_and_altered_destination_blocks(self):
+  with tempfile.TemporaryDirectory() as directory:
+   target=pathlib.Path(directory)/"out"; docs={name:b"synthetic\n" for name in OUTPUTS}; write_new_output(target,docs); self.assertEqual(set(OUTPUTS),{x.name for x in target.iterdir()})
+   with self.assertRaises(FileExistsError): write_new_output(target,docs)
+ def test_20_symlink_destination_blocks(self):
+  with tempfile.TemporaryDirectory() as directory:
+   root=pathlib.Path(directory); (root/"real").mkdir(); (root/"link").symlink_to(root/"real",target_is_directory=True)
+   with self.assertRaises(FileExistsError): write_new_output(root/"link",{name:b"x" for name in OUTPUTS})
+ def test_21_cli_writes_canonical_json_and_text(self):
+  with tempfile.TemporaryDirectory() as directory:
+   root=pathlib.Path(directory); s=snapshot(); r=assess(s,contract())
+   for name,value in (("s",s),("r",r),("c",contract())): (root/name).write_bytes(canonical_bytes(value))
+   self.assertEqual(0,main(["plan","--snapshot",str(root/"s"),"--readiness",str(root/"r"),"--contract",str(root/"c"),"--base-url","http://localhost:1","--output-dir",str(root/"out")]))
+   self.assertEqual(json.loads((root/"out"/OUTPUTS[0]).read_text(encoding="utf-8"))["network_executed"],False)
+ def test_22_schema_fixture_closed_and_synthetic(self):
+  schema=json.loads((ROOT/"schemas/v1/local-binary-observation-plan.schema.json").read_text(encoding="utf-8")); fixture=json.loads((ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8"))
+  self.assertFalse(schema["additionalProperties"]); self.assertTrue(fixture["fixture_only"]); self.assertNotIn("example.com",canonical_bytes(fixture).decode())
+ def test_23_exact_schema_and_json_inventory(self):
+  self.assertEqual(81,len(list((ROOT/"schemas/v1").glob("*.schema.json")))); self.assertEqual(82,len(list((ROOT/"schemas/v1").glob("*.json"))))
+ def test_24_real_evidence_fingerprints_are_not_hardcoded(self):
+  source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")+(ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8")
+  self.assertNotIn("7a428a6af88979e589f27ec81146c87543904f3b1c2d49072244d171304e5d21",source); self.assertNotIn("090d2fcf9cefd624b84eb60e141db0a994a4b1ba4ff2977dd986238212783341",source)
+ def test_25_file_hashes_affect_plan_fingerprint_but_no_timestamp_does(self):
+  s,r,c,sh,rh=inputs(); first=build_plan(s,r,c,"http://localhost:1",sh,rh); second=build_plan(s,r,c,"http://localhost:1","c"*64,rh)
+  self.assertNotEqual(first["plan_fingerprint"],second["plan_fingerprint"]); self.assertNotIn("timestamp",first)
+
+if __name__=="__main__": unittest.main()

@@ -13,7 +13,9 @@ Las diez categorías observadas incluían las raíces `maquinaria`/`machinery`,
 `repuestos`/`spare_part` y `servicios`/`service`, y siete hijas machinery apuntaban a la primera.
 Este repositorio no incorpora ni modifica esa evidencia: solo corrige el consumidor contractual.
 Se agregan 8 métodos offline (incluidos cinco subcasos de forma inválida), para un total Windows
-proyectado de **669**; no se ejecutaron aquí por la restricción expresa de validación estática.
+proyectado entonces de **669**; la ejecución posterior autoritativa en Windows corrigió
+ese inventario inflado en un caso y confirmó **668**. No se ejecutaron aquí por la
+restricción expresa de validación estática.
 
 Esta certificación separa estrictamente **captura** y **assessment**. La captura existente es el
 único paso con red y usa exclusivamente GET loopback; el assessor nuevo solo abre archivos locales,

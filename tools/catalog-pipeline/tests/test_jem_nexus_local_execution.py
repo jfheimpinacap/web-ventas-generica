@@ -289,8 +289,8 @@ def _exercise_generated(test,case):
         elif variant=="method":
             from jem_nexus_local_mutation_transport import LocalMutationTransport
             test.assertEqual({name for name in dir(LocalMutationTransport) if name.startswith("post_")},{"post_json","post_multipart"})
-        elif variant=="schemas": test.assertEqual(len(list((root/"schemas/v1").glob("*.schema.json"))),80)
-        else: test.assertEqual(len(list((root/"fixtures/valid").glob("local-*.json"))),5)
+        elif variant=="schemas": test.assertEqual(len(list((root/"schemas/v1").glob("*.schema.json"))),81)
+        else: test.assertEqual(len(list((root/"fixtures/valid").glob("local-*.json"))),7)
 
 def _generated_test(case):
     def generated_case(self): _exercise_generated(self,case)
