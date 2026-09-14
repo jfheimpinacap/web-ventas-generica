@@ -14,19 +14,40 @@ class SchemaTests(unittest.TestCase):
   local_names={'local-apply-authorization','local-operation-receipt','local-apply-checkpoint','local-apply-manifest','local-verification-report','local-readiness-report','local-binary-observation-plan','local-binary-observation-report'}
   self.assertEqual(local_names,{path.name.removesuffix('.schema.json') for path in schemas if path.name.startswith('local-')})
   self.assertTrue(all(json.loads((ROOT/'schemas/v1'/(name+'.schema.json')).read_text(encoding='utf-8')).get('additionalProperties') is False for name in local_names))
-  plan_schema=ROOT/'schemas/v1/local-binary-observation-plan.schema.json'; v2=json.loads((ROOT/'fixtures/valid/local-binary-observation-plan.json').read_text(encoding='utf-8'))
-  v1=copy.deepcopy(v2); v1.update(schema_version='1.0.0',rules_version='jem-local-binary-observation-plan-v1',capture_supported=False,next_permitted_step='prompt_302_limited_local_get_capture'); v1.pop('capture_policy')
-  validate(v1,plan_schema); validate(v2,plan_schema)
+  plan_schema=ROOT/'schemas/v1/local-binary-observation-plan.schema.json'
+  report_schema=ROOT/'schemas/v1/local-binary-observation-report.schema.json'
+  v1=json.loads((ROOT/'fixtures/valid/local-binary-observation-plan.json').read_text(encoding='utf-8'))
+  v2=json.loads((ROOT/'fixtures/valid/local-binary-observation-plan-v2.json').read_text(encoding='utf-8'))
+  report=json.loads((ROOT/'fixtures/valid/local-binary-observation-report.json').read_text(encoding='utf-8'))
+  originals=copy.deepcopy((v1,v2,report))
+  for value,schema in ((v1,plan_schema),(v2,plan_schema),(report,report_schema)):
+   validate(value,schema); validate(value,schema)
+  self.assertEqual(originals,(v1,v2,report))
+  self.assertEqual({'binding_v1','binding_v2'},set(json.loads(plan_schema.read_text(encoding='utf-8'))['$defs']) & {'binding_v1','binding_v2'})
+  self.assertIn('receipt_binding_v2',json.loads(report_schema.read_text(encoding='utf-8'))['$defs'])
   invalid=[]
   candidate=copy.deepcopy(v1); candidate['capture_supported']=True; invalid.append(candidate)
   candidate=copy.deepcopy(v1); candidate['capture_policy']=copy.deepcopy(v2['capture_policy']); invalid.append(candidate)
+  candidate=copy.deepcopy(v1); candidate['targets']=copy.deepcopy(v2['targets']); candidate['capture_policy']=copy.deepcopy(v2['capture_policy']); invalid.append(candidate)
   candidate=copy.deepcopy(v2); candidate['capture_supported']=False; invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate['targets']=copy.deepcopy(v1['targets']); candidate['rules_version']=v1['rules_version']; invalid.append(candidate)
   candidate=copy.deepcopy(v2); candidate['next_permitted_step']='prompt_302_limited_local_get_capture'; invalid.append(candidate)
   candidate=copy.deepcopy(v2); candidate.pop('capture_policy'); invalid.append(candidate)
   candidate=copy.deepcopy(v2); candidate['capture_policy'].pop('allowed_method'); invalid.append(candidate)
+  required=json.loads(plan_schema.read_text(encoding='utf-8'))['$defs']['binding_v2']['required']
+  for field in required:
+   candidate=copy.deepcopy(v2); candidate['targets'][0]['bindings'][0].pop(field); invalid.append(candidate)
+  candidate=copy.deepcopy(v2); candidate['targets'][0]['bindings'][0]['unknown']=True; invalid.append(candidate)
   for candidate in invalid:
    with self.subTest(rules_version=candidate['rules_version'],capture=candidate['capture_supported'],step=candidate['next_permitted_step'],policy=candidate.get('capture_policy')):
     with self.assertRaises(SchemaValidationError): validate(candidate,plan_schema)
+  for field in required:
+   candidate=copy.deepcopy(report); candidate['receipts'][0]['bindings'][0].pop(field)
+   with self.subTest(report_binding_missing=field),self.assertRaises(SchemaValidationError): validate(candidate,report_schema)
+  candidate=copy.deepcopy(report); candidate['receipts'][0]['bindings'][0]['unknown']=True
+  with self.assertRaises(SchemaValidationError): validate(candidate,report_schema)
+  nullable=('product_id','declared_extension','declared_content_type','declared_size_bytes')
+  self.assertTrue(all(field in binding for receipt in report['receipts'] for binding in receipt['bindings'] for field in nullable))
  def test_required_unknown_version_and_property_are_rejected(self):
   schema=ROOT/'schemas/v1/run-manifest.schema.json'; value=json.loads((ROOT/'fixtures/valid/run-manifest.json').read_text(encoding="utf-8"))
   for mutation in ('missing','version','extra'):

@@ -6,6 +6,7 @@ from catalog_binary_observation import OUTPUTS, main, parser, write_new_output
 from catalog_pipeline_common.serialization import canonical_bytes
 from jem_nexus_import.binary_observation import CAPTURE_POLICY, BinaryObservationError, build_plan, capture_plan, normalize_base_url, normalize_reference, validate_plan
 from catalog_pipeline_common.binary_validation import validate_observed_binary
+from catalog_acquisition.schema_validation import validate
 from jem_nexus_import.readiness import assess, contract_fingerprint
 from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
 
@@ -164,6 +165,8 @@ class BinaryObservationTests(unittest.TestCase):
  def test_22_schema_fixture_closed_and_synthetic(self):
   schema=json.loads((ROOT/"schemas/v1/local-binary-observation-plan.schema.json").read_text(encoding="utf-8")); fixture=json.loads((ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8"))
   self.assertFalse(schema["additionalProperties"]); self.assertTrue(fixture["fixture_only"]); self.assertNotIn("example.com",canonical_bytes(fixture).decode())
+  produced=plan(); validate(produced,ROOT/"schemas/v1/local-binary-observation-plan.schema.json")
+  self.assertTrue(produced["capture_supported"]); self.assertEqual("limited_local_get_capture",produced["next_permitted_step"])
  def test_23_exact_schema_and_json_inventory(self):
   self.assertEqual(82,len(list((ROOT/"schemas/v1").glob("*.schema.json")))); self.assertEqual(83,len(list((ROOT/"schemas/v1").glob("*.json"))))
  def test_24_real_evidence_fingerprints_are_not_hardcoded(self):
@@ -176,7 +179,9 @@ class BinaryObservationTests(unittest.TestCase):
   from catalog_pipeline_common.serialization import content_fingerprint
   old={"schema_version":"1.0.0","rules_version":"jem-local-binary-observation-plan-v1"}; old["plan_fingerprint"]=content_fingerprint(old)
   self.assertIs(old,validate_plan(old))
-  with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_VERSION_UNSUPPORTED"): validate_plan(old,capture=True)
+  calls=[]
+  with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_VERSION_UNSUPPORTED"): capture_plan(old,old["plan_fingerprint"],"a"*64,lambda *args:calls.append(args))
+  self.assertEqual([],calls)
  def test_27_capture_fingerprint_fails_before_transport(self):
   calls=[]
   with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_FINGERPRINT_MISMATCH"): capture_plan(plan(),"0"*64,"1"*64,lambda *args:calls.append(args))
@@ -195,6 +200,18 @@ class BinaryObservationTests(unittest.TestCase):
   self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/Encrypt","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+8}])["code"])
   self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/JavaScript","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+11}])["code"])
   self.assertEqual("BINARY_SIZE_MISMATCH",validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":1}])["code"])
+  value=plan(); next(target for target in value["targets"] if target["media_class"]=="technical_sheet")["bindings"][0]["declared_size_bytes"]=len(pdf)
+  value["plan_fingerprint"]=__import__("catalog_pipeline_common.serialization",fromlist=["content_fingerprint"]).content_fingerprint({key:item for key,item in value.items() if key!="plan_fingerprint"})
+  bodies={"image":png,"technical_sheet":pdf}
+  def transport(base,path,headers,timeout,limit):
+   body=bodies[next(target["media_class"] for target in value["targets"] if target["root_relative_path"]==path)]
+   media=next(target["media_class"] for target in value["targets"] if target["root_relative_path"]==path)
+   return {"status":200,"mime":"image/png" if media=="image" else "application/pdf","body":body,"content_length":str(len(body))}
+  reports=[capture_plan(value,value["plan_fingerprint"],"c"*64,transport) for _ in range(2)]
+  self.assertEqual(reports[0],reports[1]); validate(reports[0],ROOT/"schemas/v1/local-binary-observation-report.schema.json")
+  self.assertEqual([target["bindings"] for target in value["targets"]],[receipt["bindings"] for receipt in reports[0]["receipts"]])
+  def contains_bytes(item): return isinstance(item,bytes) or (isinstance(item,dict) and any(contains_bytes(x) for x in item.values())) or (isinstance(item,list) and any(contains_bytes(x) for x in item))
+  self.assertFalse(contains_bytes(reports[0]))
  def test_30_capture_response_taxonomy_is_stable(self):
   source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")
   for code in ("BINARY_READ_STATUS","BINARY_READ_MIME","BINARY_READ_EMPTY","BINARY_CONTENT_LENGTH_INVALID","BINARY_CONTENT_LENGTH_MISMATCH","BINARY_READ_TOO_LARGE","BINARY_TOTAL_LIMIT_EXCEEDED","BINARY_SIGNATURE_INVALID","BINARY_SIZE_MISMATCH","BINARY_PDF_UNSAFE"):
