@@ -1,5 +1,5 @@
 """Offline behavioral tests for Prompt 284. No test in this module opens a socket."""
-import copy,errno,hashlib,inspect,json,os,pathlib,sys,tempfile,unittest
+import copy,errno,hashlib,inspect,io,json,os,pathlib,sys,tempfile,unittest
 from unittest import mock
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from jem_nexus_import.bindings import BindingResolver,MissingBindingError
@@ -11,7 +11,7 @@ from jem_nexus_import.snapshot import COLLECTIONS,semantic_fingerprint,validate_
 from catalog_acquisition.packaging import build_package,fingerprint,PackageError
 from catalog_acquisition.serialization import canonical_bytes
 from catalog_acquisition.schema_validation import validate,SchemaValidationError
-from catalog_import import create_plan,plan_outputs,capture_snapshot
+from catalog_import import create_plan,plan_outputs,capture_snapshot,main as catalog_main
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations,reconcile_category,reconcile_brand,reconcile_supplier,reconcile_product,reconcile_assets
 from jem_nexus_local_transport import get_json_bytes
@@ -106,6 +106,11 @@ class LocalTransportTests(unittest.TestCase):
     self.assertEqual(b"[]",get_json_bytes(target,{},1,2)[2])
 
 class SnapshotTests(unittest.TestCase):
+ def product_snapshot(self,product=None):
+  value=snapshot(); value["collections"]["products"]=[product or {"id":2,"name":"P","slug":"p","category":{"id":1}}]; value["semantic_fingerprint"]=semantic_fingerprint(value); return value
+ def assert_orphan(self,product):
+  with self.assertRaises(SnapshotError) as caught: validate_snapshot(self.product_snapshot(product))
+  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
  def test_complete_snapshot_validates(self): self.assertIsNotNone(validate_snapshot(snapshot(),"c"*64))
  def test_order_and_capture_time_do_not_change_semantics(self):
   first=snapshot(); second=copy.deepcopy(first); second["captured_at"]="2099-01-01T00:00:00Z"; second["endpoints"].reverse()
@@ -122,6 +127,53 @@ class SnapshotTests(unittest.TestCase):
   value=snapshot(); value["collections"]["products"]=[{"id":2,"name":"P","slug":"p","category_id":999}]; value["semantic_fingerprint"]=semantic_fingerprint(value)
   with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
   self.assertEqual("ORPHAN_RELATION",caught.exception.code)
+ def test_product_get_category_scalar_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category":1})))
+ def test_product_structured_category_id_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category_id":1})))
+ def test_matching_dual_product_category_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category_id":1,"category":1})))
+ def test_conflicting_dual_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category_id":1,"category":9})
+ def test_missing_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p"})
+ def test_null_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":None})
+ def test_unknown_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":{"id":999}})
+ def test_numeric_string_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":"1"})
+ def test_boolean_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":True})
+ def test_product_read_category_object_is_valid_by_repository_contract(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot()))
+ def test_valid_category_parent_read_shape_is_valid(self):
+  value=snapshot(); value["collections"]["categories"].append({"id":3,"name":"Child","slug":"child","parent":1}); value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
+ def test_orphan_category_parent_read_shape_is_rejected(self):
+  value=snapshot(); value["collections"]["categories"].append({"id":3,"name":"Child","slug":"child","parent":999}); value["semantic_fingerprint"]=semantic_fingerprint(value)
+  with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
+  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
+ def test_image_product_read_shape_remains_valid(self):
+  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
+ def test_image_product_id_shape_remains_valid(self):
+  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product_id":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
+ def test_spec_product_read_shape_remains_valid(self):
+  value=self.product_snapshot(); value["collections"]["product_specs"]=[{"id":4,"product":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
+ def test_spec_product_id_shape_remains_valid(self):
+  value=self.product_snapshot(); value["collections"]["product_specs"]=[{"id":4,"product_id":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
+ def test_conflicting_dual_image_relation_is_a_real_orphan(self):
+  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product":2,"product_id":5}]; value["semantic_fingerprint"]=semantic_fingerprint(value)
+  with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
+  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
+ def test_complete_get_shaped_snapshot_validates(self):
+  value=self.product_snapshot(); self.assertIs(validate_snapshot(value),value)
+ def test_get_shape_fingerprint_is_order_independent(self):
+  first=self.product_snapshot(); second=copy.deepcopy(first); second["collections"]["categories"].reverse(); self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second))
+ def test_product_relation_validation_does_not_mutate_input(self):
+  value=self.product_snapshot(); before=copy.deepcopy(value); validate_snapshot(value); self.assertEqual(before,value)
+ def test_capture_snapshot_accepts_product_get_shape(self):
+  value=self.product_snapshot({"id":2,"name":"P","slug":"p","category":1})
+  class Reader:
+   def read_collection(self,collection): return copy.deepcopy(value["collections"][collection])
+  self.assertEqual(1,capture_snapshot(Reader(),"c"*64,"fixture_only")["collections"]["products"][0]["category"])
+ def test_snapshot_cli_emits_only_structured_error_code(self):
+  value=self.product_snapshot({"id":2,"name":"observed-secret","slug":"p","category":{"id":999}})
+  class Reader:
+   def read_collection(self,collection): return copy.deepcopy(value["collections"][collection])
+  output=io.BytesIO()
+  with mock.patch("sys.stdout",mock.Mock(buffer=output)):
+   result=catalog_main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output","unused"],reader_factory=lambda unused:Reader())
+  self.assertEqual(2,result); self.assertEqual(b'{"error":"ORPHAN_RELATION"}\n',output.getvalue()); self.assertNotIn(b"observed-secret",output.getvalue())
 
 class ProjectionTests(unittest.TestCase):
  def test_safe_commercial_defaults_cannot_be_overridden(self):

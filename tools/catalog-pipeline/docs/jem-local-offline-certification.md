@@ -137,6 +137,20 @@ El snapshot fresco y el preflight se completan antes de crear el mutator.
 
 ## Límites y pasos posteriores
 
+La corrección posterior al falso positivo del Prompt 296 conserva los DTO observados sin
+normalizarlos: la captura GET observada usa `category` como ID entero y el código inspeccionado lo
+materializa como objeto `CategoryReadDto` con `id` entero, mientras snapshots históricos pueden
+usar `category_id` entero. `category` y `category_id` son los únicos nombres admitidos por el
+snapshot; si ambos aparecen deben identificar exactamente la misma categoría observable. Valores
+ausentes, nulos, de tipo incorrecto, contradictorios o desconocidos siguen bloqueándose con
+`ORPHAN_RELATION`. Imágenes y ProductSpec mantienen análogamente `product`/`product_id`, ahora con
+conflictos duales explícitamente bloqueados. Los fingerprints continúan calculándose sobre el DTO
+original y la validación no lo muta.
+
+La captura real se repetirá solo después del merge y del retest en Windows con Python 3.13.5, en
+un destino nuevo que no reutilice `prompt-296-run-05` ni `prompt-296-run-06`. Readiness continúa
+pendiente; esta corrección no autoriza GET adicionales, mutaciones, reparación ni publicación.
+
 Esta es evidencia de integración del código local, no evidencia de compatibilidad runtime con una
 instancia real. No contiene outputs runtime, tokens, autorizaciones `local_development`, datos de
 EP/GAM ni otros catálogos congelados. Conserva el inventario de 79 schemas. El total proyectado es

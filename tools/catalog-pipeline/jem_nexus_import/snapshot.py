@@ -8,6 +8,26 @@ COLLECTIONS=("categories","brands","suppliers","products","product_images","prod
 class SnapshotError(ValueError):
     def __init__(self,code,detail): self.code=code; super().__init__(detail)
 
+def _integer_relation(item,structured_key,read_key,read_object=False):
+    """Resolve one closed pair of relationship spellings without rewriting ``item``."""
+    present=[]
+    if structured_key in item: present.append(item[structured_key])
+    if read_key in item:
+        observed=item[read_key]
+        if read_object:
+            observed=observed.get("id") if isinstance(observed,dict) else observed
+        present.append(observed)
+    if not present or any(type(value) is not int for value in present) or len(set(present))!=1:
+        raise SnapshotError("ORPHAN_RELATION",structured_key)
+    return present[0]
+
+def _nullable_integer_relation(item,structured_key,read_key):
+    present=[item[key] for key in (structured_key,read_key) if key in item]
+    if not present: return None
+    if any(value is not None and type(value) is not int for value in present) or len(set(present))!=1:
+        raise SnapshotError("ORPHAN_RELATION",structured_key)
+    return present[0]
+
 def semantic_fingerprint(snapshot):
     semantic={"schema_version":SCHEMA_VERSION,"rules_version":RULES_VERSION,"contract_fingerprint":snapshot.get("contract_fingerprint"),
               "classification":snapshot.get("classification"),"collections":{k:sorted(snapshot.get("collections",{}).get(k,[]),key=lambda x:(x.get("id",-1),str(x))) for k in COLLECTIONS},
@@ -32,13 +52,17 @@ def validate_snapshot(value,contract_fingerprint=None):
             if "" in folded or len(folded)!=len(set(folded)): raise SnapshotError("IDENTITY_COLLISION",name)
         ids[name]=set(values)
     for category in collections["categories"]:
-        if category.get("parent_id") is not None and category["parent_id"] not in ids["categories"]: raise SnapshotError("ORPHAN_RELATION","category.parent_id")
+        parent_id=_nullable_integer_relation(category,"parent_id","parent")
+        if parent_id is not None and parent_id not in ids["categories"]: raise SnapshotError("ORPHAN_RELATION","category.parent_id")
     for product in collections["products"]:
-        if product.get("category_id") not in ids["categories"]: raise SnapshotError("ORPHAN_RELATION","product.category_id")
+        # The captured GET exposes an integer ``category``; the inspected
+        # ProductListReadDto also contracts a CategoryReadDto object. Historical
+        # structured snapshots use the write-side ``category_id``.
+        if _integer_relation(product,"category_id","category",read_object=True) not in ids["categories"]: raise SnapshotError("ORPHAN_RELATION","product.category_id")
     for name in ("product_images","product_specs"):
         # Inspected read DTOs expose ``Product`` while write DTOs also accept
         # ``product_id``.  Snapshot validation accepts either real read shape.
-        if any(item.get("product_id",item.get("product")) not in ids["products"] for item in collections[name]): raise SnapshotError("ORPHAN_RELATION",name+".product_id")
+        if any(_integer_relation(item,"product_id","product") not in ids["products"] for item in collections[name]): raise SnapshotError("ORPHAN_RELATION",name+".product_id")
     actual=semantic_fingerprint(value)
     if value.get("semantic_fingerprint")!=actual: raise SnapshotError("SNAPSHOT_FINGERPRINT","semantic fingerprint differs")
     return value
