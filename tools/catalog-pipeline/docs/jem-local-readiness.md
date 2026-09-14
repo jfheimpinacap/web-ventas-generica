@@ -20,6 +20,38 @@ campo consumido son blockers. `null` solo se acepta donde el tipo contractual lo
 | product_specs | `/api/product-specs` | `id`, `product`, `name`, `value`, `unit`, `order` | ID | `product` → product | compatible; `name` es la key leída |
 | technical_sheets | `/api/technical-sheets/` | `id`, `name`, `original_file_name`, `content_type`, `size_bytes`, `file_url` | ID | relación solo si el GET la expone | estructura compatible; binario no verificable |
 
+### Relación de categoría y seguimiento del Prompt 296
+
+La captura read-only del Prompt 296 terminó con `ORPHAN_RELATION` en
+`product.category_id`: el validador buscaba exclusivamente esa forma estructurada y trataba su
+ausencia como `None`, antes de interpretar el campo `category` realmente observado. La inspección
+estática del repositorio confirma además que `GET /api/products` construye `ProductListReadDto`,
+cuyo `category` obligatorio es un `CategoryReadDto` (objeto con `id` entero). La captura local
+observada expuso el mismo nombre como ID entero escalar; ninguna de las dos formas es nullable. En
+cambio, `ProductWriteDto` admite los IDs enteros
+`category` y `category_id`; los snapshots estructurados históricos conservan `category_id`.
+
+La validación de snapshots admite de forma cerrada solo esas dos representaciones contractuales:
+`category: <entero>` para la captura GET, `category: {"id": <entero>}` para el DTO GET actualmente
+materializado en el repositorio y `category_id: <entero>` para la forma histórica. No admite
+`categoryId`, nombres ni slugs. Si aparecen ambas claves, sus IDs
+deben ser idénticos; ausencia, `null`, booleanos, strings numéricos, objetos sin ID entero,
+contradicciones o IDs fuera de la colección `categories` producen `ORPHAN_RELATION`. La validación
+solo lee el objeto: no añade, elimina ni normaliza campos, por lo que el fingerprint continúa
+representando exactamente la forma observada y mantiene su independencia del orden.
+
+El mismo resolver fail-closed audita `product_images` y `product_specs`, donde los DTO GET exponen
+el entero `product` y la forma estructurada admite `product_id`; ambas claves simultáneas deben
+coincidir. Para categorías padre se aceptan de manera cerrada `parent` (GET) y `parent_id`
+(histórica), incluido el `null` contractual, y todo padre no observable sigue bloqueado. No se
+amplió `technical_sheets` ni ninguna otra relación.
+
+Esta corrección no valida los valores observados en la instancia: la captura real debe repetirse,
+en un destino nuevo, únicamente después del merge y del retest completo en Windows/Python 3.13.5.
+No se deben reutilizar `prompt-296-run-05` ni `prompt-296-run-06`. Readiness permanece pendiente
+hasta obtener un snapshot válido. No se autorizó ninguna mutación, reparación, publicación ni
+acceso adicional al backend.
+
 El assessor exige la raíz física única `maquinarias`, con ID entero positivo, `parent=null` e
 identidad contractual exacta, y valida descendientes por `parent`. No crea ni propone reparar la
 raíz y no la confunde con categorías normalizadas o futuras categorías de producto.
