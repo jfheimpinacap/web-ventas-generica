@@ -16,21 +16,50 @@ def _png(data):
     return False
 
 def _jpeg(data):
-    if len(data)<4 or not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"): return False
-    position=2; saw_structure=False
-    while position<len(data)-2:
-        if data[position]!=0xff: position+=1; continue
+    """Validate JPEG container structure without decoding entropy-coded data."""
+    if len(data)<4 or data[:2]!=b"\xff\xd8": return False
+    position=2; frame_components=None; saw_scan=False
+    sof_markers={0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf}
+    length_markers=sof_markers|{0xc4,0xcc,0xdb,0xdc,0xdd,0xde,0xdf,0xda,0xfe,*range(0xe0,0xfe)}
+    while position<len(data):
+        # Segment context: a marker starts with one or more FF fill bytes.
+        if data[position]!=0xff: return False
         while position<len(data) and data[position]==0xff: position+=1
         if position>=len(data): return False
         marker=data[position]; position+=1
-        if marker in {0x01,*range(0xd0,0xd8)}: continue
-        if marker==0xd9: break
+        if marker==0xd9:
+            return position==len(data) and frame_components is not None and saw_scan
+        if marker in {0x00,0x01,0xd8,*range(0xd0,0xd8)} or marker not in length_markers: return False
         if position+2>len(data): return False
         length=int.from_bytes(data[position:position+2],"big")
         if length<2 or position+length>len(data): return False
-        if marker in {0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf}: saw_structure=length>=7
-        position+=length
-    return saw_structure
+        payload=position+2; end=position+length
+        if marker in sof_markers:
+            if frame_components is not None or length<8: return False
+            components=data[payload+5]
+            if data[payload+1:payload+3]==b"\x00\x00" or data[payload+3:payload+5]==b"\x00\x00": return False
+            if components not in range(1,5) or length!=8+3*components: return False
+            frame_components=components
+        elif marker==0xda:
+            if frame_components is None or length<6: return False
+            components=data[payload]
+            if components not in range(1,frame_components+1) or length!=6+2*components: return False
+            saw_scan=True; position=end
+            # Scan context: stuffed FF and restart markers remain entropy data;
+            # any other marker returns control to the segment parser.
+            while position<len(data):
+                if data[position]!=0xff: position+=1; continue
+                marker_start=position
+                while position<len(data) and data[position]==0xff: position+=1
+                if position>=len(data): return False
+                scan_marker=data[position]
+                if scan_marker==0x00 or scan_marker in range(0xd0,0xd8):
+                    position+=1; continue
+                position=marker_start; break
+            else: return False
+            continue
+        position=end
+    return False
 
 def _pdf(data):
     if not re.match(br"%PDF-[12]\.[0-9]",data[:12]) or b"%%EOF" not in data[-2048:]: return "BINARY_SIGNATURE_INVALID"

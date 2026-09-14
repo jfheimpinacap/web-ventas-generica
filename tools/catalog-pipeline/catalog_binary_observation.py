@@ -14,6 +14,11 @@ from jem_nexus_local_binary_transport import BinaryTransportError, LocalBinaryTr
 OUTPUTS = ("binary-observation-plan.json", "binary-observation-plan.txt")
 REPORT_OUTPUTS = ("binary-observation-report.json", "binary-observation-report.txt")
 
+class BinaryCliError(ValueError):
+    def __init__(self,code):
+        self.code=code
+        super().__init__(code)
+
 
 def parser():
     root = argparse.ArgumentParser()
@@ -32,10 +37,14 @@ def parser():
 
 
 def _read(path):
-    raw = Path(path).read_bytes()
-    value = json.loads(raw.decode("utf-8", errors="strict"))
+    try: raw = Path(path).read_bytes()
+    except OSError: raise BinaryCliError("INPUT_FILE_UNREADABLE") from None
+    try: text=raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError: raise BinaryCliError("INPUT_UTF8_INVALID") from None
+    try: value = json.loads(text)
+    except json.JSONDecodeError: raise BinaryCliError("INPUT_JSON_INVALID") from None
     if not isinstance(value, dict):
-        raise ValueError("INPUT_OBJECT_REQUIRED")
+        raise BinaryCliError("INPUT_OBJECT_REQUIRED")
     return value, hashlib.sha256(raw).hexdigest()
 
 
@@ -76,16 +85,18 @@ def _sync_directory(directory):
 
 def preflight_new_output(directory):
     target = Path(directory)
-    parent = target.parent.resolve(strict=True)
+    try: parent = target.parent.resolve(strict=True)
+    except (FileNotFoundError,NotADirectoryError,PermissionError): raise BinaryCliError("OUTPUT_PARENT_INVALID") from None
     if target.exists() or target.is_symlink():
-        raise FileExistsError("OUTPUT_DIRECTORY_MUST_BE_NEW")
+        raise BinaryCliError("OUTPUT_DIRECTORY_EXISTS")
     if target.parent.resolve(strict=True) != parent:
-        raise FileExistsError("OUTPUT_PARENT_INVALID")
+        raise BinaryCliError("OUTPUT_PARENT_INVALID")
     return target,parent
 
 def write_new_output(directory, documents):
     target,parent=preflight_new_output(directory)
-    staging = Path(tempfile.mkdtemp(prefix="." + target.name + ".writing-", dir=parent))
+    try: staging = Path(tempfile.mkdtemp(prefix="." + target.name + ".writing-", dir=parent))
+    except OSError: raise BinaryCliError("OUTPUT_WRITE_FAILED") from None
     try:
         for name in sorted(documents):
             data = documents[name]
@@ -95,12 +106,16 @@ def write_new_output(directory, documents):
         _sync_directory(staging)
         os.replace(staging, target)
         _sync_directory(parent)
-    except Exception:
+    except Exception as error:
         for name in documents:
             (staging / name).unlink(missing_ok=True)
         try: staging.rmdir()
         except FileNotFoundError: pass
+        if isinstance(error,OSError): raise BinaryCliError("OUTPUT_WRITE_FAILED") from None
         raise
+
+def _emit_error(code):
+    print(canonical_bytes({"error":code}).decode("utf-8"),end="")
 
 
 def report_text_projection(report):
@@ -123,7 +138,8 @@ def main(argv=None):
             if os.environ.get("JEM_NEXUS_LOCAL_MUTATION_TOKEN") is not None: raise BinaryObservationError("MUTATION_TOKEN_PRESENT")
             report=capture_plan(plan,args.plan_fingerprint,plan_hash,LocalBinaryTransport(token))
             write_new_output(args.output_dir,{REPORT_OUTPUTS[0]:canonical_bytes(report),REPORT_OUTPUTS[1]:report_text_projection(report)})
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, BinaryObservationError, BinaryTransportError):
+    except (BinaryObservationError, BinaryTransportError, BinaryCliError) as error:
+        _emit_error(error.code)
         return 2
     return 0
 
