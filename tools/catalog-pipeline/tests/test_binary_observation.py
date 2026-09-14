@@ -1,14 +1,15 @@
-import ast, copy, hashlib, json, pathlib, sys, tempfile, unittest
+import ast, contextlib, copy, hashlib, io, json, pathlib, sys, tempfile, unittest
 from unittest import mock
 
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
-from catalog_binary_observation import OUTPUTS, main, parser, write_new_output
+from catalog_binary_observation import BinaryCliError, OUTPUTS, main, parser, write_new_output
 from catalog_pipeline_common.serialization import canonical_bytes
 from jem_nexus_import.binary_observation import CAPTURE_POLICY, BinaryObservationError, build_plan, capture_plan, normalize_base_url, normalize_reference, validate_plan
 from catalog_pipeline_common.binary_validation import validate_observed_binary
 from catalog_acquisition.schema_validation import validate
 from jem_nexus_import.readiness import assess, contract_fingerprint
 from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
+from jem_nexus_local_binary_transport import BinaryTransportError, LocalBinaryTransport
 
 
 def contract(): return json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8"))
@@ -147,13 +148,13 @@ class BinaryObservationTests(unittest.TestCase):
  def test_19_output_is_atomic_new_only_and_altered_destination_blocks(self):
   with tempfile.TemporaryDirectory() as directory:
    target=pathlib.Path(directory)/"out"; docs={name:b"synthetic\n" for name in OUTPUTS}; write_new_output(target,docs); self.assertEqual(set(OUTPUTS),{x.name for x in target.iterdir()})
-   with self.assertRaises(FileExistsError): write_new_output(target,docs)
+   with self.assertRaisesRegex(BinaryCliError,"OUTPUT_DIRECTORY_EXISTS"): write_new_output(target,docs)
  def test_20_symlink_destination_blocks(self):
   with tempfile.TemporaryDirectory() as directory:
    root=pathlib.Path(directory); target=root/"out"; unrelated=root/"unrelated.txt"; unrelated.write_bytes(b"preserve me")
    with mock.patch.object(pathlib.Path,"is_symlink",autospec=True,side_effect=lambda candidate: candidate==target) as is_symlink:
-    with self.assertRaises(FileExistsError) as raised: write_new_output(target,{name:b"x" for name in OUTPUTS})
-   self.assertEqual("OUTPUT_DIRECTORY_MUST_BE_NEW",str(raised.exception)); is_symlink.assert_called_once_with(target)
+    with self.assertRaises(BinaryCliError) as raised: write_new_output(target,{name:b"x" for name in OUTPUTS})
+   self.assertEqual("OUTPUT_DIRECTORY_EXISTS",raised.exception.code); is_symlink.assert_called_once_with(target)
    self.assertFalse(target.exists()); self.assertEqual(b"preserve me",unrelated.read_bytes())
    self.assertEqual([],list(root.glob(".out.writing-*")))
  def test_21_cli_writes_canonical_json_and_text(self):
@@ -162,6 +163,30 @@ class BinaryObservationTests(unittest.TestCase):
    for name,value in (("s",s),("r",r),("c",contract())): (root/name).write_bytes(canonical_bytes(value))
    self.assertEqual(0,main(["plan","--snapshot",str(root/"s"),"--readiness",str(root/"r"),"--contract",str(root/"c"),"--base-url","http://localhost:1","--output-dir",str(root/"out")]))
    self.assertEqual(json.loads((root/"out"/OUTPUTS[0]).read_text(encoding="utf-8"))["network_executed"],False)
+   cases=((b"{","INPUT_JSON_INVALID"),(b"\xff","INPUT_UTF8_INVALID"),(b"[]","INPUT_OBJECT_REQUIRED"))
+   for raw,expected in cases:
+    bad=root/("bad-"+expected); bad.write_bytes(raw); output=io.StringIO()
+    with self.subTest(cli_error=expected), contextlib.redirect_stdout(output):
+     self.assertEqual(2,main(["capture-local","--plan",str(bad),"--plan-fingerprint","a"*64,"--output-dir",str(root/"never-created")]))
+    self.assertEqual('{"error":"'+expected+'"}\n',output.getvalue()); self.assertFalse((root/"never-created").exists())
+   missing_output=io.StringIO()
+   with contextlib.redirect_stdout(missing_output): self.assertEqual(2,main(["capture-local","--plan",str(root/"missing"),"--plan-fingerprint","a"*64,"--output-dir",str(root/"never-created")]))
+   self.assertEqual('{"error":"INPUT_FILE_UNREADABLE"}\n',missing_output.getvalue())
+   with mock.patch("catalog_binary_observation._read",side_effect=RuntimeError("programming defect")):
+    with self.assertRaisesRegex(RuntimeError,"programming defect"): main(["capture-local","--plan","unused","--plan-fingerprint","a"*64,"--output-dir","unused"])
+   capture=plan(); capture_path=root/"capture-plan"; capture_path.write_bytes(canonical_bytes(capture))
+   known=((BinaryObservationError("BINARY_SIGNATURE_INVALID","private /path token"),"BINARY_SIGNATURE_INVALID"),(BinaryTransportError("BINARY_READ_STATUS"),"BINARY_READ_STATUS"))
+   for error,expected in known:
+    output=io.StringIO()
+    with self.subTest(domain_error=expected), mock.patch.dict("os.environ",{"JEM_NEXUS_LOCAL_READ_TOKEN":"secret"},clear=True), mock.patch("catalog_binary_observation.capture_plan",side_effect=error), contextlib.redirect_stdout(output):
+     self.assertEqual(2,main(["capture-local","--plan",str(capture_path),"--plan-fingerprint",capture["plan_fingerprint"],"--output-dir",str(root/("report-"+expected))]))
+    self.assertEqual('{"error":"'+expected+'"}\n',output.getvalue()); self.assertNotIn("private",output.getvalue()); self.assertNotIn("secret",output.getvalue())
+   existing=root/"existing"; existing.mkdir(); output=io.StringIO()
+   with contextlib.redirect_stdout(output): self.assertEqual(2,main(["capture-local","--plan",str(capture_path),"--plan-fingerprint",capture["plan_fingerprint"],"--output-dir",str(existing)]))
+   self.assertEqual('{"error":"OUTPUT_DIRECTORY_EXISTS"}\n',output.getvalue())
+   with mock.patch("catalog_binary_observation.tempfile.mkdtemp",side_effect=PermissionError("private /path")), contextlib.redirect_stdout(output:=io.StringIO()):
+    self.assertEqual(2,main(["plan","--snapshot",str(root/"s"),"--readiness",str(root/"r"),"--contract",str(root/"c"),"--base-url","http://localhost:1","--output-dir",str(root/"write-failure")]))
+   self.assertEqual('{"error":"OUTPUT_WRITE_FAILED"}\n',output.getvalue()); self.assertFalse((root/"write-failure").exists())
  def test_22_schema_fixture_closed_and_synthetic(self):
   schema=json.loads((ROOT/"schemas/v1/local-binary-observation-plan.schema.json").read_text(encoding="utf-8")); fixture=json.loads((ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8"))
   self.assertFalse(schema["additionalProperties"]); self.assertTrue(fixture["fixture_only"]); self.assertNotIn("example.com",canonical_bytes(fixture).decode())
@@ -195,13 +220,37 @@ class BinaryObservationTests(unittest.TestCase):
   def chunk(kind,data): return struct.pack(">I",len(data))+kind+data+struct.pack(">I",binascii.crc32(kind+data)&0xffffffff)
   ihdr=struct.pack(">IIBBBBB",1,1,8,2,0,0,0)
   png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",ihdr)+chunk(b"IEND",b"")
-  jpeg=b"\xff\xd8"+b"\xff\xe0\x00\x02"+b"\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00"+b"\xff\xd9"
+  def segment(marker,payload): return b"\xff"+bytes([marker])+struct.pack(">H",len(payload)+2)+payload
+  def frame(marker=0xc0,width=1,height=1): return segment(marker,b"\x08"+struct.pack(">HHB",height,width,1)+b"\x01\x11\x00")
+  def scan(entropy=b"\x01\x02",components=1): return segment(0xda,bytes([components])+b"\x01\x00"*components+b"\x00\x3f\x00")+entropy
+  jpeg=b"\xff\xd8"+segment(0xe0,b"")+frame()+scan()+b"\xff\xd9"
   pdf=b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n9\n%%EOF\n"
+  jpeg_cases={
+   "baseline":jpeg,
+   "stuffed":b"\xff\xd8"+frame(width=320,height=240)+scan(b"\x01\xff\x00\x02")+b"\xff\xd9",
+   "restart":b"\xff\xd8"+frame()+segment(0xdd,b"\x00\x01")+scan(b"\x01\xff\xd0\x02\xff\xd7")+b"\xff\xd9",
+   "fill":b"\xff\xd8"+b"\xff\xff\xe1\x00\x02"+frame()+scan(b"\x01")+b"\xff\xff\xd9",
+   "progressive":b"\xff\xd8"+segment(0xfe,b"synthetic")+segment(0xdb,b"\x00")+segment(0xc4,b"\x00")+frame(0xc2,9,7)+scan()+b"\xff\xd9",
+   "progressive-multiscan":b"\xff\xd8"+frame(0xc2)+scan(b"\x01")+scan(b"\x02\xff\x00\x03")+b"\xff\xd9",
+  }
+  for condition,body in jpeg_cases.items():
+   for extension in (".jpg",".jpeg"):
+    with self.subTest(jpeg=condition,extension=extension): self.assertIsNone(validate_observed_binary(body,"image","image/jpeg",[{"declared_extension":extension}])["code"])
   valid=((jpeg,"image","image/jpeg",{"declared_extension":".jpg"},"bounded_jpeg_container"),(png,"image","image/png",{"declared_extension":".png"},"bounded_png_container"),(pdf,"technical_sheet","application/pdf",{"declared_size_bytes":len(pdf)},"bounded_pdf_structure_and_safety"))
   for body,media,mime,binding,validation_name in valid:
    with self.subTest(valid=mime):
     result=validate_observed_binary(body,media,mime,[binding]); self.assertIsNone(result["code"]); self.assertEqual(validation_name,result["validation"])
-  jpeg_negative={"soi":jpeg[2:],"eoi":jpeg[:-2],"sof":b"\xff\xd8\xff\xe0\x00\x02\xff\xd9","truncated":b"\xff\xd8\xff\xc0\x00\x0b\x08\xff\xd9","length":b"\xff\xd8\xff\xc0\x00\x01\xff\xd9"}
+  jpeg_negative={
+   "soi":jpeg[2:],"eoi":jpeg[:-2],"after_eoi":jpeg+b"x","sof":b"\xff\xd8"+scan()+b"\xff\xd9",
+   "sos":b"\xff\xd8"+frame()+b"\xff\xd9","marker_truncated":b"\xff\xd8"+frame()+scan()+b"\xff",
+   "length_underflow":b"\xff\xd8\xff\xe0\x00\x01\xff\xd9","length_overflow":b"\xff\xd8\xff\xe0\xff\xff\xff\xd9",
+   "sof_truncated":b"\xff\xd8\xff\xc0\x00\x0b\x08\xff\xd9","zero_height":b"\xff\xd8"+frame(height=0)+scan()+b"\xff\xd9",
+   "zero_width":b"\xff\xd8"+frame(width=0)+scan()+b"\xff\xd9","zero_components":b"\xff\xd8"+segment(0xc0,b"\x08\x00\x01\x00\x01\x00")+scan()+b"\xff\xd9",
+   "sof_length":b"\xff\xd8"+segment(0xc0,b"\x08\x00\x01\x00\x01\x01")+scan()+b"\xff\xd9",
+   "sos_truncated":b"\xff\xd8"+frame()+b"\xff\xda\x00\x08\x01\xff\xd9","sos_length":b"\xff\xd8"+frame()+segment(0xda,b"\x01\x01\x00")+b"\xff\xd9",
+   "scan_unterminated":b"\xff\xd8"+frame()+scan(b"\x01"),"invalid_marker":b"\xff\xd8"+frame()+b"\xff\x02\x00\x02"+scan()+b"\xff\xd9",
+   "second_soi":b"\xff\xd8"+frame()+b"\xff\xd8"+scan()+b"\xff\xd9","restart_outside_scan":b"\xff\xd8"+frame()+b"\xff\xd0"+scan()+b"\xff\xd9",
+   "prefix_suffix_only":b"\xff\xd8\xff\xd9"}
   png_negative={"signature":b"X"+png[1:],"ihdr_missing":b"\x89PNG\r\n\x1a\n"+chunk(b"IEND",b""),"ihdr_duplicate":b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",ihdr)*2+chunk(b"IEND",b""),"crc":png[:-1]+bytes([png[-1]^1]),"iend_missing":png[:-12],"after_iend":png+b"x","chunk_truncated":png[:-1]}
   for family,cases,media,mime,binding in (("jpeg",jpeg_negative,"image","image/jpeg",{"declared_extension":".jpg"}),("png",png_negative,"image","image/png",{"declared_extension":".png"})):
    for condition,body in cases.items():
@@ -263,5 +312,29 @@ class BinaryObservationTests(unittest.TestCase):
   source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")
   for code in ("BINARY_READ_STATUS","BINARY_READ_MIME","BINARY_READ_EMPTY","BINARY_CONTENT_LENGTH_INVALID","BINARY_CONTENT_LENGTH_MISMATCH","BINARY_READ_TOO_LARGE","BINARY_TOTAL_LIMIT_EXCEEDED","BINARY_SIGNATURE_INVALID","BINARY_SIZE_MISMATCH","BINARY_PDF_UNSAFE"):
    with self.subTest(code=code): self.assertIn(code,source+(ROOT/"catalog_pipeline_common/binary_validation.py").read_text(encoding="utf-8"))
+  class Response:
+   status=200; headers={"Content-Type":"image/jpeg","Content-Length":"1"}
+   def __enter__(self): return self
+   def __exit__(self,*unused): return None
+   def read(self,limit): return b"x"
+  class Opener:
+   def __init__(self,result): self.result=result; self.requests=[]
+   def open(self,request,timeout):
+    self.requests.append((request,timeout))
+    if isinstance(self.result,BaseException): raise self.result
+    return self.result
+  def factory(opener): return lambda *handlers: opener
+  for status in (401,404):
+   from urllib.error import HTTPError
+   opener=Opener(HTTPError("http://localhost:1/private",status,"private",{},None)); transport=LocalBinaryTransport("secret",factory(opener))
+   with self.subTest(http=status), self.assertRaises(BinaryTransportError) as raised: transport("http://localhost:1","/synthetic.jpg",{},15,10)
+   self.assertEqual("BINARY_READ_STATUS",raised.exception.code); self.assertEqual("GET",opener.requests[0][0].method)
+  response=Response(); response.status=302; opener=Opener(response); transport=LocalBinaryTransport("secret",factory(opener))
+  with self.assertRaises(BinaryTransportError) as raised: transport("http://localhost:1","/synthetic.jpg",{},15,10)
+  self.assertEqual("BINARY_READ_REDIRECT",raised.exception.code)
+  with self.assertRaises(BinaryTransportError) as raised: LocalBinaryTransport("",factory(Opener(Response())))
+  self.assertEqual("CAPTURE_TOKEN_MISSING",raised.exception.code)
+  with self.assertRaises(BinaryTransportError) as raised: LocalBinaryTransport("secret",factory(Opener(Response())))("http://example.invalid:1","/x",{},15,10)
+  self.assertEqual("UNSAFE_LOCAL_TARGET",raised.exception.code)
 
 if __name__=="__main__": unittest.main()
