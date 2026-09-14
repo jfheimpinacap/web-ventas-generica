@@ -4,7 +4,8 @@ from unittest import mock
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
 from catalog_binary_observation import OUTPUTS, main, parser, write_new_output
 from catalog_pipeline_common.serialization import canonical_bytes
-from jem_nexus_import.binary_observation import BinaryObservationError, build_plan, normalize_base_url, normalize_reference
+from jem_nexus_import.binary_observation import CAPTURE_POLICY, BinaryObservationError, build_plan, capture_plan, normalize_base_url, normalize_reference, validate_plan
+from catalog_pipeline_common.binary_validation import validate_observed_binary
 from jem_nexus_import.readiness import assess, contract_fingerprint
 from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
 
@@ -117,13 +118,13 @@ class BinaryObservationTests(unittest.TestCase):
   self.assertEqual(canonical_bytes(first),canonical_bytes(second))
  def test_15_exact_counters_and_manual_state(self):
   value=plan(); self.assertEqual({"targets_total":2,"image_targets":1,"technical_sheet_targets":1,"bindings_total":2,"relations_observable":1,"manual_relations":1,"blockers":0,"warnings":1},value["counts"])
- def test_16_safety_flags_are_all_false(self):
-  value=plan(); self.assertTrue(all(value[key] is False for key in ("network_executed","bytes_observed","capture_supported","mutation_authorized","content_published")))
- def test_17_cli_has_only_plan_and_no_unsafe_flags(self):
-  source=(ROOT/"catalog_binary_observation.py").read_text(encoding="utf-8"); self.assertEqual("plan",parser().parse_args(["plan","--snapshot","s","--readiness","r","--contract","c","--base-url","http://localhost:1","--output-dir","o"]).command)
+ def test_16_safety_flags_and_capture_authorization(self):
+  value=plan(); self.assertTrue(value["capture_supported"]); self.assertEqual(CAPTURE_POLICY,value["capture_policy"]); self.assertTrue(all(value[key] is False for key in ("network_executed","bytes_observed","mutation_authorized","content_published")))
+ def test_17_cli_has_exact_commands_and_no_unsafe_flags(self):
+  source=(ROOT/"catalog_binary_observation.py").read_text(encoding="utf-8"); self.assertEqual("plan",parser().parse_args(["plan","--snapshot","s","--readiness","r","--contract","c","--base-url","http://localhost:1","--output-dir","o"]).command); self.assertEqual("capture-local",parser().parse_args(["capture-local","--plan","p","--plan-fingerprint","a"*64,"--output-dir","o"]).command)
   self.assertFalse(any(flag in source for flag in ("--token","--force","--overwrite","--skip",'add_parser("capture")','add_parser("fetch")','add_parser("apply")')))
  def test_18_core_has_no_transport_or_environment(self):
-  for path in (ROOT/"jem_nexus_import/binary_observation.py",ROOT/"catalog_binary_observation.py"):
+  for path in (ROOT/"jem_nexus_import/binary_observation.py",):
    with self.subTest(path=path): self.assertEqual([],architectural_violations(path.read_text(encoding="utf-8")))
   rejected={
    "import requests":"import requests", "from requests import get":"from requests import get",
@@ -164,12 +165,39 @@ class BinaryObservationTests(unittest.TestCase):
   schema=json.loads((ROOT/"schemas/v1/local-binary-observation-plan.schema.json").read_text(encoding="utf-8")); fixture=json.loads((ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8"))
   self.assertFalse(schema["additionalProperties"]); self.assertTrue(fixture["fixture_only"]); self.assertNotIn("example.com",canonical_bytes(fixture).decode())
  def test_23_exact_schema_and_json_inventory(self):
-  self.assertEqual(81,len(list((ROOT/"schemas/v1").glob("*.schema.json")))); self.assertEqual(82,len(list((ROOT/"schemas/v1").glob("*.json"))))
+  self.assertEqual(82,len(list((ROOT/"schemas/v1").glob("*.schema.json")))); self.assertEqual(83,len(list((ROOT/"schemas/v1").glob("*.json"))))
  def test_24_real_evidence_fingerprints_are_not_hardcoded(self):
   source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")+(ROOT/"fixtures/valid/local-binary-observation-plan.json").read_text(encoding="utf-8")
   self.assertNotIn("7a428a6af88979e589f27ec81146c87543904f3b1c2d49072244d171304e5d21",source); self.assertNotIn("090d2fcf9cefd624b84eb60e141db0a994a4b1ba4ff2977dd986238212783341",source)
  def test_25_file_hashes_affect_plan_fingerprint_but_no_timestamp_does(self):
   s,r,c,sh,rh=inputs(); first=build_plan(s,r,c,"http://localhost:1",sh,rh); second=build_plan(s,r,c,"http://localhost:1","c"*64,rh)
   self.assertNotEqual(first["plan_fingerprint"],second["plan_fingerprint"]); self.assertNotIn("timestamp",first)
+ def test_26_v1_is_auditable_but_not_capturable(self):
+  from catalog_pipeline_common.serialization import content_fingerprint
+  old={"schema_version":"1.0.0","rules_version":"jem-local-binary-observation-plan-v1"}; old["plan_fingerprint"]=content_fingerprint(old)
+  self.assertIs(old,validate_plan(old))
+  with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_VERSION_UNSUPPORTED"): validate_plan(old,capture=True)
+ def test_27_capture_fingerprint_fails_before_transport(self):
+  calls=[]
+  with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_FINGERPRINT_MISMATCH"): capture_plan(plan(),"0"*64,"1"*64,lambda *args:calls.append(args))
+  self.assertEqual([],calls)
+ def test_28_policy_is_fingerprint_sealed_and_closed(self):
+  value=plan(); original=value["plan_fingerprint"]; value["capture_policy"]["retries"]=1
+  self.assertNotEqual(original,__import__("catalog_pipeline_common.serialization",fromlist=["content_fingerprint"]).content_fingerprint({k:v for k,v in value.items() if k!="plan_fingerprint"}))
+  with self.assertRaises(BinaryObservationError): validate_plan(value,capture=True)
+ def test_29_synthetic_jpeg_png_pdf_validation_matrix(self):
+  import binascii,struct
+  def chunk(kind,data): return struct.pack(">I",len(data))+kind+data+struct.pack(">I",binascii.crc32(kind+data)&0xffffffff)
+  png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",1,1,8,2,0,0,0))+chunk(b"IEND",b""); jpeg=b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9"; pdf=b"%PDF-1.4\n1 0 obj<<>>endobj\nstartxref\n9\n%%EOF\n"
+  for body,mime,ext in ((png,"image/png",".png"),(jpeg,"image/jpeg",".jpg")):
+   with self.subTest(mime=mime): self.assertIsNone(validate_observed_binary(body,"image",mime,[{"declared_extension":ext}])["code"]); self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(body[:-1],"image",mime,[{"declared_extension":ext}])["code"])
+  self.assertIsNone(validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)}])["code"])
+  self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/Encrypt","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+8}])["code"])
+  self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/JavaScript","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+11}])["code"])
+  self.assertEqual("BINARY_SIZE_MISMATCH",validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":1}])["code"])
+ def test_30_capture_response_taxonomy_is_stable(self):
+  source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")
+  for code in ("BINARY_READ_STATUS","BINARY_READ_MIME","BINARY_READ_EMPTY","BINARY_CONTENT_LENGTH_INVALID","BINARY_CONTENT_LENGTH_MISMATCH","BINARY_READ_TOO_LARGE","BINARY_TOTAL_LIMIT_EXCEEDED","BINARY_SIGNATURE_INVALID","BINARY_SIZE_MISMATCH","BINARY_PDF_UNSAFE"):
+   with self.subTest(code=code): self.assertIn(code,source+(ROOT/"catalog_pipeline_common/binary_validation.py").read_text(encoding="utf-8"))
 
 if __name__=="__main__": unittest.main()

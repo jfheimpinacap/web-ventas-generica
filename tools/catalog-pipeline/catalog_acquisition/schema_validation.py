@@ -6,7 +6,7 @@ from pathlib import Path, PurePosixPath
 from .errors import PipelineError
 
 ANNOTATION_KEYWORDS=frozenset({"$schema","$id","$defs","title","description","schema_version"})
-VALIDATION_KEYWORDS=frozenset({"$ref","type","properties","required","additionalProperties","enum","const","items","minItems","uniqueItems","minLength","maxLength","minimum","maximum","pattern","format"})
+VALIDATION_KEYWORDS=frozenset({"$ref","type","properties","required","additionalProperties","enum","const","items","minItems","uniqueItems","minLength","maxLength","minimum","maximum","pattern","format","oneOf","not"})
 SUPPORTED_KEYWORDS=ANNOTATION_KEYWORDS|VALIDATION_KEYWORDS
 
 class SchemaValidationError(PipelineError):
@@ -62,6 +62,17 @@ def validate(instance: object, schema_path: Path) -> None:
         if not isinstance(node,dict): _fail("Schema reference target is not a schema object",current,instance_path,"$ref")
         return node,target.resolve()
     def walk(value: object, schema: dict[str,object], path: str, current: Path) -> None:
+        if "oneOf" in schema:
+            matches=0
+            for alternative in schema["oneOf"]:
+                try: walk(value,alternative,path,current)
+                except SchemaValidationError: continue
+                matches+=1
+            if matches!=1: _fail("Value must match exactly one alternative",current,path,"oneOf")
+        if "not" in schema:
+            try: walk(value,schema["not"],path,current)
+            except SchemaValidationError: pass
+            else: _fail("Value matches forbidden schema",current,path,"not")
         if "$ref" in schema:
             marker=(current,str(schema["$ref"]))
             if marker in active_refs: _fail("Cyclic schema reference is unsupported",current,path,"$ref")

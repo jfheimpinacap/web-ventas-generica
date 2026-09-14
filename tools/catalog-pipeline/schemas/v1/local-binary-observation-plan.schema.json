@@ -1,30 +1,486 @@
 {
-  "$schema":"https://json-schema.org/draft/2020-12/schema",
-  "$id":"https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-binary-observation-plan.schema.json",
-  "title":"local-binary-observation-plan","type":"object","additionalProperties":false,
-  "required":["schema_version","rules_version","fixture_only","state","plan_fingerprint","base_url","contract_fingerprint","snapshot_semantic_fingerprint","snapshot_file_sha256","readiness_file_sha256","path_policy","media_rules","targets","counts","blockers","warnings","network_executed","bytes_observed","capture_supported","mutation_authorized","content_published","next_permitted_step"],
-  "properties":{
-    "schema_version":{"const":"1.0.0"},"rules_version":{"const":"jem-local-binary-observation-plan-v1"},
-    "fixture_only":{"type":"boolean"},"state":{"enum":["planned","blocked"]},"plan_fingerprint":{"$ref":"#/$defs/fingerprint"},
-    "base_url":{"type":"string","pattern":"^http://(localhost|127\\.0\\.0\\.1|\\[::1\\]):[0-9]+$"},
-    "contract_fingerprint":{"$ref":"#/$defs/fingerprint"},"snapshot_semantic_fingerprint":{"$ref":"#/$defs/fingerprint"},
-    "snapshot_file_sha256":{"$ref":"#/$defs/fingerprint"},"readiness_file_sha256":{"$ref":"#/$defs/fingerprint"},
-    "path_policy":{"$ref":"#/$defs/path_policy"},"media_rules":{"$ref":"#/$defs/media_rules"},
-    "targets":{"type":"array","items":{"$ref":"#/$defs/target"}},"counts":{"$ref":"#/$defs/counts"},
-    "blockers":{"type":"array","items":{"type":"string","pattern":"^[A-Z0-9_]+$"}},
-    "warnings":{"type":"array","items":{"type":"string","pattern":"^[A-Z0-9_]+$"}},
-    "network_executed":{"const":false},"bytes_observed":{"const":false},"capture_supported":{"const":false},
-    "mutation_authorized":{"const":false},"content_published":{"const":false},
-    "next_permitted_step":{"const":"prompt_302_limited_local_get_capture"}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-binary-observation-plan.schema.json",
+  "title": "local-binary-observation-plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rules_version",
+    "fixture_only",
+    "state",
+    "plan_fingerprint",
+    "base_url",
+    "contract_fingerprint",
+    "snapshot_semantic_fingerprint",
+    "snapshot_file_sha256",
+    "readiness_file_sha256",
+    "path_policy",
+    "media_rules",
+    "targets",
+    "counts",
+    "blockers",
+    "warnings",
+    "network_executed",
+    "bytes_observed",
+    "capture_supported",
+    "mutation_authorized",
+    "content_published",
+    "next_permitted_step"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "1.0.0",
+        "2.0.0"
+      ]
+    },
+    "rules_version": {
+      "enum": [
+        "jem-local-binary-observation-plan-v1",
+        "jem-local-binary-observation-plan-v2"
+      ]
+    },
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "blocked"
+      ]
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "base_url": {
+      "type": "string",
+      "pattern": "^http://(localhost|127\\.0\\.0\\.1|\\[::1\\]):[0-9]+$"
+    },
+    "contract_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "snapshot_semantic_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "snapshot_file_sha256": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "readiness_file_sha256": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "path_policy": {
+      "$ref": "#/$defs/path_policy"
+    },
+    "media_rules": {
+      "$ref": "#/$defs/media_rules"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      }
+    },
+    "network_executed": {
+      "const": false
+    },
+    "bytes_observed": {
+      "const": false
+    },
+    "capture_supported": {
+      "type": "boolean"
+    },
+    "mutation_authorized": {
+      "const": false
+    },
+    "content_published": {
+      "const": false
+    },
+    "next_permitted_step": {
+      "enum": [
+        "prompt_302_limited_local_get_capture",
+        "limited_local_get_capture"
+      ]
+    },
+    "capture_policy": {
+      "$ref": "#/$defs/capture_policy"
+    }
   },
-  "$defs":{
-    "fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"},
-    "safe_path":{"type":"string","pattern":"^/(?!/)(?!.*[\\\\?#])(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\u007f]+$"},
-    "path_policy":{"type":"object","additionalProperties":false,"required":["kind","percent_decoding","filesystem_resolution"],"properties":{"kind":{"const":"root_relative_url_path"},"percent_decoding":{"const":"reject_encoded_separators_and_ambiguous_double_decoding"},"filesystem_resolution":{"const":false}}},
-    "media_policy":{"type":"object","additionalProperties":false,"required":["future_validation"],"properties":{"future_validation":{"type":"array","items":{"enum":["bytes","actual_mime","sha256","pdf_signature","pdf_structure","security","size"]},"uniqueItems":true}}},
-    "media_rules":{"type":"object","additionalProperties":false,"required":["image","technical_sheet"],"properties":{"image":{"$ref":"#/$defs/media_policy"},"technical_sheet":{"$ref":"#/$defs/media_policy"}}},
-    "binding":{"type":"object","additionalProperties":false,"required":["collection","row_id","field","media_class","root_relative_path","product_id","relation_observable","manual_relation_verification_required","declared_extension","declared_content_type","declared_size_bytes","state"],"properties":{"collection":{"enum":["product_images","technical_sheets"]},"row_id":{"type":"integer","minimum":1},"field":{"enum":["image","file_url"]},"media_class":{"enum":["image","technical_sheet"]},"root_relative_path":{"$ref":"#/$defs/safe_path"},"product_id":{"type":["integer","null"],"minimum":1},"relation_observable":{"type":"boolean"},"manual_relation_verification_required":{"type":"boolean"},"declared_extension":{"type":["string","null"],"pattern":"^\\.[a-z0-9]+$"},"declared_content_type":{"type":["string","null"]},"declared_size_bytes":{"type":["integer","null"],"minimum":0},"state":{"enum":["planned","manual_relation_verification_required"]}}},
-    "target":{"type":"object","additionalProperties":false,"required":["target_id","root_relative_path","media_class","policy","bindings"],"properties":{"target_id":{"type":"string","pattern":"^target-[0-9a-f]{24}$"},"root_relative_path":{"$ref":"#/$defs/safe_path"},"media_class":{"enum":["image","technical_sheet"]},"policy":{"$ref":"#/$defs/media_policy"},"bindings":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/binding"}}}},
-    "counts":{"type":"object","additionalProperties":false,"required":["targets_total","image_targets","technical_sheet_targets","bindings_total","relations_observable","manual_relations","blockers","warnings"],"properties":{"targets_total":{"type":"integer","minimum":0},"image_targets":{"type":"integer","minimum":0},"technical_sheet_targets":{"type":"integer","minimum":0},"bindings_total":{"type":"integer","minimum":0},"relations_observable":{"type":"integer","minimum":0},"manual_relations":{"type":"integer","minimum":0},"blockers":{"type":"integer","minimum":0},"warnings":{"type":"integer","minimum":0}}}
-  }
+  "$defs": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safe_path": {
+      "type": "string",
+      "pattern": "^/(?!/)(?!.*[\\\\?#])(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "path_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "percent_decoding",
+        "filesystem_resolution"
+      ],
+      "properties": {
+        "kind": {
+          "const": "root_relative_url_path"
+        },
+        "percent_decoding": {
+          "const": "reject_encoded_separators_and_ambiguous_double_decoding"
+        },
+        "filesystem_resolution": {
+          "const": false
+        }
+      }
+    },
+    "media_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_validation"
+      ],
+      "properties": {
+        "future_validation": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "bytes",
+              "actual_mime",
+              "sha256",
+              "pdf_signature",
+              "pdf_structure",
+              "security",
+              "size"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "media_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image",
+        "technical_sheet"
+      ],
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/media_policy"
+        },
+        "technical_sheet": {
+          "$ref": "#/$defs/media_policy"
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collection",
+        "row_id",
+        "field",
+        "media_class",
+        "root_relative_path",
+        "product_id",
+        "relation_observable",
+        "manual_relation_verification_required",
+        "declared_extension",
+        "declared_content_type",
+        "declared_size_bytes",
+        "state"
+      ],
+      "properties": {
+        "collection": {
+          "enum": [
+            "product_images",
+            "technical_sheets"
+          ]
+        },
+        "row_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "field": {
+          "enum": [
+            "image",
+            "file_url"
+          ]
+        },
+        "media_class": {
+          "enum": [
+            "image",
+            "technical_sheet"
+          ]
+        },
+        "root_relative_path": {
+          "$ref": "#/$defs/safe_path"
+        },
+        "product_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "relation_observable": {
+          "type": "boolean"
+        },
+        "manual_relation_verification_required": {
+          "type": "boolean"
+        },
+        "declared_extension": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\.[a-z0-9]+$"
+        },
+        "declared_content_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declared_size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "manual_relation_verification_required"
+          ]
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "root_relative_path",
+        "media_class",
+        "policy",
+        "bindings"
+      ],
+      "properties": {
+        "target_id": {
+          "type": "string",
+          "pattern": "^target-[0-9a-f]{24}$"
+        },
+        "root_relative_path": {
+          "$ref": "#/$defs/safe_path"
+        },
+        "media_class": {
+          "enum": [
+            "image",
+            "technical_sheet"
+          ]
+        },
+        "policy": {
+          "$ref": "#/$defs/media_policy"
+        },
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targets_total",
+        "image_targets",
+        "technical_sheet_targets",
+        "bindings_total",
+        "relations_observable",
+        "manual_relations",
+        "blockers",
+        "warnings"
+      ],
+      "properties": {
+        "targets_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image_targets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "technical_sheet_targets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bindings_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relations_observable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual_relations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "capture_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_method",
+        "redirects_allowed",
+        "proxies_allowed",
+        "retries",
+        "cookies_allowed",
+        "concurrent_requests",
+        "timeout_seconds",
+        "max_image_bytes",
+        "max_pdf_bytes",
+        "max_total_bytes",
+        "allowed_mime_types",
+        "allowed_signatures",
+        "invalid_response",
+        "byte_storage"
+      ],
+      "properties": {
+        "allowed_method": {
+          "const": "GET"
+        },
+        "redirects_allowed": {
+          "const": false
+        },
+        "proxies_allowed": {
+          "const": false
+        },
+        "retries": {
+          "const": 0
+        },
+        "cookies_allowed": {
+          "const": false
+        },
+        "concurrent_requests": {
+          "const": 1
+        },
+        "timeout_seconds": {
+          "const": 15
+        },
+        "max_image_bytes": {
+          "const": 10000000
+        },
+        "max_pdf_bytes": {
+          "const": 25000000
+        },
+        "max_total_bytes": {
+          "const": 250000000
+        },
+        "allowed_mime_types": {
+          "const": {
+            "image": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "technical_sheet": [
+              "application/pdf"
+            ]
+          }
+        },
+        "allowed_signatures": {
+          "const": {
+            "image": [
+              "jpeg",
+              "png"
+            ],
+            "technical_sheet": [
+              "pdf"
+            ]
+          }
+        },
+        "invalid_response": {
+          "const": "abort_without_report"
+        },
+        "byte_storage": {
+          "const": "discard_after_validation"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "rules_version": {
+          "const": "jem-local-binary-observation-plan-v1"
+        },
+        "capture_supported": {
+          "const": false
+        },
+        "next_permitted_step": {
+          "const": "prompt_302_limited_local_get_capture"
+        }
+      },
+      "not": {
+        "required": [
+          "capture_policy"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "schema_version": {
+          "const": "2.0.0"
+        },
+        "rules_version": {
+          "const": "jem-local-binary-observation-plan-v2"
+        },
+        "capture_supported": {
+          "const": true
+        },
+        "next_permitted_step": {
+          "const": "limited_local_get_capture"
+        }
+      },
+      "required": [
+        "capture_policy"
+      ]
+    }
+  ]
 }
