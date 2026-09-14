@@ -193,25 +193,72 @@ class BinaryObservationTests(unittest.TestCase):
  def test_29_synthetic_jpeg_png_pdf_validation_matrix(self):
   import binascii,struct
   def chunk(kind,data): return struct.pack(">I",len(data))+kind+data+struct.pack(">I",binascii.crc32(kind+data)&0xffffffff)
-  png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",1,1,8,2,0,0,0))+chunk(b"IEND",b""); jpeg=b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9"; pdf=b"%PDF-1.4\n1 0 obj<<>>endobj\nstartxref\n9\n%%EOF\n"
-  for body,mime,ext in ((png,"image/png",".png"),(jpeg,"image/jpeg",".jpg")):
-   with self.subTest(mime=mime): self.assertIsNone(validate_observed_binary(body,"image",mime,[{"declared_extension":ext}])["code"]); self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(body[:-1],"image",mime,[{"declared_extension":ext}])["code"])
-  self.assertIsNone(validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)}])["code"])
-  self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/Encrypt","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+8}])["code"])
-  self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(pdf+b"/JavaScript","technical_sheet","application/pdf",[{"declared_size_bytes":len(pdf)+11}])["code"])
+  ihdr=struct.pack(">IIBBBBB",1,1,8,2,0,0,0)
+  png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",ihdr)+chunk(b"IEND",b"")
+  jpeg=b"\xff\xd8"+b"\xff\xe0\x00\x02"+b"\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00"+b"\xff\xd9"
+  pdf=b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n9\n%%EOF\n"
+  valid=((jpeg,"image","image/jpeg",{"declared_extension":".jpg"},"bounded_jpeg_container"),(png,"image","image/png",{"declared_extension":".png"},"bounded_png_container"),(pdf,"technical_sheet","application/pdf",{"declared_size_bytes":len(pdf)},"bounded_pdf_structure_and_safety"))
+  for body,media,mime,binding,validation_name in valid:
+   with self.subTest(valid=mime):
+    result=validate_observed_binary(body,media,mime,[binding]); self.assertIsNone(result["code"]); self.assertEqual(validation_name,result["validation"])
+  jpeg_negative={"soi":jpeg[2:],"eoi":jpeg[:-2],"sof":b"\xff\xd8\xff\xe0\x00\x02\xff\xd9","truncated":b"\xff\xd8\xff\xc0\x00\x0b\x08\xff\xd9","length":b"\xff\xd8\xff\xc0\x00\x01\xff\xd9"}
+  png_negative={"signature":b"X"+png[1:],"ihdr_missing":b"\x89PNG\r\n\x1a\n"+chunk(b"IEND",b""),"ihdr_duplicate":b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",ihdr)*2+chunk(b"IEND",b""),"crc":png[:-1]+bytes([png[-1]^1]),"iend_missing":png[:-12],"after_iend":png+b"x","chunk_truncated":png[:-1]}
+  for family,cases,media,mime,binding in (("jpeg",jpeg_negative,"image","image/jpeg",{"declared_extension":".jpg"}),("png",png_negative,"image","image/png",{"declared_extension":".png"})):
+   for condition,body in cases.items():
+    with self.subTest(family=family,condition=condition): self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(body,media,mime,[binding])["code"])
+  pdf_negative={"header":b"X"+pdf[1:],"version":pdf.replace(b"PDF-1.4",b"PDF-3.0"),"eof":pdf.replace(b"%%EOF",b""),"startxref_missing":pdf.replace(b"startxref\n9\n",b""),"startxref_invalid":pdf.replace(b"startxref\n9",b"startxref\n9999")}
+  for condition,body in pdf_negative.items():
+   with self.subTest(pdf=condition): self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(body,"technical_sheet","application/pdf",[{"declared_size_bytes":len(body)}])["code"])
+  for token in (b"/Encrypt",b"/JavaScript",b"/JS",b"/Launch",b"/EmbeddedFile",b"/OpenAction",b"/AA"):
+   body=pdf+token
+   with self.subTest(pdf_unsafe=token): self.assertEqual("BINARY_PDF_UNSAFE",validate_observed_binary(body,"technical_sheet","application/pdf",[{"declared_size_bytes":len(body)}])["code"])
   self.assertEqual("BINARY_SIZE_MISMATCH",validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":1}])["code"])
-  value=plan(); next(target for target in value["targets"] if target["media_class"]=="technical_sheet")["bindings"][0]["declared_size_bytes"]=len(pdf)
-  value["plan_fingerprint"]=__import__("catalog_pipeline_common.serialization",fromlist=["content_fingerprint"]).content_fingerprint({key:item for key,item in value.items() if key!="plan_fingerprint"})
-  bodies={"image":png,"technical_sheet":pdf}
-  def transport(base,path,headers,timeout,limit):
-   body=bodies[next(target["media_class"] for target in value["targets"] if target["root_relative_path"]==path)]
-   media=next(target["media_class"] for target in value["targets"] if target["root_relative_path"]==path)
-   return {"status":200,"mime":"image/png" if media=="image" else "application/pdf","body":body,"content_length":str(len(body))}
-  reports=[capture_plan(value,value["plan_fingerprint"],"c"*64,transport) for _ in range(2)]
-  self.assertEqual(reports[0],reports[1]); validate(reports[0],ROOT/"schemas/v1/local-binary-observation-report.schema.json")
-  self.assertEqual([target["bindings"] for target in value["targets"]],[receipt["bindings"] for receipt in reports[0]["receipts"]])
-  def contains_bytes(item): return isinstance(item,bytes) or (isinstance(item,dict) and any(contains_bytes(x) for x in item.values())) or (isinstance(item,list) and any(contains_bytes(x) for x in item))
-  self.assertFalse(contains_bytes(reports[0]))
+  self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(png,"image","image/png",[{"declared_extension":".jpg"}])["code"])
+
+  source=snapshot(); source["collections"]["product_images"].append({"id":9,"product":5,"image":"/media/synthetic.png","alt_text":"y","is_main":False,"order":1}); source["collections"]["technical_sheets"][0]["size_bytes"]=len(pdf)
+  source["semantic_fingerprint"]=semantic_fingerprint(source); value=plan(source,assess(source,contract())); original=copy.deepcopy(value)
+  responses={"/media/synthetic.jpg":("image/jpeg",jpeg),"/media/synthetic.png":("image/png",png),"/files/opaque":("application/pdf",pdf)}
+  class SyntheticTransport:
+   def __init__(self): self.calls=[]
+   def __call__(self,base,path,headers,timeout,limit):
+    self.calls.append((base,path,copy.deepcopy(headers),timeout,limit))
+    if path not in responses: raise AssertionError("UNEXPECTED_SYNTHETIC_URL: "+path)
+    mime,body=responses[path]
+    return {"status":200,"mime":mime,"body":body,"content_length":str(len(body))}
+  transports=[SyntheticTransport(),SyntheticTransport()]
+  reports=[capture_plan(value,value["plan_fingerprint"],"c"*64,transport) for transport in transports]
+  self.assertEqual(original,value); self.assertEqual(reports[0],reports[1]); validate(reports[0],ROOT/"schemas/v1/local-binary-observation-report.schema.json")
+  expected_paths=[target["root_relative_path"] for target in value["targets"]]
+  for transport in transports:
+   self.assertEqual(expected_paths,[call[1] for call in transport.calls]); self.assertEqual(len(value["targets"]),len(transport.calls))
+   with self.assertRaisesRegex(AssertionError,"UNEXPECTED_SYNTHETIC_URL"): transport(value["base_url"],"/unexpected",{},15,1)
+  receipts={receipt["target_id"]:receipt for receipt in reports[0]["receipts"]}
+  self.assertEqual(len(value["targets"]),len(receipts))
+  for target in value["targets"]:
+   receipt=receipts[target["target_id"]]; mime,body=responses[target["root_relative_path"]]
+   self.assertEqual((target["target_id"],target["media_class"],target["bindings"]),(receipt["target_id"],receipt["media_class"],receipt["bindings"])); self.assertEqual((mime,len(body),hashlib.sha256(body).hexdigest()),(receipt["observed_mime"],receipt["observed_size_bytes"],receipt["observed_sha256"])); self.assertTrue(receipt["binary_validation"].startswith("bounded_"))
+  manual=next(receipt for receipt in reports[0]["receipts"] if receipt["media_class"]=="technical_sheet")
+  self.assertEqual("observed_manual_relation_verification_required",reports[0]["state"]); self.assertTrue(manual["manual_relation_verification_required"])
+  def contains_body(item): return isinstance(item,(bytes,bytearray,memoryview)) or (isinstance(item,dict) and any(contains_body(x) for x in item.values())) or (isinstance(item,list) and any(contains_body(x) for x in item))
+  self.assertFalse(contains_body(reports[0])); json.dumps(reports[0])
+  response_negative={
+   "response":("BINARY_READ_RESPONSE_INVALID",{"status":200,"mime":"application/pdf","body":pdf}),
+   "mime":("BINARY_READ_MIME",{"status":200,"mime":"image/png","body":pdf,"content_length":str(len(pdf))}),
+   "empty":("BINARY_READ_EMPTY",{"status":200,"mime":"application/pdf","body":b"","content_length":"0"}),
+   "content_length":("BINARY_CONTENT_LENGTH_MISMATCH",{"status":200,"mime":"application/pdf","body":pdf,"content_length":str(len(pdf)+1)}),
+   "too_large":("BINARY_READ_TOO_LARGE",{"status":200,"mime":"application/pdf","body":b"x"*(CAPTURE_POLICY["max_pdf_bytes"]+1),"content_length":str(CAPTURE_POLICY["max_pdf_bytes"]+1)}),
+   "status":("BINARY_READ_STATUS",{"status":404,"mime":"application/pdf","body":pdf,"content_length":str(len(pdf))}),
+   "structure":("BINARY_SIGNATURE_INVALID",{"status":200,"mime":"application/pdf","body":pdf[:-6],"content_length":str(len(pdf)-6)}),
+  }
+  for condition,(code,response) in response_negative.items():
+   def rejecting_transport(base,path,headers,timeout,limit,response=response):
+    if path!="/files/opaque": raise AssertionError("negative case reached a later target")
+    return response
+   with self.subTest(response=condition), self.assertRaisesRegex(BinaryObservationError,code): capture_plan(value,value["plan_fingerprint"],"c"*64,rejecting_transport)
+  aggregate_plan=copy.deepcopy(value); aggregate_plan["capture_policy"]["max_total_bytes"]=len(pdf)
+  aggregate_plan["plan_fingerprint"]=__import__("catalog_pipeline_common.serialization",fromlist=["content_fingerprint"]).content_fingerprint({key:item for key,item in aggregate_plan.items() if key!="plan_fingerprint"})
+  with mock.patch.dict(CAPTURE_POLICY,{"max_total_bytes":len(pdf)}), self.assertRaisesRegex(BinaryObservationError,"BINARY_TOTAL_LIMIT_EXCEEDED"):
+   capture_plan(aggregate_plan,aggregate_plan["plan_fingerprint"],"c"*64,SyntheticTransport())
  def test_30_capture_response_taxonomy_is_stable(self):
   source=(ROOT/"jem_nexus_import/binary_observation.py").read_text(encoding="utf-8")
   for code in ("BINARY_READ_STATUS","BINARY_READ_MIME","BINARY_READ_EMPTY","BINARY_CONTENT_LENGTH_INVALID","BINARY_CONTENT_LENGTH_MISMATCH","BINARY_READ_TOO_LARGE","BINARY_TOTAL_LIMIT_EXCEEDED","BINARY_SIGNATURE_INVALID","BINARY_SIZE_MISMATCH","BINARY_PDF_UNSAFE"):
