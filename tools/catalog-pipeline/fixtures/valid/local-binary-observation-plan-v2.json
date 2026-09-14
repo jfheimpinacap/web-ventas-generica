@@ -2,7 +2,7 @@
   "base_url": "http://localhost:5000",
   "blockers": [],
   "bytes_observed": false,
-  "capture_supported": false,
+  "capture_supported": true,
   "content_published": false,
   "contract_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "counts": {
@@ -36,7 +36,7 @@
   },
   "mutation_authorized": false,
   "network_executed": false,
-  "next_permitted_step": "prompt_302_limited_local_get_capture",
+  "next_permitted_step": "limited_local_get_capture",
   "path_policy": {
     "filesystem_resolution": false,
     "kind": "root_relative_url_path",
@@ -44,8 +44,8 @@
   },
   "plan_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "readiness_file_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "rules_version": "jem-local-binary-observation-plan-v1",
-  "schema_version": "1.0.0",
+  "rules_version": "jem-local-binary-observation-plan-v2",
+  "schema_version": "2.0.0",
   "snapshot_file_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "snapshot_semantic_fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   "state": "planned",
@@ -81,5 +81,37 @@
   ],
   "warnings": [
     "BINARY_CONTENT_NOT_OBSERVABLE"
-  ]
+  ],
+  "capture_policy": {
+    "allowed_method": "GET",
+    "redirects_allowed": false,
+    "proxies_allowed": false,
+    "retries": 0,
+    "cookies_allowed": false,
+    "concurrent_requests": 1,
+    "timeout_seconds": 15,
+    "max_image_bytes": 10000000,
+    "max_pdf_bytes": 25000000,
+    "max_total_bytes": 250000000,
+    "allowed_mime_types": {
+      "image": [
+        "image/jpeg",
+        "image/png"
+      ],
+      "technical_sheet": [
+        "application/pdf"
+      ]
+    },
+    "allowed_signatures": {
+      "image": [
+        "jpeg",
+        "png"
+      ],
+      "technical_sheet": [
+        "pdf"
+      ]
+    },
+    "invalid_response": "abort_without_report",
+    "byte_storage": "discard_after_validation"
+  }
 }

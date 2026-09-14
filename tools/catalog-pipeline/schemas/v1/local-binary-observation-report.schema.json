@@ -124,8 +124,9 @@
         "bindings": {
           "type": "array",
           "items": {
-            "$ref": "local-binary-observation-plan.schema.json#/$defs/binding"
-          }
+            "$ref": "#/$defs/receipt_binding_v2"
+          },
+          "minItems": 1
         },
         "observed_status": {
           "const": 200
@@ -284,6 +285,94 @@
         },
         "delete_requests": {
           "const": 0
+        }
+      }
+    },
+    "safe_path": {
+      "type": "string",
+      "pattern": "^/(?!/)(?!.*[\\\\?#])(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "receipt_binding_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collection",
+        "row_id",
+        "field",
+        "media_class",
+        "root_relative_path",
+        "product_id",
+        "relation_observable",
+        "manual_relation_verification_required",
+        "declared_extension",
+        "declared_content_type",
+        "declared_size_bytes",
+        "state"
+      ],
+      "properties": {
+        "collection": {
+          "enum": [
+            "product_images",
+            "technical_sheets"
+          ]
+        },
+        "row_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "field": {
+          "enum": [
+            "image",
+            "file_url"
+          ]
+        },
+        "media_class": {
+          "enum": [
+            "image",
+            "technical_sheet"
+          ]
+        },
+        "root_relative_path": {
+          "$ref": "#/$defs/safe_path"
+        },
+        "product_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "relation_observable": {
+          "type": "boolean"
+        },
+        "manual_relation_verification_required": {
+          "type": "boolean"
+        },
+        "declared_extension": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\.[a-z0-9]+$"
+        },
+        "declared_content_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declared_size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "manual_relation_verification_required"
+          ]
         }
       }
     }

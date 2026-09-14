@@ -59,7 +59,18 @@
       "binary_validation": "bounded_pdf_structure_and_safety",
       "bindings": [
         {
-          "declared_size_bytes": 32
+          "collection": "technical_sheets",
+          "row_id": 2,
+          "field": "file_url",
+          "media_class": "technical_sheet",
+          "root_relative_path": "/synthetic/sheet.pdf",
+          "product_id": null,
+          "relation_observable": false,
+          "manual_relation_verification_required": true,
+          "declared_extension": ".pdf",
+          "declared_content_type": "application/pdf",
+          "declared_size_bytes": 32,
+          "state": "manual_relation_verification_required"
         }
       ],
       "declared_size_match": true,
