@@ -93,13 +93,50 @@ alterados, completos ni con extras.
 
 El schema cerrado `local-binary-observation-plan.schema.json` contiene `$defs` para
 targets y bindings; su fixture es inequívocamente sintético (`fixture_only=true`) y no
-habilita captura. El inventario queda exactamente en **81** archivos
-`*.schema.json` y **82** JSON bajo `schemas/v1` al contar el contrato JEM.
+habilita captura. El inventario queda exactamente en **82** archivos
+`*.schema.json` y **83** JSON bajo `schemas/v1` al contar el contrato JEM.
 
 ## Riesgos y siguiente paso
 
-El plan no demuestra disponibilidad, MIME, tamaño, firma, estructura, seguridad o hash
-del contenido. Tampoco aporta transporte, token, retry, resume o receipts. Prompt 302
-deberá diseñar esos límites antes de cualquier GET; una fase aún posterior decidirá
-cómo incorporar evidencia a readiness. POST, PUT, PATCH, DELETE, publicación y toda
-mutación permanecen fuera de alcance.
+Históricamente, el plan v1 no demostró disponibilidad, MIME, tamaño, firma, estructura,
+seguridad o hash del contenido, ni aportó transporte, token o receipts. Prompt 303 agrega
+esas capacidades solamente a v2; Prompt 304 decidirá cómo incorporar el reporte a readiness.
+POST, PUT, PATCH, DELETE, publicación y toda mutación permanecen fuera de alcance.
+
+## Plan v2 y captura local limitada (Prompt 303)
+
+El plan v1 sigue siendo evidencia histórica parseable e inmutable, pero `capture-local` lo
+rechaza con `CAPTURE_PLAN_VERSION_UNSUPPORTED`; nunca se convierte ni sobrescribe. El planner
+emite exclusivamente v2, usa el estado semántico `limited_local_get_capture` y sella en su
+fingerprint una política fija: un GET secuencial por target deduplicado, cero redirects,
+proxies, cookies, retries o concurrencia, timeout de 15 segundos, límites de 10 MB por imagen,
+25 MB por PDF y 250 MB agregados, MIME JPEG/PNG/PDF y descarte de bytes tras validación.
+
+El núcleo puro valida plan, fingerprint, contadores, respuestas, firmas, estructura y seguridad
+PDF, y produce receipts y reporte. No conoce entorno ni transporte. El composition root lee
+solo `JEM_NEXUS_LOCAL_READ_TOKEN`, bloquea `JEM_NEXUS_LOCAL_MUTATION_TOKEN`, hace todo el
+preflight antes de construir el transporte y lo inyecta. No existe flag de token. La tercera
+frontera, `jem_nexus_local_binary_transport.py`, reconstruye exclusivamente URLs HTTP loopback,
+instala `ProxyHandler({})`, bloquea redirects y lee `limit + 1`; las otras fronteras conservan
+JSON GET y mutación POST respectivamente. No hay PUT, PATCH ni DELETE.
+
+Se exige status 200, Content-Length válido y coincidente cuando existe, MIME coherente, cuerpo
+no vacío, límites individual/agregado, JPEG/PNG estructural y PDF íntegro, no cifrado y sin
+contenido activo. El SHA-256 se calcula sobre los bytes recibidos; ningún byte, token o header
+sensible se persiste. Los receipts conservan bindings y las fichas sin producto permanecen en
+`observed_manual_relation_verification_required`.
+
+La publicación de `binary-observation-report.json` y `.txt` usa staging hermano, escritura
+exclusiva, flush/fsync, rename y sync portable, rechaza symlinks y nunca publica un reporte
+parcial. Los errores estables incluyen `CAPTURE_PLAN_VERSION_UNSUPPORTED`, `CAPTURE_NOT_SUPPORTED`,
+`CAPTURE_PLAN_FINGERPRINT_MISMATCH`, `CAPTURE_TOKEN_MISSING`, `MUTATION_TOKEN_PRESENT`,
+`BINARY_READ_STATUS`, `BINARY_READ_REDIRECT`, `BINARY_READ_MIME`, `BINARY_READ_TOO_LARGE`,
+`BINARY_READ_EMPTY`, `BINARY_CONTENT_LENGTH_INVALID`, `BINARY_CONTENT_LENGTH_MISMATCH`,
+`BINARY_SIGNATURE_INVALID`, `BINARY_SIZE_MISMATCH`, `BINARY_PDF_UNSAFE`,
+`BINARY_TOTAL_LIMIT_EXCEEDED` y `OUTPUT_DIRECTORY_MUST_BE_NEW`. Prompt 304 queda reservado para
+integrar este reporte con readiness; no se cambia aún su warning histórico.
+
+Procedimiento: fusionar Prompt 303, ejecutar toda la suite en Windows con Python 3.13.5,
+regenerar un plan v2 en un directorio nuevo, capturar con un token de lectura fresco y eliminarlo
+al terminar, preservando el plan v1 y toda evidencia anterior. Solo un retest correcto autoriza
+esa regeneración y una captura real; esta implementación no autoriza mutaciones ni publicación.

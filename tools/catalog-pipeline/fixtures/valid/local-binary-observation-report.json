@@ -1,0 +1,92 @@
+{
+  "base_url": "http://localhost:5000",
+  "blockers": [],
+  "contract_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "counts": {
+    "blockers": 0,
+    "bytes_total": 96,
+    "get_requests": 2,
+    "images": 1,
+    "manual_relations": 1,
+    "pdfs": 1,
+    "targets_expected": 2,
+    "targets_observed": 2,
+    "warnings": 1
+  },
+  "fixture_only": true,
+  "network_manifest": {
+    "bytes_observed": true,
+    "concurrency": 1,
+    "method": "GET",
+    "network_executed": true,
+    "redirects": 0,
+    "requests": 2,
+    "retries": 0
+  },
+  "next_permitted_step": "prompt_304_readiness_integration",
+  "plan_file_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "plan_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "receipts": [
+    {
+      "binary_validation": "bounded_png_container",
+      "bindings": [
+        {
+          "collection": "product_images",
+          "declared_content_type": null,
+          "declared_extension": ".png",
+          "declared_size_bytes": null,
+          "field": "image",
+          "manual_relation_verification_required": false,
+          "media_class": "image",
+          "product_id": 1,
+          "relation_observable": true,
+          "root_relative_path": "/synthetic/image.jpg",
+          "row_id": 1,
+          "state": "planned"
+        }
+      ],
+      "declared_size_match": null,
+      "manual_relation_verification_required": false,
+      "media_class": "image",
+      "observed_mime": "image/png",
+      "observed_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "observed_size_bytes": 64,
+      "observed_status": 200,
+      "relation_observable": true,
+      "target_id": "target-synthetic-image"
+    },
+    {
+      "binary_validation": "bounded_pdf_structure_and_safety",
+      "bindings": [
+        {
+          "declared_size_bytes": 32
+        }
+      ],
+      "declared_size_match": true,
+      "manual_relation_verification_required": true,
+      "media_class": "technical_sheet",
+      "observed_mime": "application/pdf",
+      "observed_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "observed_size_bytes": 32,
+      "observed_status": 200,
+      "relation_observable": false,
+      "target_id": "target-synthetic-sheet"
+    }
+  ],
+  "report_fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "rules_version": "jem-local-binary-observation-report-v1",
+  "schema_version": "1.0.0",
+  "snapshot_semantic_fingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+  "state": "observed_manual_relation_verification_required",
+  "warnings": [
+    "BINARY_CONTENT_NOT_OBSERVABLE"
+  ],
+  "zero_mutation_manifest": {
+    "content_published": false,
+    "delete_requests": 0,
+    "mutation_authorized": false,
+    "patch_requests": 0,
+    "post_requests": 0,
+    "put_requests": 0
+  }
+}

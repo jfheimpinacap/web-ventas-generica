@@ -1,1 +1,117 @@
-{"base_url":"http://localhost:5000","blockers":[],"bytes_observed":false,"capture_supported":false,"content_published":false,"contract_fingerprint":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","counts":{"bindings_total":1,"blockers":0,"image_targets":1,"manual_relations":0,"relations_observable":1,"targets_total":1,"technical_sheet_targets":0,"warnings":1},"fixture_only":true,"media_rules":{"image":{"future_validation":["bytes","actual_mime","sha256"]},"technical_sheet":{"future_validation":["pdf_signature","pdf_structure","security","size","sha256"]}},"mutation_authorized":false,"network_executed":false,"next_permitted_step":"prompt_302_limited_local_get_capture","path_policy":{"filesystem_resolution":false,"kind":"root_relative_url_path","percent_decoding":"reject_encoded_separators_and_ambiguous_double_decoding"},"plan_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","readiness_file_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","rules_version":"jem-local-binary-observation-plan-v1","schema_version":"1.0.0","snapshot_file_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","snapshot_semantic_fingerprint":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","state":"planned","targets":[{"bindings":[{"collection":"product_images","declared_content_type":null,"declared_extension":".jpg","declared_size_bytes":null,"field":"image","manual_relation_verification_required":false,"media_class":"image","product_id":1,"relation_observable":true,"root_relative_path":"/synthetic/image.jpg","row_id":1,"state":"planned"}],"media_class":"image","policy":{"future_validation":["bytes","actual_mime","sha256"]},"root_relative_path":"/synthetic/image.jpg","target_id":"target-111111111111111111111111"}],"warnings":["BINARY_CONTENT_NOT_OBSERVABLE"]}
+{
+  "base_url": "http://localhost:5000",
+  "blockers": [],
+  "bytes_observed": false,
+  "capture_supported": true,
+  "content_published": false,
+  "contract_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "counts": {
+    "bindings_total": 1,
+    "blockers": 0,
+    "image_targets": 1,
+    "manual_relations": 0,
+    "relations_observable": 1,
+    "targets_total": 1,
+    "technical_sheet_targets": 0,
+    "warnings": 1
+  },
+  "fixture_only": true,
+  "media_rules": {
+    "image": {
+      "future_validation": [
+        "bytes",
+        "actual_mime",
+        "sha256"
+      ]
+    },
+    "technical_sheet": {
+      "future_validation": [
+        "pdf_signature",
+        "pdf_structure",
+        "security",
+        "size",
+        "sha256"
+      ]
+    }
+  },
+  "mutation_authorized": false,
+  "network_executed": false,
+  "next_permitted_step": "limited_local_get_capture",
+  "path_policy": {
+    "filesystem_resolution": false,
+    "kind": "root_relative_url_path",
+    "percent_decoding": "reject_encoded_separators_and_ambiguous_double_decoding"
+  },
+  "plan_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "readiness_file_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "rules_version": "jem-local-binary-observation-plan-v2",
+  "schema_version": "2.0.0",
+  "snapshot_file_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "snapshot_semantic_fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "state": "planned",
+  "targets": [
+    {
+      "bindings": [
+        {
+          "collection": "product_images",
+          "declared_content_type": null,
+          "declared_extension": ".jpg",
+          "declared_size_bytes": null,
+          "field": "image",
+          "manual_relation_verification_required": false,
+          "media_class": "image",
+          "product_id": 1,
+          "relation_observable": true,
+          "root_relative_path": "/synthetic/image.jpg",
+          "row_id": 1,
+          "state": "planned"
+        }
+      ],
+      "media_class": "image",
+      "policy": {
+        "future_validation": [
+          "bytes",
+          "actual_mime",
+          "sha256"
+        ]
+      },
+      "root_relative_path": "/synthetic/image.jpg",
+      "target_id": "target-111111111111111111111111"
+    }
+  ],
+  "warnings": [
+    "BINARY_CONTENT_NOT_OBSERVABLE"
+  ],
+  "capture_policy": {
+    "allowed_method": "GET",
+    "redirects_allowed": false,
+    "proxies_allowed": false,
+    "retries": 0,
+    "cookies_allowed": false,
+    "concurrent_requests": 1,
+    "timeout_seconds": 15,
+    "max_image_bytes": 10000000,
+    "max_pdf_bytes": 25000000,
+    "max_total_bytes": 250000000,
+    "allowed_mime_types": {
+      "image": [
+        "image/jpeg",
+        "image/png"
+      ],
+      "technical_sheet": [
+        "application/pdf"
+      ]
+    },
+    "allowed_signatures": {
+      "image": [
+        "jpeg",
+        "png"
+      ],
+      "technical_sheet": [
+        "pdf"
+      ]
+    },
+    "invalid_response": "abort_without_report",
+    "byte_storage": "discard_after_validation"
+  }
+}

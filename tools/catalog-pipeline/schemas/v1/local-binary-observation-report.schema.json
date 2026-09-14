@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jem-nexus.invalid/catalog-pipeline/v1/local-binary-observation-report.schema.json",
+  "title": "local-binary-observation-report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rules_version",
+    "fixture_only",
+    "plan_fingerprint",
+    "plan_file_sha256",
+    "contract_fingerprint",
+    "snapshot_semantic_fingerprint",
+    "base_url",
+    "state",
+    "receipts",
+    "counts",
+    "blockers",
+    "warnings",
+    "network_manifest",
+    "zero_mutation_manifest",
+    "next_permitted_step",
+    "report_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "rules_version": {
+      "const": "jem-local-binary-observation-report-v1"
+    },
+    "fixture_only": {
+      "type": "boolean"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/hash"
+    },
+    "plan_file_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "contract_fingerprint": {
+      "$ref": "#/$defs/hash"
+    },
+    "snapshot_semantic_fingerprint": {
+      "$ref": "#/$defs/hash"
+    },
+    "base_url": {
+      "type": "string",
+      "pattern": "^http://(localhost|127\\.0\\.0\\.1|\\[::1\\]):[0-9]+$"
+    },
+    "state": {
+      "enum": [
+        "observed",
+        "observed_manual_relation_verification_required",
+        "blocked"
+      ]
+    },
+    "receipts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/receipt"
+      }
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "network_manifest": {
+      "$ref": "#/$defs/network"
+    },
+    "zero_mutation_manifest": {
+      "$ref": "#/$defs/zero"
+    },
+    "next_permitted_step": {
+      "const": "prompt_304_readiness_integration"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "media_class",
+        "bindings",
+        "observed_status",
+        "observed_mime",
+        "observed_size_bytes",
+        "observed_sha256",
+        "binary_validation",
+        "declared_size_match",
+        "relation_observable",
+        "manual_relation_verification_required"
+      ],
+      "properties": {
+        "target_id": {
+          "type": "string"
+        },
+        "media_class": {
+          "enum": [
+            "image",
+            "technical_sheet"
+          ]
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "local-binary-observation-plan.schema.json#/$defs/binding"
+          }
+        },
+        "observed_status": {
+          "const": 200
+        },
+        "observed_mime": {
+          "enum": [
+            "image/jpeg",
+            "image/png",
+            "application/pdf"
+          ]
+        },
+        "observed_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "binary_validation": {
+          "enum": [
+            "bounded_jpeg_container",
+            "bounded_png_container",
+            "bounded_pdf_structure_and_safety"
+          ]
+        },
+        "declared_size_match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "relation_observable": {
+          "type": "boolean"
+        },
+        "manual_relation_verification_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targets_expected",
+        "targets_observed",
+        "get_requests",
+        "images",
+        "pdfs",
+        "bytes_total",
+        "manual_relations",
+        "blockers",
+        "warnings"
+      ],
+      "properties": {
+        "targets_expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "targets_observed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "get_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "images": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pdfs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual_relations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_executed",
+        "bytes_observed",
+        "method",
+        "requests",
+        "redirects",
+        "retries",
+        "concurrency"
+      ],
+      "properties": {
+        "network_executed": {
+          "const": true
+        },
+        "bytes_observed": {
+          "const": true
+        },
+        "method": {
+          "const": "GET"
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redirects": {
+          "const": 0
+        },
+        "retries": {
+          "const": 0
+        },
+        "concurrency": {
+          "const": 1
+        }
+      }
+    },
+    "zero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mutation_authorized",
+        "content_published",
+        "post_requests",
+        "put_requests",
+        "patch_requests",
+        "delete_requests"
+      ],
+      "properties": {
+        "mutation_authorized": {
+          "const": false
+        },
+        "content_published": {
+          "const": false
+        },
+        "post_requests": {
+          "const": 0
+        },
+        "put_requests": {
+          "const": 0
+        },
+        "patch_requests": {
+          "const": 0
+        },
+        "delete_requests": {
+          "const": 0
+        }
+      }
+    }
+  }
+}
