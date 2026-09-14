@@ -97,7 +97,8 @@ class ReadinessTests(unittest.TestCase):
     def test_28_invalid_root_shapes_fail_closed(self):
         for field, invalid in (("parent", 9), ("id", None), ("id", True), ("id", "41"), ("product_type", "service")):
             with self.subTest(field=field, invalid=invalid):
-                value=snapshot(); value["collections"]["categories"][0][field]=invalid; value["semantic_fingerprint"]=semantic_fingerprint(value)
+                value=snapshot(); value["collections"]["categories"][0][field]=invalid; before=copy.deepcopy(value); fingerprint=semantic_fingerprint(value)
+                self.assertEqual(before,value); value["semantic_fingerprint"]=fingerprint
                 self.assertIn("ROOT_CATEGORY_INVALID", [x["code"] for x in self.report(value)["blockers"]])
 
     def test_29_root_selection_is_order_independent_and_ignores_other_types(self):
