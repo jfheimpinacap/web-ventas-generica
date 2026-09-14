@@ -28,7 +28,7 @@ from jem_nexus_import.planning import simulate
 from jem_nexus_import.snapshot import COLLECTIONS, SnapshotError, semantic_fingerprint
 from jem_nexus_import.verification import SnapshotObserver, verify_managed
 
-CONTRACT = "c" * 64
+CONTRACT = content_fingerprint(json.loads((ROOT / "schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8")))
 BASE_URL = "http://localhost:2910"
 SAFE = {"price": None, "price_visible": False, "is_featured": False, "is_published": False}
 IMAGE_PRIMARY = b"\x89PNG\r\n\x1a\nfixture-primary"
@@ -99,9 +99,9 @@ class _SyntheticBackend:
     def __init__(self, mode="observable_binary_fixture"):
         self.mode = mode
         self.collections = {name: [] for name in COLLECTIONS}
-        self.collections["categories"] = [{"id": 1, "name": "Maquinarias", "slug": "maquinarias", "parent_id": None, "product_type": "machinery"}]
+        self.collections["categories"] = [{"id": 41, "name": "Maquinarias", "slug": "maquinaria", "parent": None, "product_type": "machinery"}]
         self.collections["suppliers"] = [{"id": 2, "name": "Proveedor Sintético", "contact_name": "", "phone": "", "email": "", "notes": "", "is_active": True}]
-        self.next_id = 10
+        self.next_id = 100
         self.events = []
         self.posts = {}
         self.intents = {}
@@ -299,6 +299,14 @@ class _Harness:
 
 
 class JemNexusLocalIntegrationTests(unittest.TestCase):
+    def test_000_planner_uses_contractual_root_binding_without_fixed_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            h = _Harness(d); root = next(x for x in h.plan["external_bindings"] if x["namespace"] == "root")
+            category = next(x for x in h.plan["operations"] if x["kind"] == "category")
+            self.assertEqual(("maquinaria", 41), (root["key"], root["value"]))
+            self.assertEqual({"scope":"external","namespace":"root","key":"maquinaria","binding_type":"entity_id"},
+                             category["payload_template"]["parent_id"])
+
     def test_001_complete_package_reaches_verified_with_observable_binaries(self):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); report = verify_managed(h.plan, cp, h.observable())
@@ -320,7 +328,7 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
     def test_004_real_bindings_are_propagated(self):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); product = h.backend.collections["products"][0]
-            brand_id = h.backend.collections["brands"][0]["id"]; category_id = next(x["id"] for x in h.backend.collections["categories"] if x["slug"] != "maquinarias")
+            brand_id = h.backend.collections["brands"][0]["id"]; category_id = next(x["id"] for x in h.backend.collections["categories"] if x["slug"] != "maquinaria")
             self.assertEqual((brand_id, category_id, 2), (product["brand_id"], product["category_id"], product["supplier_id"])); self.assertEqual(3, len(cp["produced_bindings"]))
 
     def test_005_safe_commercial_defaults_reach_backend(self):

@@ -3,9 +3,9 @@
   "external_bindings": [
     {
       "namespace": "root",
-      "key": "maquinarias",
+      "key": "maquinaria",
       "binding_type": "entity_id",
-      "value": 1,
+      "value": 41,
       "producer_operation": null,
       "resolution_status": "resolved"
     }
@@ -15,7 +15,7 @@
     {
       "scope": "external",
       "namespace": "root",
-      "key": "maquinarias",
+      "key": "maquinaria",
       "binding_type": "entity_id"
     }
   ],

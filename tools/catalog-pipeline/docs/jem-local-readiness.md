@@ -1,5 +1,20 @@
 # Certificación offline de una captura GET local
 
+## Continuidad y evidencia de Prompt 299
+
+Esta corrección continúa la línea de Prompts 294–298 sobre la base fusionada `55c5a41` (contenido
+funcional `81d89db`). El retest confirmado externamente antes de este cambio fue **661 pruebas OK**.
+La captura GET read-only aprobada `prompt-296-run-07` tuvo 98.576 bytes y SHA-256
+`466d535971de62c8a4da2845e1bbcc7a5c66e63b4112794a9196befb7af28dee`; su assessment offline
+terminó `read_incompatible`/exit 3 únicamente por `ROOT_CATEGORY_MISSING`, además del warning
+`BINARY_CONTENT_NOT_OBSERVABLE`, con cero solicitudes y cero mutaciones en el manifiesto.
+
+Las diez categorías observadas incluían las raíces `maquinaria`/`machinery`,
+`repuestos`/`spare_part` y `servicios`/`service`, y siete hijas machinery apuntaban a la primera.
+Este repositorio no incorpora ni modifica esa evidencia: solo corrige el consumidor contractual.
+Se agregan 8 métodos offline (incluidos cinco subcasos de forma inválida), para un total Windows
+proyectado de **669**; no se ejecutaron aquí por la restricción expresa de validación estática.
+
 Esta certificación separa estrictamente **captura** y **assessment**. La captura existente es el
 único paso con red y usa exclusivamente GET loopback; el assessor nuevo solo abre archivos locales,
 no recibe URL ni credenciales, no autoriza mutaciones y declara cero solicitudes propias.
@@ -52,9 +67,25 @@ No se deben reutilizar `prompt-296-run-05` ni `prompt-296-run-06`. Readiness per
 hasta obtener un snapshot válido. No se autorizó ninguna mutación, reparación, publicación ni
 acceso adicional al backend.
 
-El assessor exige la raíz física única `maquinarias`, con ID entero positivo, `parent=null` e
-identidad contractual exacta, y valida descendientes por `parent`. No crea ni propone reparar la
-raíz y no la confunde con categorías normalizadas o futuras categorías de producto.
+El contrato vigente distingue expresamente **Etiqueta visible: Maquinarias**, **Slug persistido:
+maquinaria** y **Tipo: machinery**. La migración canónica del backend, sus DTO/GET, filtros y pruebas
+son la autoridad estática del slug singular; ni la etiqueta humana ni las rutas comerciales cambian.
+El falso `ROOT_CATEGORY_MISSING` de `prompt-296-run-07` fue causado exclusivamente por el plural
+contractual anterior.
+
+El assessor exige exactamente una raíz física que cumpla a la vez `slug=maquinaria`, ID entero
+positivo (no booleano ni string), `parent=null` y `product_type=machinery`. Repuestos, servicios,
+posición, orden e ID conocido no son fallbacks. La misma metadata cerrada de
+`jem-nexus-contract.json` alimenta planning: el binding externo es `root:maquinaria` y una categoría
+hija recibe el ID observado por ese binding, nunca el literal `1`. Ausencia, duplicidad o forma
+inválida bloquean; no se crea ni se propone reparar la raíz.
+
+El cambio de contrato altera su fingerprint canónico y por ello invalida fail-closed snapshots,
+planes, dry-runs y autorizaciones ligados al fingerprint histórico
+`6da3fd64c4180bf1f19dacaa10ea14dafa8633db0d02dd8fb76b7196560d7daf`. No se incrementa
+`jem-local-readiness-v1`: las reglas de evaluación no cambiaron y el contrato completo ya es la
+entrada versionada y fingerprinted que liga todos esos artefactos. `prompt-296-run-07` permanece
+evidencia histórica inmutable y no es aceptable bajo el contrato nuevo.
 
 Los GET de imágenes y fichas ofrecen metadatos, pero la captura de colecciones no obtiene bytes ni
 SHA-256. Filename, URL, MIME o tamaño aislado no prueban igualdad. Por ello el resultado realista de
@@ -67,8 +98,8 @@ fichas se informan por separado y `mutation_authorized` permanece `false`.
    explícito desde esa configuración; no se presupone ningún puerto.
 2. Exporte únicamente `JEM_NEXUS_LOCAL_READ_TOKEN`. No defina
    `JEM_NEXUS_LOCAL_MUTATION_TOKEN`.
-3. Calcule el fingerprint canónico del contrato con una herramienta aprobada por su procedimiento
-   local y capture con la interfaz existente:
+3. Después del merge y del retest completo, calcule el fingerprint canónico del contrato mediante
+   la función productiva y capture en el destino nuevo `prompt-296-run-08` con la interfaz existente:
 
    ```text
    catalog_import.py snapshot-local --base-url <URL_LOOPBACK_CON_PUERTO> --contract-fingerprint <FINGERPRINT_CONTRATO> --output <DIRECTORIO_SNAPSHOT>
@@ -93,6 +124,12 @@ fichas se informan por separado y `mutation_authorized` permanece `false`.
 `snapshot-local` realiza exclusivamente los siete GET locales allowlisted y ningún POST. El
 assessment realiza cero solicitudes de red, cero POST, cero create/update/delete y ninguna
 publicación. No habilita producción, EP/GAM live ni cambios LGMG.
+
+La advertencia `BINARY_CONTENT_NOT_OBSERVABLE` permanece: los GET no exponen bytes y SHA-256
+verificables. Una captura nueva válida puede derivar
+`read_compatible_manual_binary_verification`, pero ese resultado no se fuerza. El siguiente paso
+permitido es solamente la captura GET read-only nueva y su assessment offline; no autoriza apply,
+resume, verify mutante, reparación, importación ni publicación.
 
 ## Salidas, resultados y errores
 

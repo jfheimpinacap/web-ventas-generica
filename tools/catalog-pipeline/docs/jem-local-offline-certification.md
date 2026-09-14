@@ -17,7 +17,7 @@ una API, POST reales, publicación, producción ni uso de catálogos reales.
 
 La prueba `test_jem_nexus_local_integration.py` construye un ZIP canónico con el packager real, lo
 verifica con el verificador real y consume sus bytes sin extraerlos. Después ejecuta planner,
-dry-run, autorización fixture-only, snapshot fresco con raíz `maquinarias`, preflight, executor,
+dry-run, autorización fixture-only, snapshot fresco con raíz `maquinaria`, preflight, executor,
 checkpoint/receipts, reconciliación de resume y verifier. Reader y mutator son los únicos límites
 inyectados. No se sustituyen planificación, bindings, preflight, ejecución, checkpoint,
 reconciliación ni verificación.
@@ -147,9 +147,18 @@ ausentes, nulos, de tipo incorrecto, contradictorios o desconocidos siguen bloqu
 conflictos duales explícitamente bloqueados. Los fingerprints continúan calculándose sobre el DTO
 original y la validación no lo muta.
 
-La captura real se repetirá solo después del merge y del retest en Windows con Python 3.13.5, en
-un destino nuevo que no reutilice `prompt-296-run-05` ni `prompt-296-run-06`. Readiness continúa
-pendiente; esta corrección no autoriza GET adicionales, mutaciones, reparación ni publicación.
+La raíz vigente conserva la etiqueta visible `Maquinarias`, pero su slug persistido es
+`maquinaria` y su tipo es `machinery`. Esa identidad procede una sola vez de la metadata cerrada
+del contrato; readiness y planning la comparten, y planning produce `root:maquinaria` con el ID
+observado, no con un ID fijo. El plural anterior explica el falso `ROOT_CATEGORY_MISSING` sin
+implicar ninguna reparación de datos.
+
+Cambiar el contrato invalida por fingerprint la captura y toda autorización anteriores. La captura
+real se repetirá solo después del merge y del retest en Windows con Python 3.13.5, en
+`prompt-296-run-08`; `prompt-296-run-07` y las anteriores permanecen históricas e inmutables.
+Readiness continúa pendiente y `BINARY_CONTENT_NOT_OBSERVABLE` permanece hasta aportar evidencia
+manual real. Esta corrección no autoriza GET durante su implementación, mutaciones, reparación,
+importación ni publicación.
 
 Esta es evidencia de integración del código local, no evidencia de compatibilidad runtime con una
 instancia real. No contiene outputs runtime, tokens, autorizaciones `local_development`, datos de

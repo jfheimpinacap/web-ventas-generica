@@ -184,11 +184,11 @@ class ProjectionTests(unittest.TestCase):
 
 class BindingTests(unittest.TestCase):
  def test_explicit_external_root_and_produced(self):
-  resolver=BindingResolver([{'namespace':'root','key':'maquinarias','binding_type':'entity_id','value':7}], [{'namespace':'category','key':'forklifts','binding_type':'entity_id','value':8}])
-  self.assertEqual(7,resolver.resolve({'scope':'external','namespace':'root','key':'maquinarias','binding_type':'entity_id'}))
+  resolver=BindingResolver([{'namespace':'root','key':'maquinaria','binding_type':'entity_id','value':7}], [{'namespace':'category','key':'forklifts','binding_type':'entity_id','value':8}])
+  self.assertEqual(7,resolver.resolve({'scope':'external','namespace':'root','key':'maquinaria','binding_type':'entity_id'}))
   self.assertEqual(8,resolver.resolve({'scope':'produced','namespace':'category','key':'forklifts','binding_type':'entity_id'}))
  def test_missing_is_structured_not_keyerror(self):
-  with self.assertRaises(MissingBindingError) as cm: BindingResolver().resolve({'scope':'external','namespace':'root','key':'maquinarias','binding_type':'entity_id'})
+  with self.assertRaises(MissingBindingError) as cm: BindingResolver().resolve({'scope':'external','namespace':'root','key':'maquinaria','binding_type':'entity_id'})
   self.assertEqual('MISSING_BINDING',cm.exception.as_dict()['code']); self.assertNotIsInstance(cm.exception,KeyError)
 
 class ArchitectureTests(unittest.TestCase):
