@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib,json
 from .planning import operation
 from .projection import build_safe_product_payload, project_candidate
+from .contract import select_contract_root
 
 STATES=frozenset({"create","reuse_exact","noop_exact","manual_review_required","blocked","retained_not_imported"})
 def result(entity,identity,state,reason,evidence,**extra):
@@ -56,22 +57,25 @@ def reconcile_document(document,entries,primary):
     if not valid:return result("technical_sheet" if primary else "document",document.get("sha256","missing"),"blocked","ASSET_ENTRY_MISMATCH",[document])
     return result("technical_sheet" if primary else "document",document["sha256"],"create" if primary else "retained_not_imported","ASSET_VALID" if primary else "NO_COMPATIBLE_RELATION",[document])
 
-def build_operations(package_view,snapshot,policy):
+def build_operations(package_view,snapshot,policy,root_contract):
     products=[]
     for path,data in package_view["entries"].items():
         if path.endswith("producto.json"): products.append(json.loads(data.decode("utf-8",errors="strict")))
     reconciliations=[]; operations=[]; external=[]; reviews=[]; retained=[]
-    roots=[x for x in snapshot["collections"]["categories"] if x.get("parent_id") is None and x.get("slug")=="maquinarias"]
-    if len(roots)==1: external.append({"scope":"external","namespace":"root","key":"maquinarias","binding_type":"entity_id","value":roots[0]["id"]})
+    selection=select_contract_root(snapshot["collections"].get(root_contract["collection"]),root_contract)
+    root_key=root_contract["identity"]
+    root_ref={"scope":"external","namespace":"root","key":root_key,"binding_type":"entity_id"}
+    if selection["status"]=="valid": external.append({**root_ref,"value":selection["root"]["id"]})
+    else: reviews.append(result("category",root_key,"blocked","ROOT_CATEGORY_"+selection["status"].upper(),selection["matches"]))
     for product in sorted(products,key=lambda x:x["canonical_identity"]):
-        mapping=product.get("category_mapping",{}); category={"name":mapping.get("name"),"slug":mapping.get("slug"),"parent_id":roots[0]["id"] if len(roots)==1 else None,"product_type":mapping.get("product_type","machinery")}
+        mapping=product.get("category_mapping",{}); category={"name":mapping.get("name"),"slug":mapping.get("slug"),"parent_id":selection["root"]["id"] if selection["root"] else None,"product_type":mapping.get("product_type","machinery")}
         brand={"name":product.get("brand_code"),"slug":product.get("brand_code","").casefold()}
         cr=reconcile_category(category,snapshot["collections"]["categories"]); br=reconcile_brand(brand,snapshot["collections"]["brands"]); sr=reconcile_supplier(product.get("supplier"),snapshot["collections"]["suppliers"],policy.get("supplier_optional",True)); reconciliations += [cr,br,sr]
         refs=[]; deps=[]
         for entity,want,rec,endpoint in (("category",category,cr,"/api/categories"),("brand",brand,br,"/api/brands")):
             key=want["slug"]
             if rec["state"]=="create":
-                required=[{"scope":"external","namespace":"root","key":"maquinarias","binding_type":"entity_id"}] if entity=="category" else []
+                required=[root_ref] if entity=="category" else []
                 payload={"name":want["name"],"slug":key,"is_active":True}
                 if entity=="category":payload.update({"parent_id":required[0],"product_type":want["product_type"],"description":None,"order":0})
                 op=operation(entity,"create",key,endpoint,payload,required,[{"scope":"produced","namespace":entity,"key":key,"binding_type":"entity_id"}]); operations.append(op); deps.append(op["operation_id"]); refs.append({"scope":"produced","namespace":entity,"key":key,"binding_type":"entity_id"})

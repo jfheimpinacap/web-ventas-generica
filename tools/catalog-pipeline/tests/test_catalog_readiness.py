@@ -20,8 +20,8 @@ def snapshot(observable=False):
     binary = {"sha256":"a" * 64, "bytes":"c3ludGhldGlj"} if observable else {}
     value = {"schema_version":"1.0.0", "complete":True, "classification":"fixture_only",
              "contract_fingerprint":contract_fingerprint(c), "collections":{
-        "categories":[{"id":1,"name":"Maquinarias","slug":"maquinarias","parent":None,"product_type":"machinery"},
-                      {"id":2,"name":"Plataformas","slug":"plataformas","parent":1,"product_type":"machinery"}],
+        "categories":[{"id":41,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"},
+                      {"id":2,"name":"Plataformas","slug":"plataformas","parent":41,"product_type":"machinery"}],
         "brands":[{"id":3,"name":"Marca sintética","slug":"marca-sintetica"}],
         "suppliers":[{"id":4,"name":"Proveedor sintético"}],
         "products":[{"id":5,"name":"Equipo sintético","slug":"equipo-sintetico","category":{"id":2},"brand":{"id":3},"model":"S1","product_type":"machinery"}],
@@ -45,7 +45,7 @@ class ReadinessTests(unittest.TestCase):
     def test_06_missing_root_blocks(self):
         value=snapshot(); value["collections"]["categories"]=value["collections"]["categories"][1:]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIn("ROOT_CATEGORY_MISSING", [x["code"] for x in self.report(value)["blockers"]])
     def test_07_ambiguous_root_blocks(self):
-        value=snapshot(); value["collections"]["categories"].append({"id":9,"name":"Otra","slug":"maquinarias","parent":None,"product_type":"machinery"}); value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIn("ROOT_CATEGORY_AMBIGUOUS", [x["code"] for x in self.report(value)["blockers"]])
+        value=snapshot(); value["collections"]["categories"].append({"id":9,"name":"Otra","slug":"maquinaria","parent":None,"product_type":"machinery"}); value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIn("ROOT_CATEGORY_AMBIGUOUS", [x["code"] for x in self.report(value)["blockers"]])
     def test_08_missing_collection_blocks(self):
         value=snapshot(); del value["collections"]["brands"]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIn("COLLECTION_MISSING", [x["code"] for x in self.report(value)["blockers"]])
     def test_09_wrong_collection_type_blocks(self):
@@ -85,6 +85,40 @@ class ReadinessTests(unittest.TestCase):
         text=canonical_bytes(self.report()).decode("utf-8").casefold(); self.assertNotIn("authorization",text); self.assertNotIn("token",text); self.assertNotIn("cookie",text); self.assertNotIn("equipo sintético".casefold(),text)
     def test_25_assessor_has_no_network_or_mutation_import_and_importer_has_six_commands(self):
         source=(ROOT/"jem_nexus_import/readiness.py").read_text(encoding="utf-8"); cli=(ROOT/"catalog_readiness.py").read_text(encoding="utf-8"); importer=(ROOT/"catalog_import.py").read_text(encoding="utf-8"); self.assertFalse(any(word in source+cli for word in ("import urllib","import socket","jem_nexus_local_transport","jem_nexus_local_mutation_transport"))); self.assertTrue(all(name in importer for name in ('"snapshot-local"','"plan"','"dry-run"','"apply-local"','"resume-local"','"verify-local"'))); self.assertNotIn('add_parser("assess")',importer)
+
+    def test_26_contract_declares_canonical_root_metadata(self):
+        self.assertEqual({"collection":"categories", "identity_field":"slug", "identity":"maquinaria",
+                          "parent_field":"parent", "product_type":"machinery"}, contract()["local_readiness"]["root_category"])
+
+    def test_27_plural_slug_does_not_satisfy_contract(self):
+        value=snapshot(); value["collections"]["categories"][0]["slug"]="maquinarias"; value["semantic_fingerprint"]=semantic_fingerprint(value)
+        self.assertIn("ROOT_CATEGORY_MISSING", [x["code"] for x in self.report(value)["blockers"]])
+
+    def test_28_invalid_root_shapes_fail_closed(self):
+        for field, invalid in (("parent", 9), ("id", None), ("id", True), ("id", "41"), ("product_type", "service")):
+            with self.subTest(field=field, invalid=invalid):
+                value=snapshot(); value["collections"]["categories"][0][field]=invalid; value["semantic_fingerprint"]=semantic_fingerprint(value)
+                self.assertIn("ROOT_CATEGORY_INVALID", [x["code"] for x in self.report(value)["blockers"]])
+
+    def test_29_root_selection_is_order_independent_and_ignores_other_types(self):
+        value=snapshot(); value["collections"]["categories"][:0]=[
+            {"id":31,"name":"Servicios","slug":"servicios","parent":None,"product_type":"service"},
+            {"id":32,"name":"Repuestos","slug":"repuestos","parent":None,"product_type":"spare_part"}]
+        value["semantic_fingerprint"]=semantic_fingerprint(value); first=self.report(value)
+        value["collections"]["categories"].reverse(); value["semantic_fingerprint"]=semantic_fingerprint(value); second=self.report(value)
+        self.assertTrue(first["root_category"]["valid"]); self.assertEqual(first["root_category"],second["root_category"])
+
+    def test_30_contract_change_invalidates_old_snapshot_fingerprint(self):
+        value=snapshot(); old=copy.deepcopy(contract()); old["local_readiness"]["root_category"]["identity"]="maquinarias"
+        value["contract_fingerprint"]=contract_fingerprint(old); value["semantic_fingerprint"]=semantic_fingerprint(value)
+        self.assertNotEqual(contract_fingerprint(old),contract_fingerprint(contract()))
+        self.assertIn("CONTRACT_FINGERPRINT_MISMATCH", [x["code"] for x in self.report(value)["blockers"]])
+
+    def test_31_valid_root_removes_false_missing_but_preserves_binary_warning_and_zero_mutation(self):
+        report=self.report(); self.assertNotIn("ROOT_CATEGORY_MISSING", [x["code"] for x in report["blockers"]])
+        self.assertIn("BINARY_CONTENT_NOT_OBSERVABLE", [x["code"] for x in report["warnings"]])
+        self.assertEqual({"assessment_network_requests":0,"mutation_requests":0,"resources_created":0,"resources_updated":0,
+                          "resources_deleted":0,"content_published":False,"mutation_authorized":False},report["zero_mutation_manifest"])
 
 
 if __name__ == "__main__": unittest.main()

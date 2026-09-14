@@ -51,7 +51,7 @@ solapados. La ficha aprobada puede planificarse; todo documento adicional queda
 
 Bindings observados son `external`; resultados futuros son `produced`. Cada referencia lleva scope,
 namespace, key y tipo. Duplicados/solapamientos, tipos erróneos, productores ausentes o múltiples,
-dependencias futuras inválidas y ciclos bloquean. La regresión sintética `root:maquinarias` siembra la
+dependencias futuras inválidas y ciclos bloquean. La regresión sintética `root:maquinaria` siembra la
 raíz observada para resolver una hija; si falta produce `MISSING_BINDING`, nunca `KeyError` ni
 `partial`.
 

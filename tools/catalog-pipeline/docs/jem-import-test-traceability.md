@@ -50,7 +50,7 @@ varias filas comparten un método solamente cuando este contiene assertions dife
 |40|case A filename|reconcile_assets|metadata only|assets|covered|
 |41|ambiguous_and_parent|reconcile_category|exact/create/block|reconcile|covered|
 |42|ambiguous_and_parent supplier|reconcile_supplier|optional/exact/block|reconcile|covered|
-|43|root_maquinarias_resolves|simulate|dry_run_ready|bindings|covered|
+|43|root_maquinaria_resolves|simulate|dry_run_ready|bindings|covered|
 |44|missing_root|simulate|MISSING_BINDING|bindings|covered|
 |45|missing_root|simulate|typed error, no KeyError|bindings|covered|
 |46|case A bindings|build_operations|external/produced scopes|bindings|covered|

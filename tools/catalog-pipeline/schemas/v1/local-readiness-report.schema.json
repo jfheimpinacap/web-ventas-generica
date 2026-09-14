@@ -18,7 +18,7 @@
     "mutation_authorized":{"const":false},
     "checks":{"type":"array","items":{"$ref":"#/$defs/collection_check"}},
     "counts":{"type":"object","additionalProperties":false,"required":["collections_required","collections_present","resources_observed","blockers","warnings"],"properties":{"collections_required":{"type":"integer","minimum":0},"collections_present":{"type":"integer","minimum":0},"resources_observed":{"type":"integer","minimum":0},"blockers":{"type":"integer","minimum":0},"warnings":{"type":"integer","minimum":0}}},
-    "root_category":{"type":"object","additionalProperties":false,"required":["identity","count","unique","positive_integer_id","valid"],"properties":{"identity":{"const":"maquinarias"},"count":{"type":"integer","minimum":0},"unique":{"type":"boolean"},"positive_integer_id":{"type":"boolean"},"valid":{"type":"boolean"}}},
+    "root_category":{"type":"object","additionalProperties":false,"required":["identity","count","unique","positive_integer_id","valid"],"properties":{"identity":{"const":"maquinaria"},"count":{"type":"integer","minimum":0},"unique":{"type":"boolean"},"positive_integer_id":{"type":"boolean"},"valid":{"type":"boolean"}}},
     "relation_checks":{"type":"array","items":{"$ref":"#/$defs/relation_check"}},
     "dto_compatibility":{"type":"array","items":{"$ref":"#/$defs/dto"}},
     "binary_observability":{"type":"array","items":{"$ref":"#/$defs/binary"}},

@@ -66,7 +66,7 @@
   ],
   "local_readiness": {
     "rules_version": "jem-local-readiness-v1",
-    "root_category": {"collection":"categories","identity_field":"slug","identity":"maquinarias","parent_field":"parent"},
+    "root_category": {"collection":"categories","identity_field":"slug","identity":"maquinaria","parent_field":"parent","product_type":"machinery"},
     "collections": [
       {"name":"categories","endpoint":"GET /api/categories","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string","parent":"nullable_positive_integer","product_type":"non_empty_string"}},
       {"name":"brands","endpoint":"GET /api/brands","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string"}},

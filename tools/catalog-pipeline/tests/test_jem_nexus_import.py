@@ -14,6 +14,7 @@ from catalog_acquisition.schema_validation import validate,SchemaValidationError
 from catalog_import import create_plan,plan_outputs,capture_snapshot,main as catalog_main
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations,reconcile_category,reconcile_brand,reconcile_supplier,reconcile_product,reconcile_assets
+from jem_nexus_import.contract import root_category_contract,select_contract_root
 from jem_nexus_local_transport import get_json_bytes
 
 def ref(scope,namespace,key): return {"scope":scope,"namespace":namespace,"key":key,"binding_type":"entity_id"}
@@ -21,7 +22,7 @@ def binding(namespace,key,value=1): return {**ref("external",namespace,key),"val
 def snapshot():
  value={"schema_version":"1.0.0","complete":True,"classification":"fixture_only","contract_fingerprint":"c"*64,
   "collections":{name:[] for name in COLLECTIONS},"endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
- value["collections"]["categories"]=[{"id":1,"name":"Maquinarias","slug":"maquinarias","parent_id":None}]
+ value["collections"]["categories"]=[{"id":41,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"}]
  value["semantic_fingerprint"]=semantic_fingerprint(value); return value
 def plan(ops,external=(),reviews=()): return {"operations":ops,"external_bindings":list(external),"reviews":list(reviews),"plan_fingerprint":"a"*64}
 def canonical_package(directory,blocked=0,excluded=0):
@@ -197,13 +198,13 @@ class ProjectionTests(unittest.TestCase):
   evidence=project_candidate({"model":"S1"})["field_evidence"][0]; self.assertEqual("/model",evidence["source_pointer"]); self.assertEqual("audited_package",evidence["provenance"])
 
 class GraphTests(unittest.TestCase):
- def test_root_maquinarias_resolves_child(self):
-  required=ref("external","root","maquinarias"); produced=ref("produced","category","scissor-lifts")
+ def test_root_maquinaria_resolves_child(self):
+  required=ref("external","root","maquinaria"); produced=ref("produced","category","scissor-lifts")
   child=operation("category","create","scissor-lifts","/api/categories",{"parent_id":required},[required],[produced])
-  result=simulate(plan([child],[binding("root","maquinarias")]))
+  result=simulate(plan([child],[binding("root","maquinaria",41)]))
   self.assertEqual("dry_run_ready",result["state"]); self.assertEqual(0,result["mutations_attempted"])
  def test_missing_root_is_typed_not_key_error(self):
-  required=ref("external","root","maquinarias"); child=operation("category","create","child","/api/categories",{},[required])
+  required=ref("external","root","maquinaria"); child=operation("category","create","child","/api/categories",{},[required])
   result=simulate(plan([child])); self.assertEqual("preflight_failed",result["state"]); self.assertEqual("MISSING_BINDING",result["errors"][0]["code"]); self.assertNotEqual("partial",result["state"])
  def test_duplicate_external_and_produced_binding_is_rejected(self):
   with self.assertRaises(ValueError): BindingResolver([binding("brand","jem")],[binding("brand","jem")])
@@ -261,7 +262,10 @@ class OutputTests(unittest.TestCase):
 class FunctionalFlowTests(unittest.TestCase):
  def test_case_a_real_package_to_complete_graph_and_outputs(self):
   with tempfile.TemporaryDirectory() as directory:
-   package,receipt,product=canonical_package(directory); snap=complete_snapshot(); policy={"schema_version":"1.0.0","rules_version":"policy-v1","contract_fingerprint":"c"*64,"supplier_optional":True,"package_policy":{}}
+   package,receipt,product=canonical_package(directory); snap=complete_snapshot()
+   contract_value=json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8")); contract_fp=fingerprint(contract_value)
+   snap["contract_fingerprint"]=contract_fp; snap["semantic_fingerprint"]=semantic_fingerprint(snap)
+   policy={"schema_version":"1.0.0","rules_version":"policy-v1","contract_fingerprint":contract_fp,"supplier_optional":True,"package_policy":{}}
    sp=pathlib.Path(directory)/"snapshot.json"; pp=pathlib.Path(directory)/"policy.json"; sp.write_bytes(canonical_bytes(snap)); pp.write_bytes(canonical_bytes(policy))
    value=create_plan(package,receipt,sp,pp); kinds=[x["kind"] for x in value["operations"]]
    self.assertEqual(["brand","category"],sorted(kinds[:2])); self.assertIn("product",kinds); self.assertEqual(2,kinds.count("image")); self.assertIn("spec",kinds); self.assertIn("technical_sheet",kinds)

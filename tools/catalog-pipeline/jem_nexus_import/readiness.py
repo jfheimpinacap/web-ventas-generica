@@ -10,6 +10,7 @@ import hashlib
 import unicodedata
 
 from catalog_pipeline_common.serialization import canonical_bytes, content_fingerprint
+from .contract import root_category_contract, select_contract_root
 from .snapshot import semantic_fingerprint
 
 SCHEMA_VERSION = "1.0.0"
@@ -152,14 +153,21 @@ def assess(snapshot, contract):
     if sheet_relation_observable: orphan("technical_sheets", "product", "products", lambda x: x.get("product", x.get("product_id")))
     else: relation_checks.append({"collection":"technical_sheets","field":"product","target_collection":"products","observable":False,"valid":True,"orphan_count":0})
 
-    root_contract = metadata.get("root_category", {}) if isinstance(metadata, dict) else {}
-    roots = [x for x in collections.get(root_contract.get("collection"), []) if isinstance(x, dict) and x.get(root_contract.get("identity_field")) == root_contract.get("identity") and x.get(root_contract.get("parent_field")) is None]
-    if not roots: blockers.append(_issue("ROOT_CATEGORY_MISSING", "categories"))
-    elif len(roots) > 1: blockers.append(_issue("ROOT_CATEGORY_AMBIGUOUS", "categories"))
-    root_result = {"identity": root_contract.get("identity", "maquinarias"), "count": len(roots),
-                   "unique": len(roots) == 1, "positive_integer_id": len(roots) == 1 and _valid(roots[0].get("id"), "positive_integer"),
-                   "valid": len(roots) == 1 and _valid(roots[0].get("id"), "positive_integer")}
-    if len(roots) == 1 and not root_result["positive_integer_id"]: blockers.append(_issue("DTO_FIELD_TYPE_INVALID", "categories", "id"))
+    try:
+        root_contract = root_category_contract(contract)
+        root_selection = select_contract_root(collections.get(root_contract["collection"]), root_contract)
+    except ValueError:
+        root_contract = {"identity": None}
+        root_selection = {"status":"invalid", "matches":[], "root":None}
+        blockers.append(_issue("ROOT_CATEGORY_CONTRACT_INVALID", "categories"))
+    roots = root_selection["matches"]
+    if root_selection["status"] == "missing": blockers.append(_issue("ROOT_CATEGORY_MISSING", "categories"))
+    elif root_selection["status"] == "ambiguous": blockers.append(_issue("ROOT_CATEGORY_AMBIGUOUS", "categories"))
+    elif root_selection["status"] == "invalid": blockers.append(_issue("ROOT_CATEGORY_INVALID", "categories"))
+    root_result = {"identity": root_contract.get("identity"), "count": len(roots),
+                   "unique": len(roots) == 1,
+                   "positive_integer_id": len(roots) == 1 and _valid(roots[0].get("id"), "positive_integer"),
+                   "valid": root_selection["status"] == "valid"}
 
     binaries = [_binary("product_images", collections.get("product_images", []) if isinstance(collections.get("product_images"), list) else []),
                 _binary("technical_sheets", sheets)]
