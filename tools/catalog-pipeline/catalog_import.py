@@ -9,6 +9,7 @@ from jem_nexus_import.snapshot import validate_snapshot,semantic_fingerprint,Sna
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations
 from jem_nexus_import.contract import root_category_contract
+from jem_nexus_import.readiness import contract_fingerprint
 from jem_nexus_import.planning import build_plan,simulate
 from jem_nexus_import.output import write_output_set
 from jem_nexus_local_transport import get_json_bytes
@@ -41,7 +42,7 @@ def capture_snapshot(reader,contract_fingerprint,classification="local_developme
 def create_plan(package_path,receipt_path,snapshot_path,policy_path,verifier=verify_package):
     policy=_read(policy_path); snap=validate_snapshot(_read(snapshot_path),policy["contract_fingerprint"])
     contract=_read(Path(__file__).parent/"schemas/v1/jem-nexus-contract.json")
-    if content_fingerprint(contract)!=policy["contract_fingerprint"]: raise SnapshotError("CONTRACT_FINGERPRINT","planning contract differs")
+    if contract_fingerprint(contract)!=policy["contract_fingerprint"]: raise SnapshotError("CONTRACT_FINGERPRINT","planning contract differs")
     view=read_verified_package(package_path,receipt_path,policy.get("package_policy",{}),verifier)
     graph=build_operations(view,snap,policy,root_category_contract(contract)); plan=build_plan(view,snap,policy,policy["contract_fingerprint"],graph["operations"],graph["external_bindings"],graph["reviews"])
     plan["reconciliations"]=graph["reconciliations"]; plan["retained_documents"]=graph["retained_documents"]

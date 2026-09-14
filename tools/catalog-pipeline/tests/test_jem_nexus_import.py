@@ -15,6 +15,7 @@ from catalog_import import create_plan,plan_outputs,capture_snapshot,main as cat
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations,reconcile_category,reconcile_brand,reconcile_supplier,reconcile_product,reconcile_assets
 from jem_nexus_import.contract import root_category_contract,select_contract_root
+from jem_nexus_import.readiness import contract_fingerprint
 from jem_nexus_local_transport import get_json_bytes
 
 def ref(scope,namespace,key): return {"scope":scope,"namespace":namespace,"key":key,"binding_type":"entity_id"}
@@ -22,7 +23,7 @@ def binding(namespace,key,value=1): return {**ref("external",namespace,key),"val
 def snapshot():
  value={"schema_version":"1.0.0","complete":True,"classification":"fixture_only","contract_fingerprint":"c"*64,
   "collections":{name:[] for name in COLLECTIONS},"endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
- value["collections"]["categories"]=[{"id":41,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"}]
+ value["collections"]["categories"]=[{"id":1,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"}]
  value["semantic_fingerprint"]=semantic_fingerprint(value); return value
 def plan(ops,external=(),reviews=()): return {"operations":ops,"external_bindings":list(external),"reviews":list(reviews),"plan_fingerprint":"a"*64}
 def canonical_package(directory,blocked=0,excluded=0):
@@ -121,7 +122,7 @@ class SnapshotTests(unittest.TestCase):
    value=snapshot(); mutate(value); value["semantic_fingerprint"]=semantic_fingerprint(value)
    with self.assertRaises(SnapshotError): validate_snapshot(value)
  def test_duplicate_and_casefold_collision_are_rejected(self):
-  for extra in ({"id":1,"name":"Other","slug":"other","parent_id":None},{"id":2,"name":"MAQUINARIAS","slug":"MAQUINARIAS","parent_id":None}):
+  for extra in ({"id":1,"name":"Other","slug":"other","parent_id":None},{"id":2,"name":"MAQUINARIAS","slug":"MAQUINARIA","parent_id":None}):
    value=snapshot(); value["collections"]["categories"].append(extra); value["semantic_fingerprint"]=semantic_fingerprint(value)
    with self.assertRaises(SnapshotError): validate_snapshot(value)
  def test_orphan_relations_are_rejected(self):
@@ -159,7 +160,11 @@ class SnapshotTests(unittest.TestCase):
  def test_complete_get_shaped_snapshot_validates(self):
   value=self.product_snapshot(); self.assertIs(validate_snapshot(value),value)
  def test_get_shape_fingerprint_is_order_independent(self):
-  first=self.product_snapshot(); second=copy.deepcopy(first); second["collections"]["categories"].reverse(); self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second))
+  first=self.product_snapshot(); second=copy.deepcopy(first); second["collections"]["categories"].reverse(); before=copy.deepcopy(first)
+  self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second)); self.assertEqual(before,first)
+  for invalid in (None,"1",True,[],{}):
+   malformed=copy.deepcopy(first); malformed["collections"]["categories"].append({"id":invalid,"slug":"invalid"})
+   self.assertEqual(semantic_fingerprint(malformed),semantic_fingerprint(copy.deepcopy(malformed)))
  def test_product_relation_validation_does_not_mutate_input(self):
   value=self.product_snapshot(); before=copy.deepcopy(value); validate_snapshot(value); self.assertEqual(before,value)
  def test_capture_snapshot_accepts_product_get_shape(self):
@@ -263,7 +268,7 @@ class FunctionalFlowTests(unittest.TestCase):
  def test_case_a_real_package_to_complete_graph_and_outputs(self):
   with tempfile.TemporaryDirectory() as directory:
    package,receipt,product=canonical_package(directory); snap=complete_snapshot()
-   contract_value=json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8")); contract_fp=fingerprint(contract_value)
+   contract_value=json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8")); contract_fp=contract_fingerprint(contract_value)
    snap["contract_fingerprint"]=contract_fp; snap["semantic_fingerprint"]=semantic_fingerprint(snap)
    policy={"schema_version":"1.0.0","rules_version":"policy-v1","contract_fingerprint":contract_fp,"supplier_optional":True,"package_policy":{}}
    sp=pathlib.Path(directory)/"snapshot.json"; pp=pathlib.Path(directory)/"policy.json"; sp.write_bytes(canonical_bytes(snap)); pp.write_bytes(canonical_bytes(policy))

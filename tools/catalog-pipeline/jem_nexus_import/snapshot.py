@@ -1,6 +1,6 @@
 """Closed, order-independent representation of an observed local JEM API."""
 from __future__ import annotations
-from catalog_pipeline_common.serialization import content_fingerprint
+from catalog_pipeline_common.serialization import canonical_bytes,content_fingerprint
 
 SCHEMA_VERSION="1.0.0"; RULES_VERSION="jem-snapshot-v1"
 COLLECTIONS=("categories","brands","suppliers","products","product_images","product_specs","technical_sheets")
@@ -28,9 +28,26 @@ def _nullable_integer_relation(item,structured_key,read_key):
         raise SnapshotError("ORPHAN_RELATION",structured_key)
     return present[0]
 
+def _collection_sort_key(item):
+    """Order valid integer IDs historically and every other JSON ID totally."""
+    canonical_item=canonical_bytes(item)
+    if isinstance(item,dict) and type(item.get("id")) is int:
+        return (0,item["id"],b"",b"",canonical_item)
+    present=isinstance(item,dict) and "id" in item
+    identifier=item.get("id") if present else None
+    kind=("missing" if not present else
+          "null" if identifier is None else
+          "boolean" if isinstance(identifier,bool) else
+          "string" if isinstance(identifier,str) else
+          "array" if isinstance(identifier,list) else
+          "object" if isinstance(identifier,dict) else
+          "number" if isinstance(identifier,(int,float)) else "unsupported")
+    canonical_id=canonical_bytes(identifier) if present else b""
+    return (1,0,kind.encode("ascii"),canonical_id,canonical_item)
+
 def semantic_fingerprint(snapshot):
     semantic={"schema_version":SCHEMA_VERSION,"rules_version":RULES_VERSION,"contract_fingerprint":snapshot.get("contract_fingerprint"),
-              "classification":snapshot.get("classification"),"collections":{k:sorted(snapshot.get("collections",{}).get(k,[]),key=lambda x:(x.get("id",-1),str(x))) for k in COLLECTIONS},
+              "classification":snapshot.get("classification"),"collections":{k:sorted(snapshot.get("collections",{}).get(k,[]),key=_collection_sort_key) for k in COLLECTIONS},
               "endpoints":sorted(({k:v for k,v in e.items() if k!="captured_at"} for e in snapshot.get("endpoints",[])),key=lambda x:x.get("path",""))}
     return content_fingerprint(semantic)
 

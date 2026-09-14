@@ -25,10 +25,12 @@ from jem_nexus_import.bindings import BindingResolver
 from jem_nexus_import.output import write_output_set
 from jem_nexus_import.package_input import read_verified_package
 from jem_nexus_import.planning import simulate
+from jem_nexus_import.readiness import contract_fingerprint
 from jem_nexus_import.snapshot import COLLECTIONS, SnapshotError, semantic_fingerprint
 from jem_nexus_import.verification import SnapshotObserver, verify_managed
 
-CONTRACT = content_fingerprint(json.loads((ROOT / "schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8")))
+CONTRACT_DOCUMENT = json.loads((ROOT / "schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8"))
+CONTRACT = contract_fingerprint(CONTRACT_DOCUMENT)
 BASE_URL = "http://localhost:2910"
 SAFE = {"price": None, "price_visible": False, "is_featured": False, "is_published": False}
 IMAGE_PRIMARY = b"\x89PNG\r\n\x1a\nfixture-primary"
@@ -304,6 +306,7 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
             h = _Harness(d); root = next(x for x in h.plan["external_bindings"] if x["namespace"] == "root")
             category = next(x for x in h.plan["operations"] if x["kind"] == "category")
             self.assertEqual(("maquinaria", 41), (root["key"], root["value"]))
+            self.assertEqual(CONTRACT, h.plan["inputs"]["contract_fingerprint"])
             self.assertEqual({"scope":"external","namespace":"root","key":"maquinaria","binding_type":"entity_id"},
                              category["payload_template"]["parent_id"])
 
