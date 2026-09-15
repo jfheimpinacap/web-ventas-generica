@@ -305,7 +305,7 @@ class BinaryObservationTests(unittest.TestCase):
   }
   for condition,(code,response) in response_negative.items():
    def rejecting_transport(base,path,headers,timeout,limit,response=response):
-    if path!="/files/opaque": raise AssertionError("negative case reached a later target")
+    if path!=canonical_sheet_path: raise AssertionError("negative case reached a later target")
     return response
    with self.subTest(response=condition), self.assertRaisesRegex(BinaryObservationError,code): capture_plan(value,value["plan_fingerprint"],"c"*64,rejecting_transport)
   aggregate_plan=copy.deepcopy(value); aggregate_plan["capture_policy"]["max_total_bytes"]=len(pdf)
