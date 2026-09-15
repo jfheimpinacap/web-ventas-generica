@@ -5,7 +5,7 @@ from catalog_acquisition.schema_validation import SUPPORTED_KEYWORDS, SchemaVali
 class SchemaTests(unittest.TestCase):
  def test_every_schema_has_valid_synthetic_fixture(self):
   schemas=sorted((ROOT/'schemas/v1').glob('*.schema.json'))
-  self.assertEqual(82,len(schemas))
+  self.assertEqual(83,len(schemas))
   for schema in schemas:
    fixture=ROOT/'fixtures/valid'/schema.name.replace('.schema.json','.json')
    self.assertTrue(fixture.exists(),schema.name)

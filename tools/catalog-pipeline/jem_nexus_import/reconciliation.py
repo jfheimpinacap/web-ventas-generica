@@ -2,7 +2,8 @@
 from __future__ import annotations
 import hashlib,json
 from .planning import operation
-from .projection import build_safe_product_payload, project_candidate
+from .projection import build_safe_product_payload
+from .normalized_adapter import adapt_normalized_product
 from .contract import select_contract_root
 
 STATES=frozenset({"create","reuse_exact","noop_exact","manual_review_required","blocked","retained_not_imported"})
@@ -61,7 +62,7 @@ def build_operations(package_view,snapshot,policy,root_contract):
     products=[]
     for path,data in package_view["entries"].items():
         if path.endswith("producto.json"): products.append(json.loads(data.decode("utf-8",errors="strict")))
-    reconciliations=[]; operations=[]; external=[]; reviews=[]; retained=[]
+    reconciliations=[]; operations=[]; external=[]; reviews=[]; retained=[]; projection_evidence=[]
     selection=select_contract_root(snapshot["collections"].get(root_contract["collection"]),root_contract)
     root_key=root_contract["identity"]
     root_ref={"scope":"external","namespace":"root","key":root_key,"binding_type":"entity_id"}
@@ -81,9 +82,12 @@ def build_operations(package_view,snapshot,policy,root_contract):
                 op=operation(entity,"create",key,endpoint,payload,required,[{"scope":"produced","namespace":entity,"key":key,"binding_type":"entity_id"}]); operations.append(op); deps.append(op["operation_id"]); refs.append({"scope":"produced","namespace":entity,"key":key,"binding_type":"entity_id"})
             elif rec["state"]=="reuse_exact": external.append({"scope":"external","namespace":entity,"key":key,"binding_type":"entity_id","value":rec["observed_id"]}); refs.append({"scope":"external","namespace":entity,"key":key,"binding_type":"entity_id"})
             else: reviews.append(rec)
-        projected=project_candidate({**product.get("structured_fields",{}),"name":product.get("canonical_model"),"model":product.get("canonical_model"),"slug":product["canonical_identity"],"product_type":category["product_type"]})
+        projected=adapt_normalized_product(product)
+        projection_evidence.append({"canonical_identity":product["canonical_identity"],"adapter_version":projected["adapter_version"],
+          "projection_fingerprint":projected["fingerprint"],"field_evidence":projected["field_evidence"]})
+        projected_for_payload={**projected,"structured_fields":{**projected["structured_fields"],"product_type":category["product_type"]}}
         if projected["issues"]: reviews.extend(projected["issues"]); continue
-        safe=build_safe_product_payload(projected)
+        safe=build_safe_product_payload(projected_for_payload)
         desired={"canonical_identity":product["canonical_identity"],"product_type":category["product_type"],"slug":product["canonical_identity"],"model":product.get("canonical_model"),"sku":product.get("sku"),"payload":{**safe["payload"],"category_id":refs[0] if refs else None,"brand_id":refs[1] if len(refs)>1 else None,"supplier_id":sr.get("observed_id")},"safety_evidence":safe["safety_evidence"]}
         pr=reconcile_product(desired,snapshot["collections"]["products"]); reconciliations.append(pr)
         if pr["state"] in ("blocked","manual_review_required"): reviews.append(pr); continue
@@ -95,7 +99,7 @@ def build_operations(package_view,snapshot,policy,root_contract):
                 for asset in media:
                     multipart={"product_id":product_ref,"file_entry":asset["entry_path"],"sha256":asset["sha256"],"size":asset["size"],"mime":asset["mime"],"alt_text":asset.get("alt_text",""),"is_main":asset["role"]=="primary","order":asset.get("ordinal",0),"source_filename":asset.get("source_filename")}
                     operations.append(operation("image","create",asset["sha256"],"/api/product-images",{"multipart":multipart},[product_ref],depends_on=pdeps,sources=[asset["entry_path"]]))
-            for spec in projected["product_specs"]+product.get("product_specs",[]): operations.append(operation("spec","create",product["canonical_identity"]+":"+spec["key"],"/api/product-specs",{"product_id":product_ref,"key":spec["key"],"value":str(spec["value"]),"unit":spec.get("unit"),"order":spec.get("order",0)},[product_ref],depends_on=pdeps,sources=[path]))
+            for spec in projected["product_specs"]: operations.append(operation("spec","create",product["canonical_identity"]+":"+spec["key"],"/api/product-specs",{"product_id":product_ref,"key":spec["key"],"value":str(spec["value"]),"unit":spec.get("unit"),"order":spec.get("order",0)},[product_ref],depends_on=pdeps,sources=[path]))
             sheet=product.get("technical_sheet")
             if sheet:
                 sheet_result=reconcile_document(sheet,package_view["entries"],True); reconciliations.append(sheet_result)
@@ -104,4 +108,5 @@ def build_operations(package_view,snapshot,policy,root_contract):
         for document in product.get("additional_documents",[]):
             document_result=reconcile_document(document,package_view["entries"],False); retained.append(document_result)
             if document_result["state"]=="blocked":reviews.append(document_result)
-    return {"operations":operations,"external_bindings":external,"reconciliations":reconciliations,"reviews":reviews,"retained_documents":retained}
+    return {"operations":operations,"external_bindings":external,"reconciliations":reconciliations,"reviews":reviews,"retained_documents":retained,
+      "projection_evidence":projection_evidence}

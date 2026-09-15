@@ -2,8 +2,11 @@ import copy, hashlib, json, pathlib, sys, tempfile, unittest
 from decimal import Decimal
 
 ROOT=pathlib.Path(__file__).parents[1]; sys.path.insert(0,str(ROOT))
+from catalog_acquisition.identity import canonical_identity
 from catalog_acquisition.normalization import (NormalizationError, build_plan, fingerprint,
     map_categories, normalize_observation, normalize_to, parse_measure, validate_inputs, verify_output)
+
+IDENTITY=canonical_identity("SYN","MODEL-1").value
 
 def numeric(**changes):
     value={"kind":"number","rule_id":"numeric.v1","rule_version":"1","decimal_separator":".","thousands_separator":None,"target_unit":"m","scale":3,"rounding":"ROUND_HALF_EVEN","conversions":{"mm->m":"0.001"}}
@@ -12,10 +15,10 @@ def policy(rules=None):
     value={"schema_version":"1.0.0","policy_version":"normalization-ep-v1","field_rules":rules or {}}
     value["fingerprint"]=fingerprint(value); return value
 def observation(key="working_height",raw="3",unit="m",source="ep_html"):
-    return {"canonical_identity":"synthetic-1","model":"MODEL-1","variant":None,"source_field_key":key,"source_label":key.replace("_"," ").title(),"raw_value":raw,"raw_unit":unit,"source":source,"source_url":"https://example.invalid/evidence-only","source_document":None,"source_page":None,"source_section":"specifications","extraction_rule":"table.v1","evidence_references":["e-1"],"relation_references":["r-1"],"locale":"en","qualifiers":[]}
+    return {"canonical_identity":IDENTITY,"model":"MODEL-1","variant":None,"source_field_key":key,"source_label":key.replace("_"," ").title(),"raw_value":raw,"raw_unit":unit,"source":source,"source_url":"https://example.invalid/evidence-only","source_document":None,"source_page":None,"source_section":"specifications","extraction_rule":"table.v1","evidence_references":["e-1"],"relation_references":["r-1"],"locale":"en","qualifiers":[]}
 def bundle(observations=None,mapping="approved"):
     rules={"working_height":numeric(target_field="WorkingHeightM"),"lift_height":numeric(target_field="WorkingHeightM",target_unit="mm",conversions={"m->mm":"1000"}),"rated_load_capacity":numeric(target_field="MaximumLoadCapacityKg",target_unit="kg",scale=0,conversions={}),"machine_weight":numeric(target_field="MachineWeightKg",target_unit="kg",scale=0,conversions={}),"battery_capacity":numeric(target_field="MaximumLoadCapacityKg",target_unit="Ah",scale=0,conversions={}),"power_source":{"kind":"enum","rule_id":"power.v1","rule_version":"1","target_field":"PowerSource"}}
-    return {"schema_version":"1.0.0","fixture_only":True,"structure_verified":False,"artifact_references":[],"products":[{"canonical_identity":"synthetic-1","brand_code":"SYN","canonical_model":"MODEL-1","variant":None,"source_titles":["Synthetic MODEL-1"],"source_category_keys":["forklifts"]}],"observations":observations or [observation()],"policy":policy(rules),"category_catalog":{"schema_version":"1.0.0","categories":[{"category_key":"forklifts"}]},"category_matrix":{"schema_version":"1.0.0","mappings":[{"mapping_id":"map-1","source_category_key":"forklifts","mapping_status":mapping,"target_category_key":"forklifts","primary":True}]},"asset_decisions":{"synthetic-1":{"media":["SYN/catalogo/forklifts/MODEL-1/imagenes/SYN-MODEL-1-1-principal.png"],"technical_sheet":None,"additional_documents":[]}},"upstream_fingerprints":{"identity":"a"*64,"extraction":"b"*64,"selection":"c"*64}}
+    return {"schema_version":"1.0.0","fixture_only":True,"structure_verified":False,"artifact_references":[],"products":[{"canonical_identity":IDENTITY,"brand_code":"SYN","canonical_model":"MODEL-1","variant":None,"source_titles":["Synthetic MODEL-1"],"source_category_keys":["forklifts"]}],"observations":observations or [observation()],"policy":policy(rules),"category_catalog":{"schema_version":"1.0.0","categories":[{"category_key":"forklifts"}]},"category_matrix":{"schema_version":"1.0.0","mappings":[{"mapping_id":"map-1","source_category_key":"forklifts","mapping_status":mapping,"target_category_key":"forklifts","primary":True}]},"asset_decisions":{IDENTITY:{"media":["SYN/catalogo/forklifts/MODEL-1/imagenes/SYN-MODEL-1-1-principal.png"],"technical_sheet":None,"additional_documents":[]}},"upstream_fingerprints":{"identity":"a"*64,"extraction":"b"*64,"selection":"c"*64}}
 
 class NumberNormalizationTests(unittest.TestCase):
  def test_exact_metric_value(self): self.assertEqual("3.000",parse_measure("3","m",numeric())["normalized_value"])

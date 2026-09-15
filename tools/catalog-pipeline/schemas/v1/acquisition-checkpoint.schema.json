@@ -5,6 +5,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "attempt_id",
     "candidate_id",
     "relation_id",
     "authorization_id",
@@ -29,6 +30,10 @@
   "properties": {
     "schema_version": {
       "const": "acquisition-checkpoint-v1"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^attempt:sha256:[0-9a-f]{64}$"
     },
     "candidate_id": {
       "type": "string",

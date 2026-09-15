@@ -7,6 +7,22 @@ from .errors import PathCollisionError, UnsafePathError
 _INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = re.compile(r"^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.I)
 MAX_SEGMENT = 100
+SEMANTIC_PATH_KEY_VERSION = "semantic-path-key-v1"
+_SEMANTIC_ID = re.compile(r"^(?P<prefix>[a-z][a-z0-9-]*):sha256:(?P<digest>[0-9a-f]{64})$")
+
+def semantic_path_key(identity: str, *, expected_prefix: str | None = None) -> str:
+    """Return the reversible-by-manifest physical key for a semantic SHA-256 ID.
+
+    The namespace is retained in the key rather than escaped, and the complete
+    semantic identity remains in the containing record/manifest.  Thus distinct
+    accepted identities cannot collapse to the same physical segment.
+    """
+    if not isinstance(identity, str):
+        raise UnsafePathError("Semantic identity must be text")
+    match = _SEMANTIC_ID.fullmatch(identity)
+    if not match or (expected_prefix is not None and match.group("prefix") != expected_prefix):
+        raise UnsafePathError("Malformed or unexpected semantic SHA-256 identity", value=identity)
+    return _filesystem_segment(f"sidv1-{match.group('digest')}")
 
 def _raw_semantic_label(value: str) -> str:
     """Validate naming text without interpreting it as a filesystem path."""
