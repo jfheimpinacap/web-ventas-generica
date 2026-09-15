@@ -32,7 +32,7 @@ class CatalogAssetsTests(unittest.TestCase):
 
     def test_exact_structure_and_no_gam(self):
         dirs={p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_dir()}
-        self.assertEqual(dirs,set(DIRECTORIES)|{"LGMG","EP","_pendientes","_control"})
+        self.assertEqual(dirs,set(DIRECTORIES)|{"LGMG","EP","JLG","_pendientes","_control"})
         self.assertFalse(any("GAM" in p.parts for p in self.root.rglob("*")))
         self.assertTrue(all((self.root/f).is_file() for f in FILES))
 
@@ -40,13 +40,15 @@ class CatalogAssetsTests(unittest.TestCase):
         source=self.root/"_control/fuentes.csv"
         source.write_text(",".join(("target_brand","model","source_name","source_role","page_url","asset_type","asset_url","priority","expected_language","enabled","notes"))+"\nEP,EFL181,GAM,fallback,,image,https://public.example/e.jpg,1,es,true,ok\n",encoding="utf-8")
         self.assertEqual(read_sources(source)[0].target_brand,"EP")
-        for bad in ("LGMG,X,GAM,fallback", "EP,X,GAM,primary"):
+        for bad in ("LGMG,X,GAM,fallback", "JLG,X,GAM,fallback", "EP,X,GAM,primary"):
             source.write_text(",".join(("target_brand","model","source_name","source_role","page_url","asset_type","asset_url","priority","expected_language","enabled","notes"))+f"\n{bad},,image,https://public.example/x.jpg,0,es,true,x\n",encoding="utf-8")
             with self.subTest(bad=bad), self.assertRaises(ValueError): read_sources(source)
 
     def test_names_and_stable_suffixes_no_overwrite(self):
         self.assertEqual(asset_basename("LGMG","A09JE","image",".jpg"),"LGMG-A09JE.jpg")
         self.assertEqual(asset_basename("EP","EFL 181","technical_sheet",".pdf",2),"Ficha-tecnica-EP-EFL 181-2.pdf")
+        self.assertEqual(asset_basename("JLG","1930ES","image",".jpg",2),"JLG-1930ES-2.jpg")
+        self.assertEqual(asset_basename("JLG","1930ES","technical_sheet",".pdf"),"Ficha-tecnica-JLG-1930ES.pdf")
         candidate={"url":"https://public.example/x","target_brand":"EP","model":"EFL181"}
         paths=[]
         for body in (JPEG,JPEG+b"x\xff\xd9",JPEG+b"y\xff\xd9"):
@@ -107,5 +109,68 @@ class CatalogAssetsTests(unittest.TestCase):
         self.assertEqual(main(["--root",str(self.root),"init"]),0)
         package=Path(__file__).parents[1]/"catalog_assets"
         self.assertFalse(any("catalog-pipeline" in p.read_text(encoding="utf-8") for p in package.glob("*.py")))
+
+    def _sources(self, rows):
+        path=self.root/"_control/fuentes.csv"
+        with path.open("w",encoding="utf-8-sig",newline="") as handle:
+            writer=csv.writer(handle); writer.writerow(("target_brand","model","source_name","source_role","page_url","asset_type","asset_url","priority","expected_language","enabled","notes"))
+            for brand,model in rows: writer.writerow((brand,model,brand,"primary","","auto","",0,"es","false","modelo conocido"))
+
+    def test_jlg_legacy_two_pass_and_uncertain_names(self):
+        self._sources([("JLG","1930ES")])
+        legacy=self.root/"JLG/Maquinas JLG"; legacy.mkdir()
+        assets={"1930es.jpg":JPEG,"plataforma-tijera-electrica-1930es.jpg":JPEG+b"2\xff\xd9",
+                "ChatGPT Image 5 ago 2026, 20_21_25.png":PNG,
+                "Ficha-tecnica-JLG-1930-Comaq-Rental.pdf":PDF}
+        for name,data in assets.items(): (legacy/name).write_bytes(data)
+        before={p.name:p.read_bytes() for p in legacy.iterdir()}; rows,pending=scan(self.root)
+        indexed={r["archivo"]:r for r in rows}
+        self.assertEqual(indexed["1930es.jpg"]["modelo"],"1930ES")
+        self.assertEqual(indexed["plataforma-tijera-electrica-1930es.jpg"]["modelo"],"1930ES")
+        self.assertEqual(indexed["ChatGPT Image 5 ago 2026, 20_21_25.png"]["estado_clasificacion"],"MODEL_UNKNOWN")
+        self.assertEqual(indexed["Ficha-tecnica-JLG-1930-Comaq-Rental.pdf"]["estado_clasificacion"],"MODEL_UNKNOWN")
+        self.assertTrue(all(r["ubicacion"]=="legacy" for r in rows)); self.assertEqual(before,{p.name:p.read_bytes() for p in legacy.iterdir()})
+
+    def test_lgmg_legacy_accents_and_complete_dash_two_models(self):
+        self._sources([("LGMG","SR0818E-2"),("LGMG","SR1218E-2")])
+        for folder,model in (("Fichas tecnicas LGMG","SR0818E-2"),("Fichas técnicas LGMG","SR1218E-2")):
+            path=self.root/"LGMG"/folder; path.mkdir(exist_ok=True); (path/f"Ficha-técnica-LGMG-{model}.pdf").write_bytes(PDF+model.encode())
+        rows,_=scan(self.root); self.assertEqual({r["modelo"] for r in rows},{"SR0818E-2","SR1218E-2"})
+        self.assertTrue(all(r["ubicacion"]=="legacy" for r in rows))
+
+    def test_dash_two_ambiguity(self):
+        self._sources([("LGMG","A09JE"),("LGMG","A09JE-2")])
+        (self.root/"LGMG/Imagenes modelos LGMG/LGMG-A09JE-2.jpg").write_bytes(JPEG)
+        rows,_=scan(self.root); self.assertEqual(rows[0]["estado_clasificacion"],"MODEL_AMBIGUOUS")
+
+    def test_manual_model_aliases_and_conflicts(self):
+        aliases=self.root/"_control/modelos.csv"
+        aliases.write_text("brand,canonical_model,alias,enabled,notes\nJLG,1930ES,1930 E,true,confirmado\n",encoding="utf-8")
+        legacy=self.root/"JLG/Maquinas JLG"; legacy.mkdir(); (legacy/"equipo-1930 E.jpg").write_bytes(JPEG)
+        rows,_=scan(self.root); self.assertEqual((rows[0]["modelo"],rows[0]["metodo_asociacion"]),("1930ES","manual_alias"))
+        aliases.write_text("brand,canonical_model,alias,enabled,notes\nJLG,1930ES,x,true,a\nJLG,other,X,true,b\n",encoding="utf-8")
+        with self.assertRaises(ValueError): scan(self.root)
+
+    def test_verify_integrity_vs_strict_and_invalid(self):
+        legacy=self.root/"JLG/Maquinas JLG"; legacy.mkdir(); asset=legacy/"unknown.jpg"; asset.write_bytes(JPEG)
+        scan(self.root); self.assertEqual(main(["--root",str(self.root),"verify"]),0)
+        self.assertEqual(main(["--root",str(self.root),"verify","--strict"]),1)
+        asset.write_bytes(b"not an image")
+        self.assertEqual(main(["--root",str(self.root),"verify"]),1)
+        self.assertEqual(main(["--root",str(self.root),"verify","--strict"]),1)
+
+    def test_duplicate_paths_and_detailed_missing_status(self):
+        self._sources([("JLG","1930ES"),("LGMG","A09JE")])
+        (self.root/"JLG/Imagenes modelos JLG/JLG-1930ES.jpg").write_bytes(JPEG)
+        (self.root/"JLG/fichas-tecnicas JLG/Ficha-tecnica-JLG-1930ES.pdf").write_bytes(PDF)
+        (self.root/"LGMG/Imagenes modelos LGMG/LGMG-A09JE.jpg").write_bytes(JPEG+b"a\xff\xd9")
+        (self.root/"LGMG/Imagenes modelos LGMG/LGMG-A09JE-3.jpg").write_bytes(JPEG+b"a\xff\xd9")
+        scan(self.root)
+        from contextlib import redirect_stdout
+        import io
+        output=io.StringIO()
+        with redirect_stdout(output): self.assertEqual(main(["--root",str(self.root),"status"]),0)
+        status=json.loads(output.getvalue()); self.assertEqual(status["modelos_sin_pdf"],[{"marca":"LGMG","modelo":"A09JE"}])
+        self.assertEqual(status["archivos_duplicados"],1); self.assertIn("ruta_principal",status["duplicados"][0]); self.assertIn("ruta_duplicada",status["duplicados"][0])
 
 if __name__ == "__main__": unittest.main()

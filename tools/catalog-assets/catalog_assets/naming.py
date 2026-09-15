@@ -15,7 +15,7 @@ def sanitize(value: str) -> str:
     return value
 
 def asset_basename(brand: str, model: str, kind: str, extension: str, position: int = 1) -> str:
-    if brand not in {"LGMG", "EP"}:
+    if brand not in {"LGMG", "EP", "JLG"}:
         raise ValueError("marca de destino inválida")
     stem = f"{brand}-{sanitize(model)}" if kind == "image" else f"Ficha-tecnica-{brand}-{sanitize(model)}"
     return f"{stem}{'' if position == 1 else f'-{position}'}{extension.lower()}"

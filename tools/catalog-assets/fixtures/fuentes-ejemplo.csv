@@ -2,3 +2,4 @@ target_brand,model,source_name,source_role,page_url,asset_type,asset_url,priorit
 LGMG,SR1018E-2,LGMG,primary,https://www.lgmglifts.com/product/pro-detail-5182.htm,technical_sheet,https://www.lgmglifts.com/upload/file/2025/04/lgmg-RT-scissorlift-en-SR1018E-2.pdf,0,en,false,Referencia estática: tools/lgmg-catalog-extractor/repair_lgmg_remaining_media.py; habilitar tras revisión
 EP,,EP,primary,,auto,,0,es,false,Plantilla pendiente de URL específica y modelo
 EP,,GAM,fallback,,auto,,100,es,false,Plantilla fallback pendiente; exige modelo EP inequívoco
+JLG,,JLG,primary,,auto,,0,es,false,Plantilla JLG pendiente de URL específica y modelo

@@ -9,7 +9,7 @@ from .paths import safe_path, atomic_write
 from .validation import detect_binary, validate_public_url
 
 def target_dir(root: Path, brand: str, kind: str) -> Path:
-    if brand not in {"LGMG", "EP"}: raise ValueError("marca de destino inválida")
+    if brand not in {"LGMG", "EP", "JLG"}: raise ValueError("marca de destino inválida")
     folder = f"{brand}/{'Imagenes modelos '+brand if kind == 'image' else 'fichas-tecnicas '+brand}"
     return safe_path(root, folder)
 

@@ -26,7 +26,7 @@ def read_sources(path: Path) -> list[Source]:
         for number, raw in enumerate(reader, 2):
             brand, role, source = raw["target_brand"].strip().upper(), raw["source_role"].strip().lower(), raw["source_name"].strip().upper()
             enabled_raw = raw["enabled"].strip().lower()
-            if brand not in {"LGMG", "EP"} or role not in {"primary", "fallback"} or raw["asset_type"] not in {"image", "technical_sheet", "auto"}:
+            if brand not in {"LGMG", "EP", "JLG"} or role not in {"primary", "fallback"} or raw["asset_type"] not in {"image", "technical_sheet", "auto"}:
                 raise ValueError(f"fila {number}: enum inválido")
             if enabled_raw not in {"true", "false"}:
                 raise ValueError(f"fila {number}: enabled debe ser true o false")

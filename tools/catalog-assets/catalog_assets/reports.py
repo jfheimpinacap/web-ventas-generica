@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from .paths import atomic_write
 
-INVENTORY_FIELDS = ("marca", "modelo", "tipo", "posicion", "archivo", "ruta_relativa", "fuente", "source_role", "pagina_origen", "url_original", "nombre_original", "sha256", "bytes", "mime_detectado", "estado", "observacion")
+INVENTORY_FIELDS = ("marca", "modelo", "tipo", "posicion", "archivo", "ruta_relativa", "ubicacion", "metodo_asociacion", "estado_integridad", "estado_clasificacion", "fuente", "source_role", "pagina_origen", "url_original", "nombre_original", "sha256", "bytes", "mime_detectado", "estado", "observacion")
 PENDING_FIELDS = ("id", "marca_sugerida", "modelo_sugerido", "tipo", "motivo", "fuente", "pagina_origen", "url_original", "ruta_relativa", "accion_sugerida")
 
 def csv_bytes(fields, rows) -> bytes:
