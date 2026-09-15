@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
 from .errors import UnsafePathError
-from .paths import safe_join
+from .paths import safe_join, semantic_path_key
 from .serialization import canonical_bytes
 
 SCHEMA_VERSION = "1.0.0"
@@ -91,7 +91,7 @@ def parse_measure(raw_value, raw_unit, rule):
         return {"normalized_value": None, "normalized_unit": raw_unit, "resolution_status": "unsupported", "reason": "not_numeric"}
     source_unit = raw_unit
     target_unit = rule.get("target_unit")
-    if not source_unit:
+    if not source_unit and target_unit is not None:
         return {"normalized_value": None, "normalized_unit": None, "resolution_status": "manual_approval_required", "reason": "unit_missing"}
     conversion = rule.get("conversions", {}).get(f"{source_unit}->{target_unit}")
     if source_unit != target_unit and conversion is None:
@@ -187,7 +187,8 @@ def _spec(item, order):
             "display_value": str(item["raw_value"]), "display_unit": item["raw_unit"] or "", "normalized_value": item["normalized_value"],
             "order": order, "source_field_key": item["source_field_key"], "evidence_references": item["evidence_references"],
             "rule_id": item["rule_id"], "resolution_status": item["resolution_status"], "qualifiers": item["qualifiers"],
-            "conflict_group": item["conflict_group"], "review_references": item["review_references"]}
+            "conflict_group": item["conflict_group"], "review_references": item["review_references"],
+            "observation_reference": item["observation_id"]}
 
 
 def build_plan(bundle):
@@ -228,6 +229,7 @@ def build_plan(bundle):
           "brand_code": product["brand_code"], "canonical_model": product["canonical_model"], "variant": product.get("variant"),
           "source_titles": product.get("source_titles", []), "source_categories": product["source_category_keys"], "category_mapping": mapping,
           "structured_fields": structured, "product_specs": product_specs, "media": assets.get("media", []),
+          "observations": own,
           "technical_sheet": assets.get("technical_sheet"), "additional_documents": assets.get("additional_documents", []),
           "commercial": {"is_published": False, "price_visible": False, "is_featured": False, "price": None,
                          "supplier": None, "condition": None, "stock_status": None, "commercial_text": None},
@@ -277,7 +279,13 @@ def _files(plan):
       "product-spec-candidates.json": plan["product_specs"], "category-mapping-results.json": plan["category_mapping_results"],
       "normalization-reviews.json": plan["reviews"], "normalization-conflicts.json": plan["conflicts"], "schema-gap-proposals.json": plan["schema_gaps"]}
     files = {name: canonical_bytes({"schema_version":SCHEMA_VERSION,"items":value}) for name,value in collections.items()}
-    for product in plan["products"]: files[f"products/{product['canonical_identity']}/producto.json"] = canonical_bytes(product)
+    physical_mappings=[]
+    for product in plan["products"]:
+        identity=product["canonical_identity"]
+        key=semantic_path_key(identity, expected_prefix="canonical-identity-v1")
+        physical_mappings.append({"semantic_identity":identity,"physical_key":key,"policy_version":"semantic-path-key-v1"})
+        files[f"products/{key}/producto.json"] = canonical_bytes(product)
+    files["physical-identity-mappings.json"] = canonical_bytes({"schema_version":"1.0.0","policy_version":"semantic-path-key-v1","mappings":physical_mappings})
     report = (f"offline: true\nproducts: {len(plan['products'])}\nreviews: {len(plan['reviews'])}\nconflicts: {len(plan['conflicts'])}\nreadiness: audit only; import and publication are not authorized\n").encode()
     files["normalization-report.txt"] = report
     inventory = [{"path":name,"sha256":hashlib.sha256(data).hexdigest(),"size":len(data)} for name,data in sorted(files.items())]

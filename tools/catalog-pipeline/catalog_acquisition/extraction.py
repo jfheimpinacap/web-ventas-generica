@@ -14,6 +14,7 @@ from .serialization import canonical_bytes
 from .storage import atomic_write, verify_hash
 
 ENGINE_VERSION="catalog-extraction-v1"; SCHEMA_VERSION="1.0.0"; IDENTITY_STRATEGY="source-identity-v1"
+BINDING_CONTRACT_VERSION="matching-extraction-binding-v1"
 OUTPUTS=("raw-products.jsonl","raw-field-observations.jsonl","raw-tables.jsonl",
          "media-candidates.jsonl","document-candidates.jsonl","extraction-review.jsonl")
 
@@ -50,22 +51,33 @@ def validate_inputs(snapshot_manifest_path:Path,snapshot_root:Path,matching_mani
     if snapshots.get("schema_version")!="snapshot-manifest-v1": raise ExtractionIncompatibleError("unsupported snapshot manifest")
     if matching.get("schema_version")!="1.0.0": raise ExtractionIncompatibleError("unsupported matching manifest")
     _validate_fingerprint(snapshots); _validate_fingerprint(matching)
+    bindings=matching.get("identity_bindings")
+    if matching.get("binding_contract_version")!=BINDING_CONTRACT_VERSION or not isinstance(bindings,list):
+        raise ExtractionIncompatibleError("unsupported matching/extraction binding contract")
+    if _digest(bindings)!=matching.get("binding_hash"): raise ExtractionBlockedError("altered identity binding contract")
+    by_observed={}; by_semantic={}
+    for binding in bindings:
+        observed=binding.get("observed_identity_reference"); semantic=binding.get("source_identity_value")
+        if not observed or not semantic or observed in by_observed or semantic in by_semantic:
+            raise ExtractionBlockedError("missing or duplicate identity binding")
+        by_observed[observed]=binding; by_semantic[semantic]=binding
     rows=snapshots.get("snapshots")
     if not isinstance(rows,list) or not rows: raise ExtractionBlockedError("snapshot manifest is empty")
     required={"source","source_role","source_identity_value","requested_url","canonical_url","relative_path","sha256","size","content_type","encoding","adapter_version"}
     seen_ids=set(); seen_refs=set(); validated=[]
     allowed_sources={(x.get("source"),x.get("role"),x.get("adapter_version")) for x in matching.get("sources",[])}
-    known_sources=set(matching.get("source_mappings",{}))|set(matching.get("supplemental_entry_mappings",{}))
     for row in sorted(rows,key=lambda x:(x.get("source_identity_value",""),x.get("relative_path",""))):
         if not required<=row.keys(): raise ExtractionBlockedError("incomplete snapshot metadata")
         identity=row["source_identity_value"]; reference=row["relative_path"]
         if identity in seen_ids or reference in seen_refs: raise ExtractionBlockedError("duplicate snapshot identity or reference")
         seen_ids.add(identity); seen_refs.add(reference)
-        if not identity.startswith(row["source"]+":"): raise ExtractionBlockedError("source identity namespace mismatch")
+        binding=by_observed.get(identity) or by_semantic.get(identity)
+        if binding is None: raise ExtractionBlockedError("snapshot references unknown identity binding")
+        if binding["source_namespace"]!=row["source"]: raise ExtractionBlockedError("source namespace contradicts binding")
+        if binding["source_role"]!=row["source_role"]: raise ExtractionBlockedError("source role contradicts binding")
         parsed_url=urlsplit(row["canonical_url"])
         if parsed_url.scheme not in {"http","https"} or not parsed_url.hostname or parsed_url.fragment:
             raise ExtractionBlockedError("invalid canonical URL metadata")
-        if identity not in known_sources: raise ExtractionBlockedError("snapshot references unknown source identity")
         if (row["source"],row["source_role"],row["adapter_version"]) not in allowed_sources: raise ExtractionIncompatibleError("source role or adapter mismatch")
         if row["content_type"].split(";",1)[0].lower() not in {"text/html","application/xhtml+xml"}: raise ExtractionIncompatibleError("snapshot MIME is not passive HTML")
         if not row["encoding"]: raise ExtractionBlockedError("snapshot encoding is required")
@@ -73,15 +85,15 @@ def validate_inputs(snapshot_manifest_path:Path,snapshot_root:Path,matching_mani
         try: body=target.read_bytes()
         except OSError as exc: raise ExtractionBlockedError("missing snapshot") from exc
         if len(body)!=row["size"]: raise ExtractionBlockedError("snapshot size mismatch")
-        verify_hash(body,row["sha256"]); validated.append((row,body))
+        verify_hash(body,row["sha256"]); validated.append((row|{"identity_binding":binding},body))
     return snapshots,matching,validated
 
 def _provenance(row,matching):
-    sid=row["source_identity_value"]; entry=matching.get("supplemental_entry_mappings",{}).get(sid)
+    binding=row["identity_binding"]; sid=binding["source_identity_value"]; entry=matching.get("supplemental_entry_mappings",{}).get(sid)
     if row["source_role"]=="authoritative_existence": entry="discovered:"+sid
     association=_stable_id("supplemental-association",sid) if row["source_role"]=="supplemental" else None
     return {"source_namespace":row["source"],"source_role":row["source_role"],"source_identity_value":sid,
-      "discovered_entry_id":entry,"supplemental_association_id":association,"canonical_identity_value":matching.get("source_mappings",{}).get(sid),
+      "observed_identity_reference":binding["observed_identity_reference"],"discovered_entry_id":entry,"supplemental_association_id":association,"canonical_identity_value":binding["canonical_identity_value"],
       "original_url":row["requested_url"],"canonical_url":row["canonical_url"],"snapshot_reference":row["relative_path"],
       "snapshot_sha256":row["sha256"],"content_type":row["content_type"],"encoding":row["encoding"],"adapter_id":"generic-passive-html","adapter_version":"1.0.0"}
 
@@ -136,6 +148,7 @@ def extract(snapshot_manifest_path:Path,snapshot_root:Path,matching_manifest_pat
     output_bytes={name:b"".join(canonical_bytes(x) for x in rows) for name,rows in collections.items()}
     semantic={"schema_version":SCHEMA_VERSION,"rules_version":adapter.rules_version,"engine_version":ENGINE_VERSION,"evidence_kind":"synthetic",
       "identity_strategy":IDENTITY_STRATEGY,"matching_fingerprint":matching["semantic_fingerprint"],"adapters":[{"id":adapter.adapter_id,"version":adapter.adapter_version,"structure_verified":False}],
+      "binding_contract_version":BINDING_CONTRACT_VERSION,"binding_hash":matching["binding_hash"],
       "rules":list(adapter.rules),"input_hashes":{"snapshot_manifest":sha256(snapshot_manifest_path.read_bytes()).hexdigest(),"matching_manifest":sha256(matching_manifest_path.read_bytes()).hexdigest()},
       "snapshot_hashes":sorted(snapshot_hashes),"output_hashes":{k:sha256(v).hexdigest() for k,v in sorted(output_bytes.items())},
       "sources":matching["sources"],"counts":{k.removesuffix(".jsonl"):len(v) for k,v in sorted(collections.items())},

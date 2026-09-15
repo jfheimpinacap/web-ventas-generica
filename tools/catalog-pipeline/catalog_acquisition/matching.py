@@ -20,6 +20,7 @@ from .storage import atomic_write, write_once
 
 ENGINE_VERSION = "catalog-identity-v1"
 SCHEMA_VERSION = "1.0.0"
+BINDING_CONTRACT_VERSION = "matching-extraction-binding-v1"
 RESULTS = frozenset({"exact", "normalized_candidate", "derived_by_approved_rule",
  "manual_approval_required", "manual_approved", "ambiguous", "conflict", "missing",
  "no_match", "supplemental_orphan"})
@@ -250,7 +251,17 @@ def resolve(discovery_manifest: Path, output_dir: Path, *, rules_path: Path|None
     for name in collections: collections[name]=sorted(collections[name],key=lambda x:canonical_bytes(x))
     output_hashes={name:sha256(b"".join(canonical_bytes(x) for x in rows)).hexdigest() for name,rows in collections.items()}
     resolved={x["canonical_identity_value"] for x in links if not x["blocking"] and x["canonical_identity_value"]}
+    links_by_identity={x["source_identity"]:x for x in links}
+    identity_bindings=[]
+    for row in source_rows:
+        raw=row["raw_observation"]; link=links_by_identity[row["value"]]
+        identity_bindings.append({"observed_identity_reference":raw["source_identity"],
+          "source_identity_value":row["value"],"source_namespace":raw["source"],"source_role":raw["source_role"],
+          "canonical_identity_value":link["canonical_identity_value"],"evidence_references":link["evidence_ids"]})
+    identity_bindings=sorted(identity_bindings,key=canonical_bytes)
+    binding_hash=sha256(canonical_bytes(identity_bindings)).hexdigest()
     semantic={"schema_version":SCHEMA_VERSION,"rules_version":rules["rules_version"],"engine_version":ENGINE_VERSION,
+      "binding_contract_version":BINDING_CONTRACT_VERSION,"binding_hash":binding_hash,"identity_bindings":identity_bindings,
       "input_hashes":input_hashes,"output_hashes":output_hashes,"rules":[{"rule_id":x["rule_id"],"version":x["version"]} for x in rules.get("rules",[])],
       "sources":[{"source":s,"role":next((x["source_role"] for x in observations if x["source"]==s),"supplemental"),"adapter_version":manifest["adapters"][s]} for s in sorted(manifest["sources"])],
       "universes":{"source_identity_universe":len(source_rows),"supplemental_association_universe":len(associations),"discovered_universe":len(entries),"canonical_candidate_universe":len(canonical_rows),"resolved_canonical_universe":len(resolved),"importable_universe":0,"blocked":len(review)},

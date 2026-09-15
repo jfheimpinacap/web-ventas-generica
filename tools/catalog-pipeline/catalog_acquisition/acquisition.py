@@ -5,7 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from .acquisition_plan import AcquisitionBlocked, POLICY_VERSION, validate_url
-from .paths import safe_join
+from .paths import safe_join, semantic_path_key
 from .robots import evaluate, permits_catalog
 from .serialization import canonical_bytes
 from .storage import atomic_write
@@ -63,14 +63,20 @@ class AcquisitionSession:
     def _acquire(self,item,resume):
         cid=item["candidate_id"]; sequence=[]; redirects=[]; original=item["url"]; current=original
         attempt=_id("attempt",self.auth["authorization_id"],cid)
-        base_headers={}; existing=b""; checkpoint=None; part=None
+        attempt_key=semantic_path_key(attempt, expected_prefix="attempt")
+        # Validate every possible per-attempt path before the first request.
+        paths={suffix:safe_join(self.root,relative) for suffix,relative in {
+          "part":f"_operations/parts/{attempt_key}.part", "restart":f"_operations/parts/{attempt_key}.restart.part",
+          "range_ignored":f"_operations/parts/{attempt_key}.range-ignored.part",
+          "checkpoint":f"_operations/checkpoints/{attempt_key}.json", "receipt":f"receipts/{attempt_key}.json"}.items()}
+        base_headers={}; existing=b""; checkpoint=None; part=None; incoming_parts=[]
         if resume:
             checkpoint,part,existing=resume
             current=validate_url(checkpoint["current_url"],self.auth)
             etag=_strong(checkpoint.get("strong_etag"))
             if etag: base_headers={"Range":f"bytes={len(existing)}-","If-Range":etag}
             else:
-                existing=b""; part=safe_join(self.root,f"_operations/parts/{attempt}.restart.part")
+                existing=b""; part=paths["restart"]
         try:
             for hop in range(self.auth["limits"]["max_redirects"]+1):
                 current=validate_url(current,self.auth); decision=self._robots_allows(current,sequence)
@@ -90,9 +96,11 @@ class AcquisitionSession:
             if headers.get("content-encoding", "identity").casefold() not in ("","identity"): raise AcquisitionBlocked("content_encoding_blocked")
             declared=headers.get("content-length")
             if declared and (not declared.isdigit() or int(declared)>self.auth["limits"]["max_bytes_per_asset"]): raise AcquisitionBlocked("content_length_blocked")
-            incoming=b"".join(response.chunks)
+            for chunk in response.chunks:
+                incoming_parts.append(chunk)
+            incoming=b"".join(incoming_parts)
             if base_headers:
-                if response.status==200: existing=b""; part=safe_join(self.root,f"_operations/parts/{attempt}.range-ignored.part")
+                if response.status==200: existing=b""; part=paths["range_ignored"]
                 elif response.status!=206: raise AcquisitionBlocked("resume_status_invalid")
                 else:
                     match=CONTENT_RANGE.fullmatch(headers.get("content-range", "")); expected=_strong(checkpoint.get("strong_etag"))
@@ -102,11 +110,11 @@ class AcquisitionSession:
             payload=existing+incoming
             if len(payload)>self.auth["limits"]["max_bytes_per_asset"] or self.total_bytes+len(payload)>self.auth["limits"]["max_total_bytes"]: raise AcquisitionBlocked("byte_limit")
             if declared and response.status==200 and len(payload)!=int(declared): raise AcquisitionBlocked("content_length_mismatch")
-            part=part or safe_join(self.root,f"_operations/parts/{attempt}.part"); _atomic_synced(part,payload)
+            part=part or paths["part"]; _atomic_synced(part,payload)
             digest=sha256(payload).hexdigest(); rel=f"payloads/sha256/{digest[:2]}/{digest}"
             final=safe_join(self.root,rel); _atomic_synced(final,payload); self.total_bytes+=len(payload)
             receipt=self._receipt(attempt,cid,original,current,sequence,redirects,"completed","download_complete",digest,len(payload),None,rel)
-            receipt_ref=f"receipts/{attempt}.json"; atomic_write(safe_join(self.root,receipt_ref),canonical_bytes(receipt))
+            receipt_ref=f"receipts/{attempt_key}.json"; atomic_write(paths["receipt"],canonical_bytes(receipt))
             self.receipts.append(receipt)
             provenance="synthetic_fixture" if self.auth["fixture_only"] else "authorized_capture_receipt"
             self.payloads.append({"candidate_id":cid,"relative_path":rel,"expected_sha256":digest,"expected_size":len(payload),
@@ -116,14 +124,14 @@ class AcquisitionSession:
         except Exception as exc:
             reason=exc.reason if isinstance(exc,AcquisitionBlocked) else getattr(exc,"state","transport_failed")
             state="blocked_redirect" if reason.startswith("redirect") else "blocked_robots" if reason.startswith("robots") else "interrupted" if reason=="stream_interrupted" else "resume_blocked" if resume else "failed_transport"
-            partial=existing
-            part=part or safe_join(self.root,f"_operations/parts/{attempt}.part")
+            partial=existing+b"".join(incoming_parts)
+            part=part or paths["part"]
             if partial: _atomic_synced(part,partial)
-            cp=self._checkpoint(cid,original,current,redirects,part,partial,headers if 'headers' in locals() else {},state)
-            cp_ref=f"_operations/checkpoints/{attempt}.json"; atomic_write(safe_join(self.root,cp_ref),canonical_bytes(cp))
+            cp=self._checkpoint(attempt,cid,original,current,redirects,part,partial,headers if 'headers' in locals() else {},state)
+            cp_ref=f"_operations/checkpoints/{attempt_key}.json"; atomic_write(paths["checkpoint"],canonical_bytes(cp))
             self.receipts.append(self._receipt(attempt,cid,original,current,sequence,redirects,state,reason,sha256(partial).hexdigest() if partial else None,len(partial),cp_ref,None))
-    def _checkpoint(self,cid,original,current,redirects,part,data,headers,state):
-        return {"schema_version":"acquisition-checkpoint-v1","candidate_id":cid,"relation_id":None,"authorization_id":self.auth["authorization_id"],
+    def _checkpoint(self,attempt,cid,original,current,redirects,part,data,headers,state):
+        return {"schema_version":"acquisition-checkpoint-v1","attempt_id":attempt,"candidate_id":cid,"relation_id":None,"authorization_id":self.auth["authorization_id"],
           "authorization_fingerprint":self.plan["authorization_fingerprint"],"input_fingerprints":{"candidate_set":self.auth["candidate_set_fingerprint"],"extraction":self.auth["extraction_manifest_fingerprint"],"assets":self.auth["asset_manifest_fingerprint"]},
           "original_url":_sanitize(original),"current_url":_sanitize(current),"redirects_completed":[_sanitize(x) for x in redirects],"host":urlsplit(current).hostname,
           "part_relative_path":part.relative_to(self.root.resolve()).as_posix(),"bytes_present":len(data),"partial_sha256":sha256(data).hexdigest(),"total_expected":_expected_total(headers),
