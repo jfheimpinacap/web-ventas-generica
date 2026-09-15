@@ -11,10 +11,10 @@ import unicodedata
 
 from catalog_pipeline_common.serialization import canonical_bytes, content_fingerprint
 from .contract import root_category_contract, select_contract_root
-from .snapshot import semantic_fingerprint
+from .snapshot import SnapshotError, semantic_fingerprint, validate_snapshot
 
 SCHEMA_VERSION = "1.0.0"
-RULES_VERSION = "jem-local-readiness-v1"
+RULES_VERSION = "jem-local-readiness-v2"
 RESULTS = frozenset(("read_compatible", "read_compatible_manual_binary_verification", "read_incompatible"))
 
 
@@ -37,6 +37,8 @@ def _valid(value, kind):
     if kind == "nullable_object": return value is None or isinstance(value, dict)
     if kind == "nullable_string": return value is None or isinstance(value, str)
     if kind == "nullable_positive_integer": return value is None or _valid(value, "positive_integer")
+    if kind == "nullable_integer": return value is None or type(value) is int
+    if kind == "nullable_number": return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool))
     return False
 
 
@@ -50,8 +52,8 @@ def _issue(code, collection=None, field=None, detail=None):
 
 def _binary(name, items):
     image = name == "product_images"
-    relation = [isinstance(x.get("product", x.get("product_id")), int) for x in items]
-    filename = [isinstance(x.get("image" if image else "original_file_name"), str) for x in items]
+    relation = [type(x.get("product_id")) is int for x in items]
+    filename = [isinstance(x.get("file_url" if image else "original_file_name"), str) for x in items]
     mime = [isinstance(x.get("content_type"), str) for x in items]
     size = [isinstance(x.get("size_bytes"), int) and not isinstance(x.get("size_bytes"), bool) for x in items]
     sha = [isinstance(x.get("sha256"), str) and len(x["sha256"]) == 64 for x in items]
@@ -85,6 +87,9 @@ def assess(snapshot, contract):
     except (AttributeError, TypeError, ValueError): actual_snapshot = None
     if snapshot.get("semantic_fingerprint") != actual_snapshot:
         blockers.append(_issue("SNAPSHOT_FINGERPRINT_MISMATCH"))
+    try: validate_snapshot(snapshot, actual_contract)
+    except (SnapshotError, AttributeError, TypeError, ValueError) as error:
+        blockers.append(_issue(getattr(error, "code", "SNAPSHOT_CONTRACT_INVALID")))
 
     collections = snapshot.get("collections")
     if not isinstance(collections, dict): collections = {}
@@ -112,9 +117,8 @@ def assess(snapshot, contract):
             if not isinstance(item, dict):
                 fields_ok = False; blockers.append(_issue("DTO_FIELD_TYPE_INVALID", name, None, str(index))); continue
             for field, kind in sorted(required.items()):
-                aliases = field.split("|")
-                observed = next((item[key] for key in aliases if key in item), None)
-                if not any(key in item for key in aliases):
+                observed = item[field] if field in item else None
+                if field not in item:
                     fields_ok = False; blockers.append(_issue("DTO_FIELD_MISSING", name, field))
                 elif not _valid(observed, kind):
                     fields_ok = False; blockers.append(_issue("DTO_FIELD_TYPE_INVALID", name, field))
@@ -142,16 +146,15 @@ def assess(snapshot, contract):
         for row in collection_checks:
             if row["collection"] == collection: row["relations_valid"] = row["relations_valid"] and bad == 0
 
-    orphan("categories", "parent", "categories", nullable=True)
-    orphan("products", "category", "categories", lambda x: x.get("category", {}).get("id") if isinstance(x.get("category"), dict) else None)
-    orphan("products", "brand", "brands", lambda x: x.get("brand", {}).get("id") if isinstance(x.get("brand"), dict) else None, nullable=True)
-    orphan("products", "supplier", "suppliers", lambda x: x.get("supplier", {}).get("id") if isinstance(x.get("supplier"), dict) else None, nullable=True)
-    orphan("product_images", "product", "products", lambda x: x.get("product", x.get("product_id")))
-    orphan("product_specs", "product", "products", lambda x: x.get("product", x.get("product_id")))
+    orphan("categories", "parent_id", "categories", nullable=True)
+    orphan("products", "category_id", "categories")
+    orphan("products", "brand_id", "brands", nullable=True)
+    orphan("products", "supplier_id", "suppliers", nullable=True)
+    orphan("products", "technical_sheet_id", "technical_sheets", nullable=True)
+    orphan("product_images", "product_id", "products")
+    orphan("product_specs", "product_id", "products")
     sheets = collections.get("technical_sheets", []) if isinstance(collections.get("technical_sheets"), list) else []
-    sheet_relation_observable = any("product" in x or "product_id" in x for x in sheets if isinstance(x, dict))
-    if sheet_relation_observable: orphan("technical_sheets", "product", "products", lambda x: x.get("product", x.get("product_id")))
-    else: relation_checks.append({"collection":"technical_sheets","field":"product","target_collection":"products","observable":False,"valid":True,"orphan_count":0})
+    relation_checks.append({"collection":"technical_sheets","field":"product_id","target_collection":"products","observable":False,"valid":True,"orphan_count":0})
 
     try:
         root_contract = root_category_contract(contract)

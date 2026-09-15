@@ -38,7 +38,8 @@
     "rules_version": {
       "enum": [
         "jem-local-binary-observation-plan-v1",
-        "jem-local-binary-observation-plan-v2"
+        "jem-local-binary-observation-plan-v2",
+        "jem-local-binary-observation-plan-v3"
       ]
     },
     "fixture_only": {
@@ -605,7 +606,10 @@
           "const": "2.0.0"
         },
         "rules_version": {
-          "const": "jem-local-binary-observation-plan-v2"
+          "enum": [
+            "jem-local-binary-observation-plan-v2",
+            "jem-local-binary-observation-plan-v3"
+          ]
         },
         "capture_supported": {
           "const": true

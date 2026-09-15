@@ -4,7 +4,8 @@ import argparse,hashlib,json,sys
 from pathlib import Path
 from catalog_pipeline_common.serialization import canonical_bytes,content_fingerprint
 from catalog_acquisition.packaging import verify_package
-from jem_nexus_import.local_client import LocalJemJsonReader,LocalReadError,READ_PATHS
+from jem_nexus_import.local_client import LocalJemJsonReader,LocalReadError,READ_TARGETS
+from jem_nexus_import.normalization import NormalizationError,normalize_collections
 from jem_nexus_import.snapshot import validate_snapshot,semantic_fingerprint,SnapshotError
 from jem_nexus_import.package_input import read_verified_package,ImportInputError
 from jem_nexus_import.reconciliation import build_operations
@@ -34,9 +35,13 @@ def parser():
 def _read(path): return json.loads(Path(path).read_text(encoding="utf-8",errors="strict"))
 def capture_snapshot(reader,contract_fingerprint,classification="local_development"):
     collections={}; evidence=[]
-    for name in sorted(READ_PATHS):
-        body=reader.read_collection(name); collections[name]=body if isinstance(body,list) else body.get("items",[])
-        raw=canonical_bytes(body); evidence.append({"collection":name,"path":READ_PATHS[name],"status":200,"mime":"application/json","response_sha256":hashlib.sha256(raw).hexdigest(),"pages_received":1,"pages_expected":1,"complete":True})
+    raw_collections={}
+    for name in sorted(READ_TARGETS):
+        body=reader.read_collection(name)
+        if not isinstance(body,list): raise SnapshotError("COLLECTION_SHAPE",name)
+        raw_collections[name]=body
+        raw=canonical_bytes(body); evidence.append({"collection":name,"path":READ_TARGETS[name],"status":200,"mime":"application/json","response_sha256":hashlib.sha256(raw).hexdigest(),"pages_received":1,"pages_expected":1,"complete":True})
+    collections=normalize_collections(raw_collections)
     value={"schema_version":"1.0.0","complete":True,"classification":classification,"contract_fingerprint":contract_fingerprint,"collections":collections,"endpoints":evidence}
     value["semantic_fingerprint"]=semantic_fingerprint(value); return validate_snapshot(value,contract_fingerprint)
 def create_plan(package_path,receipt_path,snapshot_path,policy_path,verifier=verify_package):
@@ -105,7 +110,7 @@ def main(argv=None,reader_factory=None,verifier=verify_package,mutator_factory=N
         manifest={"schema_version":"1.0.0","fixture_only":authorization["classification"]=="fixture_only","state":result["state"],"counters":result["counters"],"publication_allowed":False,"target_fingerprint":target,"classification":authorization["classification"]}
         write_output_set(destination,{"local-apply-manifest.json":manifest,"local-apply-report.txt":canonical_bytes(manifest)})
         return 0
-    except (ImportInputError,LocalReadError,SnapshotError,AuthorizationError,ExecutionError,CheckpointError,MutationTransportError,json.JSONDecodeError) as error:
+    except (ImportInputError,LocalReadError,NormalizationError,SnapshotError,AuthorizationError,ExecutionError,CheckpointError,MutationTransportError,json.JSONDecodeError) as error:
         code=getattr(error,"code","INPUT_INVALID"); sys.stdout.buffer.write(canonical_bytes({"error":code}))
         if isinstance(error,LocalReadError): return 5
         return 4 if "FINGERPRINT" in code else 2

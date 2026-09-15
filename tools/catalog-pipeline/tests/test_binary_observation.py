@@ -8,20 +8,20 @@ from jem_nexus_import.binary_observation import CAPTURE_POLICY, BinaryObservatio
 from catalog_pipeline_common.binary_validation import validate_observed_binary
 from catalog_acquisition.schema_validation import validate
 from jem_nexus_import.readiness import assess, contract_fingerprint
-from jem_nexus_import.snapshot import COLLECTIONS, semantic_fingerprint
+from jem_nexus_import.snapshot import COLLECTIONS, READ_TARGETS, semantic_fingerprint
 from jem_nexus_local_binary_transport import BinaryTransportError, LocalBinaryTransport
 
 
 def contract(): return json.loads((ROOT/"schemas/v1/jem-nexus-contract.json").read_text(encoding="utf-8"))
 def snapshot():
  c=contract(); value={"schema_version":"1.0.0","complete":True,"classification":"local_development","contract_fingerprint":contract_fingerprint(c),"collections":{
-  "categories":[{"id":1,"name":"Maquinaria","slug":"maquinaria","parent":None,"product_type":"machinery"},{"id":2,"name":"Sintética","slug":"sintetica","parent":1,"product_type":"machinery"}],
+  "categories":[{"id":1,"name":"Maquinaria","slug":"maquinaria","parent_id":None,"product_type":"machinery"},{"id":2,"name":"Sintética","slug":"sintetica","parent_id":1,"product_type":"machinery"}],
   "brands":[{"id":3,"name":"Marca","slug":"marca"}],"suppliers":[{"id":4,"name":"Proveedor"}],
-  "products":[{"id":5,"name":"Producto","slug":"producto","category":{"id":2},"brand":{"id":3},"model":"S","product_type":"machinery"}],
-  "product_images":[{"id":6,"product":5,"image":"/media/synthetic.jpg","alt_text":"x","is_main":True,"order":0}],
-  "product_specs":[{"id":7,"product":5,"name":"altura","value":"1","unit":"m","order":0}],
+  "products":[{"id":5,"name":"Producto","slug":"producto","category_id":2,"brand_id":3,"supplier_id":4,"technical_sheet_id":8,"relations_complete":True,"model":"S","sku":None,"product_type":"machinery","condition":"used","short_description":"s","description":"d","working_height_m":1.0,"terrain_type":"outdoor","year":2020,"hours_meter":1,"maximum_load_capacity_kg":2.0,"machine_weight_kg":3.0,"power_source":"diesel","includes_technical_review":True,"includes_commercial_technical_advice":True,"includes_coordinated_delivery":True,"price":4.0,"price_currency":"CLP","price_tax_mode":"plus_vat","price_visible":True,"stock_status":"available","is_featured":False,"is_published":False,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],
+  "product_images":[{"id":6,"product_id":5,"image":"/media/synthetic.jpg","file_url":"/api/product-images/6/file","alt_text":"x","is_main":True,"order":0}],
+  "product_specs":[{"id":7,"product_id":5,"key":"altura","value":"1","unit":"m","order":0}],
   "technical_sheets":[{"id":8,"name":"Ficha","original_file_name":"unrelated-name.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/api/technical-sheets/8/file"}]},
-  "endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
+  "endpoints":[{"collection":name,"path":READ_TARGETS[name],"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
  value["semantic_fingerprint"]=semantic_fingerprint(value); return value
 def inputs():
  s=snapshot(); r=assess(s,contract()); return s,r,contract(),"a"*64,"b"*64
@@ -101,15 +101,19 @@ class BinaryObservationTests(unittest.TestCase):
  def test_09_image_binding_is_relational_and_declared_only(self):
   binding=plan()["targets"][1 if plan()["targets"][0]["media_class"]=="technical_sheet" else 0]["bindings"][0]
   self.assertTrue(binding["relation_observable"]); self.assertEqual((5,".jpg",None),(binding["product_id"],binding["declared_extension"],binding["declared_content_type"]))
- def test_10_extensionless_pdf_is_manual_without_inference(self):
+ def test_10_extensionless_pdf_relation_is_derived_from_product(self):
   value=next(target for target in plan()["targets"] if target["media_class"]=="technical_sheet")["bindings"][0]
-  self.assertEqual((None,"application/pdf",9),(value["declared_extension"],value["declared_content_type"],value["declared_size_bytes"])); self.assertIsNone(value["product_id"]); self.assertTrue(value["manual_relation_verification_required"])
- def test_11_id_or_filename_coincidence_does_not_infer_product(self):
-  s=snapshot(); s["collections"]["technical_sheets"][0].update(id=5,original_file_name="product-5.pdf"); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
+  self.assertEqual((None,"application/pdf",9),(value["declared_extension"],value["declared_content_type"],value["declared_size_bytes"])); self.assertEqual(5,value["product_id"]); self.assertFalse(value["manual_relation_verification_required"])
+ def test_11_unassociated_sheet_remains_manual(self):
+  s=snapshot(); s["collections"]["products"][0]["technical_sheet_id"]=None; s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
   self.assertIsNone(next(t for t in value["targets"] if t["media_class"]=="technical_sheet")["bindings"][0]["product_id"])
  def test_12_duplicates_group_and_preserve_sorted_bindings(self):
   s=snapshot(); duplicate=copy.deepcopy(s["collections"]["product_images"][0]); duplicate["id"]=9; s["collections"]["product_images"].append(duplicate); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract())); target=next(t for t in value["targets"] if t["media_class"]=="image")
   self.assertEqual([6,9],[x["row_id"] for x in target["bindings"]]); self.assertEqual(2,value["counts"]["targets_total"])
+ def test_12b_shared_sheet_has_one_literal_target_and_two_product_bindings(self):
+  s=snapshot(); second=copy.deepcopy(s["collections"]["products"][0]); second.update(id=9,name="Segundo",slug="segundo"); s["collections"]["products"].append(second); s["semantic_fingerprint"]=semantic_fingerprint(s)
+  target=next(t for t in plan(s,assess(s,contract()))["targets"] if t["media_class"]=="technical_sheet")
+  self.assertEqual("/api/technical-sheets/8/file",target["root_relative_path"]); self.assertEqual([5,9],[b["product_id"] for b in target["bindings"]])
  def test_13_media_class_conflict_blocks(self):
   s=snapshot(); s["collections"]["technical_sheets"][0]["file_url"]="/media/synthetic.jpg"; s["semantic_fingerprint"]=semantic_fingerprint(s)
   with self.assertRaisesRegex(BinaryObservationError,"/media/synthetic.jpg"): plan(s,assess(s,contract()))
@@ -119,7 +123,7 @@ class BinaryObservationTests(unittest.TestCase):
   s["endpoints"].reverse(); s["semantic_fingerprint"]=semantic_fingerprint(s); second=plan(s,assess(s,contract()))
   self.assertEqual(canonical_bytes(first),canonical_bytes(second))
  def test_15_exact_counters_and_manual_state(self):
-  value=plan(); self.assertEqual({"targets_total":2,"image_targets":1,"technical_sheet_targets":1,"bindings_total":2,"relations_observable":1,"manual_relations":1,"blockers":0,"warnings":1},value["counts"])
+  value=plan(); self.assertEqual({"targets_total":2,"image_targets":1,"technical_sheet_targets":1,"bindings_total":2,"relations_observable":2,"manual_relations":0,"blockers":0,"warnings":1},value["counts"])
  def test_16_safety_flags_and_capture_authorization(self):
   value=plan(); self.assertTrue(value["capture_supported"]); self.assertEqual(CAPTURE_POLICY,value["capture_policy"]); self.assertTrue(all(value[key] is False for key in ("network_executed","bytes_observed","mutation_authorized","content_published")))
  def test_17_cli_has_exact_commands_and_no_unsafe_flags(self):
@@ -207,6 +211,12 @@ class BinaryObservationTests(unittest.TestCase):
   calls=[]
   with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_VERSION_UNSUPPORTED"): capture_plan(old,old["plan_fingerprint"],"a"*64,lambda *args:calls.append(args))
   self.assertEqual([],calls)
+ def test_26b_v2_is_not_capturable(self):
+  from catalog_pipeline_common.serialization import content_fingerprint
+  old={"schema_version":"2.0.0","rules_version":"jem-local-binary-observation-plan-v2"}; old["plan_fingerprint"]=content_fingerprint(old)
+  calls=[]
+  with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_VERSION_UNSUPPORTED"): capture_plan(old,old["plan_fingerprint"],"a"*64,lambda *args:calls.append(args))
+  self.assertEqual([],calls)
  def test_27_capture_fingerprint_fails_before_transport(self):
   calls=[]
   with self.assertRaisesRegex(BinaryObservationError,"CAPTURE_PLAN_FINGERPRINT_MISMATCH"): capture_plan(plan(),"0"*64,"1"*64,lambda *args:calls.append(args))
@@ -264,12 +274,12 @@ class BinaryObservationTests(unittest.TestCase):
   self.assertEqual("BINARY_SIZE_MISMATCH",validate_observed_binary(pdf,"technical_sheet","application/pdf",[{"declared_size_bytes":1}])["code"])
   self.assertEqual("BINARY_SIGNATURE_INVALID",validate_observed_binary(png,"image","image/png",[{"declared_extension":".jpg"}])["code"])
 
-  source=snapshot(); source["collections"]["product_images"].append({"id":9,"product":5,"image":"/media/synthetic.png","alt_text":"y","is_main":False,"order":1}); source["collections"]["technical_sheets"][0]["size_bytes"]=len(pdf)
+  source=snapshot(); source["collections"]["product_images"].append({"id":9,"product_id":5,"image":"/media/synthetic.png","file_url":"/api/product-images/9/file","alt_text":"y","is_main":False,"order":1}); source["collections"]["technical_sheets"][0]["size_bytes"]=len(pdf)
   source["semantic_fingerprint"]=semantic_fingerprint(source); value=plan(source,assess(source,contract())); original=copy.deepcopy(value)
   canonical_sheet_path="/api/technical-sheets/8/file"
   self.assertEqual(canonical_sheet_path,source["collections"]["technical_sheets"][0]["file_url"])
   self.assertEqual(canonical_sheet_path,next(target["root_relative_path"] for target in value["targets"] if target["media_class"]=="technical_sheet"))
-  responses={"/media/synthetic.jpg":("image/jpeg",jpeg),"/media/synthetic.png":("image/png",png),canonical_sheet_path:("application/pdf",pdf)}
+  responses={"/api/product-images/6/file":("image/jpeg",jpeg),"/api/product-images/9/file":("image/png",png),canonical_sheet_path:("application/pdf",pdf)}
   class SyntheticTransport:
    def __init__(self): self.calls=[]
    def __call__(self,base,path,headers,timeout,limit):

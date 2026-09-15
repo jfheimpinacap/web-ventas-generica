@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os
 from urllib.parse import urlsplit
 
-READ_PATHS={"categories":"/api/categories","brands":"/api/brands","suppliers":"/api/suppliers","products":"/api/products","product_images":"/api/product-images","product_specs":"/api/product-specs","technical_sheets":"/api/technical-sheets/"}
+READ_TARGETS={"categories":"/api/categories?include_inactive=true","brands":"/api/brands?include_inactive=true","suppliers":"/api/suppliers?include_inactive=true","products":"/api/products?include_unpublished=true","product_images":"/api/product-images","product_specs":"/api/product-specs","technical_sheets":"/api/technical-sheets/"}
 TOKEN_ENV="JEM_NEXUS_LOCAL_READ_TOKEN"
 class LocalReadError(ValueError):
     def __init__(self,code,detail): self.code=code; super().__init__(detail)
@@ -20,12 +20,13 @@ class LocalJemJsonReader:
         self.token=os.environ.get(TOKEN_ENV) if requires_auth else None
         if requires_auth and not self.token: raise LocalReadError("LOCAL_TOKEN_MISSING",TOKEN_ENV+" is required")
     def read_collection(self,name):
-        if name not in READ_PATHS: raise LocalReadError("UNSAFE_READ_QUERY","unknown read endpoint")
-        # The inspected list endpoints are currently unpaginated; no query is invented.
-        url=self.base_url+READ_PATHS[name]
+        if name not in READ_TARGETS: raise LocalReadError("UNSAFE_READ_QUERY","unknown read endpoint")
+        url=self.base_url+READ_TARGETS[name]
         status,mime,body=self.transport(url,{"Authorization":"Bearer "+self.token} if self.token else {},self.timeout,self.max_bytes)
         if status!=200: raise LocalReadError("READ_STATUS",str(status))
         if "json" not in mime.lower(): raise LocalReadError("READ_MIME","JSON response required")
         if len(body)>self.max_bytes: raise LocalReadError("READ_TOO_LARGE","response limit exceeded")
-        try: return json.loads(body.decode("utf-8",errors="strict"))
+        try: value=json.loads(body.decode("utf-8",errors="strict"))
         except (UnicodeDecodeError,json.JSONDecodeError) as error: raise LocalReadError("READ_INVALID_JSON","invalid JSON response") from error
+        if not isinstance(value,list): raise LocalReadError("READ_COLLECTION_SHAPE","collection response must be a JSON array")
+        return value

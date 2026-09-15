@@ -13,7 +13,7 @@ from .readiness import contract_fingerprint
 from .snapshot import semantic_fingerprint, validate_snapshot
 
 SCHEMA_VERSION = "2.0.0"
-RULES_VERSION = "jem-local-binary-observation-plan-v2"
+RULES_VERSION = "jem-local-binary-observation-plan-v3"
 REPORT_SCHEMA_VERSION = "1.0.0"
 REPORT_RULES_VERSION = "jem-local-binary-observation-report-v1"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -97,7 +97,7 @@ def _validate_readiness(report, snapshot_fp, contract_fp):
                 "mutation_authorized", "checks", "counts", "root_category", "relation_checks",
                 "dto_compatibility", "binary_observability", "blockers", "warnings",
                 "next_permitted_step", "zero_mutation_manifest"}
-    if set(report) != required or report.get("schema_version") != "1.0.0" or report.get("rules_version") != "jem-local-readiness-v1":
+    if set(report) != required or report.get("schema_version") != "1.0.0" or report.get("rules_version") != "jem-local-readiness-v2":
         raise BinaryObservationError("READINESS_CONTRACT_INVALID")
     supplied = report.get("report_fingerprint")
     semantic = dict(report)
@@ -130,7 +130,7 @@ def _binding(collection, row, field, media_class, path):
     row_id = row.get("id")
     if type(row_id) is not int:
         raise BinaryObservationError("BINDING_ROW_ID_INVALID")
-    product = row.get("product", row.get("product_id"))
+    product = row.get("product_id")
     observable = type(product) is int
     if media_class == "image" and not observable:
         raise BinaryObservationError("IMAGE_RELATION_NOT_OBSERVABLE")
@@ -199,15 +199,20 @@ def build_plan(snapshot, readiness, contract, base_url, snapshot_file_sha256, re
     snapshot_fp = semantic_fingerprint(snapshot)
     warnings = _validate_readiness(readiness, snapshot_fp, contract_fp)
     grouped = {}
-    sources = (("product_images", "image", "image"),
+    sources = (("product_images", "file_url", "image"),
                ("technical_sheets", "file_url", "technical_sheet"))
     for collection, field, media_class in sources:
         for row in snapshot["collections"][collection]:
             path = normalize_reference(row.get(field))
-            binding = _binding(collection, row, field, media_class, path)
-            entry = grouped.setdefault(path, {"classes": set(), "bindings": []})
-            entry["classes"].add(media_class)
-            entry["bindings"].append(binding)
+            related_rows=[row]
+            if media_class=="technical_sheet":
+                products=[product for product in snapshot["collections"]["products"] if product.get("technical_sheet_id")==row.get("id")]
+                related_rows=[dict(row,product_id=product["id"]) for product in products] or [row]
+            for related in related_rows:
+                binding = _binding(collection, related, field, media_class, path)
+                entry = grouped.setdefault(path, {"classes": set(), "bindings": []})
+                entry["classes"].add(media_class)
+                entry["bindings"].append(binding)
     conflicts = sorted(path for path, item in grouped.items() if len(item["classes"]) != 1)
     if conflicts:
         raise BinaryObservationError("MEDIA_CLASS_CONFLICT", ",".join(conflicts))

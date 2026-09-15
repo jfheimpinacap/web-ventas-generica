@@ -7,7 +7,7 @@ from jem_nexus_import.local_client import LocalJemJsonReader,LocalReadError,vali
 from jem_nexus_import.output import _fsync_directory_if_supported,write_output_set
 from jem_nexus_import.planning import operation,simulate,topological
 from jem_nexus_import.projection import build_safe_product_payload,project_candidate
-from jem_nexus_import.snapshot import COLLECTIONS,semantic_fingerprint,validate_snapshot,SnapshotError
+from jem_nexus_import.snapshot import COLLECTIONS,READ_TARGETS,semantic_fingerprint,validate_snapshot,SnapshotError
 from catalog_acquisition.packaging import build_package,fingerprint,PackageError
 from catalog_acquisition.serialization import canonical_bytes
 from catalog_acquisition.schema_validation import validate,SchemaValidationError
@@ -22,8 +22,8 @@ def ref(scope,namespace,key): return {"scope":scope,"namespace":namespace,"key":
 def binding(namespace,key,value=1): return {**ref("external",namespace,key),"value":value}
 def snapshot():
  value={"schema_version":"1.0.0","complete":True,"classification":"fixture_only","contract_fingerprint":"c"*64,
-  "collections":{name:[] for name in COLLECTIONS},"endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
- value["collections"]["categories"]=[{"id":1,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"}]
+  "collections":{name:[] for name in COLLECTIONS},"endpoints":[{"collection":name,"path":READ_TARGETS[name],"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
+ value["collections"]["categories"]=[{"id":1,"name":"Maquinarias","slug":"maquinaria","parent_id":None,"product_type":"machinery"}]
  value["semantic_fingerprint"]=semantic_fingerprint(value); return value
 def plan(ops,external=(),reviews=()): return {"operations":ops,"external_bindings":list(external),"reviews":list(reviews),"plan_fingerprint":"a"*64}
 def canonical_package(directory,blocked=0,excluded=0):
@@ -49,8 +49,8 @@ class LocalClientTests(unittest.TestCase):
    with self.subTest(url=url),self.assertRaises(LocalReadError): validate_base_url(url)
  def test_fake_transport_observes_get_contract_and_json(self):
   calls=[]
-  reader=LocalJemJsonReader("http://localhost:5000",transport=lambda url,headers,timeout,limit:(calls.append(url) or (200,"application/json",b'{"items":[]}')),requires_auth=False)
-  self.assertEqual({"items":[]},reader.read_collection("products")); self.assertEqual(1,len(calls)); self.assertEqual("http://localhost:5000/api/products",calls[0])
+  reader=LocalJemJsonReader("http://localhost:5000",transport=lambda url,headers,timeout,limit:(calls.append(url) or (200,"application/json",b'[]')),requires_auth=False)
+  self.assertEqual([],reader.read_collection("products")); self.assertEqual(1,len(calls)); self.assertEqual("http://localhost:5000/api/products?include_unpublished=true",calls[0])
  def test_non_json_and_oversize_fail_closed(self):
   for mime,body,code in (("text/html",b"{}","READ_MIME"),("application/json",b"{}x","READ_TOO_LARGE")):
    reader=LocalJemJsonReader("http://localhost:1",transport=lambda *unused:(200,mime,body),requires_auth=False,max_bytes=2)
@@ -85,13 +85,13 @@ class LocalTransportTests(unittest.TestCase):
   response=self.Response(b"{}")
   opener=mock.Mock(); opener.open.return_value=response
   with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener),mock.patch("jem_nexus_local_transport.Request") as request:
-   self.assertEqual((200,"application/json",b"{}"),get_json_bytes("http://localhost:1/api/products",{"Authorization":"Bearer secret"},3,8))
+   self.assertEqual((200,"application/json",b"{}"),get_json_bytes("http://localhost:1/api/products?include_unpublished=true",{"Authorization":"Bearer secret"},3,8))
   self.assertEqual("GET",request.call_args.kwargs["method"]); self.assertNotIn("method",inspect.signature(get_json_bytes).parameters)
   self.assertEqual(9,response.read_limit); self.assertTrue(response.closed)
  def test_redirects_and_proxies_are_disabled(self):
   response=self.Response(b"[]"); opener=mock.Mock(); opener.open.return_value=response
   with mock.patch("jem_nexus_local_transport.build_opener",return_value=opener) as builder,mock.patch("jem_nexus_local_transport.Request") as request:
-   get_json_bytes("http://127.0.0.1:2/api/brands",{},1,2)
+   get_json_bytes("http://127.0.0.1:2/api/brands?include_inactive=true",{},1,2)
   handlers=builder.call_args.args; self.assertEqual({},handlers[0].proxies)
   redirect_handler=handlers[1](); self.assertIsNone(redirect_handler.redirect_request(None,None,None,None,None,None))
   self.assertEqual("GET",request.call_args.kwargs["method"])
@@ -102,84 +102,55 @@ class LocalTransportTests(unittest.TestCase):
     with self.subTest(target=target),self.assertRaises(LocalReadError): get_json_bytes(target,{},1,1)
    builder.assert_not_called()
  def test_direct_calls_allow_each_exact_loopback_form_without_network(self):
-  for target in ("http://localhost:1/api/categories","http://127.0.0.1:2/api/products","http://[::1]:3/api/technical-sheets/"):
+  for target in ("http://localhost:1/api/categories?include_inactive=true","http://127.0.0.1:2/api/products?include_unpublished=true","http://[::1]:3/api/technical-sheets/"):
    response=self.Response(b"[]"); opener=mock.Mock(); opener.open.return_value=response
    with self.subTest(target=target),mock.patch("jem_nexus_local_transport.build_opener",return_value=opener):
     self.assertEqual(b"[]",get_json_bytes(target,{},1,2)[2])
 
 class SnapshotTests(unittest.TestCase):
+ def normalized_product(self, **changes):
+  value={"id":2,"name":"P","slug":"p","category_id":1,"brand_id":None,"supplier_id":None,"technical_sheet_id":None,"relations_complete":True,"product_type":"machinery","condition":"used","short_description":"s","description":"d","model":None,"sku":None,"working_height_m":None,"terrain_type":None,"year":None,"hours_meter":None,"maximum_load_capacity_kg":None,"machine_weight_kg":None,"power_source":None,"includes_technical_review":False,"includes_commercial_technical_advice":False,"includes_coordinated_delivery":False,"price":None,"price_currency":"CLP","price_tax_mode":"plus_vat","price_visible":False,"stock_status":"available","is_featured":False,"is_published":False,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
+  value.update(changes); return value
  def product_snapshot(self,product=None):
-  value=snapshot(); value["collections"]["products"]=[product or {"id":2,"name":"P","slug":"p","category":{"id":1}}]; value["semantic_fingerprint"]=semantic_fingerprint(value); return value
- def assert_orphan(self,product):
-  with self.assertRaises(SnapshotError) as caught: validate_snapshot(self.product_snapshot(product))
-  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
- def test_complete_snapshot_validates(self): self.assertIsNotNone(validate_snapshot(snapshot(),"c"*64))
- def test_order_and_capture_time_do_not_change_semantics(self):
-  first=snapshot(); second=copy.deepcopy(first); second["captured_at"]="2099-01-01T00:00:00Z"; second["endpoints"].reverse()
-  self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second))
- def test_missing_endpoint_and_truncated_page_are_rejected(self):
-  for mutate in (lambda x:x["endpoints"].pop(),lambda x:x["endpoints"][0].update(pages_expected=2)):
-   value=snapshot(); mutate(value); value["semantic_fingerprint"]=semantic_fingerprint(value)
-   with self.assertRaises(SnapshotError): validate_snapshot(value)
- def test_duplicate_and_casefold_collision_are_rejected(self):
-  for extra in ({"id":1,"name":"Other","slug":"other","parent_id":None},{"id":2,"name":"MAQUINARIAS","slug":"MAQUINARIA","parent_id":None}):
-   value=snapshot(); value["collections"]["categories"].append(extra); value["semantic_fingerprint"]=semantic_fingerprint(value)
-   with self.assertRaises(SnapshotError): validate_snapshot(value)
- def test_orphan_relations_are_rejected(self):
-  value=snapshot(); value["collections"]["products"]=[{"id":2,"name":"P","slug":"p","category_id":999}]; value["semantic_fingerprint"]=semantic_fingerprint(value)
-  with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
-  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
- def test_product_get_category_scalar_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category":1})))
- def test_product_structured_category_id_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category_id":1})))
- def test_matching_dual_product_category_is_valid(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot({"id":2,"name":"P","slug":"p","category_id":1,"category":1})))
- def test_conflicting_dual_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category_id":1,"category":9})
- def test_missing_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p"})
- def test_null_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":None})
- def test_unknown_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":{"id":999}})
- def test_numeric_string_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":"1"})
- def test_boolean_product_category_is_rejected(self): self.assert_orphan({"id":2,"name":"P","slug":"p","category":True})
- def test_product_read_category_object_is_valid_by_repository_contract(self): self.assertIsNotNone(validate_snapshot(self.product_snapshot()))
- def test_valid_category_parent_read_shape_is_valid(self):
-  value=snapshot(); value["collections"]["categories"].append({"id":3,"name":"Child","slug":"child","parent":1}); value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
- def test_orphan_category_parent_read_shape_is_rejected(self):
-  value=snapshot(); value["collections"]["categories"].append({"id":3,"name":"Child","slug":"child","parent":999}); value["semantic_fingerprint"]=semantic_fingerprint(value)
-  with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
-  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
- def test_image_product_read_shape_remains_valid(self):
-  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
- def test_image_product_id_shape_remains_valid(self):
-  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product_id":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
- def test_spec_product_read_shape_remains_valid(self):
-  value=self.product_snapshot(); value["collections"]["product_specs"]=[{"id":4,"product":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
- def test_spec_product_id_shape_remains_valid(self):
-  value=self.product_snapshot(); value["collections"]["product_specs"]=[{"id":4,"product_id":2}]; value["semantic_fingerprint"]=semantic_fingerprint(value); self.assertIsNotNone(validate_snapshot(value))
- def test_conflicting_dual_image_relation_is_a_real_orphan(self):
-  value=self.product_snapshot(); value["collections"]["product_images"]=[{"id":4,"product":2,"product_id":5}]; value["semantic_fingerprint"]=semantic_fingerprint(value)
-  with self.assertRaises(SnapshotError) as caught: validate_snapshot(value)
-  self.assertEqual("ORPHAN_RELATION",caught.exception.code)
- def test_complete_get_shaped_snapshot_validates(self):
-  value=self.product_snapshot(); self.assertIs(validate_snapshot(value),value)
- def test_get_shape_fingerprint_is_order_independent(self):
-  first=self.product_snapshot(); second=copy.deepcopy(first); second["collections"]["categories"].reverse(); before=copy.deepcopy(first)
-  self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second)); self.assertEqual(before,first)
-  for invalid in (None,"1",True,[],{}):
-   malformed=copy.deepcopy(first); malformed["collections"]["categories"].append({"id":invalid,"slug":"invalid"})
-   self.assertEqual(semantic_fingerprint(malformed),semantic_fingerprint(copy.deepcopy(malformed)))
- def test_product_relation_validation_does_not_mutate_input(self):
-  value=self.product_snapshot(); before=copy.deepcopy(value); validate_snapshot(value); self.assertEqual(before,value)
- def test_capture_snapshot_accepts_product_get_shape(self):
-  value=self.product_snapshot({"id":2,"name":"P","slug":"p","category":1})
+  value=snapshot(); value["collections"]["products"]=[product or self.normalized_product()]; value["semantic_fingerprint"]=semantic_fingerprint(value); return value
+ def test_complete_snapshot_v2_validates(self): self.assertIsNotNone(validate_snapshot(snapshot(),"c"*64))
+ def test_exact_endpoint_map_is_required(self):
+  for mutation in ("old","changed","duplicate","missing"):
+   value=snapshot()
+   if mutation=="old":
+    for endpoint in value["endpoints"]: endpoint["path"]=endpoint["path"].split("?",1)[0]
+   elif mutation=="changed": value["endpoints"][0]["path"] += "&search=x"
+   elif mutation=="duplicate": value["endpoints"][0]=copy.deepcopy(value["endpoints"][1])
+   else: value["endpoints"].pop()
+   value["semantic_fingerprint"]=semantic_fingerprint(value)
+   with self.subTest(mutation=mutation),self.assertRaises(SnapshotError): validate_snapshot(value)
+ def test_every_normalized_relation_rejects_orphans(self):
+  cases=(("categories","parent_id",999),("products","category_id",999),("products","brand_id",999),("products","supplier_id",999),("products","technical_sheet_id",999),("product_images","product_id",999),("product_specs","product_id",999))
+  for collection,field,bad in cases:
+   value=self.product_snapshot(); value["collections"]["brands"]=[{"id":3,"name":"B","slug":"b"}]; value["collections"]["suppliers"]=[{"id":4,"name":"S"}]; value["collections"]["technical_sheets"]=[{"id":8}]
+   value["collections"]["products"][0].update(brand_id=3,supplier_id=4,technical_sheet_id=8)
+   if collection=="categories": value["collections"][collection][0][field]=bad
+   elif collection=="products": value["collections"][collection][0][field]=bad
+   else: value["collections"][collection]=[{"id":9,field:bad}]
+   value["semantic_fingerprint"]=semantic_fingerprint(value)
+   with self.subTest(collection=collection,field=field),self.assertRaises(SnapshotError): validate_snapshot(value)
+ def test_relations_complete_is_mandatory_true(self):
+  for state in (None,False):
+   product=self.normalized_product()
+   if state is None: product.pop("relations_complete")
+   else: product["relations_complete"]=state
+   with self.subTest(state=state),self.assertRaises(SnapshotError): validate_snapshot(self.product_snapshot(product))
+ def test_capture_normalizes_real_backend_shape_before_fingerprint(self):
+  product=self.normalized_product(); product.update(category={"id":1},brand=None,supplier=None,technical_sheet=None); product.pop("relations_complete")
+  raw=snapshot()["collections"]; raw["categories"]=[{"id":1,"name":"Maquinarias","slug":"maquinaria","parent":None,"product_type":"machinery"}]; raw["products"]=[product]; raw["product_images"]=[{"id":3,"product":2,"image":"/media/x","file_url":"/api/product-images/3/file"}]; raw["product_specs"]=[{"id":4,"product":2,"name":"k"}]
   class Reader:
-   def read_collection(self,collection): return copy.deepcopy(value["collections"][collection])
-  self.assertEqual(1,capture_snapshot(Reader(),"c"*64,"fixture_only")["collections"]["products"][0]["category"])
- def test_snapshot_cli_emits_only_structured_error_code(self):
-  value=self.product_snapshot({"id":2,"name":"observed-secret","slug":"p","category":{"id":999}})
+   def read_collection(self,name): return copy.deepcopy(raw[name])
+  value=capture_snapshot(Reader(),"c"*64,"fixture_only")
+  self.assertEqual((None,1,2,"k"),(value["collections"]["categories"][0]["parent_id"],value["collections"]["products"][0]["category_id"],value["collections"]["product_images"][0]["product_id"],value["collections"]["product_specs"][0]["key"])); self.assertTrue(value["collections"]["products"][0]["relations_complete"])
+ def test_capture_rejects_non_array(self):
   class Reader:
-   def read_collection(self,collection): return copy.deepcopy(value["collections"][collection])
-  output=io.BytesIO()
-  with mock.patch("sys.stdout",mock.Mock(buffer=output)):
-   result=catalog_main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output","unused"],reader_factory=lambda unused:Reader())
-  self.assertEqual(2,result); self.assertEqual(b'{"error":"ORPHAN_RELATION"}\n',output.getvalue()); self.assertNotIn(b"observed-secret",output.getvalue())
+   def read_collection(self,name): return {} if name=="brands" else []
+  with self.assertRaises(SnapshotError): capture_snapshot(Reader(),"c"*64,"fixture_only")
 
 class ProjectionTests(unittest.TestCase):
  def test_safe_commercial_defaults_cannot_be_overridden(self):
@@ -314,11 +285,11 @@ class FunctionalFlowTests(unittest.TestCase):
  def test_asset_contract_blocks_count_hash_and_missing_entry(self):
   product={"canonical_identity":"p","media":[{"role":"primary","sha256":"0"*64,"size":1,"entry_path":"missing","mime":"image/png"}]}; rec,_=reconcile_assets(product,{})
   self.assertEqual("blocked",rec["state"]); self.assertEqual("ASSET_ENTRY_MISMATCH",rec["reason"])
- def test_snapshot_capture_uses_every_real_endpoint_without_queries(self):
+ def test_snapshot_capture_uses_every_exact_read_target(self):
   class Reader:
    def __init__(self): self.calls=[]
    def read_collection(self,name): self.calls.append(name); return []
-  reader=Reader(); value=capture_snapshot(reader,"c"*64,"fixture_only"); self.assertEqual(set(COLLECTIONS),set(reader.calls)); self.assertTrue(all("?" not in x["path"] for x in value["endpoints"])); self.assertTrue(value["complete"])
+  reader=Reader(); value=capture_snapshot(reader,"c"*64,"fixture_only"); self.assertEqual(set(COLLECTIONS),set(reader.calls)); self.assertEqual(READ_TARGETS,{x["collection"]:x["path"] for x in value["endpoints"]}); self.assertTrue(value["complete"])
  def test_semantic_snapshot_change_changes_fingerprint(self):
   first=complete_snapshot(); second=copy.deepcopy(first); second["collections"]["categories"][0]["name"]="Changed"
   self.assertNotEqual(semantic_fingerprint(first),semantic_fingerprint(second))

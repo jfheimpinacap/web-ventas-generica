@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
+using JemNexus.Api.Services.ProductImages;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -138,6 +139,74 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
     }
 
     [Fact]
+    public async Task CompleteCommercialTargetsExposeDraftRelationsAndProtectedMediaWithoutChangingPublicEligibility()
+    {
+        await _factory.SeedCommercialDataAsync();
+        using var client = await CreateAuthorizedClientAsync();
+
+        foreach (var (path, hiddenId) in new[] { ("/api/products", 2), ("/api/categories", 2), ("/api/brands", 2), ("/api/suppliers", 2) })
+        {
+            var filtered = await ReadSuccessfulJsonAsync<JsonElement>(await client.GetAsync(path));
+            Assert.DoesNotContain(filtered.EnumerateArray(), item => item.GetProperty("id").GetInt32() == hiddenId);
+        }
+
+        foreach (var (path, includedId) in new[] { ("/api/categories?include_inactive=true", 2), ("/api/brands?include_inactive=true", 2), ("/api/suppliers?include_inactive=true", 2) })
+        {
+            var complete = await ReadSuccessfulJsonAsync<JsonElement>(await client.GetAsync(path));
+            Assert.Contains(complete.EnumerateArray(), item => item.GetProperty("id").GetInt32() == includedId);
+        }
+
+        var products = await ReadSuccessfulJsonAsync<JsonElement>(await client.GetAsync("/api/products?include_unpublished=true"));
+        var draft = products.EnumerateArray().Single(item => item.GetProperty("id").GetInt32() == 2);
+        Assert.Equal(2, draft.GetProperty("category_id").GetInt32());
+        Assert.Equal(2, draft.GetProperty("brand_id").GetInt32());
+        Assert.Equal(2, draft.GetProperty("supplier_id").GetInt32());
+        Assert.Equal(2, draft.GetProperty("technical_sheet_id").GetInt32());
+        Assert.False(draft.GetProperty("is_published").GetBoolean());
+        Assert.Equal("spare_part", draft.GetProperty("product_type").GetString());
+        Assert.Equal("new", draft.GetProperty("condition").GetString());
+        Assert.Equal("No publicado", draft.GetProperty("short_description").GetString());
+        Assert.Equal("Producto no publicado", draft.GetProperty("description").GetString());
+        Assert.Equal("REP-200", draft.GetProperty("model").GetString());
+        Assert.Equal("SKU-002", draft.GetProperty("sku").GetString());
+        Assert.Equal(2.5m, draft.GetProperty("working_height_m").GetDecimal());
+        Assert.Equal(2024, draft.GetProperty("year").GetInt32());
+        Assert.Equal(12, draft.GetProperty("hours_meter").GetInt32());
+        Assert.True(draft.GetProperty("includes_technical_review").GetBoolean());
+        Assert.True(draft.GetProperty("includes_commercial_technical_advice").GetBoolean());
+        Assert.True(draft.GetProperty("includes_coordinated_delivery").GetBoolean());
+        Assert.Equal(9876.54m, draft.GetProperty("price").GetDecimal());
+        Assert.False(draft.GetProperty("price_visible").GetBoolean());
+        Assert.Equal("on_request", draft.GetProperty("stock_status").GetString());
+        Assert.False(draft.GetProperty("is_featured").GetBoolean());
+        Assert.Equal(2, draft.GetProperty("category").GetProperty("id").GetInt32());
+        Assert.Equal(2, draft.GetProperty("brand").GetProperty("id").GetInt32());
+        Assert.Equal(2, draft.GetProperty("main_image").GetProperty("id").GetInt32());
+        Assert.NotEqual(default, draft.GetProperty("created_at").GetDateTimeOffset());
+        Assert.NotEqual(default, draft.GetProperty("updated_at").GetDateTimeOffset());
+
+        var images = await ReadSuccessfulJsonAsync<JsonElement>(await client.GetAsync("/api/product-images"));
+        var image = images.EnumerateArray().Single(item => item.GetProperty("id").GetInt32() == 2);
+        Assert.Equal(2, image.GetProperty("product").GetInt32());
+        var fileUrl = image.GetProperty("file_url").GetString();
+        Assert.Equal("/api/product-images/2/file", fileUrl);
+        using var file = await client.GetAsync(fileUrl);
+        Assert.Equal(HttpStatusCode.OK, file.StatusCode);
+        Assert.Equal("image/png", file.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(TestProductImageStorage.DraftBytes, await file.Content.ReadAsByteArrayAsync());
+        using var anonymous = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(fileUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync("/media/products/draft.png")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync("/api/public/products/repuesto-borrador/technical-sheet/file")).StatusCode);
+
+        var specs = await ReadSuccessfulJsonAsync<JsonElement>(await client.GetAsync("/api/product-specs"));
+        Assert.Contains(specs.EnumerateArray(), item => item.GetProperty("product").GetInt32() == 2 && item.GetProperty("name").GetString() == "Código");
+        var body = products.GetRawText() + images.GetRawText() + specs.GetRawText();
+        foreach (var secret in new[] { "storage_key", "physical", "password", "password_hash", "token", "token_hash", "refresh" })
+            Assert.DoesNotContain(secret, body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task QuoteRequestFiltersWorkForSeller()
     {
         await _factory.SeedCommercialDataAsync();
@@ -204,6 +273,8 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
                 services.RemoveAll<JemNexus.Api.Services.ISellerCodeGenerator>();
                 services.AddSingleton<JemNexus.Api.Services.ISellerCodeGenerator, TestSellerCodeGenerator>();
+                services.RemoveAll<IProductImageStorage>();
+                services.AddSingleton<IProductImageStorage, TestProductImageStorage>();
                 services.AddDbContext<JemNexusDbContext>(options =>
                     InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
             });
@@ -248,6 +319,7 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                     Description = "Marca demo",
                     IsActive = true
                 };
+                var inactiveBrand = new Brand { Id = 2, Name = "Inactive Brand", Slug = "inactive-brand", Description = "Inactive", IsActive = false };
                 var supplier = new Supplier
                 {
                     Id = 1,
@@ -258,6 +330,8 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                     Notes = "Notas internas",
                     IsActive = true
                 };
+                var inactiveSupplier = new Supplier { Id = 2, Name = "Inactive Supplier", ContactName = "Private", Phone = "+56922222222", Email = "inactive@example.test", Notes = "Private", IsActive = false };
+                var draftSheet = new TechnicalSheet { Id = 2, Name = "Draft sheet", OriginalFileName = "draft.pdf", StorageKey = "private/draft.pdf", ContentType = "application/pdf", SizeBytes = 12 };
                 var product = new Product
                 {
                     Id = 1,
@@ -286,11 +360,23 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                     Name = "Repuesto Borrador",
                     Slug = "repuesto-borrador",
                     Category = inactiveCategory,
+                    Brand = inactiveBrand,
+                    Supplier = inactiveSupplier,
+                    TechnicalSheet = draftSheet,
                     ProductType = ProductTypes.SparePart,
                     Condition = ProductConditions.New,
                     ShortDescription = "No publicado",
                     Description = "Producto no publicado",
+                    Model = "REP-200",
                     Sku = "SKU-002",
+                    WorkingHeightM = 2.5m,
+                    Year = 2024,
+                    HoursMeter = 12,
+                    IncludesTechnicalReview = true,
+                    IncludesCommercialTechnicalAdvice = true,
+                    IncludesCoordinatedDelivery = true,
+                    Price = 9876.54m,
+                    PriceVisible = false,
                     StockStatus = StockStatuses.OnRequest,
                     IsPublished = false
                 };
@@ -307,8 +393,9 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                 };
 
                 dbContext.Categories.AddRange(category, inactiveCategory);
-                dbContext.Brands.Add(brand);
-                dbContext.Suppliers.Add(supplier);
+                dbContext.Brands.AddRange(brand, inactiveBrand);
+                dbContext.Suppliers.AddRange(supplier, inactiveSupplier);
+                dbContext.TechnicalSheets.Add(draftSheet);
                 dbContext.Products.AddRange(product, draftProduct, soldProduct);
                 dbContext.ProductImages.Add(new ProductImage
                 {
@@ -328,6 +415,8 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
                     Unit = "HP",
                     Order = 1
                 });
+                dbContext.ProductImages.Add(new ProductImage { Id = 2, Product = draftProduct, Image = "/media/products/draft.png", AltText = "Draft", IsMain = true, Order = 0 });
+                dbContext.ProductSpecs.Add(new ProductSpec { Id = 2, Product = draftProduct, Key = "Código", Value = "DRAFT", Unit = "", Order = 0 });
                 dbContext.Promotions.Add(new Promotion
                 {
                     Id = 1,
@@ -394,4 +483,11 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
     private sealed record UserPayload(int Id, string Username, string? Email, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
+    private sealed class TestProductImageStorage : IProductImageStorage
+    {
+        public static readonly byte[] DraftBytes = [0x89, 0x50, 0x4e, 0x47, 1, 2, 3];
+        public Task<StoredProductImage> SaveAsync(int productId, IFormFile file, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Stream?> OpenReadAsync(string publicPath, CancellationToken cancellationToken) => Task.FromResult<Stream?>(publicPath == "/media/products/draft.png" ? new MemoryStream(DraftBytes, writable: false) : null);
+        public Task DeleteIfManagedAsync(string publicPath, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }
