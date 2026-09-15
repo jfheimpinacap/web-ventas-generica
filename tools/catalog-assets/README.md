@@ -23,11 +23,15 @@ Maquinas/
 ├── EP/
 │   ├── Imagenes modelos EP/
 │   └── fichas-tecnicas EP/
+├── JLG/
+│   ├── Imagenes modelos JLG/
+│   └── fichas-tecnicas JLG/
 ├── _pendientes/
 │   ├── imagenes/
 │   └── fichas-tecnicas/
 ├── _control/
 │   ├── fuentes.csv
+│   ├── modelos.csv
 │   ├── candidatos.json
 │   ├── manifest.json
 │   ├── checksums.csv
@@ -37,7 +41,7 @@ Maquinas/
 └── pendientes-revision.csv
 ```
 
-No hay carpetas por modelo. **GAM nunca crea una carpeta**: solo puede actuar como fuente
+No hay carpetas por modelo. Las marcas de destino son **LGMG, EP y JLG**. **GAM nunca crea una carpeta**: solo puede actuar como fuente
 `fallback` con destino EP, cuando falta el mismo tipo de activo en una fuente EP primaria y
 el modelo EP es inequívoco.
 
@@ -47,7 +51,7 @@ El CSV usa UTF-8 con encabezado exacto:
 
 | columna | contrato |
 |---|---|
-| `target_brand` | `LGMG` o `EP` |
+| `target_brand` | `LGMG`, `EP` o `JLG` |
 | `model` | modelo original; vacío solo en una fila deshabilitada/incompleta |
 | `source_name` | nombre de origen (`LGMG`, `EP`, `GAM`, etc.) |
 | `source_role` | `primary` o `fallback`; GAM exige `target_brand=EP` y `fallback` |
@@ -72,6 +76,7 @@ python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" disco
 python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" download --allow-public-network --dry-run
 python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" download --allow-public-network
 python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" verify
+python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" verify --strict
 python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" status
 ```
 
@@ -83,8 +88,11 @@ python -m catalog_assets --root "C:\Users\Franz\Desktop\jem docs\Maquinas" statu
 * `download`: procesa candidatos inequívocos. `--dry-run` no escribe activos.
   `--download-pending` permite bajar ambiguos, pero únicamente a `_pendientes`, nunca a una
   marca. Admite `--max-bytes`, `--timeout`, `--retries` y `--pause`.
-* `verify`: vuelve a calcular firmas/hashes y compara contra el inventario sin red.
-* `status`: resume cobertura, faltantes, fallos, pendientes y duplicados sin red.
+* `verify`: comprueba integridad binaria, rutas y hashes sin convertir una clasificación
+  pendiente o un duplicado válido en un fallo.
+* `verify --strict`: añade la exigencia de clasificación completa y falla ante pendientes.
+* `status`: resume cobertura y enumera modelos sin imagen o PDF, motivos pendientes y cada
+  duplicado con su SHA-256, tamaño y sus dos rutas, sin decidir cuál conservar.
 
 Solo `discover` y `download` contienen operaciones de red, y se niegan a ejecutarlas sin
 `--allow-public-network`. Se rechazan esquemas no HTTP(S), credenciales, localhost, IP privadas,
@@ -92,12 +100,14 @@ loopback, link-local, multicast y redirects prohibidos. No se envían cookies ni
 
 ## Asociación, nombres y revisión
 
-La comparación normaliza mayúsculas, espacios, guiones y puntuación superficial, pero conserva
+El inventario trabaja en dos pasadas: primero reúne modelos fiables de nombres canónicos,
+`fuentes.csv`, asociaciones del manifest y reglas manuales; después busca coincidencias exactas
+completas en archivos heredados, prefiriendo el modelo completo más largo. La comparación normaliza mayúsculas, espacios, guiones y puntuación superficial, pero conserva
 el modelo original. Un prefijo no basta: `A09JE`, `A09JE-2`, `A09J` y `A09JE-LI` son candidatos
 distintos. Un enlace con más de un modelo queda `MODEL_AMBIGUOUS`; logos, iconos, banners,
 favicons y navegación se excluyen.
 
-Los nombres finales son `LGMG-<MODELO>.<ext>` / `EP-<MODELO>.<ext>` para imágenes y
+Los nombres finales son `<MARCA>-<MODELO>.<ext>` para imágenes y
 `Ficha-tecnica-<MARCA>-<MODELO>.pdf` para fichas. Los adicionales reciben `-2`, `-3`, etc.
 La extensión procede de los bytes. Se sanitizan caracteres y nombres reservados de Windows.
 
@@ -114,6 +124,16 @@ Los existentes dudosos permanecen exactamente donde estaban y aparecen en
 Todas las rutas se resuelven bajo `--root`; los escapes `..` y por enlaces simbólicos se
 rechazan. Los CSV se escriben como UTF-8 con BOM para Excel y los reportes se ordenan y
 actualizan atómicamente.
+
+`JLG/Maquinas JLG` y las variantes heredadas de fichas LGMG (mayúsculas, tildes, espacios o
+guiones) se inventarían en su ubicación real y se marcan como `legacy`. Nunca se mueven,
+renombran, copian ni sobrescriben; solo las nuevas descargas van a las carpetas canónicas.
+
+`_control/modelos.csv` es opcional y `init` lo crea vacío con las columnas `brand`,
+`canonical_model`, `alias`, `enabled`, `notes`. `enabled` admite únicamente `true` o `false`;
+las marcas se limitan a LGMG, EP y JLG, y los aliases activos duplicados o contradictorios se
+rechazan. No se incluye ninguna regla implícita `1930` → `1930ES`: esa decisión sigue siendo
+manual.
 
 ## Pruebas offline
 

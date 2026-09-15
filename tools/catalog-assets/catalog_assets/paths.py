@@ -3,14 +3,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-BRANDS = ("LGMG", "EP")
+BRANDS = ("LGMG", "EP", "JLG")
 DIRECTORIES = (
     "LGMG/Imagenes modelos LGMG", "LGMG/fichas-tecnicas LGMG",
     "EP/Imagenes modelos EP", "EP/fichas-tecnicas EP",
+    "JLG/Imagenes modelos JLG", "JLG/fichas-tecnicas JLG",
     "_pendientes/imagenes", "_pendientes/fichas-tecnicas",
     "_control/logs", "_control/parciales",
 )
-FILES = ("_control/fuentes.csv", "_control/candidatos.json", "_control/manifest.json",
+FILES = ("_control/fuentes.csv", "_control/modelos.csv", "_control/candidatos.json", "_control/manifest.json",
          "_control/checksums.csv", "inventario.csv", "pendientes-revision.csv")
 
 def safe_path(root: Path, relative: str | Path) -> Path:
