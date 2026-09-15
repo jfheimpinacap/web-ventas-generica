@@ -320,10 +320,17 @@ class BinaryObservationTests(unittest.TestCase):
    "structure":("BINARY_SIGNATURE_INVALID",{"status":200,"mime":"application/pdf","body":pdf[:-6],"content_length":str(len(pdf)-6)}),
   }
   for condition,(code,response) in response_negative.items():
-   def rejecting_transport(base,path,headers,timeout,limit,response=response):
-    if path!=canonical_sheet_path: raise AssertionError("negative case reached a later target")
-    return response
-   with self.subTest(response=condition), self.assertRaisesRegex(BinaryObservationError,code): capture_plan(value,value["plan_fingerprint"],"c"*64,rejecting_transport)
+   with self.subTest(response=condition):
+    negative_calls=[]
+    def rejecting_transport(base,path,headers,timeout,limit,response=response):
+     negative_calls.append(path)
+     if path==canonical_sheet_path: return response
+     if path not in responses: raise AssertionError("UNEXPECTED_SYNTHETIC_URL: "+path)
+     mime,body=responses[path]
+     return {"status":200,"mime":mime,"body":body,"content_length":str(len(body))}
+    with self.assertRaisesRegex(BinaryObservationError,code): capture_plan(value,value["plan_fingerprint"],"c"*64,rejecting_transport)
+    sheet_index=expected_paths.index(canonical_sheet_path)
+    self.assertEqual(expected_paths[:sheet_index+1],negative_calls)
   aggregate_plan=copy.deepcopy(value); aggregate_plan["capture_policy"]["max_total_bytes"]=len(pdf)
   aggregate_plan["plan_fingerprint"]=__import__("catalog_pipeline_common.serialization",fromlist=["content_fingerprint"]).content_fingerprint({key:item for key,item in aggregate_plan.items() if key!="plan_fingerprint"})
   with mock.patch.dict(CAPTURE_POLICY,{"max_total_bytes":len(pdf)}), self.assertRaisesRegex(BinaryObservationError,"BINARY_TOTAL_LIMIT_EXCEEDED"):
