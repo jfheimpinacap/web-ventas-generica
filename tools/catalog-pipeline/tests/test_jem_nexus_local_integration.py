@@ -121,11 +121,19 @@ class _SyntheticBackend:
     def read_collection(self, name):
         self.events.append("read:" + name)
         values = copy.deepcopy(self.collections[name])
-        if self.mode == "real_dto_shape" and name in ("product_images", "technical_sheets"):
+        if name == "products":
+            defaults={"brand_id":None,"supplier_id":None,"technical_sheet_id":None,"model":None,"sku":None,"working_height_m":None,"terrain_type":None,"year":None,"hours_meter":None,"maximum_load_capacity_kg":None,"machine_weight_kg":None,"power_source":None,"price":None,"condition":"not_applicable","short_description":"","description":"","includes_technical_review":False,"includes_commercial_technical_advice":False,"includes_coordinated_delivery":False,"price_currency":"CLP","price_tax_mode":"plus_vat","price_visible":False,"stock_status":"on_request","is_featured":False,"is_published":False,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
             for value in values:
-                value.pop("sha256", None)
+                for field,default in defaults.items(): value.setdefault(field,default)
+                value.setdefault("category_id",41); value["category"]={"id":value["category_id"]}
+                value["brand"]=None if value["brand_id"] is None else {"id":value["brand_id"]}
+                value["supplier"]=None if value["supplier_id"] is None else {"id":value["supplier_id"]}
+                value["technical_sheet"]=None if value["technical_sheet_id"] is None else {"id":value["technical_sheet_id"]}
+        if name in ("product_images", "technical_sheets"):
+            for value in values:
+                if self.mode == "real_dto_shape": value.pop("sha256", None)
                 if name == "product_images": value["product"] = value.pop("product_id")
-        if self.mode == "real_dto_shape" and name == "product_specs":
+        if name == "product_specs":
             for value in values:
                 value["product"] = value.pop("product_id"); value["name"] = value.pop("key")
         return values
@@ -141,6 +149,7 @@ class _SyntheticBackend:
         resource.update(copy.deepcopy(payload))
         if kind == "image":
             resource["image"] = "/media/fixture-image.bin"
+            resource["file_url"] = "/api/product-images/%d/file" % resource["id"]
         if kind == "technical_sheet":
             resource.update({"original_file_name": "upload.pdf", "content_type": "application/pdf", "size_bytes": len(data),
                              "file_url": "/api/technical-sheets/%d/file" % resource["id"]})

@@ -85,7 +85,7 @@ inválida bloquean; no se crea ni se propone reparar la raíz.
 El cambio de contrato altera su fingerprint canónico y por ello invalida fail-closed snapshots,
 planes, dry-runs y autorizaciones ligados al fingerprint histórico
 `6da3fd64c4180bf1f19dacaa10ea14dafa8633db0d02dd8fb76b7196560d7daf`. No se incrementa
-`jem-local-readiness-v1`: las reglas de evaluación no cambiaron y el contrato completo ya es la
+`jem-local-readiness-v2`: las reglas de evaluación no cambiaron y el contrato completo ya es la
 entrada versionada y fingerprinted que liga todos esos artefactos. `prompt-296-run-07` permanece
 evidencia histórica inmutable y no es aceptable bajo el contrato nuevo.
 
@@ -142,3 +142,7 @@ overwrite ni `--force`. El fingerprint excluye tiempos volátiles y el texto nun
 Los resultados cerrados son `read_compatible`,
 `read_compatible_manual_binary_verification` y `read_incompatible`. La CLI devuelve 0 para los dos
 primeros, 2 para input/schema inválido, 3 para incompatibilidad y 4 para conflicto de outputs.
+
+## Regeneración posterior al merge
+
+La lectura local v2 sella los targets administrativos exactos (incluidas sus queries), la vista normalizada y las rutas comerciales protegidas. Después del merge deben regenerarse el snapshot, el reporte readiness, el plan de observación binaria y toda su descendencia sintética o local. Los artefactos históricos sellados no se reescriben ni se aceptan como evidencia completa v2.

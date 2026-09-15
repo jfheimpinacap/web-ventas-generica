@@ -7,7 +7,7 @@
   "required":["schema_version","rules_version","report_fingerprint","result","snapshot_fingerprint","contract_fingerprint","assessment_mode","source_mode","snapshot_capture_mode","mutation_authorized","checks","counts","root_category","relation_checks","dto_compatibility","binary_observability","blockers","warnings","next_permitted_step","zero_mutation_manifest"],
   "properties":{
     "schema_version":{"const":"1.0.0"},
-    "rules_version":{"const":"jem-local-readiness-v1"},
+    "rules_version":{"const":"jem-local-readiness-v2"},
     "report_fingerprint":{"$ref":"#/$defs/fingerprint"},
     "result":{"enum":["read_compatible","read_compatible_manual_binary_verification","read_incompatible"]},
     "snapshot_fingerprint":{"$ref":"#/$defs/fingerprint"},

@@ -65,15 +65,16 @@
     "Price currency/tax validators and database checks exist in endpoint/context beyond DataAnnotations."
   ],
   "local_readiness": {
-    "rules_version": "jem-local-readiness-v1",
-    "root_category": {"collection":"categories","identity_field":"slug","identity":"maquinaria","parent_field":"parent","product_type":"machinery"},
+    "rules_version": "jem-local-readiness-v2",
+    "scope": {"authorization":"authenticated_commercial_read","products":"published_and_unpublished","catalogs":"active_and_inactive","query_policy":"exact_literal_targets_only","media":"protected_commercial_file_routes"},
+    "root_category": {"collection":"categories","identity_field":"slug","identity":"maquinaria","parent_field":"parent_id","product_type":"machinery"},
     "collections": [
-      {"name":"categories","endpoint":"GET /api/categories","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string","parent":"nullable_positive_integer","product_type":"non_empty_string"}},
-      {"name":"brands","endpoint":"GET /api/brands","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string"}},
-      {"name":"suppliers","endpoint":"GET /api/suppliers","identity_field":"name","required_fields":{"id":"positive_integer","name":"non_empty_string"}},
-      {"name":"products","endpoint":"GET /api/products","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string","category":"object","brand":"nullable_object","model":"nullable_string","product_type":"non_empty_string"}},
-      {"name":"product_images","endpoint":"GET /api/product-images","identity_field":null,"required_fields":{"id":"positive_integer","product|product_id":"positive_integer","image":"non_empty_string","alt_text":"string","is_main":"boolean","order":"non_negative_integer"}},
-      {"name":"product_specs","endpoint":"GET /api/product-specs","identity_field":null,"required_fields":{"id":"positive_integer","product|product_id":"positive_integer","name":"non_empty_string","value":"string","unit":"string","order":"non_negative_integer"}},
+      {"name":"categories","endpoint":"GET /api/categories?include_inactive=true","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string","parent_id":"nullable_positive_integer","product_type":"non_empty_string"}},
+      {"name":"brands","endpoint":"GET /api/brands?include_inactive=true","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string"}},
+      {"name":"suppliers","endpoint":"GET /api/suppliers?include_inactive=true","identity_field":"name","required_fields":{"id":"positive_integer","name":"non_empty_string"}},
+      {"name":"products","endpoint":"GET /api/products?include_unpublished=true","identity_field":"slug","required_fields":{"id":"positive_integer","name":"non_empty_string","slug":"non_empty_string","category_id":"positive_integer","brand_id":"nullable_positive_integer","supplier_id":"nullable_positive_integer","technical_sheet_id":"nullable_positive_integer","relations_complete":"boolean","product_type":"non_empty_string","condition":"non_empty_string","short_description":"string","description":"string","model":"nullable_string","sku":"nullable_string","working_height_m":"nullable_number","terrain_type":"nullable_string","year":"nullable_integer","hours_meter":"nullable_integer","maximum_load_capacity_kg":"nullable_number","machine_weight_kg":"nullable_number","power_source":"nullable_string","includes_technical_review":"boolean","includes_commercial_technical_advice":"boolean","includes_coordinated_delivery":"boolean","price":"nullable_number","price_currency":"non_empty_string","price_tax_mode":"non_empty_string","price_visible":"boolean","stock_status":"non_empty_string","is_featured":"boolean","is_published":"boolean","created_at":"non_empty_string","updated_at":"non_empty_string"}},
+      {"name":"product_images","endpoint":"GET /api/product-images","identity_field":null,"required_fields":{"id":"positive_integer","product_id":"positive_integer","image":"non_empty_string","file_url":"non_empty_string","alt_text":"string","is_main":"boolean","order":"non_negative_integer"}},
+      {"name":"product_specs","endpoint":"GET /api/product-specs","identity_field":null,"required_fields":{"id":"positive_integer","product_id":"positive_integer","key":"non_empty_string","value":"string","unit":"string","order":"non_negative_integer"}},
       {"name":"technical_sheets","endpoint":"GET /api/technical-sheets/","identity_field":null,"required_fields":{"id":"positive_integer","name":"non_empty_string","original_file_name":"non_empty_string","content_type":"non_empty_string","size_bytes":"non_negative_integer","file_url":"non_empty_string"}}
     ]
   }
