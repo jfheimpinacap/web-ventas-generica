@@ -124,6 +124,32 @@ class SnapshotTests(unittest.TestCase):
    else: value["endpoints"].pop()
    value["semantic_fingerprint"]=semantic_fingerprint(value)
    with self.subTest(mutation=mutation),self.assertRaises(SnapshotError): validate_snapshot(value)
+ def test_semantic_fingerprint_ignores_order_and_capture_metadata(self):
+  first=self.product_snapshot(); first["collections"]["categories"].append({"id":3,"name":"Otra","slug":"otra","parent_id":1,"product_type":"machinery"}); first["semantic_fingerprint"]=semantic_fingerprint(first)
+  second=copy.deepcopy(first); second["captured_at"]="2099-01-01T00:00:00Z"; second["collections"]={name:list(reversed(rows)) for name,rows in reversed(tuple(second["collections"].items()))}; second["endpoints"].reverse()
+  for endpoint in second["endpoints"]: endpoint["captured_at"]="2099-01-01T00:00:00Z"
+  self.assertEqual(semantic_fingerprint(first),semantic_fingerprint(second))
+ def test_incomplete_pagination_evidence_is_rejected(self):
+  cases=(("truncated",{"complete":False}),("received_mismatch",{"pages_received":0}),("expected_mismatch",{"pages_expected":2}))
+  for label,changes in cases:
+   value=snapshot(); value["endpoints"][0].update(changes); value["semantic_fingerprint"]=semantic_fingerprint(value)
+   with self.subTest(case=label),self.assertRaises(SnapshotError) as raised: validate_snapshot(value)
+   self.assertEqual("PAGINATION_INCOMPLETE",raised.exception.code)
+ def test_duplicate_ids_and_casefold_identity_collisions_are_rejected(self):
+  cases=({"id":1,"name":"Other","slug":"other","parent_id":None,"product_type":"machinery"},{"id":3,"name":"MAQUINARIAS","slug":"MAQUINARIA","parent_id":None,"product_type":"machinery"})
+  for extra in cases:
+   value=snapshot(); value["collections"]["categories"].append(extra); value["semantic_fingerprint"]=semantic_fingerprint(value)
+   with self.subTest(extra=extra),self.assertRaises(SnapshotError): validate_snapshot(value)
+ def test_validate_snapshot_does_not_mutate_input(self):
+  value=self.product_snapshot(); before=copy.deepcopy(value); self.assertIs(value,validate_snapshot(value)); self.assertEqual(before,value)
+ def test_snapshot_cli_emits_only_structured_normalization_error(self):
+  raw=snapshot()["collections"]; raw["products"]=[{**self.normalized_product(category_id=999),"category":{"id":999}}]
+  class Reader:
+   def read_collection(self,name): return copy.deepcopy(raw[name])
+  output=io.BytesIO()
+  with mock.patch("sys.stdout",mock.Mock(buffer=output)):
+   result=catalog_main(["snapshot-local","--base-url","http://localhost:1","--contract-fingerprint","c"*64,"--output","unused"],reader_factory=lambda unused:Reader())
+  self.assertEqual(2,result); self.assertEqual(b'{"error":"ORPHAN_RELATION"}\n',output.getvalue()); self.assertNotIn(b"Traceback",output.getvalue())
  def test_every_normalized_relation_rejects_orphans(self):
   cases=(("categories","parent_id",999),("products","category_id",999),("products","brand_id",999),("products","supplier_id",999),("products","technical_sheet_id",999),("product_images","product_id",999),("product_specs","product_id",999))
   for collection,field,bad in cases:

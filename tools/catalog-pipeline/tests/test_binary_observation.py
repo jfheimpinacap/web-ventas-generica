@@ -99,14 +99,19 @@ class BinaryObservationTests(unittest.TestCase):
   for value in values:
    with self.subTest(value=repr(value)), self.assertRaises(BinaryObservationError): normalize_reference(value)
  def test_09_image_binding_is_relational_and_declared_only(self):
-  binding=plan()["targets"][1 if plan()["targets"][0]["media_class"]=="technical_sheet" else 0]["bindings"][0]
-  self.assertTrue(binding["relation_observable"]); self.assertEqual((5,".jpg",None),(binding["product_id"],binding["declared_extension"],binding["declared_content_type"]))
+  target=next(target for target in plan()["targets"] if target["media_class"]=="image"); binding=target["bindings"][0]
+  self.assertTrue(binding["relation_observable"]); self.assertEqual((5,None,None),(binding["product_id"],binding["declared_extension"],binding["declared_content_type"]))
+  self.assertEqual("/api/product-images/6/file",target["root_relative_path"]); self.assertNotEqual("/media/synthetic.jpg",target["root_relative_path"])
  def test_10_extensionless_pdf_relation_is_derived_from_product(self):
   value=next(target for target in plan()["targets"] if target["media_class"]=="technical_sheet")["bindings"][0]
   self.assertEqual((None,"application/pdf",9),(value["declared_extension"],value["declared_content_type"],value["declared_size_bytes"])); self.assertEqual(5,value["product_id"]); self.assertFalse(value["manual_relation_verification_required"])
  def test_11_unassociated_sheet_remains_manual(self):
-  s=snapshot(); s["collections"]["products"][0]["technical_sheet_id"]=None; s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
-  self.assertIsNone(next(t for t in value["targets"] if t["media_class"]=="technical_sheet")["bindings"][0]["product_id"])
+  s=snapshot(); s["collections"]["products"][0]["technical_sheet_id"]=None; s["collections"]["product_images"]=[]; s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
+  target=next(t for t in value["targets"] if t["media_class"]=="technical_sheet"); self.assertIsNone(target["bindings"][0]["product_id"])
+  pdf=b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n9\n%%EOF\n"
+  s["collections"]["technical_sheets"][0]["size_bytes"]=len(pdf); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract()))
+  report=capture_plan(value,value["plan_fingerprint"],"c"*64,lambda base,path,headers,timeout,limit:{"status":200,"mime":"application/pdf","body":pdf,"content_length":str(len(pdf))})
+  receipt=report["receipts"][0]; self.assertEqual("observed_manual_relation_verification_required",report["state"]); self.assertTrue(receipt["manual_relation_verification_required"]); self.assertFalse(receipt["relation_observable"]); self.assertEqual("/api/technical-sheets/8/file",receipt["bindings"][0]["root_relative_path"])
  def test_12_duplicates_group_and_preserve_sorted_bindings(self):
   s=snapshot(); duplicate=copy.deepcopy(s["collections"]["product_images"][0]); duplicate["id"]=9; s["collections"]["product_images"].append(duplicate); s["semantic_fingerprint"]=semantic_fingerprint(s); value=plan(s,assess(s,contract())); target=next(t for t in value["targets"] if t["media_class"]=="image")
   self.assertEqual([6,9],[x["row_id"] for x in target["bindings"]]); self.assertEqual(2,value["counts"]["targets_total"])
@@ -115,8 +120,8 @@ class BinaryObservationTests(unittest.TestCase):
   target=next(t for t in plan(s,assess(s,contract()))["targets"] if t["media_class"]=="technical_sheet")
   self.assertEqual("/api/technical-sheets/8/file",target["root_relative_path"]); self.assertEqual([5,9],[b["product_id"] for b in target["bindings"]])
  def test_13_media_class_conflict_blocks(self):
-  s=snapshot(); s["collections"]["technical_sheets"][0]["file_url"]="/media/synthetic.jpg"; s["semantic_fingerprint"]=semantic_fingerprint(s)
-  with self.assertRaisesRegex(BinaryObservationError,"/media/synthetic.jpg"): plan(s,assess(s,contract()))
+  s=snapshot(); shared=s["collections"]["product_images"][0]["file_url"]; s["collections"]["technical_sheets"][0]["file_url"]=shared; s["semantic_fingerprint"]=semantic_fingerprint(s)
+  with self.assertRaisesRegex(BinaryObservationError,shared): plan(s,assess(s,contract()))
  def test_14_order_independent_and_reproducible(self):
   first=plan(); s=snapshot()
   for values in s["collections"].values(): values.reverse()
@@ -300,8 +305,9 @@ class BinaryObservationTests(unittest.TestCase):
   for target in value["targets"]:
    receipt=receipts[target["target_id"]]; mime,body=responses[target["root_relative_path"]]
    self.assertEqual((target["target_id"],target["media_class"],target["bindings"]),(receipt["target_id"],receipt["media_class"],receipt["bindings"])); self.assertEqual((mime,len(body),hashlib.sha256(body).hexdigest()),(receipt["observed_mime"],receipt["observed_size_bytes"],receipt["observed_sha256"])); self.assertTrue(receipt["binary_validation"].startswith("bounded_"))
-  manual=next(receipt for receipt in reports[0]["receipts"] if receipt["media_class"]=="technical_sheet")
-  self.assertEqual("observed_manual_relation_verification_required",reports[0]["state"]); self.assertTrue(manual["manual_relation_verification_required"])
+  sheet_receipt=next(receipt for receipt in reports[0]["receipts"] if receipt["media_class"]=="technical_sheet")
+  self.assertEqual("observed",reports[0]["state"]); self.assertFalse(sheet_receipt["manual_relation_verification_required"])
+  self.assertTrue(sheet_receipt["relation_observable"]); self.assertEqual(5,sheet_receipt["bindings"][0]["product_id"]); self.assertEqual(canonical_sheet_path,sheet_receipt["bindings"][0]["root_relative_path"])
   def contains_body(item): return isinstance(item,(bytes,bytearray,memoryview)) or (isinstance(item,dict) and any(contains_body(x) for x in item.values())) or (isinstance(item,list) and any(contains_body(x) for x in item))
   self.assertFalse(contains_body(reports[0])); json.dumps(reports[0])
   response_negative={

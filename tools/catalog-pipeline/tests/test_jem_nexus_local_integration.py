@@ -453,6 +453,11 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
             self.assertEqual(1, sum(h.backend.posts.values())); self.assertEqual(1, len(calls[-1]["receipts"]))
 
     def test_021_missing_managed_resource_fails_verify(self): self._assert_verify_mutation("missing", "verification_failed")
+    def test_021b_referenced_brand_is_rejected_before_verify(self):
+        with tempfile.TemporaryDirectory() as d:
+            h = _Harness(d); h.execute(); posts = dict(h.backend.posts); h.backend.collections["brands"].clear()
+            with self.assertRaises(SnapshotError) as raised: h.updated_snapshot()
+            self.assertEqual("ORPHAN_RELATION", raised.exception.code); self.assertIn("product.brand_id", str(raised.exception)); self.assertEqual(posts, h.backend.posts)
     def test_022_divergent_managed_resource_fails_verify(self): self._assert_verify_mutation("divergent", "verification_failed")
     def test_023_duplicate_managed_resource_fails_verify(self): self._assert_verify_mutation("duplicate", "verification_failed")
     def test_024_unobservable_binary_is_manual(self):
@@ -523,7 +528,8 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             h = _Harness(d); cp = h.execute(); collection = h.backend.collections["brands"]
             posts = dict(h.backend.posts)
-            if variant == "missing": collection.clear()
+            if variant == "missing":
+                h.backend.collections["product_specs"].pop(); snapshot = h.updated_snapshot()
             elif variant == "divergent": collection[0]["slug"] = "otro"
             else: collection.append(copy.deepcopy(collection[0]))
             if variant == "duplicate":
@@ -531,7 +537,8 @@ class JemNexusLocalIntegrationTests(unittest.TestCase):
                 self.assertEqual("DUPLICATE_ID", raised.exception.code)
                 self.assertEqual(posts, h.backend.posts)
                 return
-            self.assertEqual(result, verify_managed(h.plan, cp, h.observable())["result"])
+            observer = _ObservableBinaryFixtureObserver(snapshot, h.backend.asset_bytes) if variant == "missing" else h.observable()
+            self.assertEqual(result, verify_managed(h.plan, cp, observer)["result"]); self.assertEqual(posts, h.backend.posts)
 
 
 if __name__ == "__main__":
