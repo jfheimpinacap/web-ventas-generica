@@ -60,6 +60,9 @@ public sealed class TechnicalSheetTests : IDisposable
         Assert.Equal("genie.pdf", payload.GetProperty("original_file_name").GetString());
         Assert.Equal("application/pdf", payload.GetProperty("content_type").GetString());
         Assert.Equal(9, payload.GetProperty("size_bytes").GetInt64());
+        var id = payload.GetProperty("id").GetInt32();
+        var expectedFileUrl = $"/api/technical-sheets/{id}/file";
+        Assert.Equal(expectedFileUrl, payload.GetProperty("file_url").GetString());
         AssertContractHidesStorage(payload);
 
         using var scope = _factory.Services.CreateScope();
@@ -69,8 +72,12 @@ public sealed class TechnicalSheetTests : IDisposable
         Assert.DoesNotContain('/', entity.StorageKey);
         Assert.True(_factory.Storage.Exists(entity.StorageKey));
 
-        AssertContractHidesStorage(await ReadJsonAsync<JsonElement>(await client.GetAsync($"/api/technical-sheets/{entity.Id}/")));
-        Assert.All((await ReadJsonAsync<JsonElement[]>(await client.GetAsync("/api/technical-sheets/"))), AssertContractHidesStorage);
+        var fetched = await ReadJsonAsync<JsonElement>(await client.GetAsync($"/api/technical-sheets/{entity.Id}/"));
+        Assert.Equal(expectedFileUrl, fetched.GetProperty("file_url").GetString());
+        AssertContractHidesStorage(fetched);
+        var listed = await ReadJsonAsync<JsonElement[]>(await client.GetAsync("/api/technical-sheets/"));
+        Assert.All(listed, AssertContractHidesStorage);
+        Assert.Contains(listed, item => item.GetProperty("file_url").GetString() == expectedFileUrl);
     }
 
     [Fact]
@@ -256,11 +263,17 @@ public sealed class TechnicalSheetTests : IDisposable
     public async Task FileEndpointUsesInlineAndAttachmentHeaders()
     {
         using var client = await CreateAuthorizedClientAsync();
-        var item = await CreateAsync(client, "Ficha", "safe-name.pdf", "%PDF-content"u8.ToArray());
+        var bytes = "%PDF-content"u8.ToArray();
+        var item = await CreateAsync(client, "Ficha", "safe-name.pdf", bytes);
         var id = item.GetProperty("id").GetInt32();
-        var inline = await client.GetAsync($"/api/technical-sheets/{id}/file/");
-        var attachment = await client.GetAsync($"/api/technical-sheets/{id}/file/?download=true");
+        var fileUrl = item.GetProperty("file_url").GetString()!;
+        Assert.Equal($"/api/technical-sheets/{id}/file", fileUrl);
+        var inline = await client.GetAsync(fileUrl);
+        var attachment = await client.GetAsync($"{fileUrl}?download=true");
+        Assert.Equal(HttpStatusCode.OK, inline.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
         Assert.Equal("application/pdf", inline.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(bytes, await inline.Content.ReadAsByteArrayAsync());
         Assert.Null(inline.Content.Headers.ContentDisposition);
         Assert.Equal("attachment", attachment.Content.Headers.ContentDisposition?.DispositionType);
         Assert.Equal("safe-name.pdf", attachment.Content.Headers.ContentDisposition?.FileNameStar);

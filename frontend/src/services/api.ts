@@ -1,3 +1,5 @@
+import { composeApiUrl, type ApiUrlParams } from './apiUrl'
+
 const DEFAULT_API_BASE_URL = 'http://localhost:5000'
 
 export const API_BASE_URL = normalizeBaseUrl(
@@ -21,45 +23,11 @@ function normalizeBaseUrl(url: string) {
   return url.trim().replace(/\/+$/, '')
 }
 
-function normalizeEndpointPath(path: string) {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-
-  if (normalizedPath.length > 1) {
-    return normalizedPath.replace(/\/+$/, '')
-  }
-
-  return normalizedPath
-}
-
-function shouldPrefixApi(path: string) {
-  const basePath = new URL(API_BASE_URL).pathname.replace(/\/+$/, '')
-
-  if (path === '/health') {
-    return false
-  }
-
-  return basePath !== '/api' && !path.startsWith('/api/') && path !== '/api'
-}
-
 export function buildApiUrl(
   path: string,
-  params?: Record<string, string | number | boolean | undefined>,
+  params?: ApiUrlParams,
 ) {
-  const normalizedPath = normalizeEndpointPath(path)
-  const apiPath = shouldPrefixApi(normalizedPath)
-    ? `/api${normalizedPath}`
-    : normalizedPath
-  const url = new URL(`${API_BASE_URL}${apiPath}`)
-
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        url.searchParams.set(key, String(value))
-      }
-    })
-  }
-
-  return url
+  return composeApiUrl(API_BASE_URL, path, params)
 }
 
 function extractErrorMessage(payload: unknown, fallback: string) {

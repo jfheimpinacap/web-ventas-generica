@@ -143,7 +143,7 @@ class _SyntheticBackend:
             resource["image"] = "/media/fixture-image.bin"
         if kind == "technical_sheet":
             resource.update({"original_file_name": "upload.pdf", "content_type": "application/pdf", "size_bytes": len(data),
-                             "file_url": "/technical-sheets/%d/file" % resource["id"]})
+                             "file_url": "/api/technical-sheets/%d/file" % resource["id"]})
         if data is not None:
             self.asset_bytes[(kind, resource["id"])] = data
         self.collections[collection].append(resource)

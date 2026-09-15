@@ -20,7 +20,7 @@ def snapshot():
   "products":[{"id":5,"name":"Producto","slug":"producto","category":{"id":2},"brand":{"id":3},"model":"S","product_type":"machinery"}],
   "product_images":[{"id":6,"product":5,"image":"/media/synthetic.jpg","alt_text":"x","is_main":True,"order":0}],
   "product_specs":[{"id":7,"product":5,"name":"altura","value":"1","unit":"m","order":0}],
-  "technical_sheets":[{"id":8,"name":"Ficha","original_file_name":"unrelated-name.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/files/opaque"}]},
+  "technical_sheets":[{"id":8,"name":"Ficha","original_file_name":"unrelated-name.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/api/technical-sheets/8/file"}]},
   "endpoints":[{"collection":name,"path":"/api/"+name,"status":200,"mime":"application/json","response_sha256":"a"*64,"pages_received":1,"pages_expected":1,"complete":True} for name in COLLECTIONS]}
  value["semantic_fingerprint"]=semantic_fingerprint(value); return value
 def inputs():
@@ -266,7 +266,10 @@ class BinaryObservationTests(unittest.TestCase):
 
   source=snapshot(); source["collections"]["product_images"].append({"id":9,"product":5,"image":"/media/synthetic.png","alt_text":"y","is_main":False,"order":1}); source["collections"]["technical_sheets"][0]["size_bytes"]=len(pdf)
   source["semantic_fingerprint"]=semantic_fingerprint(source); value=plan(source,assess(source,contract())); original=copy.deepcopy(value)
-  responses={"/media/synthetic.jpg":("image/jpeg",jpeg),"/media/synthetic.png":("image/png",png),"/files/opaque":("application/pdf",pdf)}
+  canonical_sheet_path="/api/technical-sheets/8/file"
+  self.assertEqual(canonical_sheet_path,source["collections"]["technical_sheets"][0]["file_url"])
+  self.assertEqual(canonical_sheet_path,next(target["root_relative_path"] for target in value["targets"] if target["media_class"]=="technical_sheet"))
+  responses={"/media/synthetic.jpg":("image/jpeg",jpeg),"/media/synthetic.png":("image/png",png),canonical_sheet_path:("application/pdf",pdf)}
   class SyntheticTransport:
    def __init__(self): self.calls=[]
    def __call__(self,base,path,headers,timeout,limit):
@@ -280,6 +283,7 @@ class BinaryObservationTests(unittest.TestCase):
   expected_paths=[target["root_relative_path"] for target in value["targets"]]
   for transport in transports:
    self.assertEqual(expected_paths,[call[1] for call in transport.calls]); self.assertEqual(len(value["targets"]),len(transport.calls))
+   self.assertIn(canonical_sheet_path,[call[1] for call in transport.calls])
    with self.assertRaisesRegex(AssertionError,"UNEXPECTED_SYNTHETIC_URL"): transport(value["base_url"],"/unexpected",{},15,1)
   receipts={receipt["target_id"]:receipt for receipt in reports[0]["receipts"]}
   self.assertEqual(len(value["targets"]),len(receipts))
