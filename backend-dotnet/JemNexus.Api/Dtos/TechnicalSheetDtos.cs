@@ -6,5 +6,5 @@ public sealed record RenameTechnicalSheetRequest(string? Name);
 public static class TechnicalSheetDtoMapper
 {
     public static TechnicalSheetResponse ToResponse(JemNexus.Api.Models.TechnicalSheet sheet) =>
-        new(sheet.Id, sheet.Name, sheet.OriginalFileName, sheet.ContentType, sheet.SizeBytes, sheet.CreatedAt, sheet.UpdatedAt, $"/technical-sheets/{sheet.Id}/file");
+        new(sheet.Id, sheet.Name, sheet.OriginalFileName, sheet.ContentType, sheet.SizeBytes, sheet.CreatedAt, sheet.UpdatedAt, $"/api/technical-sheets/{sheet.Id}/file");
 }

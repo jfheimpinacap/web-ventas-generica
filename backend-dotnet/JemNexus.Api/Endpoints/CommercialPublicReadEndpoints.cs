@@ -266,7 +266,7 @@ public static class CommercialPublicReadEndpoints
         return sheet is null ? null : new(
             sheet.Id, sheet.Name, sheet.OriginalFileName, sheet.ContentType, sheet.SizeBytes,
             sheet.CreatedAt, sheet.UpdatedAt,
-            $"/public/products/{Uri.EscapeDataString(product.Slug)}/technical-sheet/file");
+            $"/api/public/products/{Uri.EscapeDataString(product.Slug)}/technical-sheet/file");
     }
 
     private static TechnicalSheet? GetEligibleTechnicalSheet(TechnicalSheet? sheet)

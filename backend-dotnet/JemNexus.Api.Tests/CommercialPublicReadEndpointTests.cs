@@ -299,11 +299,12 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         var detailResponse = await client.GetAsync("/api/public/products/excavadora/");
         var detail = await ReadJsonAsync<JsonElement>(detailResponse);
         var sheet = detail.GetProperty("technical_sheet");
-        Assert.Equal("/public/products/excavadora/technical-sheet/file", sheet.GetProperty("file_url").GetString());
+        var fileUrl = sheet.GetProperty("file_url").GetString()!;
+        Assert.Equal("/api/public/products/excavadora/technical-sheet/file", fileUrl);
         Assert.Equal("manual.pdf", sheet.GetProperty("original_file_name").GetString());
         Assert.DoesNotContain("storage", detail.ToString(), StringComparison.OrdinalIgnoreCase);
 
-        var inline = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file");
+        var inline = await client.GetAsync(fileUrl);
         Assert.Equal(HttpStatusCode.OK, inline.StatusCode);
         Assert.Equal("application/pdf", inline.Content.Headers.ContentType?.MediaType);
         Assert.Equal(bytes, await inline.Content.ReadAsByteArrayAsync());
@@ -312,11 +313,11 @@ public sealed class CommercialPublicReadEndpointTests : IDisposable
         Assert.Equal("noindex, nofollow, noarchive", inline.Headers.GetValues("X-Robots-Tag").Single());
         Assert.Equal("no-store", inline.Headers.CacheControl?.ToString());
 
-        var explicitInline = await client.GetAsync("/api/public/products/excavadora/technical-sheet/file?download=false");
+        var explicitInline = await client.GetAsync($"{fileUrl}?download=false");
         Assert.Equal(HttpStatusCode.OK, explicitInline.StatusCode);
         Assert.False(explicitInline.Content.Headers.ContentDisposition?.DispositionType == "attachment");
 
-        var download = await client.GetAsync("/api/public/products/1/technical-sheet/file?download=true");
+        var download = await client.GetAsync($"{fileUrl}?download=true");
         Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
         Assert.Equal("manual.pdf", download.Content.Headers.ContentDisposition?.FileNameStar);

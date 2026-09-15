@@ -27,7 +27,7 @@ def snapshot(observable=False):
         "products":[{"id":5,"name":"Equipo sintético","slug":"equipo-sintetico","category":{"id":2},"brand":{"id":3},"model":"S1","product_type":"machinery"}],
         "product_images":[{"id":6,"product":5,"image":"/media/synthetic.png","alt_text":"Sintética","is_main":True,"order":0,**binary}],
         "product_specs":[{"id":7,"product":5,"name":"altura","value":"1","unit":"m","order":0}],
-        "technical_sheets":[{"id":8,"name":"Ficha sintética","original_file_name":"synthetic.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/technical-sheets/8/file",**binary}]},
+        "technical_sheets":[{"id":8,"name":"Ficha sintética","original_file_name":"synthetic.pdf","content_type":"application/pdf","size_bytes":9,"file_url":"/api/technical-sheets/8/file",**binary}]},
              "endpoints":[]}
     value["semantic_fingerprint"] = semantic_fingerprint(value)
     return value
