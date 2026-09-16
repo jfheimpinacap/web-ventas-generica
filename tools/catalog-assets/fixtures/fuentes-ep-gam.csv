@@ -1,0 +1,40 @@
+target_brand,model,source_name,source_role,page_url,asset_type,asset_url,priority,expected_language,enabled,notes
+EP,EFS101,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFS151,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,CPD20,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL203,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,TDL201,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL252,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL253,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFX2,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,SERIE X3,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL353,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL303,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL352,GAM,fallback,https://online.gamrentals.com/cl/826-ep,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,SERIE X5,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL703-HV-6,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,CQD15SD,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,CQD25,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL1003-HV-6,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL181,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL201,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,SERIE X2,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EFL302,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20-30RT,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPL153,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,SERIE F,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=2,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20-ET,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,WPL202,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,RPL201H,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,CBY 30II,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20-30RTS,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20-35RTS,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,EPT20-35RT,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,RSC082,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,SYG-1016,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,RSC122,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,RSC152,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=3,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,ESi161,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=4,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,WSA161,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=4,auto,,100,es,false,PENDING_LOCAL_HARVEST
+EP,KSi201,GAM,fallback,https://online.gamrentals.com/cl/826-ep?page=4,auto,,100,es,false,PENDING_LOCAL_HARVEST

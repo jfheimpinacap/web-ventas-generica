@@ -18,6 +18,7 @@ from .reports import INVENTORY_FIELDS, PENDING_FIELDS, csv_bytes, write_csv, wri
 from .sources import COLUMNS, read_sources, serializable
 from .models import MODEL_COLUMNS
 from .validation import validate_public_url
+from .ep_harvest import harvest_ep
 
 def initial_files():
     header=(",".join(COLUMNS)+"\n").encode("utf-8-sig")
@@ -58,6 +59,13 @@ def parser():
         if name=="download":
             command.add_argument("--dry-run",action="store_true"); command.add_argument("--download-pending",action="store_true")
             command.add_argument("--timeout",type=float,default=30); command.add_argument("--retries",type=int,default=2); command.add_argument("--pause",type=float,default=.25)
+    harvest=sub.add_parser("harvest-ep")
+    harvest.add_argument("--allow-public-network",action="store_true")
+    harvest.add_argument("--request-delay",type=float,default=1.0)
+    harvest.add_argument("--max-pages",type=int,default=100)
+    harvest.add_argument("--max-models",type=int,default=39)
+    harvest.add_argument("--max-bytes",type=int,default=5_000_000)
+    harvest.add_argument("--timeout",type=float,default=20.0)
     return result
 
 def require_initialized(root):
@@ -97,6 +105,10 @@ def main(argv=None, transport=None):
         for item in pending: reasons[item["motivo"]]=reasons.get(item["motivo"],0)+1
         result={"modelos_encontrados":len(models),"modelos_con_imagenes":len(images),"modelos_con_pdf":len(pdfs),"modelos_incompletos":len(models-(images&pdfs)),"modelos_sin_imagen":listing(models-images),"modelos_sin_pdf":listing(models-pdfs),"archivos_duplicados":len(duplicates),"duplicados":duplicates,"pendientes_revision":len(pending),"pendientes_por_motivo":dict(sorted(reasons.items())),"descargas_fallidas":reasons.get("DOWNLOAD_FAILED",0)}
         print(json.dumps(result,ensure_ascii=False)); return 0
+    if args.command=="harvest-ep":
+        if not args.allow_public_network: raise ValueError("la red requiere --allow-public-network")
+        result=harvest_ep(root,transport or UrlTransport(),args.request_delay,args.max_pages,args.max_models,args.max_bytes,args.timeout)
+        print(json.dumps(result,ensure_ascii=False,sort_keys=True)); return 0
     sources=read_sources(safe_path(root,"_control/fuentes.csv"))
     if args.command=="plan":
         plan={"format_version":1,"sources":[serializable(s) for s in sources]}; write_json(safe_path(root,"_control/candidatos.json"),plan,root); print(f"filas={len(sources)}"); return 0

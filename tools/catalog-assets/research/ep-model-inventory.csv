@@ -1,0 +1,40 @@
+target_brand,model,category,official_model_name,ep_listing_url,ep_product_url,gam_product_url,ep_image_candidates,ep_pdf_candidates,missing_image,missing_pdf,gam_fallback_needed,confidence,status,notes
+EP,EFS101,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFS151,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,CPD20,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL203,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,TDL201,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL252,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL253,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFX2,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,SERIE X3,,,https://ep-equipment.com/es/productos/,,,,,,,,REVIEW,FAMILY_REVIEW,Posible familia; no convertir automáticamente en modelo
+EP,EFL353,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL303,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL352,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,SERIE X5,,,https://ep-equipment.com/es/productos/,,,,,,,,REVIEW,FAMILY_REVIEW,Posible familia; no convertir automáticamente en modelo
+EP,EFL703-HV-6,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,CQD15SD,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,CQD25,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL1003-HV-6,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL181,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EFL201,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,SERIE X2,,,https://ep-equipment.com/es/productos/,,,,,,,,REVIEW,FAMILY_REVIEW,Posible familia; no convertir automáticamente en modelo
+EP,EFL302,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPT20-30RT,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPL153,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,SERIE F,,,https://ep-equipment.com/es/productos/,,,,,,,,REVIEW,FAMILY_REVIEW,Posible familia; no convertir automáticamente en modelo
+EP,EPT20,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPT20-ET,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,EPT20 ET descrito en la página como EPT20-ET
+EP,WPL202,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,RPL201H,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,CBY 30II,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPT20-30RTS,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPT20-35RTS,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,EPT20-35RT,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,RSC082,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,SYG-1016,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,RSC122,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,RSC152,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,ESi161,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,WSA161,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
+EP,KSi201,,,https://ep-equipment.com/es/productos/,,,,,,,,PENDING_LOCAL_HARVEST,PENDING_LOCAL_HARVEST,Observación externa proporcionada al Prompt 317A
