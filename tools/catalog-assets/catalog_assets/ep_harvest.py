@@ -7,7 +7,7 @@ import time
 import urllib.robotparser
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 from .paths import atomic_write, safe_path
 from .sources import COLUMNS
@@ -19,7 +19,7 @@ GAM_LISTINGS = tuple(
     for page in range(1, 5)
 )
 FAMILIES = {"SERIE X2", "SERIE X3", "SERIE X5", "SERIE F"}
-CHECKPOINT_VERSION = {"format_version": 2, "parser_version": 3, "matcher_version": 2}
+CHECKPOINT_VERSION = {"format_version": 2, "parser_version": 4, "matcher_version": 2}
 MODEL_FIELDS = ("target_brand", "model", "observed_title", "category", "official_model_name", "ep_listing_url", "ep_product_url", "gam_product_url", "ep_image_candidates", "ep_pdf_candidates", "missing_image", "missing_pdf", "gam_fallback_needed", "confidence", "status", "notes")
 CANDIDATE_FIELDS = ("target_brand", "model", "category", "asset_type", "asset_role", "source_name", "source_role", "page_url", "asset_url", "expected_mime", "expected_extension", "language", "priority", "model_evidence", "confidence", "disposition", "http_status", "observed_mime", "validation_status", "notes")
 
@@ -69,8 +69,11 @@ class PageParser(HTMLParser):
         self.assets: list[tuple[str, str, str]] = []
         self.links: list[tuple[str, str]] = []
         self.anchor_records: list[dict] = []
+        self.action_records: list[dict] = []
+        self.rejected_sheets: list[dict] = []
         self.visible: list[str] = []
         self._anchors: list[dict] = []
+        self._actions: list[dict] = []
         self._stack: list[dict] = []
         self._heading: list[str] | None = None
         self._last_heading = ""
@@ -88,6 +91,8 @@ class PageParser(HTMLParser):
             self._stack.append({"tag": tag, "blocked": blocked})
         if tag == "a":
             self._anchors.append({"attrs": attrs, "text": [], "blocked": blocked})
+        if tag in {"span", "button"} or "onclick" in attrs or any(name.startswith("data-") and "download" in name for name in attrs):
+            self._actions.append({"tag": tag, "attrs": attrs, "text": [], "blocked": blocked})
         if tag in {"h2", "h3", "h4"} and not blocked:
             self._heading = []
         model = attrs.get("data-model") or attrs.get("data-product-model")
@@ -108,11 +113,18 @@ class PageParser(HTMLParser):
             self.visible.append(text)
         if self._anchors:
             self._anchors[-1]["text"].append(data)
+        for action in self._actions:
+            action["text"].append(data)
         if self._heading is not None:
             self._heading.append(data)
 
     def handle_endtag(self, tag):
         tag = tag.lower()
+        if self._actions and self._actions[-1]["tag"] == tag:
+            action = self._actions.pop()
+            if not action["blocked"]:
+                action["text"] = " ".join("".join(action["text"]).split())
+                self.action_records.append(action)
         if tag == "a" and self._anchors:
             anchor = self._anchors.pop()
             attrs = anchor["attrs"]
@@ -152,7 +164,56 @@ def _parse(body: bytes, base: str) -> PageParser:
         {**record, "href": urljoin(base, record["href"])}
         for record in parser.anchor_records if record["href"]
     ]
+    for record in parser.action_records:
+        onclick = record["attrs"].get("onclick")
+        if onclick is None:
+            continue
+        literal, reason = _window_open_literal(onclick)
+        if literal is None:
+            parser.rejected_sheets.append({"text": record["text"], "attribute": "onclick", "reason": reason})
+            continue
+        resolved, reason = _resolve_gam_sheet(literal, base)
+        if resolved is None:
+            parser.rejected_sheets.append({"text": record["text"], "attribute": "onclick", "reason": reason})
+            continue
+        parser.assets.append(("technical_sheet", resolved, record["text"] or "onclick:window.open"))
+    parser.assets = list({(kind, url): (kind, url, evidence) for kind, url, evidence in reversed(parser.assets)}.values())[::-1]
     return parser
+
+
+_WINDOW_OPEN = re.compile(r"\bwindow\s*\.\s*open\s*\(\s*(['\"])([^'\"\\]*(?:\\.[^'\"\\]*)*)\1\s*(?=,|\))", re.DOTALL)
+
+
+def _window_open_literal(value: str) -> tuple[str | None, str]:
+    """Extract a quoted first argument without interpreting JavaScript."""
+    match = _WINDOW_OPEN.search(value)
+    if not match:
+        return None, "WINDOW_OPEN_NOT_LITERAL"
+    literal = match.group(2)
+    if "\\" in literal or "${" in literal:
+        return None, "WINDOW_OPEN_DYNAMIC"
+    return literal, ""
+
+
+def _resolve_gam_sheet(value: str, base: str) -> tuple[str | None, str]:
+    if not value or value.startswith("//"):
+        return None, "SHEET_PROTOCOL_RELATIVE"
+    if "\\" in value or "\x00" in value:
+        return None, "SHEET_UNSAFE_CHARACTER"
+    if value.lower().startswith(("javascript:", "data:", "file:")):
+        return None, "SHEET_FORBIDDEN_SCHEME"
+    decoded = value
+    for _ in range(3):
+        decoded = unquote(decoded)
+    if "\\" in decoded or "\x00" in decoded or ".." in decoded.split("?", 1)[0].split("#", 1)[0].split("/"):
+        return None, "SHEET_TRAVERSAL"
+    resolved = urljoin(base, value)
+    parsed = urlsplit(resolved)
+    if parsed.scheme != "https" or parsed.hostname != "online.gamrentals.com" or parsed.username or parsed.password:
+        return None, "SHEET_ORIGIN"
+    if not parsed.path.startswith("/fichas-tecnicas/cl/") or not parsed.path.lower().endswith(".pdf"):
+        return None, "SHEET_PATH"
+    return resolved, ""
 
 
 def _csv_bytes(fields, rows):
@@ -189,16 +250,20 @@ def _allowed_product(url: str, source: str) -> bool:
         return False
     if source == "EP":
         return parsed.hostname in {"ep-equipment.com", "www.ep-equipment.com"} and bool(re.fullmatch(r"/es/product/[^/]+/?", parsed.path))
-    return parsed.hostname == "online.gamrentals.com" and parsed.path.startswith("/cl/ep/")
+    return parsed.hostname == "online.gamrentals.com" and not parsed.username and not parsed.password and any(
+        parsed.path.startswith(prefix) for prefix in ("/cl/ep/", "/cl/gruas-horquilla-ep/")
+    )
 
 
-def _allowed_asset(url: str, source: str) -> bool:
+def _allowed_asset(url: str, source: str, kind: str = "") -> bool:
     parsed = urlsplit(url)
     if parsed.scheme != "https":
         return False
     if source == "EP":
         return parsed.hostname in {"ep-equipment.com", "www.ep-equipment.com", "cdn.ep-portal.net"}
-    return parsed.hostname == "online.gamrentals.com"
+    if parsed.hostname != "online.gamrentals.com" or parsed.username or parsed.password:
+        return False
+    return kind != "technical_sheet" or _resolve_gam_sheet(url, url)[0] == url
 
 
 def _identity_confirmed(parser: PageParser, model: str) -> bool:
@@ -289,8 +354,7 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
         ambiguous_titles = []
         unmatched = []
         for anchor in parsed.anchor_records:
-            split = urlsplit(anchor["href"])
-            if split.scheme != "https" or split.hostname != "online.gamrentals.com" or not split.path.startswith("/cl/ep/"):
+            if not _allowed_product(anchor["href"], "GAM"):
                 continue
             under_ep.append(anchor)
             title = anchor["text"].strip()
@@ -388,23 +452,29 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
                 gam_pages += int(bool(saved.get("gam_observed")))
             else:
                 ep_observed = gam_observed = False
+                gam_parser = None
                 if ep_url:
                     page = _fetch(transport, ep_url, timeout, max_bytes)
                     requests += 1
                     parsed = _parse(page.body, page.final_url)
                     if _identity_confirmed(parsed, model):
                         ep_observed = True
-                        ep_assets = [list(asset) for asset in parsed.assets if _allowed_asset(asset[1], "EP")]
+                        ep_assets = [list(asset) for asset in parsed.assets if _allowed_asset(asset[1], "EP", asset[0])]
                         ep_pages += 1
                 if gam_url:
                     page = _fetch(transport, gam_url, timeout, max_bytes)
                     requests += 1
                     parsed = _parse(page.body, page.final_url)
+                    gam_parser = parsed
                     if _identity_confirmed(parsed, model):
                         gam_observed = True
-                        gam_assets = [list(asset) for asset in parsed.assets if _allowed_asset(asset[1], "GAM")]
+                        gam_assets = [list(asset) for asset in parsed.assets if _allowed_asset(asset[1], "GAM", asset[0])]
                         gam_pages += 1
-                checkpoint["products"][product_key] = {"ep_assets": ep_assets, "gam_assets": gam_assets, "ep_url": ep_url, "gam_url": gam_url, "ep_observed": ep_observed, "gam_observed": gam_observed}
+                sheet_evidence = [
+                    {"control_text": asset[2], "attribute": "onclick", "product_page": gam_url, "confirmed_model": model, "pdf_url": asset[1]}
+                    for asset in gam_assets if asset[0] == "technical_sheet"
+                ]
+                checkpoint["products"][product_key] = {"ep_assets": ep_assets, "gam_assets": gam_assets, "ep_url": ep_url, "gam_url": gam_url, "ep_observed": ep_observed, "gam_observed": gam_observed, "diagnostic": {"expected_model": model, "url": gam_url, "identity_confirmed": gam_observed, "images_detected": sum(a[0] == "image" for a in gam_assets), "technical_sheets_detected": sum(a[0] == "technical_sheet" for a in gam_assets), "technical_sheet_evidence": sheet_evidence, "rejected_technical_sheet_controls": gam_parser.rejected_sheets if gam_parser else []}}
                 _save_checkpoint(checkpoint_path, checkpoint, root)
                 if request_delay:
                     time.sleep(request_delay)
@@ -418,11 +488,16 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
 
     if gam_pages + ep_pages == 0:
         raise HarvestError("HARVEST_NO_PRODUCT_PAGES", "ninguna página confirmó la identidad de un modelo concreto")
-    if not source_rows:
-        raise HarvestError("HARVEST_NO_ASSET_SOURCES", "las páginas de producto no produjeron candidatos")
+    if not any(row["asset_type"] == "image" for row in source_rows):
+        raise HarvestError("HARVEST_NO_IMAGE_SOURCES", "las páginas concretas no produjeron imágenes")
+    if not any(row["asset_type"] == "technical_sheet" for row in source_rows):
+        raise HarvestError("HARVEST_NO_TECHNICAL_SHEETS", "las páginas concretas no produjeron fichas técnicas")
 
     source_rows.sort(key=lambda row: (row["model"].casefold(), int(row["priority"]), row["asset_type"], row["asset_url"]))
-    summary = {"seed_models": len(seed), "live_models": len(checkpoint["live_items"]), "matched_seed_models": len(matched), "concrete_models": len(concrete), "review_families": sorted(FAMILIES), "added": sorted(added), "removed": removed, "ambiguous": ambiguous, "gam_product_pages_observed": gam_pages, "ep_product_pages_observed": ep_pages, "image_candidates": sum(row["asset_type"] == "image" for row in source_rows), "technical_sheet_candidates": sum(row["asset_type"] == "technical_sheet" for row in source_rows), "sources": len(source_rows), "requests_this_run": requests, "assets_downloaded": 0, "checkpoint_version": dict(CHECKPOINT_VERSION), "requires_review": bool(ambiguous or added or removed or FAMILIES)}
+    models_with_images = sorted({row["model"] for row in source_rows if row["asset_type"] == "image"})
+    models_with_sheets = sorted({row["model"] for row in source_rows if row["asset_type"] == "technical_sheet"})
+    concrete_names = sorted(row["canonical_candidate"] for row in concrete)
+    summary = {"seed_models": len(seed), "live_models": len(checkpoint["live_items"]), "matched_seed_models": len(matched), "concrete_models": len(concrete), "review_families": sorted(FAMILIES), "added": sorted(added), "removed": removed, "ambiguous": ambiguous, "gam_product_pages_observed": gam_pages, "ep_product_pages_observed": ep_pages, "image_candidates": sum(row["asset_type"] == "image" for row in source_rows), "technical_sheet_candidates": sum(row["asset_type"] == "technical_sheet" for row in source_rows), "sources": len(source_rows), "requests_this_run": requests, "assets_downloaded": 0, "checkpoint_version": dict(CHECKPOINT_VERSION), "models_with_image_candidates": [{"marca": "EP", "modelo": m} for m in models_with_images], "models_with_technical_sheet_candidates": [{"marca": "EP", "modelo": m} for m in models_with_sheets], "models_missing_image": [{"marca": "EP", "modelo": m} for m in concrete_names if m not in models_with_images], "models_missing_technical_sheet": [{"marca": "EP", "modelo": m} for m in concrete_names if m not in models_with_sheets], "requires_review": bool(ambiguous or added or removed or FAMILIES)}
     audit_summary = {key: value for key, value in summary.items() if key != "requests_this_run"}
     audit = "# Recolección local EP/GAM\n\n" + json.dumps(audit_summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     # Publish the complete set only after coherence checks. Each replacement is atomic.

@@ -17,6 +17,8 @@ from catalog_assets.ep_harvest import (
     HarvestError,
     _allowed_product,
     _parse,
+    _resolve_gam_sheet,
+    _window_open_literal,
     harvest_ep,
     load_seed,
     reconcile_title,
@@ -58,10 +60,13 @@ def full_pages(no_assets=False):
     for index, row in enumerate(rows):
         model = row["canonical_candidate"]
         slug = model.lower().replace(" ", "-")
-        gam_url = f"https://online.gamrentals.com/cl/ep/{slug}"
+        prefix = "gruas-horquilla-ep" if model in {"EFL181", "EFL201", "EFL302", "SERIE X2"} else "ep"
+        ids = {"EFL181": "5514", "EFL201": "5515", "EFL302": "5516", "SERIE X2": "5518"}
+        tail = f"{ids[model]}-grua-horquilla-electrica-litio" if model in ids else slug
+        gam_url = f"https://online.gamrentals.com/cl/{prefix}/{tail}"
         groups[index % 4].append(f'<article class="product-miniature"><a href="{gam_url}"><img src="mini.jpg"></a><h2 class="product-title"><a href="{gam_url}">{title_for(model)}</a></h2><a href="{gam_url}">Ver más</a></article>')
         if row["disposition"] == "OBSERVED":
-            assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}"><a href="/download/{slug}">Descargar Ficha técnica</a></main>'
+            assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}"><span onclick="window.open(\'/fichas-tecnicas/cl/shared.pdf\', \'_blank\'); gtag(\'event\', \'download\')"><img src="/img/cms/icon-descarga.svg">Descargar Ficha técnica</span></main>'
             pages[gam_url] = f"<h1>{title_for(model)}</h1>{assets}"
     pages.update({url: "".join(group) for url, group in zip(GAM_LISTINGS, groups)})
     pages[EP_START] = "".join((
@@ -202,15 +207,15 @@ class EpHarvestTests(unittest.TestCase):
         self.assertNotIn("EQUIPO INDUSTRIAL EP NUEVO-99", summary["added"])
         self.assertIn("EFS101", summary["removed"])
 
-    def test_checkpoint_v2_is_archived_then_compatible_resume_is_idempotent(self):
+    def test_checkpoint_v3_is_archived_then_compatible_resume_is_idempotent(self):
         checkpoint = self.root / "_control/research/ep-harvest-checkpoint.json"
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
-        checkpoint.write_text('{"format_version":2,"parser_version":2,"matcher_version":2,"completed_listings":["bad"],"live_items":[]}', encoding="utf-8")
+        checkpoint.write_text('{"format_version":2,"parser_version":3,"matcher_version":2,"completed_listings":["bad"],"live_items":[]}', encoding="utf-8")
         first = MapTransport(full_pages())
         self.assertEqual(0, self.run_main(first)[0])
         archives = list(checkpoint.parent.glob("ep-harvest-checkpoint.incompatible-*.json"))
         self.assertEqual(1, len(archives))
-        self.assertEqual(2, json.loads(archives[0].read_text())["parser_version"])
+        self.assertEqual(3, json.loads(archives[0].read_text())["parser_version"])
         current = json.loads(checkpoint.read_text())
         self.assertEqual(set(GAM_LISTINGS), set(current["listing_diagnostics"]))
         self.assertTrue(all(current[key] == value for key, value in CHECKPOINT_VERSION.items()))
@@ -228,9 +233,23 @@ class EpHarvestTests(unittest.TestCase):
         pages[EP_START] = ""
         with self.assertRaises(HarvestError) as caught:
             harvest_ep(self.root, MapTransport(pages), request_delay=0)
-        self.assertEqual("HARVEST_NO_ASSET_SOURCES", caught.exception.code)
+        self.assertEqual("HARVEST_NO_IMAGE_SOURCES", caught.exception.code)
         self.assertEqual(previous, target.read_bytes())
         self.assertFalse((self.root / "_control/research/ep-source-audit.md").exists())
+
+    def test_zero_technical_sheets_fails_and_preserves_reports(self):
+        previous = b"previous,valid,fuentes\n"
+        target = self.root / "_control/fuentes.csv"
+        target.write_bytes(previous)
+        pages = full_pages()
+        pages[EP_START] = ""
+        for url, body in list(pages.items()):
+            if url.startswith("https://online.gamrentals.com/cl/") and url not in GAM_LISTINGS:
+                pages[url] = body.replace(body[body.find("<span onclick="):body.find("</span>") + 7], "")
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual("HARVEST_NO_TECHNICAL_SHEETS", caught.exception.code)
+        self.assertEqual(previous, target.read_bytes())
 
     def test_empty_gam_fails_closed_and_preserves_sources(self):
         previous = b"previous,valid,fuentes\n"
@@ -276,11 +295,32 @@ class EpHarvestTests(unittest.TestCase):
         pages = full_pages(no_assets=True)
         pages[EP_START] = ""
         for url in list(pages):
-            if "/cl/ep/" in url:
+            if url.startswith("https://online.gamrentals.com/cl/") and url not in GAM_LISTINGS:
                 pages[url] = "<h1>modelo ajeno</h1>"
         with self.assertRaises(HarvestError) as caught:
             harvest_ep(self.root, MapTransport(pages), request_delay=0)
         self.assertEqual("HARVEST_NO_PRODUCT_PAGES", caught.exception.code)
+
+    def test_gam_routes_and_static_onclick_security(self):
+        self.assertTrue(_allowed_product("https://online.gamrentals.com/cl/ep/efs101", "GAM"))
+        self.assertTrue(_allowed_product("https://online.gamrentals.com/cl/gruas-horquilla-ep/5514-grua-horquilla-electrica-litio", "GAM"))
+        self.assertFalse(_allowed_product("https://online.gamrentals.com/cl/otra/efs101", "GAM"))
+        for quote in ("'", '"'):
+            value, reason = _window_open_literal(f"window.open({quote}/fichas-tecnicas/cl/Shared.PDF{quote}, '_blank'); gtag('event', 'x')")
+            self.assertEqual(("/fichas-tecnicas/cl/Shared.PDF", ""), (value, reason))
+        dynamic = ("window.open(path)", "window.open('/fichas-tecnicas/cl/' + model + '.pdf')", "window.open(`/fichas-tecnicas/cl/x.pdf`)")
+        self.assertTrue(all(_window_open_literal(script)[0] is None for script in dynamic))
+
+    def test_sheet_policy_non_anchor_icon_and_deduplication(self):
+        base = "https://online.gamrentals.com/cl/ep/efs101"
+        valid = "https://online.gamrentals.com/fichas-tecnicas/cl/shared.pdf"
+        self.assertEqual((valid, ""), _resolve_gam_sheet("/fichas-tecnicas/cl/shared.pdf", base))
+        invalid = ("https://evil.example/fichas-tecnicas/cl/x.pdf", "//evil.example/x.pdf", "/fichas-tecnicas/cl/../x.pdf", "/fichas-tecnicas/cl/%2e%2e/x.pdf", "/fichas-tecnicas/cl/x\\y.pdf", "/fichas-tecnicas/cl/x%00.pdf")
+        self.assertTrue(all(_resolve_gam_sheet(value, base)[0] is None for value in invalid))
+        html = b'''<main><h1>EFS101</h1><span onclick="window.open('/fichas-tecnicas/cl/shared.pdf', '_blank'); gtag('event','x')"><img src="/img/cms/icon-descarga.svg">Descargar Ficha <span>tecnica</span></span><button onclick="window.open('/fichas-tecnicas/cl/shared.pdf', '_blank')">repetida</button></main>'''
+        parsed = _parse(html, base)
+        self.assertEqual(1, len(parsed.assets))
+        self.assertEqual(("technical_sheet", valid, "Descargar Ficha tecnica"), parsed.assets[0])
 
     def test_network_consent_redirect_and_brand_scope_guards(self):
         with self.assertRaisesRegex(ValueError, "--allow-public-network"):
