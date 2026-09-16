@@ -188,12 +188,23 @@ Cada URL y redirect se valida contra destinos públicos y contra la procedencia 
 por el harvest. Los bytes pasan primero por `_control/parciales`; solo firmas JPEG, PNG y WebP
 pueden llegar a `EP/Imagenes modelos EP/`, y solo un PDF completo puede llegar a
 `EP/fichas-tecnicas EP/`. La extensión se obtiene de la firma, no del nombre ni de Content-Type.
+La firma binaria continúa siendo la autoridad: para imágenes, una diferencia entre subtipos
+`image/*` declarados por el servidor se normaliza de forma segura y también se admiten MIME
+ausente u `application/octet-stream`. HTML, texto, JSON, PDF y cualquier MIME no gráfico se
+rechazan aunque la URL parezca una imagen; declarar `image/*` tampoco permite bytes sin una
+firma JPEG, PNG o WebP válida. Las fichas mantienen sin cambios la exigencia de firma PDF.
 Los nombres son `EP-<MODELO>.<ext>` y `Ficha-tecnica-EP-<MODELO>.pdf`, con sufijos estables si
 otro contenido ocupa el nombre.
 
 El reporte atómico `_control/ep-download-results.csv`, el manifest, checksums y pendientes
-permiten reanudar sin sobrescribir: un hash ya confirmado no se solicita otra vez y un hash
-duplicado no genera otra copia. Las fichas de CBY 30II, CQD15SD, EFL1003-HV-6, EFL703-HV-6 y
+permiten reanudar sin sobrescribir. Los resultados ya confirmados se verifican por ruta y hash,
+por lo que una reanudación aprovecha los 52 archivos existentes sin volver a solicitarlos. Si
+modelos diferentes comparten exactamente los mismos bytes, cada modelo recibe una copia
+ordinaria atómica con su propio nombre canónico (sin enlaces); el SHA-256 repetido representa
+esa asociación intencional. El dry-run informa cuántos archivos omitiría, materializaría desde
+una copia compartida o reintentaría, sin modificar el reporte anterior.
+
+Las fichas de CBY 30II, CQD15SD, EFL1003-HV-6, EFL703-HV-6 y
 EFS151 se registran como `MISSING_SOURCE`; no bloquean los demás activos. Las familias SERIE F,
 SERIE X2, SERIE X3 y SERIE X5 se excluyen por no ser modelos. LGMG y JLG están completamente
 fuera del alcance de esta operación; GAM solo es procedencia fallback con destino EP.
