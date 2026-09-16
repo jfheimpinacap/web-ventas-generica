@@ -19,6 +19,7 @@ from .sources import COLUMNS, read_sources, serializable
 from .models import MODEL_COLUMNS
 from .validation import validate_public_url
 from .ep_harvest import harvest_ep
+from .ep_download import download_ep_harvest
 
 def initial_files():
     header=(",".join(COLUMNS)+"\n").encode("utf-8-sig")
@@ -66,6 +67,14 @@ def parser():
     harvest.add_argument("--max-models",type=int,default=39)
     harvest.add_argument("--max-bytes",type=int,default=5_000_000)
     harvest.add_argument("--timeout",type=float,default=20.0)
+    ep_download=sub.add_parser("download-ep-harvest")
+    ep_download.add_argument("--dry-run",action="store_true")
+    ep_download.add_argument("--allow-public-network",action="store_true")
+    ep_download.add_argument("--only",choices=("all","image","technical_sheet"),default="all")
+    ep_download.add_argument("--request-delay",type=float,default=0.0)
+    ep_download.add_argument("--max-files",type=int)
+    ep_download.add_argument("--max-bytes",type=int,default=50_000_000)
+    ep_download.add_argument("--timeout",type=float,default=30.0)
     return result
 
 def require_initialized(root):
@@ -109,6 +118,13 @@ def main(argv=None, transport=None):
         if not args.allow_public_network: raise ValueError("la red requiere --allow-public-network")
         result=harvest_ep(root,transport or UrlTransport(),args.request_delay,args.max_pages,args.max_models,args.max_bytes,args.timeout)
         print(json.dumps(result,ensure_ascii=False,sort_keys=True)); return 0
+    if args.command=="download-ep-harvest":
+        if not args.dry_run and not args.allow_public_network: raise ValueError("la red requiere --allow-public-network")
+        if args.max_files is not None and args.max_files < 0: raise ValueError("--max-files inválido")
+        if args.max_bytes <= 0 or args.timeout <= 0 or args.request_delay < 0: raise ValueError("límites inválidos")
+        result, failed=download_ep_harvest(root,transport or (None if args.dry_run else UrlTransport()),dry_run=args.dry_run,
+            only=args.only,request_delay=args.request_delay,max_files=args.max_files,max_bytes=args.max_bytes,timeout=args.timeout)
+        print(json.dumps(result,ensure_ascii=False,sort_keys=True)); return 1 if failed else 0
     sources=read_sources(safe_path(root,"_control/fuentes.csv"))
     if args.command=="plan":
         plan={"format_version":1,"sources":[serializable(s) for s in sources]}; write_json(safe_path(root,"_control/candidatos.json"),plan,root); print(f"filas={len(sources)}"); return 0
