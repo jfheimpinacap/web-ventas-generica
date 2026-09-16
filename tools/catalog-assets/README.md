@@ -160,3 +160,40 @@ y las cuatro páginas GAM declaradas, escribe un checkpoint reanudable en
 auditoría y `_control/fuentes.csv`. EP es primaria y GAM solo fallback del tipo ausente. Las URLs
 de activos quedan deshabilitadas hasta su validación binaria controlada; el comando no escribe
 en las carpetas de imágenes o fichas.
+
+## Descarga validada del harvest EP
+
+`download-ep-harvest` es la etapa final especializada. A diferencia de `harvest-ep` (que
+recolecta evidencia), `discover` (que descubre candidatos genéricos) y `download` (que conserva
+su política de filas aprobadas), este comando consume exclusivamente el checkpoint compatible
+(`format_version=2`, parser 4 y matcher 2), el inventario, los candidatos seleccionados y
+`_control/fuentes.csv` publicados atómicamente por el último harvest satisfactorio. Es el único
+comando autorizado a validar las filas `VALIDATION_DEFERRED` que permanecen deshabilitadas.
+
+La inspección estructural, sin red ni escrituras, se ejecuta así:
+
+```text
+python -m catalog_assets --root <RUTA_MAQUINAS> download-ep-harvest --dry-run
+```
+
+La descarga posterior requiere consentimiento explícito y permite limitar tipo, cantidad,
+tamaño, espera y timeout:
+
+```text
+python -m catalog_assets --root <RUTA_MAQUINAS> download-ep-harvest --allow-public-network \
+  --only all --request-delay 1 --max-files 65 --max-bytes 50000000 --timeout 30
+```
+
+Cada URL y redirect se valida contra destinos públicos y contra la procedencia EP/GAM aprobada
+por el harvest. Los bytes pasan primero por `_control/parciales`; solo firmas JPEG, PNG y WebP
+pueden llegar a `EP/Imagenes modelos EP/`, y solo un PDF completo puede llegar a
+`EP/fichas-tecnicas EP/`. La extensión se obtiene de la firma, no del nombre ni de Content-Type.
+Los nombres son `EP-<MODELO>.<ext>` y `Ficha-tecnica-EP-<MODELO>.pdf`, con sufijos estables si
+otro contenido ocupa el nombre.
+
+El reporte atómico `_control/ep-download-results.csv`, el manifest, checksums y pendientes
+permiten reanudar sin sobrescribir: un hash ya confirmado no se solicita otra vez y un hash
+duplicado no genera otra copia. Las fichas de CBY 30II, CQD15SD, EFL1003-HV-6, EFL703-HV-6 y
+EFS151 se registran como `MISSING_SOURCE`; no bloquean los demás activos. Las familias SERIE F,
+SERIE X2, SERIE X3 y SERIE X5 se excluyen por no ser modelos. LGMG y JLG están completamente
+fuera del alcance de esta operación; GAM solo es procedencia fallback con destino EP.

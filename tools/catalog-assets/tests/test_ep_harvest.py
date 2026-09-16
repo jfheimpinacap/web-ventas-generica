@@ -26,6 +26,8 @@ from catalog_assets.ep_harvest import (
 from catalog_assets.paths import initialize
 from catalog_assets.sources import read_sources
 
+MISSING_SHEETS = {"CBY 30II", "CQD15SD", "EFL1003-HV-6", "EFL703-HV-6", "EFS151"}
+
 
 class MapTransport:
     def __init__(self, pages):
@@ -66,7 +68,8 @@ def full_pages(no_assets=False):
         gam_url = f"https://online.gamrentals.com/cl/{prefix}/{tail}"
         groups[index % 4].append(f'<article class="product-miniature"><a href="{gam_url}"><img src="mini.jpg"></a><h2 class="product-title"><a href="{gam_url}">{title_for(model)}</a></h2><a href="{gam_url}">Ver más</a></article>')
         if row["disposition"] == "OBSERVED":
-            assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}"><span onclick="window.open(\'/fichas-tecnicas/cl/shared.pdf\', \'_blank\'); gtag(\'event\', \'download\')"><img src="/img/cms/icon-descarga.svg">Descargar Ficha técnica</span></main>'
+            sheet = "" if model in MISSING_SHEETS else '<span onclick="window.open(\'/fichas-tecnicas/cl/shared.pdf\', \'_blank\'); gtag(\'event\', \'download\')"><img src="/img/cms/icon-descarga.svg">Descargar Ficha técnica</span>'
+            assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}">{sheet}</main>'
             pages[gam_url] = f"<h1>{title_for(model)}</h1>{assets}"
     pages.update({url: "".join(group) for url, group in zip(GAM_LISTINGS, groups)})
     pages[EP_START] = "".join((
@@ -186,7 +189,8 @@ class EpHarvestTests(unittest.TestCase):
         self.assertEqual([], summary["ambiguous"])
         self.assertEqual(sorted(FAMILIES), summary["review_families"])
         self.assertEqual(0, summary["assets_downloaded"])
-        self.assertGreater(summary["sources"], 0)
+        self.assertEqual((35, 30, 65), (summary["image_candidates"], summary["technical_sheet_candidates"], summary["sources"]))
+        self.assertEqual(sorted(MISSING_SHEETS), [row["modelo"] for row in summary["models_missing_technical_sheet"]])
         sources = read_sources(self.root / "_control/fuentes.csv")
         efl = [row for row in sources if row.model == "EFL181"]
         self.assertEqual({("EP", "image"), ("EP", "technical_sheet")}, {(row.source_name, row.asset_type) for row in efl})

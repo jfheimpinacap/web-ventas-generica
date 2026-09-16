@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from .naming import next_path, sanitize
 from .paths import safe_path, atomic_write
 from .validation import detect_binary, validate_public_url
+from .ep_harvest import _allowed_asset
 
 def target_dir(root: Path, brand: str, kind: str) -> Path:
     if brand not in {"LGMG", "EP", "JLG"}: raise ValueError("marca de destino inválida")
@@ -22,6 +23,8 @@ def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, t
         try:
             response=transport.get(url,headers=headers,timeout=timeout,max_bytes=max_bytes)
             validate_public_url(response.final_url, transport.resolve)
+            if candidate.get("allowed_source") and not _allowed_asset(response.final_url, candidate["allowed_source"], candidate.get("expected_kind", "")):
+                raise ValueError("redirect fuera de la procedencia autorizada")
             if response.status not in ({206} if offset else {200}):
                 if offset and response.status == 200: partial.write_bytes(b""); offset=0
                 elif response.status >= 400: raise OSError(f"HTTP {response.status}")
@@ -29,9 +32,14 @@ def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, t
             with partial.open(mode) as out: out.write(response.body)
             if partial.stat().st_size > max_bytes: raise ValueError("límite de tamaño excedido")
             data=partial.read_bytes(); info=detect_binary(data)
+            if candidate.get("expected_kind") and info.kind != candidate["expected_kind"]:
+                raise ValueError("TYPE_MISMATCH")
             headers={str(key).lower():value for key,value in response.headers.items()}
             declared=(headers.get("content-type") or "").split(";",1)[0].lower()
             if declared and declared not in {info.mime,"application/octet-stream","binary/octet-stream"}: raise ValueError("MIME_CONFLICT")
+            content_length=headers.get("content-length")
+            if content_length and response.status == 200 and int(content_length) != len(response.body):
+                raise ValueError("INVALID_BINARY: respuesta truncada")
             digest=hashlib.sha256(data).hexdigest()
             for existing in root.rglob("*"):
                 if existing.is_file() and "_control" not in existing.parts and hashlib.sha256(existing.read_bytes()).hexdigest()==digest:
