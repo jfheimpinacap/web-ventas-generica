@@ -222,7 +222,27 @@ La secuencia obligatoria es **dry-run → apply → verify**. Los tres modos exi
 loopback con puerto explícito. Dry-run y verify leen `JEM_NEXUS_LOCAL_READ_TOKEN`; apply lee
 exclusivamente `JEM_NEXUS_LOCAL_MUTATION_TOKEN`. El dry-run escribe el plan y su fingerprint
 en `_control/ep-local-import`; apply exige ese fingerprint mediante
-`--confirm-plan-fingerprint`. Antes de cada POST/PATCH se persiste intención en el checkpoint,
-y cada receipt confirmado permite reanudar sin repetir mutaciones. Un resultado ambiguo queda
-detenido para reconciliación manual. Verify vuelve a leer productos y activos y compara los
-binarios por SHA-256. Los tokens nunca forman parte de planes, checkpoints, reportes o hashes.
+`--confirm-plan-fingerprint`. El plan estable versión 2 calcula de nuevo SHA-256 sobre toda su
+representación canónica (sin el propio fingerprint) al cargarlo; por tanto, un plan v1 o una
+edición de payload, operaciones, rutas, hashes, root, URL o snapshot se rechaza antes de mutar.
+
+El preflight usa exactamente las seis colecciones de categorías, marcas, productos, imágenes,
+fichas y especificaciones (`GET /api/product-specs` incluido). Interpreta el contrato real:
+`category.parent`, `product_image.product`, `product.technical_sheet_id` y
+`product_spec.product`. Las imágenes se envían a `/api/product-images` con el archivo multipart
+`image` y los campos `product_id`, `alt_text`, `is_main` y `order`; las fichas conservan el
+archivo multipart `file` y se asocian al producto mediante `technical_sheet`. Los binarios ya
+existentes se descargan solamente desde `/api/product-images/{id}/file` y
+`/api/technical-sheets/{id}/file`, sin redirects, y se validan por firma, tamaño aplicable y
+SHA-256 antes de considerarlos idempotentes.
+
+Apply repite el preflight antes de la primera escritura. Antes de cada POST/PATCH persiste una
+intención y cada receipt confirmado permite reanudar sin repetir esa mutación. HTTP 400, 401,
+403, 404, 409, 422 y 429 son resultados definitivos: limpian la intención (429 conserva solo
+un `Retry-After` numérico). Timeouts, desconexiones, respuesta perdida y 5xx no reconciliados
+son ambiguos: conservan la intención y exigen reconciliación por GET. Verify vuelve a consultar
+las seis colecciones, exige cero specs y compara los 35 binarios de imagen y las 30 fichas por
+SHA-256 sin escribir. Los tokens nunca forman parte de planes, checkpoints, reportes o hashes.
+
+Este importador todavía no se ha ejecutado contra un Nexus real. LGMG y JLG siguen excluidos y
+no se inspeccionan, planifican ni modifican.
