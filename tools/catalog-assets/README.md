@@ -208,3 +208,21 @@ Las fichas de CBY 30II, CQD15SD, EFL1003-HV-6, EFL703-HV-6 y
 EFS151 se registran como `MISSING_SOURCE`; no bloquean los demás activos. Las familias SERIE F,
 SERIE X2, SERIE X3 y SERIE X5 se excluyen por no ser modelos. LGMG y JLG están completamente
 fuera del alcance de esta operación; GAM solo es procedencia fallback con destino EP.
+
+## Importación EP al Nexus local
+
+`import-ep-local` es un importador deliberadamente pequeño y separado del pipeline canónico.
+Su única fuente es `_control/ep-download-results.csv`: no recorre `Maquinas`, ignora la carpeta
+heredada `EP/Fichas tecnicas EP`, `_pendientes` y cualquier ruta LGMG/JLG, y acepta solamente
+imágenes de `EP/Imagenes modelos EP/` y fichas de `EP/fichas-tecnicas EP/` cuyo hash y firma
+coincidan. Los 35 productos resultantes son borradores, sin precio visible, specs ni datos
+técnicos o comerciales. Las cinco fichas declaradas como ausentes son válidas y no se buscan.
+
+La secuencia obligatoria es **dry-run → apply → verify**. Los tres modos exigen una URL HTTP
+loopback con puerto explícito. Dry-run y verify leen `JEM_NEXUS_LOCAL_READ_TOKEN`; apply lee
+exclusivamente `JEM_NEXUS_LOCAL_MUTATION_TOKEN`. El dry-run escribe el plan y su fingerprint
+en `_control/ep-local-import`; apply exige ese fingerprint mediante
+`--confirm-plan-fingerprint`. Antes de cada POST/PATCH se persiste intención en el checkpoint,
+y cada receipt confirmado permite reanudar sin repetir mutaciones. Un resultado ambiguo queda
+detenido para reconciliación manual. Verify vuelve a leer productos y activos y compara los
+binarios por SHA-256. Los tokens nunca forman parte de planes, checkpoints, reportes o hashes.

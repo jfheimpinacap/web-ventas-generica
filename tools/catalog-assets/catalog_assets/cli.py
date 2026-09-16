@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import socket
 import sys
 import time
@@ -20,6 +21,8 @@ from .models import MODEL_COLUMNS
 from .validation import validate_public_url
 from .ep_harvest import harvest_ep
 from .ep_download import download_ep_harvest
+from .ep_local_import import (LocalTransport, apply_plan, build_plan, validate_base_url,
+                              verify_plan, write_plan)
 
 def initial_files():
     header=(",".join(COLUMNS)+"\n").encode("utf-8-sig")
@@ -75,6 +78,14 @@ def parser():
     ep_download.add_argument("--max-files",type=int)
     ep_download.add_argument("--max-bytes",type=int,default=50_000_000)
     ep_download.add_argument("--timeout",type=float,default=30.0)
+    ep_import=sub.add_parser("import-ep-local")
+    modes=ep_import.add_mutually_exclusive_group(required=True)
+    modes.add_argument("--dry-run",action="store_true")
+    modes.add_argument("--apply",action="store_true")
+    modes.add_argument("--verify",action="store_true")
+    ep_import.add_argument("--base-url",required=True)
+    ep_import.add_argument("--output-dir",type=Path,default=Path("_control/ep-local-import"))
+    ep_import.add_argument("--confirm-plan-fingerprint")
     return result
 
 def require_initialized(root):
@@ -125,6 +136,26 @@ def main(argv=None, transport=None):
         result, failed=download_ep_harvest(root,transport or (None if args.dry_run else UrlTransport()),dry_run=args.dry_run,
             only=args.only,request_delay=args.request_delay,max_files=args.max_files,max_bytes=args.max_bytes,timeout=args.timeout)
         print(json.dumps(result,ensure_ascii=False,sort_keys=True)); return 1 if failed else 0
+    if args.command=="import-ep-local":
+        from .ep_local_import import load_assets
+        base_url=validate_base_url(args.base_url)
+        if args.apply != bool(args.confirm_plan_fingerprint):
+            raise ValueError("--confirm-plan-fingerprint es obligatorio solo con --apply")
+        if args.output_dir.is_absolute() or not args.output_dir.parts or args.output_dir.parts[0] != "_control":
+            raise ValueError("--output-dir debe estar confinado bajo _control")
+        output=safe_path(root,args.output_dir.as_posix())
+        load_assets(root)  # valida todos los bytes antes de token o red
+        variable="JEM_NEXUS_LOCAL_MUTATION_TOKEN" if args.apply else "JEM_NEXUS_LOCAL_READ_TOKEN"
+        token=os.environ.get(variable)
+        if not token: raise ValueError(f"falta {variable}")
+        local_transport=transport or LocalTransport(base_url)
+        if args.dry_run:
+            result=build_plan(root,base_url,local_transport,token); write_plan(root,output,result)
+        elif args.apply:
+            result=apply_plan(root,output,base_url,args.confirm_plan_fingerprint,local_transport,token)
+        else:
+            result=verify_plan(root,output,base_url,local_transport,token)
+        print(json.dumps({k:v for k,v in result.items() if k not in {"operations","completed","receipts"}},ensure_ascii=False,sort_keys=True)); return 0 if not result.get("failures") else 1
     sources=read_sources(safe_path(root,"_control/fuentes.csv"))
     if args.command=="plan":
         plan={"format_version":1,"sources":[serializable(s) for s in sources]}; write_json(safe_path(root,"_control/candidatos.json"),plan,root); print(f"filas={len(sources)}"); return 0
