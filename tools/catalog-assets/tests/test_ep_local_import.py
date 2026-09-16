@@ -6,6 +6,8 @@ import json
 import os
 import tempfile
 import unittest
+import urllib.error
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,7 +60,8 @@ class FakeTransport:
         if endpoint == "/api/products":
             row = {"id": self._id(), "technical_sheet_id": None, **kwargs["json_data"]}; self.products.append(row); return row
         if endpoint == "/api/product-images":
-            path = kwargs["files"]["image"]; row = {"id": self._id(), "product": kwargs["data"]["product_id"],
+            self.assert_image_contract(kwargs)
+            path = kwargs["files"]["image"]; row = {"id": self._id(), "product": kwargs["data"]["product"],
                 "image": f"/media/product-images/{path.name}", "file_url": "ignored", "alt_text": kwargs["data"]["alt_text"],
                 "is_main": kwargs["data"]["is_main"], "order": kwargs["data"]["order"]}
             self.images.append(row); self.binaries[f"/api/product-images/{row['id']}/file"] = path.read_bytes(); return row
@@ -71,6 +74,13 @@ class FakeTransport:
             product = next(x for x in self.products if x["id"] == int(endpoint.rsplit("/", 1)[1]))
             product["technical_sheet_id"] = kwargs["json_data"]["technical_sheet"]; return product
         raise AssertionError((method, endpoint))
+
+    @staticmethod
+    def assert_image_contract(kwargs):
+        if set(kwargs.get("files", {})) != {"image"} or set(kwargs.get("data", {})) != {"product", "alt_text", "is_main", "order"}:
+            raise DefinitiveRemoteError("HTTP 400 detail=image is required.")
+        if not isinstance(kwargs["data"]["product"], int):
+            raise DefinitiveRemoteError("HTTP 400")
 
 
 class CaptureOpener:
@@ -148,13 +158,18 @@ class EpLocalImportTests(unittest.TestCase):
             self.assertFalse({"description", "short_description", "price", "specs"} & op["payload"].keys())
 
     def test_full_apply_multipart_sequence_verify_and_idempotent_dry_run(self):
-        fake = FakeTransport(); plan = self.run_dry(fake); self.assertEqual(0, self.run_apply(fake, plan["fingerprint"]))
+        fake = FakeTransport(False); plan = self.run_dry(fake); self.assertEqual(0, self.run_apply(fake, plan["fingerprint"]))
         writes = [x for x in fake.calls if x[0] not in {"GET", "GET_BYTES"}]
         self.assertEqual((35, 35, 30, 30), tuple(sum(x[1] == endpoint for x in writes) for endpoint in
             ("/api/products", "/api/product-images", "/api/technical-sheets/", "/never"))[:3] + (sum(x[0] == "PATCH" for x in writes),))
         image_call = next(x for x in writes if x[1] == "/api/product-images")
         sheet_call = next(x for x in writes if x[1] == "/api/technical-sheets/")
         self.assertEqual({"image"}, set(image_call[3]["files"])); self.assertEqual({"file"}, set(sheet_call[3]["files"]))
+        self.assertEqual({"product", "alt_text", "is_main", "order"}, set(image_call[3]["data"]))
+        self.assertNotIn("product_id", image_call[3]["data"])
+        self.assertEqual(fake.products[0]["id"], image_call[3]["data"]["product"])
+        self.assertTrue(image_call[3]["data"]["is_main"]); self.assertEqual(0, image_call[3]["data"]["order"])
+        self.assertEqual(131, len(writes)); self.assertEqual(131, plan["counts"]["planned_mutations"])
         self.assertEqual(MISSING_SHEETS, {p["model"] for p in fake.products if p["technical_sheet_id"] is None})
         before = len(fake.calls)
         with patch.dict(os.environ, {"JEM_NEXUS_LOCAL_READ_TOKEN": "READ"}, clear=True):
@@ -183,18 +198,55 @@ class EpLocalImportTests(unittest.TestCase):
         plan = self.run_dry(fake); fake.brands.append({"id": 8, "name": "X", "slug": "x", "is_active": True}); before = len(fake.calls)
         with self.assertRaisesRegex(EpLocalError, "deriva remota"):
             self.run_apply(fake, plan["fingerprint"])
-        self.assertTrue(all(x[0] == "GET" for x in fake.calls[before:]))
+        self.assertTrue(all(x[0] in {"GET", "GET_BYTES"} for x in fake.calls[before:]))
 
     def test_resume_skips_receipted_mutations_and_definitive_error_clears_intent(self):
         fake = FakeTransport(); plan = self.run_dry(fake); self.run_apply(fake, plan["fingerprint"]); before = len(fake.calls)
         self.run_apply(fake, plan["fingerprint"])
-        self.assertTrue(all(x[0] == "GET" for x in fake.calls[before:]))
+        self.assertTrue(all(x[0] in {"GET", "GET_BYTES"} for x in fake.calls[before:]))
         (self.root / "_control/ep-local-import/ep-local-import-checkpoint.json").unlink()
         other = FakeTransport(); plan = self.run_dry(other); other.fail = DefinitiveRemoteError("HTTP 429 retry_after=12")
         with self.assertRaisesRegex(DefinitiveRemoteError, "retry_after=12"):
             self.run_apply(other, plan["fingerprint"])
         checkpoint = json.loads((self.root / "_control/ep-local-import/ep-local-import-checkpoint.json").read_text())
         self.assertIsNone(checkpoint["intent"]); self.assertNotIn("WRITE-SECRET", json.dumps(checkpoint))
+
+    def test_resume_real_checkpoint_shape_reconciles_and_resolves_error(self):
+        fake = FakeTransport(False); plan = self.run_dry(fake); first = plan["operations"][0]
+        self.assertEqual("CBY 30II", first["model"])
+        brand = {"id": 3, "name": "EP", "slug": "ep", "is_active": True}
+        product = {"id": 59, "technical_sheet_id": None, **{**first["payload"], "brand_id": 3}}
+        fake.brands.append(brand); fake.products.append(product)
+        checkpoint = {"fingerprint": plan["fingerprint"], "intent": None,
+                      "completed": {"brand": brand, "CBY 30II:product": product},
+                      "receipts": [{"key": "brand", "id": 3}, {"key": "CBY 30II:product", "id": 59}],
+                      "errors": [{"key": "CBY 30II:image", "error": "HTTP 400"}]}
+        checkpoint_path = self.root / "_control/ep-local-import/ep-local-import-checkpoint.json"
+        checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        before = len(fake.calls); self.assertEqual(0, self.run_apply(fake, plan["fingerprint"]))
+        writes = [call for call in fake.calls[before:] if call[0] not in {"GET", "GET_BYTES"}]
+        self.assertEqual(129, len(writes)); self.assertEqual(("POST", "/api/product-images"), writes[0][:2])
+        self.assertEqual(59, writes[0][3]["data"]["product"]); self.assertNotIn("product_id", writes[0][3]["data"])
+        self.assertFalse(any(call[1] == "/api/brands" for call in writes))
+        self.assertFalse(any(call[1] == "/api/products" and call[3].get("json_data", {}).get("model") == "CBY 30II" for call in writes))
+        finished = json.loads(checkpoint_path.read_text())
+        self.assertEqual((131, 131), (len(finished["completed"]), len(finished["receipts"])))
+        self.assertIsNone(finished["intent"]); self.assertEqual([], finished["errors"])
+        self.assertEqual([{"key": "CBY 30II:image", "error": "HTTP 400"}], finished["resolved_errors"])
+        before = len(fake.calls); self.run_apply(fake, plan["fingerprint"])
+        self.assertTrue(all(call[0] in {"GET", "GET_BYTES"} for call in fake.calls[before:]))
+        self.assertEqual(1, len(json.loads(checkpoint_path.read_text())["resolved_errors"]))
+
+    def test_completed_receipt_drift_blocks_before_writes(self):
+        fake = FakeTransport(False); plan = self.run_dry(fake)
+        brand = {"id": 3, "name": "NOT EP", "slug": "ep", "is_active": True}; fake.brands.append(brand)
+        checkpoint = {"fingerprint": plan["fingerprint"], "intent": None, "completed": {"brand": brand},
+                      "receipts": [{"key": "brand", "id": 3}], "errors": []}
+        (self.root / "_control/ep-local-import/ep-local-import-checkpoint.json").write_text(json.dumps(checkpoint))
+        before = len(fake.calls)
+        with self.assertRaisesRegex(EpLocalError, "deriva remota"):
+            self.run_apply(fake, plan["fingerprint"])
+        self.assertTrue(all(call[0] in {"GET", "GET_BYTES"} for call in fake.calls[before:]))
 
     def test_ambiguous_timeout_keeps_intent(self):
         fake = FakeTransport(); plan = self.run_dry(fake); fake.fail = TimeoutError("lost response")
@@ -205,12 +257,32 @@ class EpLocalImportTests(unittest.TestCase):
     def test_multipart_encoder_preserves_names_mime_and_bytes(self):
         transport = LocalTransport(BASE); capture = CaptureOpener(); transport.opener = capture
         image = next((self.root / "EP/Imagenes modelos EP").iterdir()); sheet = next((self.root / "EP/fichas-tecnicas EP").iterdir())
-        transport.request("POST", "/api/product-images", "secret", files={"image": image}, data={"product_id": 1, "alt_text": "EP X", "is_main": True, "order": 0})
+        transport.request("POST", "/api/product-images", "secret", files={"image": image}, data={"product": 59, "alt_text": "EP X", "is_main": True, "order": 0})
         transport.request("POST", "/api/technical-sheets/", "secret", files={"file": sheet}, data={"name": "Ficha"})
         image_body, sheet_body = (request.data for request in capture.requests)
         self.assertIn(b'name="image"; filename=', image_body); self.assertNotIn(b'name="file"; filename=', image_body)
+        self.assertIn(b'name="product"\r\n\r\n59\r\n', image_body); self.assertNotIn(b'name="product_id"', image_body)
+        for field in (b'alt_text', b'is_main', b'order'):
+            self.assertIn(b'name="' + field + b'"', image_body)
         self.assertIn(b"Content-Type: image/jpeg", image_body); self.assertIn(image.read_bytes(), image_body)
         self.assertIn(b'name="file"; filename=', sheet_body); self.assertIn(b"Content-Type: application/pdf", sheet_body); self.assertIn(sheet.read_bytes(), sheet_body)
+
+    def test_http_error_detail_is_safe_and_bounded(self):
+        class ErrorOpener:
+            def __init__(self, body): self.body = body
+            def open(self, request, timeout):
+                raise urllib.error.HTTPError(request.full_url, 400, "bad", {}, BytesIO(self.body))
+        transport = LocalTransport(BASE)
+        transport.opener = ErrorOpener(b'{"detail":"image is required."}')
+        with self.assertRaisesRegex(DefinitiveRemoteError, r"^HTTP 400 detail=image is required\.$"):
+            transport.request("GET", "/api/product-images", "SECRET")
+        for body in (b"<html>SECRET</html>", b'{"other":"SECRET"}',
+                     json.dumps({"detail": "Authorization Bearer SECRET"}).encode(),
+                     json.dumps({"detail": "x" * 241}).encode()):
+            transport.opener = ErrorOpener(body)
+            with self.assertRaisesRegex(DefinitiveRemoteError, r"^HTTP 400$") as raised:
+                transport.request("GET", "/api/product-images", "SECRET")
+            self.assertNotIn("SECRET", str(raised.exception))
 
     def test_guards_missing_token_urls_and_legacy_path(self):
         for url in ("https://localhost:443", "http://localhost", "http://10.0.0.1:80", "http://u:p@localhost:80"):

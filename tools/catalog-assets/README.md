@@ -230,19 +230,26 @@ El preflight usa exactamente las seis colecciones de categorías, marcas, produc
 fichas y especificaciones (`GET /api/product-specs` incluido). Interpreta el contrato real:
 `category.parent`, `product_image.product`, `product.technical_sheet_id` y
 `product_spec.product`. Las imágenes se envían a `/api/product-images` con el archivo multipart
-`image` y los campos `product_id`, `alt_text`, `is_main` y `order`; las fichas conservan el
+`image` y los campos `product`, `alt_text`, `is_main` y `order`; `product_id` no se utiliza en
+ese endpoint. Las fichas conservan el
 archivo multipart `file` y se asocian al producto mediante `technical_sheet`. Los binarios ya
 existentes se descargan solamente desde `/api/product-images/{id}/file` y
 `/api/technical-sheets/{id}/file`, sin redirects, y se validan por firma, tamaño aplicable y
 SHA-256 antes de considerarlos idempotentes.
 
-Apply repite el preflight antes de la primera escritura. Antes de cada POST/PATCH persiste una
-intención y cada receipt confirmado permite reanudar sin repetir esa mutación. HTTP 400, 401,
+Apply repite el preflight antes de la primera escritura y reconcilia por GET todos los receipts
+de un checkpoint parcial; cualquier ausencia o divergencia bloquea sin escribir, mientras que
+los recursos confirmados (incluidos marca y producto) no se crean de nuevo. Antes de cada
+POST/PATCH persiste una intención y cada receipt confirmado permite reanudar sin repetir esa
+mutación. Cuando un paso antes fallido termina correctamente, su error activo pasa una sola vez
+al historial `resolved_errors`. HTTP 400, 401,
 403, 404, 409, 422 y 429 son resultados definitivos: limpian la intención (429 conserva solo
-un `Retry-After` numérico). Timeouts, desconexiones, respuesta perdida y 5xx no reconciliados
+un `Retry-After` numérico); un `detail` JSON textual se filtra, se limita a 240 caracteres y se
+omite si puede contener datos sensibles. Timeouts, desconexiones, respuesta perdida y 5xx no reconciliados
 son ambiguos: conservan la intención y exigen reconciliación por GET. Verify vuelve a consultar
 las seis colecciones, exige cero specs y compara los 35 binarios de imagen y las 30 fichas por
 SHA-256 sin escribir. Los tokens nunca forman parte de planes, checkpoints, reportes o hashes.
 
-Este importador todavía no se ha ejecutado contra un Nexus real. LGMG y JLG siguen excluidos y
-no se inspeccionan, planifican ni modifican.
+La corrección del nombre del campo multipart es exclusiva del transporte: el plan estable v2 y
+su fingerprint existente continúan siendo válidos. LGMG y JLG siguen excluidos y no se
+inspeccionan, planifican ni modifican.
