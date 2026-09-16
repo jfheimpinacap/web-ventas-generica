@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import io
 import json
 import sys
@@ -8,77 +7,225 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0,str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).parents[1]))
 from catalog_assets.cli import Response, initial_files, main
-from catalog_assets.ep_harvest import EP_START, GAM_LISTINGS, _key, load_seed
+from catalog_assets.ep_harvest import (
+    CHECKPOINT_VERSION,
+    EP_START,
+    FAMILIES,
+    GAM_LISTINGS,
+    HarvestError,
+    _allowed_product,
+    _parse,
+    harvest_ep,
+    load_seed,
+    reconcile_title,
+)
 from catalog_assets.paths import initialize
 from catalog_assets.sources import read_sources
 
-class MapTransport:
-    def __init__(self,pages): self.pages=pages; self.calls=[]
-    @staticmethod
-    def resolve(host,port,type=None): return [(2,1,6,"",("93.184.216.34",port))]
-    def get(self,url,headers,timeout,max_bytes):
-        self.calls.append(url); value=self.pages[url]
-        if isinstance(value,Response): return value
-        return Response(200,value.encode(),{"content-type":"text/html; charset=utf-8"},url)
 
-def listing(name,url): return f'<a class="product-card" data-model="{name}" href="{url}">{name}</a>'
-def product(image="",pdf=""):
-    return (f'<img class="product_image" src="{image}" alt="producto">' if image else '')+(f'<a href="{pdf}">Descargar Ficha técnica</a>' if pdf else '')
+class MapTransport:
+    def __init__(self, pages):
+        self.pages = pages
+        self.calls = []
+
+    @staticmethod
+    def resolve(host, port, type=None):
+        return [(2, 1, 6, "", ("93.184.216.34", port))]
+
+    def get(self, url, headers, timeout, max_bytes):
+        self.calls.append(url)
+        value = self.pages[url]
+        if isinstance(value, Response):
+            return value
+        return Response(200, value.encode(), {"content-type": "text/html; charset=utf-8"}, url)
+
+
+def title_for(model):
+    shown = "EPT20 ET" if model == "EPT20-ET" else model
+    kind = "TRANSPALETA ELÉCTRICA" if model.startswith("EPT") else "EQUIPO INDUSTRIAL"
+    return f"{kind} EP {shown}"
+
+
+def full_pages(no_assets=False):
+    rows = load_seed()
+    pages = {
+        "https://online.gamrentals.com/robots.txt": "User-agent: *\nAllow: /cl/",
+        "https://ep-equipment.com/robots.txt": "User-agent: *\nAllow: /es/",
+    }
+    groups = [[] for _ in GAM_LISTINGS]
+    for index, row in enumerate(rows):
+        model = row["canonical_candidate"]
+        slug = model.lower().replace(" ", "-")
+        gam_url = f"https://online.gamrentals.com/cl/ep/{slug}"
+        groups[index % 4].append(f'<a class="product-card" data-model="{title_for(model)}" href="{gam_url}">producto</a>')
+        if row["disposition"] == "OBSERVED":
+            assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}"><a href="/download/{slug}">Descargar Ficha técnica</a></main>'
+            pages[gam_url] = f"<h1>{title_for(model)}</h1>{assets}"
+    pages.update({url: "".join(group) for url, group in zip(GAM_LISTINGS, groups)})
+    pages[EP_START] = "".join((
+        '<article><h3>EFL181</h3><a href="/es/product/efl-181/">Aprende más</a></article>',
+        '<article><h3>EPT20-ET</h3><a href="/es/product/ept20-et/">Aprende más</a></article>',
+        '<a href="/es/contacto/">Contacto</a>',
+    ))
+    pages["https://ep-equipment.com/es/product/efl-181/"] = (
+        '<main><h1>EFL181</h1><img class="product gallery" src="https://cdn.ep-portal.net/efl181-main.jpg" alt="EFL181">'
+        '<a href="https://cdn.ep-portal.net/download?id=181">Descargar hoja de datos</a></main>'
+        '<nav><img class="product" src="/logo.jpg" alt="logo"></nav><section class="related"><img class="product" src="/other.jpg" alt="otro"></section>'
+    )
+    pages["https://ep-equipment.com/es/product/ept20-et/"] = '<main><h1>EPT20-ET</h1><img class="product" src="https://cdn.ep-portal.net/ept20-et.jpg" alt="EPT20-ET"></main>'
+    return pages
+
 
 class EpHarvestTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name)/"Maquinas"; initialize(self.root,initial_files())
-    def tearDown(self): self.temp.cleanup()
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name) / "Maquinas"
+        initialize(self.root, initial_files())
 
-    def pages(self):
-        fixture=Path(__file__).parents[1]/"fixtures"/"ep-harvest"
-        read=lambda name:(fixture/name).read_text(encoding="utf-8")
-        pages={url:read(f"gam-page-{index}.html") for index,url in enumerate(GAM_LISTINGS,1)}
-        pages["https://online.gamrentals.com/robots.txt"]="User-agent: *\nAllow: /cl/"
-        pages["https://ep-equipment.com/robots.txt"]="User-agent: *\nAllow: /es/productos/"
-        pages[EP_START]=read("ep-catalog.html")
-        pages["https://ep-equipment.com/es/productos/efl181/"]=read("ep-complete.html")
-        pages["https://online.gamrentals.com/cl/producto/efl181"]=read("gam-efl181.html")
-        pages["https://ep-equipment.com/es/productos/ept20-et/"]=read("ep-without-pdf.html")
-        pages["https://online.gamrentals.com/cl/producto/ept20-et"]=read("gam-ept20-et.html")
-        return pages
+    def tearDown(self):
+        self.temp.cleanup()
 
-    def test_seed_has_exact_universe_and_families(self):
-        rows=load_seed(); self.assertEqual(39,len(rows)); self.assertTrue(all(r["target_brand"]=="EP" for r in rows))
-        self.assertEqual({r["observed_name"] for r in rows if r["disposition"]=="REVIEW"},{"SERIE X2","SERIE X3","SERIE X5","SERIE F"})
-        self.assertEqual({r["gam_listing_page"] for r in rows},set(GAM_LISTINGS))
-        self.assertIn("descrito",next(r["notes"] for r in rows if r["observed_name"]=="EPT20-ET"))
-
-    def test_exact_matching_is_conservative(self):
-        self.assertEqual(_key(" EPT20-ET "),_key("ept20 et")); self.assertNotEqual(_key("EPT20"),_key("EPT20-ET"))
-        self.assertNotEqual(_key("EFL201"),_key("EFL203")); self.assertNotEqual(_key("EPT20-30RT"),_key("EPT20-30RTS"))
-
-    def test_harvest_prefers_ep_and_gam_fills_only_missing_type(self):
-        transport=MapTransport(self.pages())
-        capture=io.StringIO(); old=sys.stdout; sys.stdout=capture
-        try: self.assertEqual(0,main(["--root",str(self.root),"harvest-ep","--allow-public-network","--request-delay","0"],transport))
-        finally: sys.stdout=old
-        summary=json.loads(capture.getvalue()); self.assertIn("LIVE-NEW",summary["added"]); self.assertIn("EFS101",summary["removed"]); self.assertEqual(0,summary["assets_downloaded"])
-        sources=read_sources(self.root/"_control/fuentes.csv"); by_model={}
-        for row in sources: by_model.setdefault(row.model,[]).append(row)
-        efl=by_model["EFL181"]; self.assertEqual({r.source_name for r in efl},{"EP"}); self.assertEqual({r.asset_type for r in efl},{"image","technical_sheet"})
-        et=by_model["EPT20-ET"]; self.assertEqual({(r.source_name,r.asset_type) for r in et},{("EP","image"),("GAM","technical_sheet")})
-        self.assertTrue(all(r.target_brand=="EP" and not r.enabled for r in sources)); self.assertFalse(any("LGMG" in str(p) or "JLG" in str(p) for p in (self.root/"_control/research").rglob("*")))
-        self.assertFalse(any((self.root/"EP/Imagenes modelos EP").iterdir())); self.assertFalse(any((self.root/"EP/fichas-tecnicas EP").iterdir()))
-
-    def test_checkpoint_resume_idempotence_and_network_guards(self):
-        transport=MapTransport(self.pages()); args=["--root",str(self.root),"harvest-ep","--allow-public-network","--request-delay","0"]
-        old=sys.stdout; sys.stdout=io.StringIO()
+    def run_main(self, transport):
+        capture = io.StringIO()
+        old = sys.stdout
+        sys.stdout = capture
         try:
-            self.assertEqual(0,main(args,transport)); snapshots={p.name:p.read_bytes() for p in (self.root/"_control/research").iterdir()}
-            second=MapTransport({}); self.assertEqual(0,main(args,second)); self.assertEqual([],second.calls)
-        finally: sys.stdout=old
-        self.assertEqual(snapshots,{p.name:p.read_bytes() for p in (self.root/"_control/research").iterdir()})
-        with self.assertRaises(ValueError): main(["--root",str(self.root),"harvest-ep"],MapTransport({}))
-        bad=self.pages(); bad[GAM_LISTINGS[0]]=Response(200,b"ok",{"content-type":"application/pdf"},"https://evil.example/x")
-        other=Path(self.temp.name)/"Other"; initialize(other,initial_files())
-        with self.assertRaises(ValueError): main(["--root",str(other),"harvest-ep","--allow-public-network","--request-delay","0"],MapTransport(bad))
+            code = main(["--root", str(self.root), "harvest-ep", "--allow-public-network", "--request-delay", "0"], transport)
+        finally:
+            sys.stdout = old
+        return code, json.loads(capture.getvalue())
 
-if __name__=="__main__": unittest.main()
+    def test_seed_has_exact_universe_and_review_families(self):
+        rows = load_seed()
+        self.assertEqual(39, len(rows))
+        self.assertEqual(FAMILIES, {row["canonical_candidate"] for row in rows if row["disposition"] == "REVIEW"})
+        self.assertEqual(35, sum(row["disposition"] == "OBSERVED" for row in rows))
+
+    def test_descriptive_title_reconciliation_and_variants(self):
+        seed = load_seed()
+        cases = {
+            "TRANSPALETA ELÉCTRICA EP EPT20": "EPT20",
+            "TRANSPALETA ELÉCTRICA EP EPT20-30RT": "EPT20-30RT",
+            "TRANSPALETA ELÉCTRICA EP EPT20-30RTS": "EPT20-30RTS",
+            "TRANSPALETA ELÉCTRICA EP EPT20-35RT": "EPT20-35RT",
+            "TRANSPALETA ELÉCTRICA EP EPT20-35RTS": "EPT20-35RTS",
+            "TRANSPALETA ELÉCTRICA EP EPT20 ET": "EPT20-ET",
+            "TRANSPALETA MANUAL EP CBY 30II": "CBY 30II",
+            "APILADOR ELÉCTRICO EP ESi161": "ESi161",
+            "APILADOR ELÉCTRICO EP KSi201": "KSi201",
+        }
+        for title, expected in cases.items():
+            with self.subTest(title=title):
+                self.assertEqual((expected, []), reconcile_title(title, seed))
+
+    def test_longest_complete_match_and_rejects_partial_or_ambiguous(self):
+        seed = load_seed()
+        self.assertEqual(("EPT20-30RTS", []), reconcile_title("EP EPT20-30RTS", seed))
+        self.assertEqual((None, []), reconcile_title("EP EPT20-30RTSX", seed))
+        model, conflicts = reconcile_title("Comparar EFL181 con EPT20", seed)
+        self.assertIsNone(model)
+        self.assertEqual({"EFL181", "EPT20"}, set(conflicts))
+
+    def test_official_card_pairs_heading_with_learn_more_and_scopes_routes(self):
+        parser = _parse(b'<article><h3>F4</h3><a href="/es/product/f4/">Aprende m\xc3\xa1s</a></article>', EP_START)
+        self.assertEqual([("F4", "https://ep-equipment.com/es/product/f4/", "")], parser.items)
+        self.assertTrue(_allowed_product("https://www.ep-equipment.com/es/product/f4/", "EP"))
+        self.assertFalse(_allowed_product("https://ep-equipment.com/es/productos/f4/", "EP"))
+        self.assertFalse(_allowed_product("https://ep-equipment.com/es/contacto/", "EP"))
+        self.assertFalse(_allowed_product("http://ep-equipment.com/es/product/f4/", "EP"))
+
+    def test_product_parser_accepts_contextual_sheet_and_excludes_chrome(self):
+        parser = _parse(full_pages()["https://ep-equipment.com/es/product/efl-181/"].encode(), "https://ep-equipment.com/es/product/efl-181/")
+        urls = {asset[1] for asset in parser.assets}
+        self.assertIn("https://cdn.ep-portal.net/efl181-main.jpg", urls)
+        self.assertIn("https://cdn.ep-portal.net/download?id=181", urls)
+        self.assertNotIn("https://ep-equipment.com/logo.jpg", urls)
+        self.assertNotIn("https://ep-equipment.com/other.jpg", urls)
+
+    def test_all_39_reconcile_and_outputs_prioritize_ep(self):
+        transport = MapTransport(full_pages())
+        code, summary = self.run_main(transport)
+        self.assertEqual(0, code)
+        self.assertEqual((39, 39, 35), (summary["live_models"], summary["matched_seed_models"], summary["concrete_models"]))
+        self.assertEqual([], summary["added"])
+        self.assertEqual([], summary["removed"])
+        self.assertEqual([], summary["ambiguous"])
+        self.assertEqual(sorted(FAMILIES), summary["review_families"])
+        self.assertEqual(0, summary["assets_downloaded"])
+        self.assertGreater(summary["sources"], 0)
+        sources = read_sources(self.root / "_control/fuentes.csv")
+        efl = [row for row in sources if row.model == "EFL181"]
+        self.assertEqual({("EP", "image"), ("EP", "technical_sheet")}, {(row.source_name, row.asset_type) for row in efl})
+        et = [row for row in sources if row.model == "EPT20-ET"]
+        self.assertEqual({("EP", "image"), ("GAM", "technical_sheet")}, {(row.source_name, row.asset_type) for row in et})
+        self.assertTrue(all(row.target_brand == "EP" and not row.enabled and "VALIDATION_DEFERRED" in row.notes for row in sources))
+        inventory = (self.root / "_control/research/ep-model-inventory.csv").read_text(encoding="utf-8-sig")
+        self.assertIn("observed_title", inventory.splitlines()[0])
+        self.assertIn("TRANSPALETA ELÉCTRICA EP EPT20 ET", inventory)
+        self.assertFalse(any((self.root / "EP/Imagenes modelos EP").iterdir()))
+        self.assertFalse(any((self.root / "EP/fichas-tecnicas EP").iterdir()))
+
+    def test_real_added_and_removed_are_post_reconciliation(self):
+        pages = full_pages()
+        pages[GAM_LISTINGS[0]] = pages[GAM_LISTINGS[0]].replace("EQUIPO INDUSTRIAL EP EFS101", "EQUIPO INDUSTRIAL EP NUEVO-99", 1)
+        pages["https://online.gamrentals.com/cl/ep/efs101"] = "<h1>NUEVO-99</h1>"
+        _, summary = self.run_main(MapTransport(pages))
+        self.assertIn("EQUIPO INDUSTRIAL EP NUEVO-99", summary["added"])
+        self.assertIn("EFS101", summary["removed"])
+
+    def test_checkpoint_v1_is_archived_then_compatible_resume_is_idempotent(self):
+        checkpoint = self.root / "_control/research/ep-harvest-checkpoint.json"
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_text('{"format_version":1,"live_items":[{"bad":"derived"}]}', encoding="utf-8")
+        first = MapTransport(full_pages())
+        self.assertEqual(0, self.run_main(first)[0])
+        archives = list(checkpoint.parent.glob("ep-harvest-checkpoint.incompatible-*.json"))
+        self.assertEqual(1, len(archives))
+        self.assertEqual(1, json.loads(archives[0].read_text())["format_version"])
+        current = json.loads(checkpoint.read_text())
+        self.assertTrue(all(current[key] == value for key, value in CHECKPOINT_VERSION.items()))
+        snapshots = {path.name: path.read_bytes() for path in checkpoint.parent.iterdir()}
+        second = MapTransport({})
+        self.assertEqual(0, self.run_main(second)[0])
+        self.assertEqual([], second.calls)
+        self.assertEqual(snapshots, {path.name: path.read_bytes() for path in checkpoint.parent.iterdir()})
+
+    def test_zero_sources_fails_structurally_and_preserves_reports(self):
+        previous = b"previous,valid,fuentes\n"
+        target = self.root / "_control/fuentes.csv"
+        target.write_bytes(previous)
+        pages = full_pages(no_assets=True)
+        pages[EP_START] = ""
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual("HARVEST_NO_ASSET_SOURCES", caught.exception.code)
+        self.assertEqual(previous, target.read_bytes())
+        self.assertFalse((self.root / "_control/research/ep-source-audit.md").exists())
+
+    def test_no_product_pages_fails_with_distinct_code(self):
+        pages = full_pages(no_assets=True)
+        pages[EP_START] = ""
+        for url in list(pages):
+            if "/cl/ep/" in url:
+                pages[url] = "<h1>modelo ajeno</h1>"
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual("HARVEST_NO_PRODUCT_PAGES", caught.exception.code)
+
+    def test_network_consent_redirect_and_brand_scope_guards(self):
+        with self.assertRaisesRegex(ValueError, "--allow-public-network"):
+            main(["--root", str(self.root), "harvest-ep"], MapTransport({}))
+        bad = full_pages()
+        bad[GAM_LISTINGS[0]] = Response(200, b"ok", {"content-type": "text/html"}, "https://evil.example/x")
+        with self.assertRaises(ValueError):
+            self.run_main(MapTransport(bad))
+        source = Path(__file__).parents[1] / "catalog_assets/ep_harvest.py"
+        text = source.read_text(encoding="utf-8")
+        self.assertNotIn('target_brand": "LGMG"', text)
+        self.assertNotIn('target_brand": "JLG"', text)
+
+
+if __name__ == "__main__":
+    unittest.main()
