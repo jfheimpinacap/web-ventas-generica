@@ -257,6 +257,57 @@ def _checkpoint(root, output, data):
     _write(output / "ep-local-import-checkpoint.json", data, root)
 
 
+def _reconcile_checkpoint(plan, cp, current, transport, token):
+    """Validate every recorded success against current remote state before writing."""
+    completed = cp.get("completed")
+    receipts = cp.get("receipts")
+    if not isinstance(completed, dict) or not isinstance(receipts, list):
+        raise EpLocalError("checkpoint incompatible")
+    receipt_ids = {row.get("key"): row.get("id") for row in receipts if isinstance(row, dict)}
+    operations = {op["model"]: op for op in plan["operations"]}
+    brand_result = completed.get("brand")
+    brand_id = plan["brand"].get("id") or (brand_result or {}).get("id")
+
+    for key, result in completed.items():
+        if not isinstance(result, dict) or not isinstance(result.get("id"), int) or receipt_ids.get(key) != result["id"]:
+            raise EpLocalError(f"checkpoint incompatible: receipt {key}")
+        if key == "brand":
+            matches = [x for x in current["brands"] if x["id"] == result["id"]]
+            valid = len(matches) == 1 and matches[0]["name"].casefold() == "ep" and matches[0]["slug"].casefold() == "ep"
+        else:
+            model, separator, step = key.rpartition(":")
+            op = operations.get(model) if separator else None
+            if not op:
+                raise EpLocalError(f"checkpoint incompatible: clave {key}")
+            products = [x for x in current["products"] if x["id"] == ((completed.get(f"{model}:product") or {}).get("id") or op["product_id"])]
+            product = products[0] if len(products) == 1 else None
+            payload = {**op["payload"], "brand_id": brand_id}
+            if step == "product":
+                matches = [x for x in current["products"] if x["id"] == result["id"]]
+                valid = len(matches) == 1 and _identity(matches[0], payload)
+            elif step == "image":
+                matches = [x for x in current["images"] if x["id"] == result["id"]]
+                valid = (product is not None and len(matches) == 1 and matches[0]["product"] == product["id"]
+                         and matches[0]["is_main"] and matches[0]["order"] == 0
+                         and _binary(transport, token, "image", matches[0], op["image"]))
+            elif step == "sheet":
+                matches = [x for x in current["sheets"] if x["id"] == result["id"]]
+                valid = len(matches) == 1 and _binary(transport, token, "technical_sheet", matches[0], op["technical_sheet"])
+            elif step == "associate":
+                sheet = completed.get(f"{model}:sheet") or {}
+                valid = product is not None and product["technical_sheet_id"] == sheet.get("id")
+            else:
+                valid = False
+        if not valid:
+            raise EpLocalError(f"deriva remota en receipt completado: {key}")
+
+    # A pending managed image could be the result of an ambiguous/foreign write.
+    for model, op in operations.items():
+        product_id = ((completed.get(f"{model}:product") or {}).get("id") or op["product_id"])
+        if product_id and f"{model}:image" not in completed and any(x["product"] == product_id for x in current["images"]):
+            raise EpLocalError(f"imagen remota incompatible antes de reanudar: {model}")
+
+
 def apply_plan(root: Path, output: Path, base_url: str, fingerprint: str, transport, token: str):
     plan = _load_plan(root, output, base_url)
     if plan["fingerprint"] != fingerprint:
@@ -270,9 +321,12 @@ def apply_plan(root: Path, output: Path, base_url: str, fingerprint: str, transp
     cp = json.loads(cp_path.read_text()) if cp_path.exists() else {"fingerprint": fingerprint, "completed": {}, "intent": None, "receipts": [], "errors": []}
     if cp.get("fingerprint") != fingerprint or cp.get("intent"):
         raise EpLocalError("checkpoint incompatible o resultado anterior ambiguo; reconciliar por GET")
+    cp.setdefault("errors", [])
+    cp.setdefault("resolved_errors", [])
     current = _observe(transport, token)
     if not cp["completed"] and current != plan["remote_snapshot"]:
         raise EpLocalError("deriva remota detectada antes de mutar")
+    _reconcile_checkpoint(plan, cp, current, transport, token)
 
     def mutate(key, method, endpoint, **kwargs):
         if key in cp["completed"]:
@@ -288,6 +342,7 @@ def apply_plan(root: Path, output: Path, base_url: str, fingerprint: str, transp
             result = transport.request(method, endpoint, token, **kwargs)
         except DefinitiveRemoteError as error:
             cp["intent"] = None
+            cp["errors"] = [row for row in cp["errors"] if row.get("key") != key]
             cp["errors"].append({"key": key, "error": str(error)})
             _checkpoint(root, output, cp)
             raise
@@ -296,6 +351,10 @@ def apply_plan(root: Path, output: Path, base_url: str, fingerprint: str, transp
             raise
         cp["completed"][key] = result
         cp["receipts"].append({"key": key, "id": result["id"]})
+        resolved = [row for row in cp["errors"] if row.get("key") == key]
+        cp["errors"] = [row for row in cp["errors"] if row.get("key") != key]
+        known = {(row.get("key"), row.get("error")) for row in cp["resolved_errors"]}
+        cp["resolved_errors"].extend(row for row in resolved if (row.get("key"), row.get("error")) not in known)
         cp["intent"] = None
         _checkpoint(root, output, cp)
         return result
@@ -308,7 +367,7 @@ def apply_plan(root: Path, output: Path, base_url: str, fingerprint: str, transp
         product_id = op["product_id"] or mutate(f"{model}:product", "POST", "/api/products", json_data={**op["payload"], "brand_id": brand_id})["id"]
         if op["upload_image"]:
             mutate(f"{model}:image", "POST", "/api/product-images", files={"image": root / op["image"]["path"]},
-                   data={"product_id": product_id, "alt_text": f"EP {model}", "is_main": True, "order": 0})
+                   data={"product": product_id, "alt_text": f"EP {model}", "is_main": True, "order": 0})
         if op["upload_sheet"]:
             sheet = mutate(f"{model}:sheet", "POST", "/api/technical-sheets/", files={"file": root / op["technical_sheet"]["path"]},
                            data={"name": f"Ficha técnica EP {model}"})
@@ -380,5 +439,17 @@ class LocalTransport:
             if error.code in {400, 401, 403, 404, 409, 422, 429}:
                 retry = error.headers.get("Retry-After", "") if error.code == 429 else ""
                 message = f"HTTP {error.code}" + (f" retry_after={int(retry)}" if retry.isdigit() else "")
+                try:
+                    payload = json.loads(error.read(4096))
+                    detail = payload.get("detail") if isinstance(payload, dict) else None
+                    if isinstance(detail, str):
+                        detail = "".join(ch for ch in detail if ch.isprintable()).strip()
+                        unsafe = re.search(r"(?i)(authorization|bearer|token|cookie|traceback|stack trace|<html|https?://[^\s]*@)", detail)
+                        if detail and len(detail) <= 240 and not unsafe:
+                            message += f" detail={detail}"
+                except (OSError, ValueError, json.JSONDecodeError):
+                    pass
+                finally:
+                    error.close()
                 raise DefinitiveRemoteError(message) from None
             raise EpLocalError(f"HTTP {error.code}; resultado ambiguo") from None
