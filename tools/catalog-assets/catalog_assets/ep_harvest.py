@@ -19,7 +19,7 @@ GAM_LISTINGS = tuple(
     for page in range(1, 5)
 )
 FAMILIES = {"SERIE X2", "SERIE X3", "SERIE X5", "SERIE F"}
-CHECKPOINT_VERSION = {"format_version": 2, "parser_version": 2, "matcher_version": 2}
+CHECKPOINT_VERSION = {"format_version": 2, "parser_version": 3, "matcher_version": 2}
 MODEL_FIELDS = ("target_brand", "model", "observed_title", "category", "official_model_name", "ep_listing_url", "ep_product_url", "gam_product_url", "ep_image_candidates", "ep_pdf_candidates", "missing_image", "missing_pdf", "gam_fallback_needed", "confidence", "status", "notes")
 CANDIDATE_FIELDS = ("target_brand", "model", "category", "asset_type", "asset_role", "source_name", "source_role", "page_url", "asset_url", "expected_mime", "expected_extension", "language", "priority", "model_evidence", "confidence", "disposition", "http_status", "observed_mime", "validation_status", "notes")
 
@@ -68,9 +68,10 @@ class PageParser(HTMLParser):
         self.items: list[tuple[str, str, str]] = []
         self.assets: list[tuple[str, str, str]] = []
         self.links: list[tuple[str, str]] = []
+        self.anchor_records: list[dict] = []
         self.visible: list[str] = []
         self._anchors: list[dict] = []
-        self._blocked = 0
+        self._stack: list[dict] = []
         self._heading: list[str] | None = None
         self._last_heading = ""
 
@@ -78,27 +79,32 @@ class PageParser(HTMLParser):
         attrs = dict(attrs)
         tag = tag.lower()
         marker = " ".join((tag, attrs.get("class", ""), attrs.get("id", ""), attrs.get("role", ""))).lower()
-        blocked = any(word in marker for word in ("nav", "footer", "related", "recommend", "logo", "banner", "flag", "icon"))
-        if blocked:
-            self._blocked += 1
+        structural = tag in {"nav", "footer", "aside"} or any(word in marker for word in ("related", "recommend"))
+        parent_blocked = any(frame["blocked"] for frame in self._stack)
+        blocked = parent_blocked or structural
+        # Void elements never enter the stack: a header logo cannot poison the
+        # remainder of a document which (correctly) has no </img> end tag.
+        if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+            self._stack.append({"tag": tag, "blocked": blocked})
         if tag == "a":
-            self._anchors.append({"attrs": attrs, "text": [], "blocked": bool(self._blocked), "depth": len(self._anchors), "blocked_here": blocked})
-        if tag in {"h2", "h3", "h4"} and not self._blocked:
+            self._anchors.append({"attrs": attrs, "text": [], "blocked": blocked})
+        if tag in {"h2", "h3", "h4"} and not blocked:
             self._heading = []
         model = attrs.get("data-model") or attrs.get("data-product-model")
         href = attrs.get("data-product-url") or (attrs.get("href") if model else None)
-        if model and href and not self._blocked:
+        if model and href and not blocked:
             self.items.append((model, href, attrs.get("data-category", "")))
-        if tag == "img" and not self._blocked:
+        if tag == "img" and not blocked:
             url = attrs.get("data-src") or attrs.get("data-large_image") or attrs.get("src")
             evidence = attrs.get("alt", "")
             image_marker = (marker + " " + evidence + " " + (url or "")).lower()
-            if url and any(word in image_marker for word in ("product", "producto", "gallery", "galeria", "woocommerce")):
+            excluded = any(word in image_marker for word in ("logo", "icon", "banner", "flag"))
+            if url and not excluded and any(word in image_marker for word in ("product", "producto", "gallery", "galeria", "woocommerce")):
                 self.assets.append(("image", url, evidence))
 
     def handle_data(self, data):
         text = " ".join(data.split())
-        if text and not self._blocked:
+        if text and not any(frame["blocked"] for frame in self._stack):
             self.visible.append(text)
         if self._anchors:
             self._anchors[-1]["text"].append(data)
@@ -114,6 +120,7 @@ class PageParser(HTMLParser):
             href = attrs.get("href", "")
             if href and not anchor["blocked"]:
                 self.links.append((text, href))
+                self.anchor_records.append({"text": text, "href": href, "attrs": dict(attrs)})
                 model = attrs.get("data-model") or attrs.get("data-product-model")
                 classes = attrs.get("class", "").lower()
                 if model or "product-card" in classes or "producto-card" in classes:
@@ -124,13 +131,15 @@ class PageParser(HTMLParser):
                 label = " ".join((text, attrs.get("title", ""), attrs.get("aria-label", ""))).lower()
                 if any(term in label for term in ("ficha técnica", "ficha tecnica", "hoja de datos")):
                     self.assets.append(("technical_sheet", href, text))
-            if anchor.get("blocked_here"):
-                self._blocked -= 1
-        elif self._blocked and tag in {"nav", "footer", "section", "aside", "div"}:
-            self._blocked -= 1
         if tag in {"h2", "h3", "h4"} and self._heading is not None:
             self._last_heading = " ".join("".join(self._heading).split())
             self._heading = None
+        # Recover from omitted/mismatched closing tags by closing through the
+        # nearest matching frame instead of maintaining a fragile counter.
+        for index in range(len(self._stack) - 1, -1, -1):
+            if self._stack[index]["tag"] == tag:
+                del self._stack[index:]
+                break
 
 
 def _parse(body: bytes, base: str) -> PageParser:
@@ -139,6 +148,10 @@ def _parse(body: bytes, base: str) -> PageParser:
     parser.items = list(dict.fromkeys((n.strip(), urljoin(base, u), c.strip()) for n, u, c in parser.items if n.strip() and u))
     parser.assets = list(dict.fromkeys((t, urljoin(base, u), e.strip()) for t, u, e in parser.assets if u))
     parser.links = list(dict.fromkeys((t, urljoin(base, u)) for t, u in parser.links if u))
+    parser.anchor_records = [
+        {**record, "href": urljoin(base, record["href"])}
+        for record in parser.anchor_records if record["href"]
+    ]
     return parser
 
 
@@ -176,7 +189,7 @@ def _allowed_product(url: str, source: str) -> bool:
         return False
     if source == "EP":
         return parsed.hostname in {"ep-equipment.com", "www.ep-equipment.com"} and bool(re.fullmatch(r"/es/product/[^/]+/?", parsed.path))
-    return parsed.hostname == "online.gamrentals.com" and parsed.path.startswith("/cl/")
+    return parsed.hostname == "online.gamrentals.com" and parsed.path.startswith("/cl/ep/")
 
 
 def _allowed_asset(url: str, source: str) -> bool:
@@ -218,7 +231,7 @@ def load_seed():
 
 
 def _new_checkpoint():
-    return {**CHECKPOINT_VERSION, "completed_listings": [], "live_items": [], "completed_ep_catalog": [], "ep_catalog_queue": [EP_START], "ep_catalog": [], "products": {}}
+    return {**CHECKPOINT_VERSION, "completed_listings": [], "listing_diagnostics": {}, "live_items": [], "completed_ep_catalog": [], "ep_catalog_queue": [EP_START], "ep_catalog": [], "products": {}}
 
 
 def _load_checkpoint(path: Path, root: Path):
@@ -257,6 +270,13 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
             authorized.add(source)
             checkpoint["robots_authorized"] = sorted(authorized)
             _save_checkpoint(checkpoint_path, checkpoint, root)
+    seed = load_seed()
+    seen_live = {
+        (model, item["url"])
+        for item in checkpoint["live_items"]
+        for model, conflicts in [reconcile_title(item["observed_title"], seed)]
+        if model and not conflicts
+    }
     for listing in GAM_LISTINGS[:max_pages]:
         if listing in completed:
             continue
@@ -264,15 +284,42 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
         requests += 1
         parsed = _parse(response.body, response.final_url)
         page = GAM_LISTINGS.index(listing) + 1
-        for position, (name, url, category) in enumerate(parsed.items, 1):
-            checkpoint["live_items"].append({"observed_title": name, "url": url, "category": category, "listing": listing, "position": position, "page": page})
+        under_ep = []
+        reconciled = []
+        ambiguous_titles = []
+        unmatched = []
+        for anchor in parsed.anchor_records:
+            split = urlsplit(anchor["href"])
+            if split.scheme != "https" or split.hostname != "online.gamrentals.com" or not split.path.startswith("/cl/ep/"):
+                continue
+            under_ep.append(anchor)
+            title = anchor["text"].strip()
+            model, conflicts = reconcile_title(title, seed)
+            if conflicts:
+                ambiguous_titles.append(title)
+            elif not model:
+                unmatched.append(title)
+            else:
+                reconciled.append(title)
+                identity = (model, anchor["href"])
+                if identity not in seen_live:
+                    checkpoint["live_items"].append({"observed_title": title, "url": anchor["href"], "category": anchor["attrs"].get("data-category", ""), "listing": listing, "position": len(checkpoint["live_items"]) + 1, "page": page})
+                    seen_live.add(identity)
+        mime = (response.headers.get("content-type") or response.headers.get("Content-Type") or "").split(";", 1)[0].lower()
+        checkpoint["listing_diagnostics"][listing] = {
+            "requested_url": listing, "http_status": response.status, "mime": mime,
+            "bytes": len(response.body), "total_anchors": len(parsed.anchor_records),
+            "ep_path_anchors": len(under_ep), "reconciled_titles": reconciled,
+            "ambiguous_titles": ambiguous_titles, "unmatched_titles": unmatched,
+        }
         checkpoint["completed_listings"].append(listing)
         completed.add(listing)
         _save_checkpoint(checkpoint_path, checkpoint, root)
         if request_delay:
             time.sleep(request_delay)
 
-    seed = load_seed()
+    if not checkpoint["live_items"]:
+        raise HarvestError("HARVEST_NO_LIVE_MODELS", "los listados GAM no produjeron candidatos de producto conciliables")
     seed_models = {row["canonical_candidate"] for row in seed}
     matched: dict[str, dict] = {}
     ambiguous = []
@@ -288,7 +335,7 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
         else:
             added.append(item["observed_title"])
     removed = sorted(seed_models - set(matched))
-    if checkpoint["live_items"] and not matched:
+    if not matched:
         raise HarvestError("HARVEST_MODEL_RECONCILIATION_FAILED", "ningún título GAM se concilió con el seed")
 
     ep_queue = list(checkpoint.get("ep_catalog_queue", [EP_START]))
@@ -319,6 +366,8 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
     candidates = []
     source_rows = []
     concrete = [row for row in seed if row["disposition"] == "OBSERVED" and row["canonical_candidate"] in matched][:max_models]
+    if not concrete:
+        raise HarvestError("HARVEST_NO_CONCRETE_MODELS", "la conciliación no produjo modelos concretos")
     gam_pages = ep_pages = 0
     for seed_row in seed:
         model = seed_row["canonical_candidate"]
@@ -367,9 +416,9 @@ def harvest_ep(root, transport, request_delay=1.0, max_pages=100, max_models=39,
             source_rows.append({"target_brand": "EP", "model": model, "source_name": source, "source_role": role, "page_url": page_url, "asset_type": kind, "asset_url": url, "priority": 0 if source == "EP" else 100, "expected_language": "es", "enabled": "false", "notes": "VALIDATION_DEFERRED; exact model page; direct asset discovered"})
         inventory.append({"target_brand": "EP", "model": model, "observed_title": live_row.get("observed_title", ""), "category": seed_row["category"], "official_model_name": matches[0][0] if len(matches) == 1 else "", "ep_listing_url": EP_START, "ep_product_url": ep_url, "gam_product_url": gam_url, "ep_image_candidates": sum(asset[0] == "image" for asset in ep_assets), "ep_pdf_candidates": sum(asset[0] == "technical_sheet" for asset in ep_assets), "missing_image": str("image" not in ep_types).lower(), "missing_pdf": str("technical_sheet" not in ep_types).lower(), "gam_fallback_needed": str(any(asset[0] not in ep_types for asset in gam_assets)).lower(), "confidence": "REVIEW" if family or len(matches) != 1 else "HIGH", "status": "FAMILY_REVIEW" if family else ("MATCHED" if len(matches) == 1 else "OFFICIAL_SOURCE_NOT_FOUND"), "notes": seed_row["notes"]})
 
-    if concrete and gam_pages + ep_pages == 0:
+    if gam_pages + ep_pages == 0:
         raise HarvestError("HARVEST_NO_PRODUCT_PAGES", "ninguna página confirmó la identidad de un modelo concreto")
-    if concrete and not source_rows:
+    if not source_rows:
         raise HarvestError("HARVEST_NO_ASSET_SOURCES", "las páginas de producto no produjeron candidatos")
 
     source_rows.sort(key=lambda row: (row["model"].casefold(), int(row["priority"]), row["asset_type"], row["asset_url"]))
