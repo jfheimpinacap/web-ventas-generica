@@ -59,7 +59,7 @@ def full_pages(no_assets=False):
         model = row["canonical_candidate"]
         slug = model.lower().replace(" ", "-")
         gam_url = f"https://online.gamrentals.com/cl/ep/{slug}"
-        groups[index % 4].append(f'<a class="product-card" data-model="{title_for(model)}" href="{gam_url}">producto</a>')
+        groups[index % 4].append(f'<article class="product-miniature"><a href="{gam_url}"><img src="mini.jpg"></a><h2 class="product-title"><a href="{gam_url}">{title_for(model)}</a></h2><a href="{gam_url}">Ver más</a></article>')
         if row["disposition"] == "OBSERVED":
             assets = "" if no_assets else f'<main><img class="product_image" src="/img/{slug}.jpg" alt="{model}"><a href="/download/{slug}">Descargar Ficha técnica</a></main>'
             pages[gam_url] = f"<h1>{title_for(model)}</h1>{assets}"
@@ -144,6 +144,33 @@ class EpHarvestTests(unittest.TestCase):
         self.assertNotIn("https://ep-equipment.com/logo.jpg", urls)
         self.assertNotIn("https://ep-equipment.com/other.jpg", urls)
 
+    def test_void_chrome_and_closed_icon_do_not_block_prestashop_product(self):
+        html = b'''<img class="logo"><img src="icon-descarga.svg"><span class="icon">x</span>
+        <nav><a href="/cl/ep/wrong">EP EFL181</a></nav><div class="banner">promo</div>
+        <article class="product-miniature"><a href="/cl/ep/efs101"><img src="mini.jpg"></a>
+        <h2 class="product-title"><a href="/cl/ep/efs101">GRUA HORQUILLA ELECTRICA EP EFS101</a></h2>
+        <a href="/cl/ep/efs101">Ver mas</a></article>
+        <footer><a href="/cl/ep/wrong">EP EPT20</a></footer>'''
+        parsed = _parse(html, "https://online.gamrentals.com/cl/826-ep")
+        self.assertEqual(
+            ["", "GRUA HORQUILLA ELECTRICA EP EFS101", "Ver mas"],
+            [anchor["text"] for anchor in parsed.anchor_records],
+        )
+
+    def test_duplicate_card_anchors_yield_one_live_model(self):
+        pages = full_pages()
+        pages.update({url: "" for url in GAM_LISTINGS})
+        pages[GAM_LISTINGS[0]] = '''<article class="product-miniature">
+        <a href="https://online.gamrentals.com/cl/ep/efs101"><img src="mini.jpg"></a>
+        <h2 class="product-title"><a href="https://online.gamrentals.com/cl/ep/efs101">GRÚA HORQUILLA ELÉCTRICA EP EFS101</a></h2>
+        <a href="https://online.gamrentals.com/cl/ep/efs101">Ver más</a></article>'''
+        summary = harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual(1, summary["live_models"])
+        checkpoint = json.loads((self.root / "_control/research/ep-harvest-checkpoint.json").read_text())
+        self.assertEqual(1, len(checkpoint["live_items"]))
+        diagnostic = checkpoint["listing_diagnostics"][GAM_LISTINGS[0]]
+        self.assertEqual((3, 3, 1), (diagnostic["total_anchors"], diagnostic["ep_path_anchors"], len(diagnostic["reconciled_titles"])))
+
     def test_all_39_reconcile_and_outputs_prioritize_ep(self):
         transport = MapTransport(full_pages())
         code, summary = self.run_main(transport)
@@ -172,19 +199,20 @@ class EpHarvestTests(unittest.TestCase):
         pages[GAM_LISTINGS[0]] = pages[GAM_LISTINGS[0]].replace("EQUIPO INDUSTRIAL EP EFS101", "EQUIPO INDUSTRIAL EP NUEVO-99", 1)
         pages["https://online.gamrentals.com/cl/ep/efs101"] = "<h1>NUEVO-99</h1>"
         _, summary = self.run_main(MapTransport(pages))
-        self.assertIn("EQUIPO INDUSTRIAL EP NUEVO-99", summary["added"])
+        self.assertNotIn("EQUIPO INDUSTRIAL EP NUEVO-99", summary["added"])
         self.assertIn("EFS101", summary["removed"])
 
-    def test_checkpoint_v1_is_archived_then_compatible_resume_is_idempotent(self):
+    def test_checkpoint_v2_is_archived_then_compatible_resume_is_idempotent(self):
         checkpoint = self.root / "_control/research/ep-harvest-checkpoint.json"
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
-        checkpoint.write_text('{"format_version":1,"live_items":[{"bad":"derived"}]}', encoding="utf-8")
+        checkpoint.write_text('{"format_version":2,"parser_version":2,"matcher_version":2,"completed_listings":["bad"],"live_items":[]}', encoding="utf-8")
         first = MapTransport(full_pages())
         self.assertEqual(0, self.run_main(first)[0])
         archives = list(checkpoint.parent.glob("ep-harvest-checkpoint.incompatible-*.json"))
         self.assertEqual(1, len(archives))
-        self.assertEqual(1, json.loads(archives[0].read_text())["format_version"])
+        self.assertEqual(2, json.loads(archives[0].read_text())["parser_version"])
         current = json.loads(checkpoint.read_text())
+        self.assertEqual(set(GAM_LISTINGS), set(current["listing_diagnostics"]))
         self.assertTrue(all(current[key] == value for key, value in CHECKPOINT_VERSION.items()))
         snapshots = {path.name: path.read_bytes() for path in checkpoint.parent.iterdir()}
         second = MapTransport({})
@@ -203,6 +231,46 @@ class EpHarvestTests(unittest.TestCase):
         self.assertEqual("HARVEST_NO_ASSET_SOURCES", caught.exception.code)
         self.assertEqual(previous, target.read_bytes())
         self.assertFalse((self.root / "_control/research/ep-source-audit.md").exists())
+
+    def test_empty_gam_fails_closed_and_preserves_sources(self):
+        previous = b"previous,valid,fuentes\n"
+        target = self.root / "_control/fuentes.csv"
+        target.write_bytes(previous)
+        pages = full_pages()
+        pages.update({url: '<nav><a href="/cl/ep/efs101">EP EFS101</a></nav>' for url in GAM_LISTINGS})
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual("HARVEST_NO_LIVE_MODELS", caught.exception.code)
+        self.assertEqual(previous, target.read_bytes())
+
+    def test_checkpoint_with_unmatched_titles_fails_reconciliation(self):
+        checkpoint = {
+            **CHECKPOINT_VERSION, "completed_listings": list(GAM_LISTINGS),
+            "listing_diagnostics": {}, "live_items": [{"observed_title": "MODELO AJENO", "url": "https://online.gamrentals.com/cl/ep/ajeno"}],
+            "completed_ep_catalog": [], "ep_catalog_queue": [EP_START], "ep_catalog": [],
+            "products": {}, "robots_authorized": ["EP", "GAM"],
+        }
+        path = self.root / "_control/research/ep-harvest-checkpoint.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport({}), request_delay=0)
+        self.assertEqual("HARVEST_MODEL_RECONCILIATION_FAILED", caught.exception.code)
+
+    def test_only_review_family_fails_without_concrete_models(self):
+        checkpoint = {
+            **CHECKPOINT_VERSION, "completed_listings": list(GAM_LISTINGS),
+            "listing_diagnostics": {}, "live_items": [{"observed_title": "EQUIPO EP SERIE X2", "url": "https://online.gamrentals.com/cl/ep/serie-x2"}],
+            "completed_ep_catalog": [], "ep_catalog_queue": [EP_START], "ep_catalog": [],
+            "products": {}, "robots_authorized": ["EP", "GAM"],
+        }
+        path = self.root / "_control/research/ep-harvest-checkpoint.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        pages = {EP_START: ""}
+        with self.assertRaises(HarvestError) as caught:
+            harvest_ep(self.root, MapTransport(pages), request_delay=0)
+        self.assertEqual("HARVEST_NO_CONCRETE_MODELS", caught.exception.code)
 
     def test_no_product_pages_fails_with_distinct_code(self):
         pages = full_pages(no_assets=True)
