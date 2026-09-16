@@ -9,9 +9,11 @@ from pathlib import Path
 from . import __version__
 from .downloader import download_one
 from .ep_harvest import CANDIDATE_FIELDS, CHECKPOINT_VERSION, FAMILIES, MODEL_FIELDS, _allowed_asset
-from .paths import safe_path
+from .naming import asset_basename
+from .paths import atomic_write, safe_path
 from .reports import INVENTORY_FIELDS, PENDING_FIELDS, write_csv, write_json
 from .sources import read_sources
+from .validation import detect_binary
 
 RESULT_FIELDS = ("source", "target_brand", "model", "asset_type", "asset_url", "page_url",
                  "path", "bytes", "sha256", "state", "detail")
@@ -95,6 +97,9 @@ def _base_summary(plan: dict, dry_run: bool) -> dict:
             "image_candidates": sum(r["asset_type"] == "image" for r in candidates),
             "technical_sheet_candidates": sum(r["asset_type"] == "technical_sheet" for r in candidates),
             "attempted": 0, "downloaded": 0, "already_present": 0, "duplicates": 0,
+            "shared_assets": 0, "materialized_from_existing": 0, "retried": 0,
+            "would_skip_present": 0, "would_materialize_shared": 0, "would_retry": 0,
+            "failed_candidates": [],
             "failed": 0, "missing_source": len(plan["missing_image"]) + len(plan["missing_sheet"]),
             "models_complete": len(plan["models"]) - len(set(plan["missing_image"] + plan["missing_sheet"])),
             "models_incomplete": len(set(plan["missing_image"] + plan["missing_sheet"])),
@@ -103,15 +108,70 @@ def _base_summary(plan: dict, dry_run: bool) -> dict:
             "requests_this_run": 0, "bytes_downloaded": 0, "dry_run": dry_run}
 
 
+SUCCESS_STATES = {"DOWNLOADED", "ALREADY_PRESENT", "DUPLICATE", "MATERIALIZED_SHARED"}
+
+
+def _verified(root: Path, row: dict) -> Path | None:
+    if not row.get("path") or not row.get("sha256"):
+        return None
+    path = safe_path(root, row["path"])
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == row["sha256"]:
+        return path
+    return None
+
+
+def _is_own_canonical(row: dict, path: Path) -> bool:
+    extension = path.suffix.lower()
+    expected = asset_basename("EP", row["model"], row["asset_type"], extension)
+    stem, suffix = Path(expected).stem, Path(expected).suffix
+    return path.name == expected or (path.name.startswith(stem + "-") and path.name.endswith(suffix))
+
+
+def _materialize(root: Path, row: dict, source: Path) -> tuple[str, str, int]:
+    data = source.read_bytes()
+    info = detect_binary(data)
+    if info.kind != row["asset_type"]:
+        raise ValueError("TYPE_MISMATCH")
+    directory = safe_path(root, "EP/" + ("Imagenes modelos EP" if info.kind == "image" else "fichas-tecnicas EP"))
+    position = 1
+    while True:
+        name = asset_basename("EP", row["model"], info.kind, info.extension, position)
+        destination = directory / name
+        if not destination.exists():
+            atomic_write(destination, data, root)
+            return destination.relative_to(root).as_posix(), info.mime, len(data)
+        if hashlib.sha256(destination.read_bytes()).hexdigest() == hashlib.sha256(data).hexdigest():
+            return destination.relative_to(root).as_posix(), info.mime, len(data)
+        position += 1
+
+
+def _resume_actions(root: Path, plan: dict, previous: list[dict], only: str) -> dict:
+    completed = {(r["model"], r["asset_type"], r["asset_url"]): r for r in previous}
+    counts = {"would_skip_present": 0, "would_materialize_shared": 0, "would_retry": 0}
+    for row in plan["candidates"]:
+        if only != "all" and row["asset_type"] != only:
+            continue
+        old = completed.get((row["model"], row["asset_type"], row["asset_url"]))
+        path = _verified(root, old) if old else None
+        if old and old["state"] in SUCCESS_STATES and path:
+            key = "would_skip_present" if _is_own_canonical(row, path) else "would_materialize_shared"
+            counts[key] += 1
+        else:
+            counts["would_retry"] += 1
+    return counts
+
+
 def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", request_delay=0.0,
                         max_files=None, max_bytes=50_000_000, timeout=30.0) -> tuple[dict, bool]:
     plan = load_ep_plan(root)
     summary = _base_summary(plan, dry_run)
-    if dry_run:
-        return summary, False
-
     report_path = safe_path(root, "_control/ep-download-results.csv")
     previous = _read_csv(report_path, RESULT_FIELDS, "DOWNLOAD_REPORT_INVALID") if report_path.exists() else []
+    if dry_run:
+        if previous:
+            summary.update(_resume_actions(root, plan, previous, only))
+        return summary, False
+
     completed = {(r["model"], r["asset_type"], r["asset_url"]): r for r in previous}
     results = []
     for model in plan["missing_image"]:
@@ -124,13 +184,22 @@ def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", req
                         "state": "MISSING_SOURCE", "detail": "harvest sin fuente"})
 
     selected = [r for r in plan["candidates"] if only == "all" or r["asset_type"] == only]
+    selected_keys = {(r["model"], r["asset_type"], r["asset_url"]) for r in selected}
+    results.extend(r for key, r in completed.items() if r.get("asset_url") and key not in selected_keys)
     for index, row in enumerate(selected):
         old = completed.get((row["model"], row["asset_type"], row["asset_url"]))
-        if old and old["state"] in {"DOWNLOADED", "ALREADY_PRESENT", "DUPLICATE"} and old["path"]:
-            path = safe_path(root, old["path"])
-            if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == old["sha256"]:
+        if old and old["state"] in SUCCESS_STATES:
+            path = _verified(root, old)
+            if path and _is_own_canonical(row, path):
                 results.append({**old, "state": "ALREADY_PRESENT", "detail": "hash confirmado; sin solicitud"})
                 summary["already_present"] += 1
+                continue
+            if path:
+                new_path, mime, size = _materialize(root, row, path)
+                results.append({**old, "path": new_path, "bytes": str(size), "state": "MATERIALIZED_SHARED",
+                                "detail": f"activo compartido materializado; detected={mime}"})
+                summary["shared_assets"] += 1
+                summary["materialized_from_existing"] += 1
                 continue
         if max_files is not None and summary["attempted"] >= max_files:
             results.append({"source": row["source_name"], "target_brand": "EP", "model": row["model"],
@@ -138,12 +207,20 @@ def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", req
                             "path": "", "bytes": "", "sha256": "", "state": "SKIPPED_LIMIT", "detail": "max-files"})
             continue
         summary["attempted"] += 1
+        if old: summary["retried"] += 1
         summary["requests_this_run"] += 1
         try:
             outcome = download_one(root, {"url": row["asset_url"], "target_brand": "EP", "model": row["model"],
-                                          "expected_kind": row["asset_type"], "allowed_source": row["source_name"]}, transport, max_bytes, timeout, 0, 0)
+                                          "expected_kind": row["asset_type"], "allowed_source": row["source_name"]}, transport, max_bytes, timeout, 0, 0,
+                                   normalize_image_mime=True)
             state = {"VALID": "DOWNLOADED", "DUPLICATE": "DUPLICATE", "DOWNLOAD_FAILED": "FAILED_NETWORK"}[outcome["state"]]
-            detail = outcome.get("error", "")
+            detail = outcome.get("error", "") or outcome.get("mime_detail", "")
+            if state == "DUPLICATE":
+                source = safe_path(root, outcome["path"])
+                new_path, mime, size = _materialize(root, row, source)
+                outcome.update(path=new_path, bytes=size)
+                state = "MATERIALIZED_SHARED"
+                detail = f"activo compartido materializado; detected={mime}"
         except ValueError as error:
             outcome = {}
             text = str(error)
@@ -159,11 +236,16 @@ def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", req
             summary["downloaded"] += 1
             summary["bytes_downloaded"] += int(outcome["bytes"])
         elif state == "DUPLICATE": summary["duplicates"] += 1
+        elif state == "MATERIALIZED_SHARED": summary["shared_assets"] += 1
         elif state in {"FAILED_NETWORK", "INVALID_BINARY", "TYPE_MISMATCH"}: summary["failed"] += 1
         if request_delay and index + 1 < len(selected): time.sleep(request_delay)
 
     write_csv(report_path, RESULT_FIELDS, results, root)
-    accepted = [r for r in results if r["state"] in {"DOWNLOADED", "ALREADY_PRESENT", "DUPLICATE"} and r["path"]]
+    summary["failed_candidates"] = [{"model": r["model"], "asset_type": r["asset_type"],
+                                     "state": r["state"], "detail": r["detail"]}
+                                    for r in sorted(results, key=lambda x: (x["model"], x["asset_type"]))
+                                    if r["state"] in {"FAILED_NETWORK", "INVALID_BINARY", "TYPE_MISMATCH"}]
+    accepted = [r for r in results if r["state"] in SUCCESS_STATES and r["path"]]
     manifest_path = safe_path(root, "_control/manifest.json")
     try: old_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError): old_manifest = {}
@@ -174,7 +256,7 @@ def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", req
                "configuration": {"command": "download-ep-harvest", "max_bytes": max_bytes},
                "accepted_files": all_accepted, "hashes": {r["path"]: r["sha256"] for r in all_accepted},
                "sources": old_manifest.get("sources", []), "associations": old_manifest.get("associations", []),
-               "pending": [r for r in results if r["state"] not in {"DOWNLOADED", "ALREADY_PRESENT", "DUPLICATE"}], "errors": []}, root)
+               "pending": [r for r in results if r["state"] not in SUCCESS_STATES], "errors": []}, root)
     checksum_path = safe_path(root, "_control/checksums.csv")
     old_checksums = _read_csv(checksum_path, ("ruta_relativa", "sha256", "bytes"), "CHECKSUMS_INVALID") if checksum_path.exists() else []
     checksums = {r["ruta_relativa"]: r for r in old_checksums}
@@ -184,7 +266,7 @@ def download_ep_harvest(root: Path, transport, *, dry_run=False, only="all", req
     pending_path = safe_path(root, "pendientes-revision.csv")
     old_pending = _read_csv(pending_path, PENDING_FIELDS, "PENDING_INVALID") if pending_path.exists() else []
     pending = [r for r in old_pending if r.get("marca_sugerida") != "EP"]
-    for i, r in enumerate((x for x in results if x["state"] not in {"DOWNLOADED", "ALREADY_PRESENT", "DUPLICATE"}), 1):
+    for i, r in enumerate((x for x in results if x["state"] not in SUCCESS_STATES), 1):
         pending.append({"id": f"ep-download-{i:04d}", "marca_sugerida": "EP", "modelo_sugerido": r["model"],
                         "tipo": r["asset_type"], "motivo": r["state"], "fuente": r["source"],
                         "pagina_origen": r["page_url"], "url_original": r["asset_url"], "ruta_relativa": r["path"],

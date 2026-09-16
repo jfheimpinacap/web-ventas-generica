@@ -14,7 +14,8 @@ def target_dir(root: Path, brand: str, kind: str) -> Path:
     folder = f"{brand}/{'Imagenes modelos '+brand if kind == 'image' else 'fichas-tecnicas '+brand}"
     return safe_path(root, folder)
 
-def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, timeout=30, retries=2, pause=0.0, pending=False):
+def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, timeout=30, retries=2,
+                 pause=0.0, pending=False, normalize_image_mime=False):
     url=candidate["url"]; validate_public_url(url, transport.resolve)
     partial=safe_path(root, "_control/parciales/"+hashlib.sha256(url.encode()).hexdigest()+".part")
     for attempt in range(retries+1):
@@ -36,7 +37,10 @@ def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, t
                 raise ValueError("TYPE_MISMATCH")
             headers={str(key).lower():value for key,value in response.headers.items()}
             declared=(headers.get("content-type") or "").split(";",1)[0].lower()
-            if declared and declared not in {info.mime,"application/octet-stream","binary/octet-stream"}: raise ValueError("MIME_CONFLICT")
+            permitted={info.mime,"application/octet-stream","binary/octet-stream"}
+            normalized=bool(normalize_image_mime and info.kind=="image" and declared.startswith("image/"))
+            if declared and declared not in permitted and not normalized:
+                raise ValueError(f"MIME_CONFLICT: declared={declared}; detected={info.mime}")
             content_length=headers.get("content-length")
             if content_length and response.status == 200 and int(content_length) != len(response.body):
                 raise ValueError("INVALID_BINARY: respuesta truncada")
@@ -52,7 +56,9 @@ def download_one(root: Path, candidate: dict, transport, max_bytes=50_000_000, t
             else:
                 destination=next_path(target_dir(root,candidate["target_brand"],info.kind),candidate["target_brand"],candidate["model"],info.kind,info.extension)
             atomic_write(destination,data,root); partial.unlink(missing_ok=True)
-            return {"state":"VALID","path":destination.relative_to(root).as_posix(),"sha256":digest,"bytes":len(data),"mime":info.mime,"status":response.status,"final_url":response.final_url,"original_name":Path(urlsplit(url).path).name}
+            mime_detail=f"declared={declared or '<absent>'}; detected={info.mime}"
+            if normalized: mime_detail += "; normalized=image-subtype"
+            return {"state":"VALID","path":destination.relative_to(root).as_posix(),"sha256":digest,"bytes":len(data),"mime":info.mime,"declared_mime":declared,"mime_detail":mime_detail,"status":response.status,"final_url":response.final_url,"original_name":Path(urlsplit(url).path).name}
         except (OSError, TimeoutError) as error:
             if attempt == retries: return {"state":"DOWNLOAD_FAILED","error":str(error)}
             time.sleep(pause)
