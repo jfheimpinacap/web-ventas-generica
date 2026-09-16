@@ -143,3 +143,20 @@ python3 -m compileall catalog_assets tests
 ```
 
 Usan `TemporaryDirectory` y transporte falso: no abren sockets ni consultan páginas reales.
+
+## Recolección local EP/GAM
+
+`harvest-ep` prepara fuentes para los 39 productos observados en GAM Chile, sin descargar los
+activos finales:
+
+```text
+python -m catalog_assets --root <RUTA_MAQUINAS> harvest-ep --allow-public-network
+```
+
+El comando admite `--request-delay` (1 s), `--max-pages` (100), `--max-models` (39),
+`--max-bytes` (5 MiB por HTML) y `--timeout` (20 s). Consulta únicamente la entrada oficial EP
+y las cuatro páginas GAM declaradas, escribe un checkpoint reanudable en
+`_control/research/ep-harvest-checkpoint.json` y actualiza atómicamente el inventario, candidatos,
+auditoría y `_control/fuentes.csv`. EP es primaria y GAM solo fallback del tipo ausente. Las URLs
+de activos quedan deshabilitadas hasta su validación binaria controlada; el comando no escribe
+en las carpetas de imágenes o fichas.
