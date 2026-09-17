@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 using JemNexus.Api.Data;
+using JemNexus.Api.Authorization;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
@@ -42,39 +43,39 @@ public static class CommercialWriteEndpoints
             .RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite)
             .WithTags("Commercial write");
 
-        group.MapPost("/categories", CreateCategoryAsync).WithName("CommercialCategoriesCreate").WithOpenApi();
-        group.MapMethods("/categories/{id:int}", ["PUT", "PATCH"], UpdateCategoryAsync).WithName("CommercialCategoriesUpdate");
-        group.MapDelete("/categories/{id:int}", DeleteCategoryAsync).WithName("CommercialCategoriesDelete").WithOpenApi();
+        group.MapPost("/categories", CreateCategoryAsync).RequirePermission(AppPermissions.CategoriesCreate).WithName("CommercialCategoriesCreate").WithOpenApi();
+        group.MapMethods("/categories/{id:int}", ["PUT", "PATCH"], UpdateCategoryAsync).RequirePermission(AppPermissions.CategoriesUpdate).WithName("CommercialCategoriesUpdate");
+        group.MapDelete("/categories/{id:int}", DeleteCategoryAsync).RequirePermission(AppPermissions.CategoriesDelete).WithName("CommercialCategoriesDelete").WithOpenApi();
 
-        group.MapPost("/brands", CreateBrandAsync).WithName("CommercialBrandsCreate").WithOpenApi();
-        group.MapMethods("/brands/{id:int}", ["PUT", "PATCH"], UpdateBrandAsync).WithName("CommercialBrandsUpdate");
-        group.MapDelete("/brands/{id:int}", DeleteBrandAsync).WithName("CommercialBrandsDelete").WithOpenApi();
+        group.MapPost("/brands", CreateBrandAsync).RequirePermission(AppPermissions.BrandsCreate).WithName("CommercialBrandsCreate").WithOpenApi();
+        group.MapMethods("/brands/{id:int}", ["PUT", "PATCH"], UpdateBrandAsync).RequirePermission(AppPermissions.BrandsUpdate).WithName("CommercialBrandsUpdate");
+        group.MapDelete("/brands/{id:int}", DeleteBrandAsync).RequirePermission(AppPermissions.BrandsDelete).WithName("CommercialBrandsDelete").WithOpenApi();
 
-        group.MapPost("/suppliers", CreateSupplierAsync).WithName("CommercialSuppliersCreate").WithOpenApi();
-        group.MapMethods("/suppliers/{id:int}", ["PUT", "PATCH"], UpdateSupplierAsync).WithName("CommercialSuppliersUpdate");
-        group.MapDelete("/suppliers/{id:int}", DeleteSupplierAsync).WithName("CommercialSuppliersDelete").WithOpenApi();
+        group.MapPost("/suppliers", CreateSupplierAsync).RequirePermission(AppPermissions.SuppliersCreate).WithName("CommercialSuppliersCreate").WithOpenApi();
+        group.MapMethods("/suppliers/{id:int}", ["PUT", "PATCH"], UpdateSupplierAsync).RequirePermission(AppPermissions.SuppliersUpdate).WithName("CommercialSuppliersUpdate");
+        group.MapDelete("/suppliers/{id:int}", DeleteSupplierAsync).RequirePermission(AppPermissions.SuppliersDelete).WithName("CommercialSuppliersDelete").WithOpenApi();
 
-        group.MapPost("/promotions", CreatePromotionAsync).WithName("CommercialPromotionsCreate").WithOpenApi();
-        group.MapMethods("/promotions/{id:int}", ["PUT", "PATCH"], UpdatePromotionAsync).WithName("CommercialPromotionsUpdate");
-        group.MapDelete("/promotions/{id:int}", DeletePromotionAsync).WithName("CommercialPromotionsDelete").WithOpenApi();
+        group.MapPost("/promotions", CreatePromotionAsync).RequirePermission(AppPermissions.PromotionsCreate).WithName("CommercialPromotionsCreate").WithOpenApi();
+        group.MapMethods("/promotions/{id:int}", ["PUT", "PATCH"], UpdatePromotionAsync).RequirePermission(AppPermissions.PromotionsUpdate).WithName("CommercialPromotionsUpdate");
+        group.MapDelete("/promotions/{id:int}", DeletePromotionAsync).RequirePermission(AppPermissions.PromotionsDelete).WithName("CommercialPromotionsDelete").WithOpenApi();
 
-        group.MapPost("/products", CreateProductAsync).WithName("CommercialProductsCreate").WithOpenApi();
-        group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).WithName("CommercialProductsUpdate");
-        group.MapDelete("/products/{idOrSlug}", DeleteProductAsync).WithName("CommercialProductsDelete").WithOpenApi();
+        group.MapPost("/products", CreateProductAsync).RequirePermission(AppPermissions.ProductsCreate).WithName("CommercialProductsCreate").WithOpenApi();
+        group.MapMethods("/products/{idOrSlug}", ["PUT", "PATCH"], UpdateProductAsync).RequirePermission(AppPermissions.ProductsUpdate).WithName("CommercialProductsUpdate");
+        group.MapDelete("/products/{idOrSlug}", DeleteProductAsync).RequirePermission(AppPermissions.ProductsDelete).WithName("CommercialProductsDelete").WithOpenApi();
 
-        group.MapPost("/product-images", CreateProductImageAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload).WithName("CommercialProductImagesCreate").WithOpenApi();
-        group.MapMethods("/product-images/{id:int}", ["PUT", "PATCH"], UpdateProductImageAsync).WithName("CommercialProductImagesUpdate");
-        group.MapDelete("/product-images/{id:int}", DeleteProductImageAsync).WithName("CommercialProductImagesDelete").WithOpenApi();
+        group.MapPost("/product-images", CreateProductImageAsync).RequirePermission(AppPermissions.ProductImagesManage).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload).WithName("CommercialProductImagesCreate").WithOpenApi();
+        group.MapMethods("/product-images/{id:int}", ["PUT", "PATCH"], UpdateProductImageAsync).RequirePermission(AppPermissions.ProductImagesManage).WithName("CommercialProductImagesUpdate");
+        group.MapDelete("/product-images/{id:int}", DeleteProductImageAsync).RequirePermission(AppPermissions.ProductImagesManage).WithName("CommercialProductImagesDelete").WithOpenApi();
 
-        group.MapPost("/product-specs", CreateProductSpecAsync).WithName("CommercialProductSpecsCreate").WithOpenApi();
-        group.MapMethods("/product-specs/{id:int}", ["PUT", "PATCH"], UpdateProductSpecAsync).WithName("CommercialProductSpecsUpdate");
-        group.MapDelete("/product-specs/{id:int}", DeleteProductSpecAsync).WithName("CommercialProductSpecsDelete").WithOpenApi();
+        group.MapPost("/product-specs", CreateProductSpecAsync).RequirePermission(AppPermissions.ProductSpecsManage).WithName("CommercialProductSpecsCreate").WithOpenApi();
+        group.MapMethods("/product-specs/{id:int}", ["PUT", "PATCH"], UpdateProductSpecAsync).RequirePermission(AppPermissions.ProductSpecsManage).WithName("CommercialProductSpecsUpdate");
+        group.MapDelete("/product-specs/{id:int}", DeleteProductSpecAsync).RequirePermission(AppPermissions.ProductSpecsManage).WithName("CommercialProductSpecsDelete").WithOpenApi();
 
-        group.MapPatch("/quote-requests/{id:int}", UpdateQuoteRequestAsync).WithName("CommercialQuoteRequestsUpdate").WithOpenApi();
+        group.MapPatch("/quote-requests/{id:int}", UpdateQuoteRequestAsync).RequirePermission(AppPermissions.QuoteRequestsUpdate).WithName("CommercialQuoteRequestsUpdate").WithOpenApi();
 
-        group.MapPost("/home-section-items", CreateHomeSectionItemAsync).WithName("CommercialHomeSectionItemsCreate").WithOpenApi();
-        group.MapMethods("/home-section-items/{id:int}", ["PUT", "PATCH"], UpdateHomeSectionItemAsync).WithName("CommercialHomeSectionItemsUpdate");
-        group.MapDelete("/home-section-items/{id:int}", DeleteHomeSectionItemAsync).WithName("CommercialHomeSectionItemsDelete").WithOpenApi();
+        group.MapPost("/home-section-items", CreateHomeSectionItemAsync).RequirePermission(AppPermissions.HomeSectionsCreate).WithName("CommercialHomeSectionItemsCreate").WithOpenApi();
+        group.MapMethods("/home-section-items/{id:int}", ["PUT", "PATCH"], UpdateHomeSectionItemAsync).RequirePermission(AppPermissions.HomeSectionsUpdate).WithName("CommercialHomeSectionItemsUpdate");
+        group.MapDelete("/home-section-items/{id:int}", DeleteHomeSectionItemAsync).RequirePermission(AppPermissions.HomeSectionsDelete).WithName("CommercialHomeSectionItemsDelete").WithOpenApi();
 
         return app;
     }

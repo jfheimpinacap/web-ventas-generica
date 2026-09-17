@@ -595,3 +595,42 @@ Toda escritura permanece protegida con Bearer y `RequireCommercialWrite`. No se 
 ### Advertencias operacionales
 
 No ejecutar `dotnet ef database update` contra producción sin aprobación explícita, backup verificado, revisión de connection string y ventana de mantenimiento. Las publicaciones futuras deben generarse con el flujo de ZIP seguro existente, sin incluir ni sobrescribir el `web.config` productivo y sin commitear credenciales ni archivos `.env.local`.
+
+## Permisos granulares del backend
+
+Los únicos roles técnicos son `seller` y `support_admin`. El segundo representa al
+superadministrador y obtiene todos los permisos conocidos por rol, incluido el reservado
+`users.manage`, sin filas persistidas. Un vendedor activo conserva lectura de los módulos
+comerciales (excepto Usuarios), pero cada escritura exige una fila exacta en
+`AppUserPermissions`. Ni `IsStaff` ni `IsSuperuser` conceden acceso a roles desconocidos.
+La autenticación y el handler de permisos consultan el usuario y los permisos vigentes en
+la base en cada solicitud, por lo que una revocación se aplica sin renovar el JWT.
+
+El catálogo operativo es: `products.create`, `products.update`, `products.delete`,
+`product_images.manage`, `product_specs.manage`, `technical_sheets.create`,
+`technical_sheets.update`, `technical_sheets.delete`, `categories.create`,
+`categories.update`, `categories.delete`, `brands.create`, `brands.update`,
+`brands.delete`, `suppliers.create`, `suppliers.update`, `suppliers.delete`,
+`customers.create`, `customers.update`, `customers.set_status`,
+`quote_requests.update`, `commercial_quotes.issue`, `quote_notifications.test`,
+`promotions.create`, `promotions.update`, `promotions.delete`,
+`home_sections.create`, `home_sections.update` y `home_sections.delete`.
+`users.manage` está reservado y nunca es efectivo para un vendedor.
+
+La migración concede inicialmente todo el catálogo operativo a vendedores existentes,
+incluso inactivos. El seed idempotente y el endpoint de creación hacen lo mismo para
+vendedores nuevos. Login, refresh y `/api/auth/me` exponen `permissions`, ordenado y
+filtrado; los permisos no se incorporan al JWT. Productos, categorías/subcategorías,
+marcas, proveedores, promociones y portada tienen permisos separados de crear,
+actualizar y eliminar; imágenes y especificaciones usan sus permisos `manage`; las
+fichas separan crear, actualizar (renombrar/reemplazar) y eliminar; clientes separan
+crear, actualizar y cambiar estado; solicitudes, emisión y prueba de notificación usan
+sus permisos dedicados. La administración de usuarios sigue limitada por
+`RequireSupportAdmin`, y eliminar un usuario continúa siendo desactivación reversible.
+
+La autorización de `commercial_quotes.issue` admite al superadministrador, pero la regla
+de negocio vigente todavía exige una identidad de vendedor activa con `SellerCode`; una
+identidad administrativa que no lo tenga falla de forma segura. La resolución de esa
+identidad corresponde a la normalización de cuentas posterior. La matriz visual llegará
+en el Prompt 329 y la normalización en el Prompt 330; este cambio no crea, renombra ni
+modifica cuentas reales.

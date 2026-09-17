@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.RateLimiting;
 using JemNexus.Api.Data;
+using JemNexus.Api.Authorization;
 using JemNexus.Api.Options;
 using JemNexus.Api.Dtos;
 using JemNexus.Api.Models;
@@ -16,14 +17,14 @@ public static class TechnicalSheetEndpoints
 
     public static IEndpointRouteBuilder MapTechnicalSheetEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/technical-sheets").RequireAuthorization("RequireCommercialWrite");
+        var group = endpoints.MapGroup("/api/technical-sheets").RequireAuthorization("RequireCommercialRead");
         group.MapGet("/", ListAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("/", CreateAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
-        group.MapPatch("/{id:int}", RenameAsync);
-        group.MapPost("/{id:int}/file", ReplaceFileAsync).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
+        group.MapPost("/", CreateAsync).RequirePermission(AppPermissions.TechnicalSheetsCreate).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
+        group.MapPatch("/{id:int}", RenameAsync).RequirePermission(AppPermissions.TechnicalSheetsUpdate);
+        group.MapPost("/{id:int}/file", ReplaceFileAsync).RequirePermission(AppPermissions.TechnicalSheetsUpdate).DisableAntiforgery().RequireRateLimiting(RateLimitPolicies.Upload);
         group.MapGet("/{id:int}/file", DownloadAsync).RequireRateLimiting(RateLimitPolicies.Download);
-        group.MapDelete("/{id:int}", DeleteAsync);
+        group.MapDelete("/{id:int}", DeleteAsync).RequirePermission(AppPermissions.TechnicalSheetsDelete);
         return endpoints;
     }
 

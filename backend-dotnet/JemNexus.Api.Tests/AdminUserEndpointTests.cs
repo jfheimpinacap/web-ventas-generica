@@ -92,12 +92,14 @@ public sealed class AdminUserEndpointTests
         Assert.DoesNotContain(NewPassword, body);
 
         using var scope = factory.Services.CreateScope();
-        var stored = await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.SingleAsync(user => user.Username == "new.seller");
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        var stored = await db.AppUsers.SingleAsync(user => user.Username == "new.seller");
         Assert.NotEqual(NewPassword, stored.PasswordHash);
         Assert.StartsWith("AQAAAA", stored.PasswordHash);
         Assert.NotNull(stored.SellerCode);
         Assert.Equal("+56 9 1234 5678", stored.Phone);
         Assert.Contains($"\"seller_code\":\"{stored.SellerCode}\"", body);
+        Assert.Equal(AppPermissions.SellerGrantable, await db.AppUserPermissions.Where(value => value.UserId == stored.Id).Select(value => value.Permission).OrderBy(value => value).ToListAsync());
 
         using var loginClient = factory.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(loginClient, "new.seller", NewPassword)).StatusCode);

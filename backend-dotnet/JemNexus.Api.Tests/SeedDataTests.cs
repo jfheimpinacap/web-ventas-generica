@@ -37,6 +37,7 @@ public sealed class SeedDataTests
         Assert.True(seller.IsStaff);
         Assert.False(seller.IsSuperuser);
         Assert.Matches("^VEN-[0-9]{4,}$", seller.SellerCode!);
+        Assert.Equal(AppPermissions.SellerGrantable.Length, await dbContext.AppUserPermissions.CountAsync());
     }
 
     [Fact]
@@ -89,6 +90,8 @@ public sealed class SeedDataTests
 
         await SeedData.SeedUsersAsync(services, environment);
         await AssertSeededUsersCountAsync(services, expectedCount: 2);
+        using (var permissionScope = services.CreateScope())
+            Assert.Equal(AppPermissions.SellerGrantable.Length, await permissionScope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUserPermissions.CountAsync());
 
         using var scope = services.CreateScope();
         var users = await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.ToListAsync();

@@ -45,6 +45,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.Equal(AppRoles.Seller, payload.User.Role);
         Assert.True(payload.User.IsStaff);
         Assert.Matches("^VEN-[0-9]{4,}$", payload.User.SellerCode!);
+        Assert.Equal(AppPermissions.SellerGrantable, payload.User.Permissions);
     }
 
     [Theory]
@@ -96,6 +97,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.Equal("demo", user.Username);
         Assert.Equal(AppRoles.Seller, user.Role);
         Assert.Equal(login.User.SellerCode, user.SellerCode);
+        Assert.Equal(AppPermissions.SellerGrantable, user.Permissions);
         Assert.DoesNotContain(jwt.Claims, claim => claim.Type.Contains("seller_code", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -115,6 +117,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         Assert.False(string.IsNullOrWhiteSpace(payload.Access));
         Assert.False(string.IsNullOrWhiteSpace(payload.Refresh));
         Assert.NotEqual(login.Refresh, payload.Refresh);
+        Assert.Equal(AppPermissions.SellerGrantable, payload.User.Permissions);
     }
 
     [Fact]
@@ -344,6 +347,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
         var login = await ReadSuccessfulJsonAsync<LoginPayload>(
             await client.PostAsJsonAsync("/api/auth/login", new { username = "support", password = TestPassword }));
         Assert.Null(login.User.SellerCode);
+        Assert.Equal(AppPermissions.All, login.User.Permissions);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Access);
         var me = await ReadSuccessfulJsonAsync<UserPayload>(await client.GetAsync("/api/auth/me"));
         Assert.Null(me.SellerCode);
@@ -413,6 +417,6 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
     }
 
     private sealed record LoginPayload(string Access, string Refresh, UserPayload User);
-    private sealed record RefreshPayload(string Access, string Refresh);
-    private sealed record UserPayload(int Id, string Username, [property: JsonPropertyName("seller_code")] string? SellerCode, string? Email, string? Phone, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser);
+    private sealed record RefreshPayload(string Access, string Refresh, UserPayload User);
+    private sealed record UserPayload(int Id, string Username, [property: JsonPropertyName("seller_code")] string? SellerCode, string? Email, string? Phone, string Role, [property: JsonPropertyName("is_staff")] bool IsStaff, [property: JsonPropertyName("is_superuser")] bool IsSuperuser, IReadOnlyList<string> Permissions);
 }
