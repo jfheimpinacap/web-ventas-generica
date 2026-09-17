@@ -7,6 +7,7 @@ using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services.ProductImages;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
