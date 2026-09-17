@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using JemNexus.Api.Contracts.Admin;
+using JemNexus.Api.Authorization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
@@ -25,7 +26,7 @@ public static class AdminCommercialQuoteEndpoints
         group.MapGet("/{id:int}/pdf", GetPdfAsync)
             .RequireRateLimiting(RateLimitPolicies.Download)
             .WithName("AdminCommercialQuotePdf");
-        group.MapPost("/issue", IssueAsync).RequireRateLimiting(RateLimitPolicies.QuoteIssue).RequireAuthorization(policy => policy.RequireRole(AppRoles.Seller));
+        group.MapPost("/issue", IssueAsync).RequirePermission(AppPermissions.CommercialQuotesIssue).RequireRateLimiting(RateLimitPolicies.QuoteIssue);
         return endpoints;
     }
 

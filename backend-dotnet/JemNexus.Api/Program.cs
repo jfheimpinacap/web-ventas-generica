@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using JemNexus.Api.Contracts.Auth;
+using JemNexus.Api.Authorization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Endpoints;
 using JemNexus.Api.Middleware;
@@ -193,17 +194,11 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser()
             .RequireAssertion(context =>
                 context.User.IsInRole(AppRoles.Seller)
-                || context.User.IsInRole(AppRoles.SupportAdmin)
-                || context.User.HasClaim("is_staff", "true")
-                || context.User.HasClaim("is_superuser", "true")));
+                || context.User.IsInRole(AppRoles.SupportAdmin)));
 
     options.AddPolicy("RequireCommercialWrite", policy =>
         policy.RequireAuthenticatedUser()
-            .RequireAssertion(context =>
-                context.User.IsInRole(AppRoles.Seller)
-                || context.User.IsInRole(AppRoles.SupportAdmin)
-                || context.User.HasClaim("is_staff", "true")
-                || context.User.HasClaim("is_superuser", "true")));
+            .RequireRole(AppRoles.Seller, AppRoles.SupportAdmin));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -211,6 +206,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddScoped<IEffectivePermissionService, EffectivePermissionService>();
 builder.Services.AddScoped<ISellerCodeGenerator, SellerCodeGenerator>();
 builder.Services.AddScoped<IQuoteNotificationService, SmtpQuoteNotificationService>();
 builder.Services.AddSingleton<ITechnicalSheetStorage, LocalTechnicalSheetStorage>();
@@ -339,6 +336,7 @@ static async Task<IResult> LoginAsync(
     JemNexusDbContext dbContext,
     IPasswordHasherService passwordHasher,
     IJwtTokenService jwtTokenService,
+    IEffectivePermissionService permissionService,
     CancellationToken cancellationToken)
 {
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
@@ -369,13 +367,15 @@ static async Task<IResult> LoginAsync(
     dbContext.AppRefreshTokens.Add(refreshToken);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    return Results.Ok(new LoginResponse(tokenPair.Access, tokenPair.Refresh, AuthUserResponse.FromUser(user)));
+    var permissions = await permissionService.GetAsync(user, cancellationToken);
+    return Results.Ok(new LoginResponse(tokenPair.Access, tokenPair.Refresh, AuthUserResponse.FromUser(user, permissions)));
 }
 
 static async Task<IResult> RefreshAsync(
     RefreshRequest request,
     JemNexusDbContext dbContext,
     IJwtTokenService jwtTokenService,
+    IEffectivePermissionService permissionService,
     CancellationToken cancellationToken)
 {
     if (string.IsNullOrWhiteSpace(request.Refresh))
@@ -446,7 +446,8 @@ static async Task<IResult> RefreshAsync(
         return Results.Unauthorized();
     }
 
-    return Results.Ok(new RefreshResponse(tokenPair.Access, tokenPair.Refresh));
+    var permissions = await permissionService.GetAsync(refreshToken.User, cancellationToken);
+    return Results.Ok(new RefreshResponse(tokenPair.Access, tokenPair.Refresh, AuthUserResponse.FromUser(refreshToken.User, permissions)));
 }
 
 static async Task<IResult> LogoutAsync(
@@ -530,7 +531,7 @@ static async Task RevokeRefreshTokenFamilyAsync(
     }
 }
 
-static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext dbContext, CancellationToken cancellationToken)
+static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext dbContext, IEffectivePermissionService permissionService, CancellationToken cancellationToken)
 {
     var userIdValue = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
     if (!int.TryParse(userIdValue, out var userId))
@@ -544,7 +545,8 @@ static async Task<IResult> MeAsync(ClaimsPrincipal principal, JemNexusDbContext 
         return Results.Unauthorized();
     }
 
-    return Results.Ok(AuthUserResponse.FromUser(user));
+    var permissions = await permissionService.GetAsync(user, cancellationToken);
+    return Results.Ok(AuthUserResponse.FromUser(user, permissions));
 }
 
 static string[] GetAllowedOrigins(IConfiguration configuration)

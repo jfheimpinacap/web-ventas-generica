@@ -18,4 +18,5 @@ public sealed class AppUser
     public DateTimeOffset UpdatedAt { get; set; }
 
     public ICollection<AppRefreshToken> RefreshTokens { get; set; } = new List<AppRefreshToken>();
+    public ICollection<AppUserPermission> Permissions { get; set; } = new List<AppUserPermission>();
 }

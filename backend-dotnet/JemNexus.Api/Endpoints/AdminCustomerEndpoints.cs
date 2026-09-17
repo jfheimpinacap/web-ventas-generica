@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using JemNexus.Api.Contracts.Admin;
+using JemNexus.Api.Authorization;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Options;
@@ -23,10 +24,10 @@ public static partial class AdminCustomerEndpoints
         var group = endpoints.MapGroup("/api/admin/customers").RequireAuthorization("RequireSellerOrSupportAdmin").WithTags("Admin customers");
         group.MapGet("", SearchAsync);
         group.MapGet("/{id:int}", GetAsync);
-        group.MapPost("", CreateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
-        group.MapPut("/{id:int}", UpdateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
-        group.MapPost("/{id:int}/deactivate", DeactivateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
-        group.MapPost("/{id:int}/reactivate", ReactivateAsync).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPost("", CreateAsync).RequirePermission(AppPermissions.CustomersCreate).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPut("/{id:int}", UpdateAsync).RequirePermission(AppPermissions.CustomersUpdate).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPost("/{id:int}/deactivate", DeactivateAsync).RequirePermission(AppPermissions.CustomersSetStatus).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
+        group.MapPost("/{id:int}/reactivate", ReactivateAsync).RequirePermission(AppPermissions.CustomersSetStatus).RequireRateLimiting(RateLimitPolicies.AuthenticatedWrite);
         return endpoints;
     }
 

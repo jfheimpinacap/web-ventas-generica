@@ -17,14 +17,15 @@ public sealed record AuthUserResponse(
     string? Phone,
     string Role,
     [property: JsonPropertyName("is_staff")] bool IsStaff,
-    [property: JsonPropertyName("is_superuser")] bool IsSuperuser)
+    [property: JsonPropertyName("is_superuser")] bool IsSuperuser,
+    IReadOnlyList<string> Permissions)
 {
-    public static AuthUserResponse FromUser(AppUser user)
+    public static AuthUserResponse FromUser(AppUser user, IReadOnlyList<string> permissions)
     {
-        return new AuthUserResponse(user.Id, user.Username, user.SellerCode, user.Email, user.Phone, user.Role, user.IsStaff, user.IsSuperuser);
+        return new AuthUserResponse(user.Id, user.Username, user.SellerCode, user.Email, user.Phone, user.Role, user.IsStaff, user.IsSuperuser, permissions);
     }
 }
 
 public sealed record LoginResponse(string Access, string Refresh, AuthUserResponse User);
 
-public sealed record RefreshResponse(string Access, string Refresh);
+public sealed record RefreshResponse(string Access, string Refresh, AuthUserResponse User);

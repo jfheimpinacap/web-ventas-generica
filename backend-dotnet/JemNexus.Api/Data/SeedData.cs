@@ -57,10 +57,20 @@ public static class SeedData
             updateExistingPassword: options.UpdateExistingPasswords,
             cancellationToken);
 
-        if (sellerCreated || supportCreated)
+        var permissionChanges = await EnsureSellerPermissionsAsync(dbContext, cancellationToken);
+        if (sellerCreated || supportCreated || permissionChanges)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static async Task<bool> EnsureSellerPermissionsAsync(JemNexusDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var sellers = await dbContext.AppUsers.Include(user => user.Permissions)
+            .Where(user => user.Role == AppRoles.Seller).ToListAsync(cancellationToken);
+        var before = dbContext.ChangeTracker.Entries<AppUserPermission>().Count(entry => entry.State == EntityState.Added);
+        foreach (var seller in sellers) DefaultSellerPermissions.EnsureAssigned(seller);
+        return dbContext.ChangeTracker.Entries<AppUserPermission>().Count(entry => entry.State == EntityState.Added) > before;
     }
 
     private static async Task<bool> SeedUserAsync(
@@ -89,12 +99,15 @@ public static class SeedData
         var normalizedUsername = username.Trim();
         var existingUser = dbContext.AppUsers.Local
             .FirstOrDefault(user => string.Equals(user.Username, normalizedUsername, StringComparison.Ordinal));
-        existingUser ??= await dbContext.AppUsers
+        existingUser ??= await dbContext.AppUsers.Include(user => user.Permissions)
             .FirstOrDefaultAsync(user => user.Username == normalizedUsername, cancellationToken);
 
         if (existingUser is not null)
         {
             var changed = false;
+            var permissionCount = existingUser.Permissions.Count;
+            DefaultSellerPermissions.EnsureAssigned(existingUser);
+            changed |= existingUser.Permissions.Count != permissionCount;
             if (role == AppRoles.Seller && existingUser.SellerCode is null)
             {
                 existingUser.SellerCode = await sellerCodeGenerator.GenerateAsync(cancellationToken);
@@ -132,6 +145,7 @@ public static class SeedData
             IsSuperuser = isSuperuser
         };
         user.PasswordHash = passwordHasher.HashPassword(user, password);
+        DefaultSellerPermissions.EnsureAssigned(user);
 
         dbContext.AppUsers.Add(user);
         logger.LogInformation("SeedUsers {SeedName} created.", seedName);

@@ -8,6 +8,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
 {
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<AppRefreshToken> AppRefreshTokens => Set<AppRefreshToken>();
+    public DbSet<AppUserPermission> AppUserPermissions => Set<AppUserPermission>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -87,6 +88,7 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             .IncrementsBy(1);
 
         ConfigureAppUser(modelBuilder);
+        ConfigureAppUserPermission(modelBuilder);
         ConfigureAppRefreshToken(modelBuilder);
         ConfigureCategory(modelBuilder);
         ConfigureBrand(modelBuilder);
@@ -253,6 +255,18 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.ToTable(table => table.HasCheckConstraint(
                 "CK_AppUsers_Role_SellerCode",
                 "([Role] = 'seller' AND [SellerCode] IS NOT NULL) OR ([Role] <> 'seller' AND [SellerCode] IS NULL)"));
+        });
+    }
+
+    private static void ConfigureAppUserPermission(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AppUserPermission>(entity =>
+        {
+            entity.ToTable("AppUserPermissions");
+            entity.HasKey(value => new { value.UserId, value.Permission });
+            entity.Property(value => value.Permission).HasMaxLength(AppPermissions.MaxLength).IsRequired();
+            entity.HasOne(value => value.User).WithMany(user => user.Permissions)
+                .HasForeignKey(value => value.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

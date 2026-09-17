@@ -84,6 +84,14 @@ namespace JemNexus.Api.Data.Migrations
                     b.ToTable("AppRefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("JemNexus.Api.Models.AppUserPermission", b =>
+                {
+                    b.Property<int>("UserId").HasColumnType("int");
+                    b.Property<string>("Permission").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.HasKey("UserId", "Permission");
+                    b.ToTable("AppUserPermissions", (string)null);
+                });
+
             modelBuilder.Entity("JemNexus.Api.Models.AppUser", b =>
                 {
                     b.Property<int>("Id")
@@ -1086,6 +1094,16 @@ namespace JemNexus.Api.Data.Migrations
                     b.ToTable("Suppliers", (string)null);
                 });
 
+            modelBuilder.Entity("JemNexus.Api.Models.AppUserPermission", b =>
+                {
+                    b.HasOne("JemNexus.Api.Models.AppUser", "User")
+                        .WithMany("Permissions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("JemNexus.Api.Models.AppRefreshToken", b =>
                 {
                     b.HasOne("JemNexus.Api.Models.AppUser", "User")
@@ -1358,6 +1376,8 @@ namespace JemNexus.Api.Data.Migrations
 
             modelBuilder.Entity("JemNexus.Api.Models.AppUser", b =>
                 {
+                    b.Navigation("Permissions");
+
                     b.Navigation("RefreshTokens");
                 });
 

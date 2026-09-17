@@ -87,6 +87,7 @@ public static partial class AdminUserEndpoints
             IsSuperuser = false
         };
         user.PasswordHash = hasher.HashPassword(user, request.Password!);
+        DefaultSellerPermissions.EnsureAssigned(user);
         db.AppUsers.Add(user);
 
         var failure = await SaveWithUniqueConflictAsync(db, ct);
