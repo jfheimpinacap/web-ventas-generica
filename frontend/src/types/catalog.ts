@@ -233,6 +233,7 @@ export interface AuthUser {
   is_superuser: boolean
   role?: string
   roles?: string[] | string
+  permissions: string[]
 }
 
 export interface ProductQueryParams {

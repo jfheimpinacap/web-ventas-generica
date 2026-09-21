@@ -56,6 +56,7 @@ export function normalizeAuthUser(user?: RawAuthUser | null): AuthUser | undefin
     is_superuser: normalizeBoolean(user.is_superuser ?? user.isSuperuser ?? user.isSuperUser),
     role: typeof user.role === 'string' ? user.role : typeof user.userRole === 'string' ? user.userRole : user.user_role,
     roles: user.roles,
+    permissions: Array.from(new Set(Array.isArray(user.permissions) ? user.permissions.filter((value): value is string => typeof value === 'string') : [])).sort(),
   }
 }
 
@@ -96,10 +97,16 @@ function requireAuthUser(user?: AuthUser) {
 
 export function canAccessSellerPanel(user?: AuthUser) {
   if (!user) return false
-  if (user.is_staff || user.is_superuser) return true
-
   const roles = getUserRoles(user)
-  return roles.some((role) => ['seller', 'support_admin', 'admin', 'staff'].includes(role))
+  return roles.some((role) => role === 'seller' || role === 'support_admin')
+}
+
+export function hasPermission(user: AuthUser | undefined, permission: string) {
+  return Boolean(user?.permissions.includes(permission))
+}
+
+export function hasAnyPermission(user: AuthUser | undefined, permissions: readonly string[]) {
+  return permissions.some((permission) => hasPermission(user, permission))
 }
 
 export function normalizeAuthResponse(response: AuthResponse): AuthTokens {
