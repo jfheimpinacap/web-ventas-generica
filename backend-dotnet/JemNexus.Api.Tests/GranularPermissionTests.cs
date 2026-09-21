@@ -17,7 +17,9 @@ public sealed class GranularPermissionTests
         Assert.Equal(AppPermissions.All.Length, AppPermissions.All.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(AppPermissions.All.Order(StringComparer.Ordinal), AppPermissions.All);
         Assert.DoesNotContain(AppPermissions.UsersManage, AppPermissions.SellerGrantable);
-        Assert.Equal([AppPermissions.UsersManage], AppPermissions.Reserved);
+        Assert.Equal(
+            AppPermissions.UsersManage,
+            Assert.Single(AppPermissions.Reserved));
         Assert.All(AppPermissions.SellerGrantable, value => Assert.True(AppPermissions.IsKnown(value)));
         Assert.False(AppPermissions.IsKnown(" products.create"));
         Assert.False(AppPermissions.IsKnown("PRODUCTS.CREATE"));
