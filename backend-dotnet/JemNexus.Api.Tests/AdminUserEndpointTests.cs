@@ -251,9 +251,11 @@ public sealed class AdminUserEndpointTests
     {
         await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
         var payload = JsonDocument.Parse(await admin.GetStringAsync("/api/admin/users/permission-catalog")).RootElement;
-        Assert.Equal([AppRoles.Seller, AppRoles.SupportAdmin], payload.GetProperty("roles").EnumerateArray().Select(value => value.GetString()).ToArray());
+        var roles = ReadRequiredStringArray(payload.GetProperty("roles"));
+        Assert.Equal(new[] { AppRoles.Seller, AppRoles.SupportAdmin }, roles);
         Assert.Equal(29, payload.GetProperty("seller_grantable").GetArrayLength());
-        Assert.Equal([AppPermissions.UsersManage], payload.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()).ToArray());
+        var reserved = ReadRequiredStringArray(payload.GetProperty("reserved"));
+        Assert.Equal(new[] { AppPermissions.UsersManage }, reserved);
     }
 
     [Theory]
@@ -319,6 +321,12 @@ public sealed class AdminUserEndpointTests
     {
         Content = new StringContent("{}", Encoding.UTF8, "application/json")
     };
+
+    private static string[] ReadRequiredStringArray(JsonElement array) => array.EnumerateArray().Select(value =>
+    {
+        Assert.Equal(JsonValueKind.String, value.ValueKind);
+        return value.GetString() ?? throw new InvalidOperationException("Expected a non-null JSON string.");
+    }).ToArray();
 
     private static async Task<LoginPayload> AuthenticateAsync(HttpClient client, string username, string password)
     {
