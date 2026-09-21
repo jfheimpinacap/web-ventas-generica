@@ -178,7 +178,7 @@ public sealed class CommercialPublicQuoteEndpointTests : IDisposable
     public sealed class CommercialPublicQuoteApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("CommercialPublicQuoteEndpointTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
         private readonly CapturingQuoteNotificationService _notificationService;
 
         public CommercialPublicQuoteApiFactory(CapturingQuoteNotificationService notificationService)

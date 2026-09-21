@@ -807,7 +807,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         private readonly Action<DbContextOptionsBuilder>? _configureDbContext;
         private readonly string _publicBasePath;
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("CommercialWriteEndpointTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
         private readonly string _uploadRoot = Path.Combine(Path.GetTempPath(), "jemnexus-product-images-" + Guid.NewGuid().ToString("N"));
 
         public CommercialWriteApiFactory(

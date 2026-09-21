@@ -1,32 +1,26 @@
 using JemNexus.Api.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace JemNexus.Api.Tests;
 
 internal static class InMemoryTestDatabase
 {
+    private static readonly InMemoryDatabaseRoot SharedDatabaseRoot = new();
+
     public static string CreateDatabaseName(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 
-    public static InMemoryDatabaseRoot CreateDatabaseRoot() => new();
+    public static InMemoryDatabaseRoot GetSharedDatabaseRoot() => SharedDatabaseRoot;
 
     public static void Configure(DbContextOptionsBuilder options, string databaseName, InMemoryDatabaseRoot databaseRoot)
     {
-        options
-            .UseInMemoryDatabase(databaseName, databaseRoot)
-            .ConfigureWarnings(warnings =>
-            {
-                // Tests intentionally create isolated InMemory stores per factory/service provider.
-                // Do not share UseInternalServiceProvider because UseInMemoryDatabase options vary per test database.
-                warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning);
-            });
+        options.UseInMemoryDatabase(databaseName, databaseRoot);
     }
 
     public static DbContextOptions<JemNexusDbContext> CreateOptions(string databaseName)
     {
         var builder = new DbContextOptionsBuilder<JemNexusDbContext>();
-        Configure(builder, databaseName, CreateDatabaseRoot());
+        Configure(builder, databaseName, GetSharedDatabaseRoot());
         return builder.Options;
     }
 }

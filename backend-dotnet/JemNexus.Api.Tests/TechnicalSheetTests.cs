@@ -375,7 +375,7 @@ public sealed class TechnicalSheetTests : IDisposable
     public sealed class TechnicalSheetApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("TechnicalSheetTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
         public FakeTechnicalSheetStorage Storage { get; } = new();
         public TechnicalSheetPersistenceFailureInterceptor PersistenceFailure { get; } = new();
         protected override void ConfigureWebHost(IWebHostBuilder builder)
