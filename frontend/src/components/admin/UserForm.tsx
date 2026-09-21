@@ -1,21 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../services/api'
 import { getUserPermissionCatalog, type ManagedRole, type ManagedUserWrite, type UserPermissionCatalog } from '../../services/adminUsersApi'
+import { getPermissionMetadata, PERMISSION_GROUPS } from '../../auth/permissionMetadata'
+import { buildManagedUserPayload } from './userFormPayload'
 
 export interface UserFormFields { username: string; email: string; fullName: string; phone: string; password: string; confirmation: string; role: ManagedRole; permissions: string[] }
 export const EMPTY_USER_FORM: UserFormFields = { username: '', email: '', fullName: '', phone: '', password: '', confirmation: '', role: 'seller', permissions: [] }
-const groups: Array<[string, string[]]> = [
-  ['Productos', ['products.']], ['Imágenes de productos', ['product_images.']], ['Especificaciones', ['product_specs.']],
-  ['Fichas técnicas', ['technical_sheets.']], ['Categorías y subcategorías', ['categories.']], ['Marcas', ['brands.']],
-  ['Proveedores', ['suppliers.']], ['Clientes', ['customers.']], ['Solicitudes de cotización', ['quote_requests.']],
-  ['Cotizaciones comerciales', ['commercial_quotes.']], ['Notificaciones', ['quote_notifications.']], ['Promociones', ['promotions.']],
-  ['Secciones/ofertas de portada', ['home_sections.']], ['Otros permisos', []],
-]
-const labels: Record<string, string> = { create: 'Crear', update: 'Editar', delete: 'Desactivar', manage: 'Administrar', set_status: 'Cambiar estado', issue: 'Emitir', test: 'Enviar prueba' }
-const permissionLabel = (permission: string) => {
-  const segments = permission.split('.')
-  return labels[segments[segments.length - 1]] ?? permission
-}
 const usernamePattern = /^[\p{L}\p{N}._-]+$/u
 type Errors = Partial<Record<'username' | 'email' | 'fullName' | 'phone' | 'password' | 'confirmation', string>>
 
@@ -40,7 +30,8 @@ export function safeUserMutationError(error: unknown) {
   return 'No fue posible completar la operación. Intenta nuevamente.'
 }
 
-interface Props { initialFields: UserFormFields; passwordRequired: boolean; mode: 'create' | 'edit' | 'reactivate'; currentSession?: boolean; onSubmit: (payload: ManagedUserWrite, clearSensitive: () => void) => Promise<void>; onCancel: () => void }
+export type UserFormMode = 'create' | 'edit' | 'reactivate'
+interface Props { initialFields: UserFormFields; passwordRequired: boolean; mode: UserFormMode; currentSession?: boolean; onSubmit: (payload: ManagedUserWrite, clearSensitive: () => void) => Promise<void>; onCancel: () => void }
 export function UserForm({ initialFields, passwordRequired, mode, currentSession = false, onSubmit, onCancel }: Props) {
   const [fields, setFields] = useState(initialFields); const [catalog, setCatalog] = useState<UserPermissionCatalog | null>(null)
   const [errors, setErrors] = useState<Errors>({}); const [generalError, setGeneralError] = useState<string | null>(null); const [submitting, setSubmitting] = useState(false)
@@ -59,8 +50,7 @@ export function UserForm({ initialFields, passwordRequired, mode, currentSession
     else if (fields.password && (fields.password.length < 12 || fields.password.length > 128 || !/[A-Z]/.test(fields.password) || !/[a-z]/.test(fields.password) || !/\d/.test(fields.password) || !/[^\p{L}\p{N}]/u.test(fields.password))) next.password = 'Usa entre 12 y 128 caracteres, con mayúscula, minúscula, número y símbolo.'
     if ((passwordRequired || fields.password) && fields.confirmation !== fields.password) next.confirmation = 'Las contraseñas no coinciden.'
     setErrors(next); const first = Object.keys(next)[0] as keyof Errors | undefined; if (first) { refs.current[first]?.focus(); return }
-    const allowed = new Set(catalog.seller_grantable); const payload: ManagedUserWrite = { username, email: email || null, full_name: fields.fullName.trim() || null, phone: fields.phone.trim() || null, role: fields.role, permissions: fields.role === 'seller' ? fields.permissions.filter((item) => allowed.has(item)) : [] }
-    if (fields.password) payload.password = fields.password; if (mode === 'reactivate') payload.is_active = true
+    const payload = buildManagedUserPayload(fields, catalog, mode)
     setSubmitting(true); setGeneralError(null)
     try { await onSubmit(payload, () => setFields((current) => ({ ...current, password: '', confirmation: '' }))) }
     catch (error) { setFields((current) => ({ ...current, password: '', confirmation: '' })); setGeneralError(safeUserMutationError(error)) }
@@ -69,10 +59,8 @@ export function UserForm({ initialFields, passwordRequired, mode, currentSession
   const field = (key: keyof Errors, label: string, type = 'text') => <div className="admin-user-field"><label htmlFor={key}>{label}</label><input ref={(node) => { refs.current[key] = node }} id={key} type={type} autoComplete={type === 'password' ? 'new-password' : undefined} value={String(fields[key])} onChange={(event) => setText(key, event.target.value)} aria-invalid={Boolean(errors[key])} />{errors[key] ? <span className="admin-field-error">{errors[key]}</span> : null}</div>
   return <form className="admin-user-form-page" onSubmit={(event) => void submit(event)} noValidate>
     <div aria-live="assertive">{generalError ? <p className="ui-note ui-note--error">{generalError}</p> : null}</div>
-    <section className="admin-block"><h2>Datos de acceso</h2><div className="admin-user-form-grid">{field('username', 'Nombre de usuario')}{field('email', 'Correo electrónico (opcional)', 'email')}{field('password', mode === 'edit' ? 'Nueva contraseña (opcional)' : 'Contraseña nueva', 'password')}{field('confirmation', 'Confirmar contraseña', 'password')}</div></section>
-    <section className="admin-block"><h2>Información del usuario</h2><div className="admin-user-form-grid">{field('fullName', 'Nombre completo (opcional)')}{field('phone', 'Teléfono (opcional)', 'tel')}</div></section>
-    <section className="admin-block"><h2>Rol</h2><div className="admin-user-field"><label htmlFor="role">Rol de acceso</label><select id="role" value={fields.role} disabled={currentSession} onChange={(event) => setFields((current) => ({ ...current, role: event.target.value as ManagedRole }))}><option value="seller">Vendedor</option><option value="support_admin">Superadministrador</option></select></div>{currentSession ? <p className="ui-note">No puedes desactivar ni cambiar el rol de tu sesión actual.</p> : null}</section>
-    {fields.role === 'support_admin' ? <section className="admin-block"><h2>Permisos</h2><p className="ui-note">El superadministrador posee acceso total y puede administrar usuarios.</p></section> : <section className="admin-block admin-permissions"><div className="admin-permissions__header"><div><h2>Permisos del vendedor</h2><p>{fields.permissions.length} de {catalog?.seller_grantable.length ?? 29} seleccionados</p></div><div><button type="button" className="btn btn--secondary" onClick={() => setFields((current) => ({ ...current, permissions: catalog?.seller_grantable ?? [] }))}>Seleccionar todos</button><button type="button" className="btn btn--secondary" onClick={() => setFields((current) => ({ ...current, permissions: [] }))}>Quitar todos</button></div></div>{!catalog ? <p className="ui-note">Cargando permisos…</p> : <div className="admin-permission-grid">{groups.map(([name, prefixes]) => { const knownPrefixes = groups.flatMap(([, values]) => values); const permissions = catalog.seller_grantable.filter((permission) => prefixes.length ? prefixes.some((prefix) => permission.startsWith(prefix)) : !knownPrefixes.some((prefix) => permission.startsWith(prefix))); return permissions.length ? <fieldset key={name}><legend>{name}</legend>{permissions.map((permission) => <label key={permission}><input type="checkbox" checked={fields.permissions.includes(permission)} onChange={() => toggle(permission)} /><span>{permissionLabel(permission)}<small>{permission}</small></span></label>)}</fieldset> : null })}</div>}</section>}
+    <section className="admin-block admin-access-block"><h2>Datos de acceso</h2><div className="admin-user-form-grid">{field('username', 'Nombre de usuario')}{field('email', 'Correo electrónico (opcional)', 'email')}{field('password', mode === 'edit' ? 'Nueva contraseña (opcional)' : 'Contraseña nueva', 'password')}{field('confirmation', 'Confirmar contraseña', 'password')}<div className="admin-user-field"><label htmlFor="role">Rol de acceso</label><select id="role" value={fields.role} disabled={currentSession} onChange={(event) => setFields((current) => ({ ...current, role: event.target.value as ManagedRole }))}><option value="seller">Vendedor</option><option value="support_admin">Superadministrador</option></select></div></div>{currentSession ? <p className="ui-note">No puedes desactivar ni cambiar el rol de tu sesión actual.</p> : null}</section>
+    {fields.role === 'support_admin' ? <section className="admin-block"><h2>Permisos de la cuenta</h2><p className="ui-note">El superadministrador posee acceso total y puede administrar usuarios.</p></section> : <section className="admin-block admin-permissions"><div className="admin-permissions__header"><div><h2>Permisos de la cuenta</h2><p>{fields.permissions.length} de {catalog?.seller_grantable.length ?? 29} seleccionados</p></div><div><button type="button" className="btn btn--secondary" onClick={() => setFields((current) => ({ ...current, permissions: catalog?.seller_grantable ?? [] }))}>Seleccionar todos</button><button type="button" className="btn btn--secondary" onClick={() => setFields((current) => ({ ...current, permissions: [] }))}>Quitar todos</button></div></div>{!catalog ? <p className="ui-note">Cargando permisos…</p> : <div className="admin-permission-grid">{PERMISSION_GROUPS.map((group) => { const permissions = catalog.seller_grantable.filter((permission) => getPermissionMetadata(permission).group === group); return permissions.length ? <fieldset key={group}><legend>{group}</legend>{permissions.map((permission, index) => { const metadata = getPermissionMetadata(permission); const descriptionId = `permission-${PERMISSION_GROUPS.indexOf(group)}-${index}-description`; return <label key={permission}><input type="checkbox" checked={fields.permissions.includes(permission)} onChange={() => toggle(permission)} aria-describedby={descriptionId} /><span><strong>{metadata.label}</strong><small id={descriptionId}>{metadata.description}</small></span></label> })}</fieldset> : null })}</div>}</section>}
     <div className="admin-user-form__actions"><button className="btn btn--secondary" type="button" onClick={onCancel} disabled={submitting}>Cancelar</button><button className="btn btn--accent" type="submit" disabled={submitting || !catalog}>{submitting ? 'Guardando…' : mode === 'create' ? 'Crear usuario' : mode === 'reactivate' ? 'Guardar y reactivar' : 'Guardar cambios'}</button></div>
   </form>
 }
