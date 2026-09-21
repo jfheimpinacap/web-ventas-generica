@@ -84,7 +84,7 @@ function QuoteRequestsView() {
 
 
   const onStatusChange = async (item: QuoteRequestAdmin, nextStatus: QuoteStatus) => {
-    if (item.status === nextStatus) return
+    if (!mayUpdate || item.status === nextStatus) return
 
     try {
       setUpdatingId(item.id)
@@ -219,8 +219,8 @@ function QuoteRequestsView() {
                     <select
                       className="quote-status-select"
                       value={item.status}
-                      onChange={(event) => void onStatusChange(item, event.target.value as QuoteStatus)} disabled={!mayUpdate}
-                      disabled={updatingId === item.id}
+                      onChange={(event) => void onStatusChange(item, event.target.value as QuoteStatus)}
+                      disabled={!mayUpdate || updatingId === item.id}
                       aria-label={`Cambiar estado de cotización ${item.id}`}
                     >
                       {Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => (
