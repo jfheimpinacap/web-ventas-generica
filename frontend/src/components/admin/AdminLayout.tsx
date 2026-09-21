@@ -4,7 +4,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../../services/authApi'
 import { AdminIcon, type AdminIconName } from './AdminIcon'
 import { useAdminUser } from './ProtectedRoute'
-import { isSupportAdmin } from '../../services/authApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
 
 const adminMenu: { to: string; label: string; icon: AdminIconName }[] = [
   { to: '/admin/productos', label: 'Productos', icon: 'box' },
@@ -125,7 +125,7 @@ export function AdminLayout({ children }: PropsWithChildren) {
               <AdminIcon name={item.icon} /><span>{item.label}</span>
             </NavLink>
           ))}
-          {isSupportAdmin(currentUser ?? undefined) ? (
+          {can(currentUser ?? undefined, PERMISSIONS.usersManage) ? (
             <NavLink to="/admin/usuarios" className="admin-nav-link" onClick={closeMobileMenu}>
               <AdminIcon name="users" /><span>Usuarios</span>
             </NavLink>

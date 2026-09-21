@@ -6,6 +6,8 @@ import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { useSystemDialog } from '../../context/SystemDialogContext'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deactivateCustomer, listCustomers, reactivateCustomer, type CustomerStatus } from '../../services/customerProfilesApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import type { CustomerProfile } from '../../types/commercialQuote'
 import { formatChileanRutInput } from '../../utils/chileanRut'
 
@@ -13,6 +15,8 @@ const PAGE_SIZE = 20
 const statusValues = new Set<CustomerStatus>(['active', 'inactive', 'all'])
 
 export function AdminCustomersPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.customersCreate), mayUpdate = can(user, PERMISSIONS.customersUpdate), maySetStatus = can(user, PERMISSIONS.customersSetStatus)
   const { requestConfirmation } = useSystemDialog()
   const [params, setParams] = useSearchParams()
   const search = params.get('search')?.trim() ?? ''
@@ -76,7 +80,7 @@ export function AdminCustomersPage() {
   const pages = Math.ceil(data.count / PAGE_SIZE)
 
   return <AdminLayout>
-    <AdminPageHeader title="Clientes" actions={<Link className="btn btn--accent" to={`/admin/clientes/nuevo${returnQuery ? `?return=${encodeURIComponent(returnQuery)}` : ''}`}>Crear cliente</Link>} />
+    <AdminPageHeader title="Clientes" actions={mayCreate ? <Link className="btn btn--accent" to={`/admin/clientes/nuevo${returnQuery ? `?return=${encodeURIComponent(returnQuery)}` : ''}`}>Crear cliente</Link> : undefined} />
     <section className="admin-customer-filters admin-block" aria-label="Filtros de clientes">
       <form className="admin-inline-search" role="search" onSubmit={event => { event.preventDefault(); updateParams({ search: query.trim(), page: 1 }) }}>
         <label><span>Buscar clientes</span><span className="admin-inline-search"><input className="admin-search" value={query} maxLength={200} placeholder="Razón social o RUT" onChange={event => setQuery(event.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" aria-label="Buscar clientes" title="Buscar"><AdminIcon name="search" /></button></span></label>
@@ -86,8 +90,8 @@ export function AdminCustomersPage() {
     {feedback ? <p className="ui-note ui-note--success" role="status" aria-live="polite">{feedback}</p> : null}
     {error ? <div className="ui-note ui-note--error" role="alert"><p>{error}</p><button className="btn btn--secondary" type="button" onClick={() => void load()}>Reintentar</button></div> : null}
     {loading ? <p className="ui-note" aria-busy="true">Cargando clientes…</p> : null}
-    {!loading && !error && !data.results.length ? <div className="admin-block"><p>{search || status !== 'all' ? 'No existen coincidencias para los filtros actuales.' : 'No existen clientes registrados.'}</p>{!search && status === 'all' ? <Link className="btn btn--accent" to="/admin/clientes/nuevo">Crear cliente</Link> : null}</div> : null}
-    {!loading && !error && data.results.length ? <div className="admin-table-wrapper"><table className="admin-table admin-table--customers"><thead><tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col">Nombre de contacto</th><th scope="col">Correo</th><th scope="col">Teléfono</th><th scope="col">Comuna o ciudad</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead><tbody>{data.results.map(customer => <tr key={customer.id}><td>{customer.businessName}</td><td>{formatChileanRutInput(customer.rut)}</td><td>{customer.contactName || 'No informado'}</td><td className="admin-customer-email">{customer.email || 'No informado'}</td><td>{customer.phone || 'No informado'}</td><td>{customer.cityOrCommune || 'No informado'}</td><td><span className={`badge ${customer.isActive ? 'badge--ok' : 'badge--muted'}`}>{customer.isActive ? 'Activo' : 'Inactivo'}</span></td><td><div className="admin-table-actions"><Link className="table-action" aria-disabled={busy.has(customer.id)} to={`/admin/clientes/${customer.id}/editar${returnQuery ? `?return=${encodeURIComponent(returnQuery)}` : ''}`}><AdminIcon name="edit" />Editar</Link><button className={`table-action table-action--button ${customer.isActive ? 'table-action--danger' : ''}`} type="button" disabled={busy.has(customer.id)} onClick={() => void mutate(customer, !customer.isActive)}>{customer.isActive ? 'Desactivar' : 'Reactivar'}</button></div></td></tr>)}</tbody></table></div> : null}
+    {!loading && !error && !data.results.length ? <div className="admin-block"><p>{search || status !== 'all' ? 'No existen coincidencias para los filtros actuales.' : 'No existen clientes registrados.'}</p>{!search && status === 'all' && mayCreate ? <Link className="btn btn--accent" to="/admin/clientes/nuevo">Crear cliente</Link> : null}</div> : null}
+    {!loading && !error && data.results.length ? <div className="admin-table-wrapper"><table className="admin-table admin-table--customers"><thead><tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col">Nombre de contacto</th><th scope="col">Correo</th><th scope="col">Teléfono</th><th scope="col">Comuna o ciudad</th><th scope="col">Estado</th>{(mayUpdate || maySetStatus) ? <th scope="col">Acciones</th> : null}</tr></thead><tbody>{data.results.map(customer => <tr key={customer.id}><td>{customer.businessName}</td><td>{formatChileanRutInput(customer.rut)}</td><td>{customer.contactName || 'No informado'}</td><td className="admin-customer-email">{customer.email || 'No informado'}</td><td>{customer.phone || 'No informado'}</td><td>{customer.cityOrCommune || 'No informado'}</td><td><span className={`badge ${customer.isActive ? 'badge--ok' : 'badge--muted'}`}>{customer.isActive ? 'Activo' : 'Inactivo'}</span></td>{(mayUpdate || maySetStatus) ? <td><div className="admin-table-actions">{mayUpdate ? <Link className="table-action" aria-disabled={busy.has(customer.id)} to={`/admin/clientes/${customer.id}/editar${returnQuery ? `?return=${encodeURIComponent(returnQuery)}` : ''}`}><AdminIcon name="edit" />Editar</Link> : null}{maySetStatus ? <button className={`table-action table-action--button ${customer.isActive ? 'table-action--danger' : ''}`} type="button" disabled={busy.has(customer.id)} onClick={() => void mutate(customer, !customer.isActive)}>{customer.isActive ? 'Desactivar' : 'Reactivar'}</button> : null}</div></td> : null}</tr>)}</tbody></table></div> : null}
     {pages > 1 ? <nav className="admin-pagination" aria-label="Paginación de clientes"><button className="btn btn--secondary" disabled={page <= 1 || loading} onClick={() => updateParams({ page: page - 1 })}>Anterior</button><span>Página {page} de {pages}</span><button className="btn btn--secondary" disabled={page >= pages || loading} onClick={() => updateParams({ page: page + 1 })}>Siguiente</button></nav> : null}
   </AdminLayout>
 }

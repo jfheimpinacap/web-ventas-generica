@@ -7,9 +7,13 @@ import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteCategory, getAdminCategories } from '../../services/adminApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import type { Category } from '../../types/catalog'
 
 export function AdminCategoriesPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.categoriesCreate), mayUpdate = can(user, PERMISSIONS.categoriesUpdate), mayDelete = can(user, PERMISSIONS.categoriesDelete)
   const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<Category[]>([])
   const [selectedRootId, setSelectedRootId] = useState<number | null>(null)
@@ -72,7 +76,7 @@ export function AdminCategoriesPage() {
     <AdminLayout>
       <AdminPageHeader title="Categorías" actions={
         <div className="admin-page-header__toolbar">
-          <Link to="/admin/categorias/nueva" className="btn btn--accent">Crear categoría principal</Link>
+          {mayCreate ? <Link to="/admin/categorias/nueva" className="btn btn--accent">Crear categoría principal</Link> : null}
           <select className="admin-search" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as 'active' | 'inactive' | 'all')} aria-label="Filtrar por estado">
             <option value="active">Solo activas</option>
             <option value="inactive">Solo inactivas</option>
@@ -97,7 +101,7 @@ export function AdminCategoriesPage() {
                   <tr key={item.id} className={item.id === selectedRootId ? 'admin-table__row--selected' : ''}>
                     <td><button type="button" className="admin-category-selector" onClick={() => setSelectedRootId(item.id)}>{item.name}</button></td>
                     <td>{renderStatus(item)}</td>
-                    <td><div className="admin-table-actions"><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button></div></td>
+                    <td>{(mayUpdate || mayDelete) ? <div className="admin-table-actions">{mayUpdate ? <Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link> : null}{mayDelete ? <button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button> : null}</div> : null}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -105,12 +109,12 @@ export function AdminCategoriesPage() {
           </section>
 
           <section className="admin-compact-list admin-compact-list--categories">
-            <AdminPageHeader className="admin-page-header--section" title={<>Subcategorías{selectedRoot ? ` de ${selectedRoot.name}` : ''}</>} actions={selectedRoot ? <Link to={`/admin/categorias/nueva?parent=${selectedRoot.id}`} className="btn btn--accent">Crear subcategoría</Link> : undefined} />
+            <AdminPageHeader className="admin-page-header--section" title={<>Subcategorías{selectedRoot ? ` de ${selectedRoot.name}` : ''}</>} actions={selectedRoot && mayCreate ? <Link to={`/admin/categorias/nueva?parent=${selectedRoot.id}`} className="btn btn--accent">Crear subcategoría</Link> : undefined} />
             {!selectedRoot ? <p className="ui-note">Selecciona una categoría principal para administrar sus subcategorías.</p> : null}
             {selectedRoot && subcategories.length === 0 ? <p className="ui-note">Sin subcategorías para esta categoría principal.</p> : null}
             {selectedRoot && subcategories.length > 0 ? (
               <div className="admin-table-wrapper admin-table-wrapper--compact"><table className="admin-table admin-table--compact"><thead><tr><th scope="col">Nombre</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead><tbody>{subcategories.map((item) => (
-                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td><div className="admin-table-actions"><Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link><button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button></div></td></tr>
+                <tr key={item.id}><td>{item.name}</td><td>{renderStatus(item)}</td><td>{(mayUpdate || mayDelete) ? <div className="admin-table-actions">{mayUpdate ? <Link className="table-action" to={`/admin/categorias/${item.id}/editar`}><AdminIcon name="edit" />Editar</Link> : null}{mayDelete ? <button type="button" className="table-action table-action--button table-action--danger" onClick={() => void handleDelete(item)}><AdminIcon name="trash" />Borrar</button> : null}</div> : null}</td></tr>
               ))}</tbody></table></div>
             ) : null}
           </section>

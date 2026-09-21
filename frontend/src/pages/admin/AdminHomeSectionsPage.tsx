@@ -21,6 +21,8 @@ import type {
   ProductListItem,
 } from '../../types/catalog'
 import { formatPrice, formatStockStatus } from '../../utils/formatters'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 
 type SectionConfig = {
   key: HomeSection
@@ -401,6 +403,8 @@ function SectionPreview({
 }
 
 export function AdminHomeSectionsPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.homeSectionsCreate), mayUpdate = can(user, PERMISSIONS.homeSectionsUpdate), mayDelete = can(user, PERMISSIONS.homeSectionsDelete)
   const [items, setItems] = useState<HomeSectionItem[]>([])
   const [productsBySection, setProductsBySection] = useState<ProductsBySection>(
     EMPTY_PRODUCTS_BY_SECTION,
@@ -519,6 +523,7 @@ export function AdminHomeSectionsPage() {
   }, [])
 
   const addProductToSection = async (section: HomeSection, limit: number) => {
+    if (!mayCreate) return
     const selectedProductId = selectedBySection[section]
     if (!selectedProductId) return
 
@@ -571,7 +576,7 @@ export function AdminHomeSectionsPage() {
     item: HomeSectionItem,
     nextPosition: number,
   ) => {
-    if (item.position === nextPosition) return
+    if (!mayUpdate || item.position === nextPosition) return
 
     setSectionFeedback(section, { loading: true, error: null, success: null })
 
@@ -596,6 +601,7 @@ export function AdminHomeSectionsPage() {
   }
 
   const removeItem = async (section: HomeSection, item: HomeSectionItem) => {
+    if (!mayDelete) return
     setSectionFeedback(section, { loading: true, error: null, success: null })
 
     try {
@@ -667,7 +673,7 @@ export function AdminHomeSectionsPage() {
                     </p>
                   </div>
 
-                  <div className="home-section-add-row">
+                  {mayCreate ? <div className="home-section-add-row">
                     <select
                       className="home-section-select"
                       value={selectedBySection[section.key]}
@@ -708,7 +714,7 @@ export function AdminHomeSectionsPage() {
                     >
                       Agregar
                     </button>
-                  </div>
+                  </div> : null}
 
                   {status.error ? (
                     <p className="ui-note ui-note--error">{status.error}</p>
@@ -751,7 +757,7 @@ export function AdminHomeSectionsPage() {
                                     Number(event.target.value),
                                   )
                                 }
-                                disabled={status.loading}
+                                disabled={status.loading || !mayUpdate}
                               >
                                 {Array.from(
                                   { length: section.limit },
@@ -764,7 +770,7 @@ export function AdminHomeSectionsPage() {
                               </select>
                             </label>
 
-                            {isConfirmingRemoval ? (
+                            {mayDelete ? (isConfirmingRemoval ? (
                               <div className="home-section-confirm">
                                 <span>¿Quitar?</span>
                                 <button
@@ -800,7 +806,7 @@ export function AdminHomeSectionsPage() {
                               >
                                 <AdminIcon name="trash" />Quitar
                               </button>
-                            )}
+                            )) : null}
                           </div>
                         </article>
                       )

@@ -7,10 +7,14 @@ import { getSafeApiErrorMessage } from '../../services/api'
 import { authBlobFetch } from '../../services/authApi'
 import { createTechnicalSheet, deleteTechnicalSheet, getTechnicalSheets, renameTechnicalSheet, replaceTechnicalSheetFile } from '../../services/adminApi'
 import type { TechnicalSheet } from '../../types/catalog'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 
 const MAX_SIZE = 10 * 1024 * 1024
 
 export function AdminTechnicalSheetsPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.technicalSheetsCreate), mayUpdate = can(user, PERMISSIONS.technicalSheetsUpdate), mayDelete = can(user, PERMISSIONS.technicalSheetsDelete)
   const { requestConfirmation, requestText } = useSystemDialog()
   const [items, setItems] = useState<TechnicalSheet[]>([])
   const [search, setSearch] = useState('')
@@ -95,9 +99,9 @@ export function AdminTechnicalSheetsPage() {
   }
 
   return <AdminLayout>
-    <AdminPageHeader title="Fichas técnicas" description="Administra archivos PDF, JPG/JPEG, PNG o WebP (máximo 10 MB) que podrás usar en tus productos." actions={<div className="admin-page-header__toolbar"><button type="button" className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button><form className="admin-inline-search" role="search" onSubmit={e => { e.preventDefault(); setAppliedSearch(search) }}><input className="admin-search" aria-label="Buscar ficha técnica por nombre" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" title="Buscar ficha técnica" aria-label="Buscar ficha técnica"><AdminIcon name="search" /></button></form></div>} />
+    <AdminPageHeader title="Fichas técnicas" description="Administra archivos PDF, JPG/JPEG, PNG o WebP (máximo 10 MB) que podrás usar en tus productos." actions={<div className="admin-page-header__toolbar">{mayCreate ? <button type="button" className="btn btn--accent" onClick={() => setShowCreate(true)}>Agregar ficha técnica</button> : null}<form className="admin-inline-search" role="search" onSubmit={e => { e.preventDefault(); setAppliedSearch(search) }}><input className="admin-search" aria-label="Buscar ficha técnica por nombre" placeholder="Buscar por nombre" value={search} onChange={e => setSearch(e.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" title="Buscar ficha técnica" aria-label="Buscar ficha técnica"><AdminIcon name="search" /></button></form></div>} />
     {error ? <p className="ui-note ui-note--error" role="alert">{error}</p> : null}{message ? <p className="ui-note" role="status">{message}</p> : null}
-    {showCreate ? <section className="technical-sheet-form" aria-busy={busy}><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF, JPG/JPEG, PNG o WebP (máximo 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p className="technical-sheet-form__filename">Archivo seleccionado: {file.name}</p> : null}<div className="technical-sheet-form__actions"><button type="button" className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando…' : 'Guardar'}</button> <button type="button" className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
+    {showCreate && mayCreate ? <section className="technical-sheet-form" aria-busy={busy}><h2>Nueva ficha técnica</h2><label>Nombre<input value={name} maxLength={220} onChange={e => setName(e.target.value)} /></label><label>Archivo PDF, JPG/JPEG, PNG o WebP (máximo 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>{file ? <p className="technical-sheet-form__filename">Archivo seleccionado: {file.name}</p> : null}<div className="technical-sheet-form__actions"><button type="button" className="btn btn--accent" disabled={busy} onClick={() => void submitCreate()}>{busy ? 'Guardando…' : 'Guardar'}</button> <button type="button" className="btn" disabled={busy} onClick={() => setShowCreate(false)}>Cancelar</button></div></section> : null}
     {loading ? <p role="status" aria-busy="true">Cargando fichas técnicas…</p> : !items.length ? <p>No hay fichas técnicas registradas.</p> : !filtered.length ? <p>No se encontraron fichas con ese nombre.</p> : (
       <div className="admin-table-wrapper admin-technical-sheets-table-wrapper">
         <table className="admin-table admin-technical-sheets-table">
@@ -107,9 +111,9 @@ export function AdminTechnicalSheetsPage() {
             <td><div className="admin-table-actions">
               <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, false)}><AdminIcon name="external" />Ver PDF</button>
               <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void openFile(item, true)}><AdminIcon name="download" />Descargar</button>
-              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}><AdminIcon name="edit" />Editar</button>
-              <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}><AdminIcon name="reset" />Reemplazar</button>
-              <button type="button" className="table-action table-action--button table-action--danger" disabled={busy} onClick={() => void remove(item)}><AdminIcon name="trash" />Eliminar</button>
+              {mayUpdate ? <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => void editName(item)}><AdminIcon name="edit" />Editar</button> : null}
+              {mayUpdate ? <button type="button" className="table-action table-action--button" disabled={busy} onClick={() => { replacingId.current = item.id; replaceInput.current?.click() }}><AdminIcon name="reset" />Reemplazar</button> : null}
+              {mayDelete ? <button type="button" className="table-action table-action--button table-action--danger" disabled={busy} onClick={() => void remove(item)}><AdminIcon name="trash" />Eliminar</button> : null}
             </div></td>
           </tr>)}</tbody>
         </table>

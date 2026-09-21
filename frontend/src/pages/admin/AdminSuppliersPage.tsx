@@ -7,9 +7,13 @@ import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteSupplier, getAdminSuppliers } from '../../services/adminApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import type { SupplierSummary } from '../../types/catalog'
 
 export function AdminSuppliersPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.suppliersCreate), mayUpdate = can(user, PERMISSIONS.suppliersUpdate), mayDelete = can(user, PERMISSIONS.suppliersDelete)
   const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<SupplierSummary[]>([])
   const [search, setSearch] = useState('')
@@ -65,7 +69,7 @@ export function AdminSuppliersPage() {
     <AdminLayout>
       <AdminPageHeader title="Proveedores" actions={
         <div className="admin-page-header__toolbar">
-          <Link className="btn btn--accent" to="/admin/proveedores/nuevo">Nuevo proveedor</Link>
+          {mayCreate ? <Link className="btn btn--accent" to="/admin/proveedores/nuevo">Nuevo proveedor</Link> : null}
           <input
             className="admin-search"
             placeholder="Buscar proveedor"
@@ -96,7 +100,7 @@ export function AdminSuppliersPage() {
                 <th scope="col">Teléfono</th>
                 <th scope="col">Email</th>
                 <th scope="col">Activo</th>
-                <th scope="col">Acciones</th>
+                {(mayUpdate || mayDelete) ? <th scope="col">Acciones</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -113,21 +117,21 @@ export function AdminSuppliersPage() {
                       {item.is_active ? 'Sí' : 'No'}
                     </span>
                   </td>
-                  <td>
-                    <div className="admin-table-actions"><Link
+                  {(mayUpdate || mayDelete) ? <td>
+                    <div className="admin-table-actions">{mayUpdate ? <Link
                       className="table-action"
                       to={`/admin/proveedores/${item.id}/editar`}
                     >
                       <AdminIcon name="edit" />Editar
-                    </Link>
-                    <button
+                    </Link> : null}
+                    {mayDelete ? <button
                       type="button"
                       className="table-action table-action--button table-action--danger"
                       onClick={() => void handleDelete(item)}
                     >
                       <AdminIcon name="trash" />Eliminar
-                    </button></div>
-                  </td>
+                    </button> : null}</div>
+                  </td> : null}
                 </tr>
               ))}
             </tbody>
