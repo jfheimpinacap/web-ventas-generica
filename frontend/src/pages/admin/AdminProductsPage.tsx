@@ -9,6 +9,8 @@ import { getSafeApiErrorMessage } from "../../services/api";
 import { getAdminCategories, getAdminProducts } from "../../services/adminApi";
 import type { Category, ProductListItem } from "../../types/catalog";
 import { formatCondition, formatStockStatus, getRootCategory } from "../../utils/formatters";
+import { can, PERMISSIONS } from "../../auth/permissions";
+import { useAdminUser } from "../../components/admin/ProtectedRoute";
 
 const PRODUCT_FILTERS_STORAGE_KEY = "admin-products-filters";
 
@@ -64,6 +66,9 @@ function sortCategories(left: Category, right: Category) {
 }
 
 export function AdminProductsPage() {
+  const user = useAdminUser() ?? undefined;
+  const mayCreate = can(user, PERMISSIONS.productsCreate);
+  const mayUpdate = can(user, PERMISSIONS.productsUpdate);
   const [searchParams] = useSearchParams();
   const storedFilters = useMemo(() => readStoredFilters(), []);
   const [products, setProducts] = useState<ProductListItem[]>([]);
@@ -204,7 +209,7 @@ export function AdminProductsPage() {
   return (
     <AdminLayout>
       <div className="admin-products-list">
-        <AdminPageHeader title="Productos" actions={<Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link>} />
+        <AdminPageHeader title="Productos" actions={mayCreate ? <Link className="btn btn--accent" to="/admin/productos/nuevo"><AdminIcon name="plus" />Nuevo producto</Link> : undefined} />
         <div className="admin-products-list__messages" aria-live="polite">
           {loading ? <p className="ui-note">Cargando productos...</p> : null}
           {error ? <p className="ui-note ui-note--error" role="alert">{error}</p> : null}
@@ -221,12 +226,12 @@ export function AdminProductsPage() {
           {!loading && !error && filteredProducts.length === 0 ? <p className="ui-note">{!hasLoadedProducts || (products.length === 0 && !appliedSearch && publishedFilter === "") ? "No existen productos" : "No hay productos para los criterios seleccionados"}</p> : null}
           {!loading && !error && filteredProducts.length > 0 ? (
             <div className="admin-table-wrapper admin-products-table-wrapper" tabIndex={0} aria-label="Tabla de productos con desplazamiento horizontal">
-              <table className="admin-table admin-products-table"><thead><tr><th scope="col">Nombre</th><th scope="col">Categoría / Subcategoría</th><th scope="col">Marca</th><th scope="col">Condición</th><th scope="col">Disponibilidad</th><th scope="col">Estado</th><th scope="col">Actualizado</th><th scope="col">Acciones</th></tr></thead>
+              <table className="admin-table admin-products-table"><thead><tr><th scope="col">Nombre</th><th scope="col">Categoría / Subcategoría</th><th scope="col">Marca</th><th scope="col">Condición</th><th scope="col">Disponibilidad</th><th scope="col">Estado</th><th scope="col">Actualizado</th>{mayUpdate ? <th scope="col">Acciones</th> : null}</tr></thead>
                 <tbody>{filteredProducts.map((product) => {
                   const category = categories.find((item) => item.id === product.category.id) ?? product.category;
                   const root = getRootCategory(category, categories) ?? category;
                   const subcategory = category.parent && category.id !== root.id ? category.name : "—";
-                  return <tr key={product.id}><td><div className="admin-products-table__name"><div className="admin-products-table__thumbnail">{product.main_image ? <AdminProductImage imageId={product.main_image.id} alt={product.main_image.alt_text.trim() || product.name} normalizeWhitespace /> : <div className="admin-products-table__placeholder" role="img" aria-label={`Sin imagen para ${product.name}`} />}</div><span className="admin-products-table__name-text">{product.name}</span></div></td><td><span>{root.name}</span><span className="admin-products-table__secondary">{subcategory}</span></td><td>{product.brand?.name ?? "—"}</td><td>{formatCondition(product.condition)}</td><td><span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span></td><td><div className="admin-products-table__status"><span className={`badge ${product.is_featured ? "badge--ok" : "badge--muted"}`}>{product.is_featured ? "Destacado" : "Normal"}</span><span className={`badge ${product.is_published ? "badge--ok" : "badge--muted"}`}>{product.is_published ? "Publicado" : "No publicado"}</span></div></td><td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString("es-CL") : "—"}</td><td><Link className="table-action" to={`/admin/productos/${product.slug}/editar`}><AdminIcon name="edit" />Editar</Link></td></tr>;
+                  return <tr key={product.id}><td><div className="admin-products-table__name"><div className="admin-products-table__thumbnail">{product.main_image ? <AdminProductImage imageId={product.main_image.id} alt={product.main_image.alt_text.trim() || product.name} normalizeWhitespace /> : <div className="admin-products-table__placeholder" role="img" aria-label={`Sin imagen para ${product.name}`} />}</div><span className="admin-products-table__name-text">{product.name}</span></div></td><td><span>{root.name}</span><span className="admin-products-table__secondary">{subcategory}</span></td><td>{product.brand?.name ?? "—"}</td><td>{formatCondition(product.condition)}</td><td><span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span></td><td><div className="admin-products-table__status"><span className={`badge ${product.is_featured ? "badge--ok" : "badge--muted"}`}>{product.is_featured ? "Destacado" : "Normal"}</span><span className={`badge ${product.is_published ? "badge--ok" : "badge--muted"}`}>{product.is_published ? "Publicado" : "No publicado"}</span></div></td><td>{product.updated_at ? new Date(product.updated_at).toLocaleDateString("es-CL") : "—"}</td>{mayUpdate ? <td><Link className="table-action" to={`/admin/productos/${product.slug}/editar`}><AdminIcon name="edit" />Editar</Link></td> : null}</tr>;
                 })}</tbody>
               </table>
             </div>

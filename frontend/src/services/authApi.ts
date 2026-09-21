@@ -1,4 +1,5 @@
 import type { AuthUser } from '../types/catalog'
+import { can, canAny, isEffectiveSupportAdmin, type AppPermission } from '../auth/permissions'
 import { apiRequest, ApiError, buildApiUrl } from './api'
 
 export const ACCESS_TOKEN_KEY = 'ventas_access_token'
@@ -80,7 +81,7 @@ function getUserRoles(user?: AuthUser) {
 }
 
 export function isSupportAdmin(user?: AuthUser) {
-  return getUserRoles(user).includes('support_admin')
+  return isEffectiveSupportAdmin(user)
 }
 
 export function isSeller(user?: AuthUser) {
@@ -101,12 +102,12 @@ export function canAccessSellerPanel(user?: AuthUser) {
   return roles.some((role) => role === 'seller' || role === 'support_admin')
 }
 
-export function hasPermission(user: AuthUser | undefined, permission: string) {
-  return Boolean(user?.permissions.includes(permission))
+export function hasPermission(user: AuthUser | undefined, permission: AppPermission) {
+  return can(user, permission)
 }
 
-export function hasAnyPermission(user: AuthUser | undefined, permissions: readonly string[]) {
-  return permissions.some((permission) => hasPermission(user, permission))
+export function hasAnyPermission(user: AuthUser | undefined, permissions: readonly AppPermission[]) {
+  return canAny(user, permissions)
 }
 
 export function normalizeAuthResponse(response: AuthResponse): AuthTokens {

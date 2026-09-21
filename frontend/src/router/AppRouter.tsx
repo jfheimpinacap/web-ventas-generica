@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '../components/admin/ProtectedRoute'
+import { PermissionRoute } from '../components/admin/PermissionRoute'
+import { PERMISSIONS } from '../auth/permissions'
 import { AboutPage } from '../pages/AboutPage'
 import { ApiDiagnostics } from '../pages/ApiDiagnostics'
 import { CatalogPage, type CommercialCatalogConfig } from '../pages/CatalogPage'
@@ -84,30 +86,29 @@ export function AppRouter() {
         <Route path="/admin" element={<Navigate to="/admin/productos" replace />} />
         <Route path="/admin/productos" element={<AdminProductsPage />} />
         <Route path="/admin/fichas-tecnicas" element={<AdminTechnicalSheetsPage />} />
-        <Route path="/admin/productos/nuevo" element={<AdminProductCreatePage />} />
-        <Route path="/admin/productos/:slug/editar" element={<AdminProductEditPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.productsCreate} backTo="/admin/productos" />}><Route path="/admin/productos/nuevo" element={<AdminProductCreatePage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.productsUpdate} backTo="/admin/productos" />}><Route path="/admin/productos/:slug/editar" element={<AdminProductEditPage />} /></Route>
         <Route path="/admin/categorias" element={<AdminCategoriesPage />} />
-        <Route path="/admin/categorias/nueva" element={<AdminCategoryFormPage />} />
-        <Route path="/admin/categorias/:id/editar" element={<AdminCategoryFormPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.categoriesCreate} backTo="/admin/categorias" />}><Route path="/admin/categorias/nueva" element={<AdminCategoryFormPage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.categoriesUpdate} backTo="/admin/categorias" />}><Route path="/admin/categorias/:id/editar" element={<AdminCategoryFormPage />} /></Route>
         <Route path="/admin/marcas" element={<AdminBrandsPage />} />
-        <Route path="/admin/marcas/nueva" element={<AdminBrandFormPage />} />
-        <Route path="/admin/marcas/:id/editar" element={<AdminBrandFormPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.brandsCreate} backTo="/admin/marcas" />}><Route path="/admin/marcas/nueva" element={<AdminBrandFormPage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.brandsUpdate} backTo="/admin/marcas" />}><Route path="/admin/marcas/:id/editar" element={<AdminBrandFormPage />} /></Route>
         <Route path="/admin/proveedores" element={<AdminSuppliersPage />} />
-        <Route path="/admin/proveedores/nuevo" element={<AdminSupplierFormPage />} />
-        <Route path="/admin/proveedores/:id/editar" element={<AdminSupplierFormPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.suppliersCreate} backTo="/admin/proveedores" />}><Route path="/admin/proveedores/nuevo" element={<AdminSupplierFormPage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.suppliersUpdate} backTo="/admin/proveedores" />}><Route path="/admin/proveedores/:id/editar" element={<AdminSupplierFormPage />} /></Route>
         <Route path="/admin/clientes" element={<AdminCustomersPage />} />
-        <Route path="/admin/clientes/nuevo" element={<AdminCustomerFormPage />} />
-        <Route path="/admin/clientes/:id/editar" element={<AdminCustomerFormPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.customersCreate} backTo="/admin/clientes" />}><Route path="/admin/clientes/nuevo" element={<AdminCustomerFormPage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.customersUpdate} backTo="/admin/clientes" />}><Route path="/admin/clientes/:id/editar" element={<AdminCustomerFormPage />} /></Route>
         <Route path="/admin/cotizaciones" element={<AdminQuotesPage />} />
         <Route path="/admin/cotizaciones-comerciales" element={<Navigate to="/admin/cotizaciones?vista=generadas" replace />} />
-        <Route path="/admin/cotizaciones/nueva" element={<CommercialQuoteEditorPage />} />
-        <Route path="/admin/cotizaciones/:id/editar" element={<CommercialQuoteEditorPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.commercialQuotesIssue} backTo="/admin/cotizaciones" />}><Route path="/admin/cotizaciones/nueva" element={<CommercialQuoteEditorPage />} /><Route path="/admin/cotizaciones/:id/editar" element={<CommercialQuoteEditorPage />} /></Route>
         <Route path="/admin/cotizaciones/:id" element={<AdminQuoteDetailPage />} />
         <Route path="/admin/promociones" element={<AdminHomeSectionsPage />} />
         <Route path="/admin/home-secciones" element={<Navigate to="/admin/promociones" replace />} />
         <Route path="/admin/ofertas-hero" element={<AdminPromotionsPage />} />
-        <Route path="/admin/ofertas-hero/nueva" element={<AdminPromotionFormPage />} />
-        <Route path="/admin/ofertas-hero/:id/editar" element={<AdminPromotionFormPage />} />
+        <Route element={<PermissionRoute permission={PERMISSIONS.promotionsCreate} backTo="/admin/ofertas-hero" />}><Route path="/admin/ofertas-hero/nueva" element={<AdminPromotionFormPage />} /></Route>
+        <Route element={<PermissionRoute permission={PERMISSIONS.promotionsUpdate} backTo="/admin/ofertas-hero" />}><Route path="/admin/ofertas-hero/:id/editar" element={<AdminPromotionFormPage />} /></Route>
       </Route>
       <Route element={<ProtectedRoute supportAdminOnly />}>
         <Route path="/admin/usuarios" element={<AdminUsersPage />} />

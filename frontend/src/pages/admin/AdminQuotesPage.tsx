@@ -5,7 +5,7 @@ import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import { useCommercialQuotePdfDownload } from '../../hooks/useCommercialQuotePdfDownload'
-import { isSeller } from '../../services/authApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
 import { getCommercialQuotes } from '../../services/commercialQuotesApi'
@@ -30,6 +30,8 @@ const STATUS_OPTIONS: Array<{ value: QuoteStatus; label: string }> = [
 ]
 
 function QuoteRequestsView() {
+  const user = useAdminUser() ?? undefined
+  const mayUpdate = can(user, PERMISSIONS.quoteRequestsUpdate)
   const [items, setItems] = useState<QuoteRequestAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -217,7 +219,7 @@ function QuoteRequestsView() {
                     <select
                       className="quote-status-select"
                       value={item.status}
-                      onChange={(event) => void onStatusChange(item, event.target.value as QuoteStatus)}
+                      onChange={(event) => void onStatusChange(item, event.target.value as QuoteStatus)} disabled={!mayUpdate}
                       disabled={updatingId === item.id}
                       aria-label={`Cambiar estado de cotización ${item.id}`}
                     >
@@ -329,7 +331,7 @@ export function AdminQuotesPage() {
     <AdminLayout>
       <AdminPageHeader
         title="Cotizaciones"
-        actions={isSeller(currentUser ?? undefined) ? <Link className="btn btn--accent" to="/admin/cotizaciones/nueva">Crear cotización</Link> : undefined}
+        actions={can(currentUser ?? undefined, PERMISSIONS.commercialQuotesIssue) ? <Link className="btn btn--accent" to="/admin/cotizaciones/nueva">Crear cotización</Link> : undefined}
       />
       <nav className="quote-view-tabs" aria-label="Vistas de cotizaciones" role="tablist">
         <Link className={activeView === 'solicitudes' ? 'quote-view-tab quote-view-tab--active' : 'quote-view-tab'} to="/admin/cotizaciones" role="tab" aria-selected={activeView === 'solicitudes'}>Solicitudes recibidas</Link>

@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { AdminIdleSessionTimeout } from './AdminIdleSessionTimeout'
 import { NOINDEX_ROBOTS, Seo } from '../common/Seo'
 import { canAccessSellerPanel, clearSession, getMe, isAuthenticated, isSupportAdmin } from '../../services/authApi'
 import type { AuthUser } from '../../types/catalog'
+import { ApiError } from '../../services/api'
+import { AdminLayout } from './AdminLayout'
 
 type AuthGuardStatus = 'checking' | 'authorized' | 'anonymous' | 'forbidden'
 
@@ -47,10 +49,11 @@ export function ProtectedRoute({ supportAdminOnly = false }: { supportAdminOnly?
         setUser(user)
         setStatus(canAccessSellerPanel(user) && (!supportAdminOnly || isSupportAdmin(user)) ? 'authorized' : 'forbidden')
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted) return
-        clearSession()
-        setStatus('anonymous')
+        if (error instanceof ApiError && error.status === 403) { setStatus('forbidden'); return }
+        if (error instanceof ApiError && error.status === 401) clearSession()
+        setStatus(error instanceof ApiError && error.status === 401 ? 'anonymous' : 'forbidden')
       })
 
     return () => {
@@ -63,7 +66,7 @@ export function ProtectedRoute({ supportAdminOnly = false }: { supportAdminOnly?
   }
 
   if (status === 'forbidden') {
-    return <><AdminSeo /><Navigate to="/login" replace state={{ from: location.pathname, reason: 'forbidden' }} /></>
+    return <><AdminSeo /><AdminUserContext.Provider value={user}><AdminLayout><section className="admin-block" role="alert"><h1>Acceso denegado</h1><p>No tienes permiso para realizar esta acción.</p><Link className="btn btn--secondary" to="/admin/productos">Volver al panel</Link></section></AdminLayout></AdminUserContext.Provider></>
   }
 
   if (status === 'checking') {

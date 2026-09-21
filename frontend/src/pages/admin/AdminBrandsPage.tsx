@@ -7,9 +7,13 @@ import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deleteBrand, getAdminBrands } from '../../services/adminApi'
+import { can, PERMISSIONS } from '../../auth/permissions'
+import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import type { Brand } from '../../types/catalog'
 
 export function AdminBrandsPage() {
+  const user = useAdminUser() ?? undefined
+  const mayCreate = can(user, PERMISSIONS.brandsCreate), mayUpdate = can(user, PERMISSIONS.brandsUpdate), mayDelete = can(user, PERMISSIONS.brandsDelete)
   const { requestConfirmation } = useSystemDialog()
   const [items, setItems] = useState<Brand[]>([])
   const [search, setSearch] = useState('')
@@ -64,7 +68,7 @@ export function AdminBrandsPage() {
     <AdminLayout>
       <div className="admin-brands-content"><AdminPageHeader title="Marcas" actions={
         <div className="admin-page-header__toolbar">
-          <Link className="btn btn--accent" to="/admin/marcas/nueva">Nueva marca</Link>
+          {mayCreate ? <Link className="btn btn--accent" to="/admin/marcas/nueva">Nueva marca</Link> : null}
           <form className="admin-inline-search" role="search" onSubmit={(e) => { e.preventDefault(); setAppliedSearch(search) }}><input className="admin-search" aria-label="Buscar marca" placeholder="Buscar marca" value={search} onChange={(e) => setSearch(e.target.value)} /><button className="btn btn--accent admin-icon-button" type="submit" title="Buscar marca" aria-label="Buscar marca"><AdminIcon name="search" /></button></form>
           <select
             className="admin-search"
@@ -102,19 +106,19 @@ export function AdminBrandsPage() {
                     </span>
                   </td>
                   <td>
-                    <div className="admin-table-actions"><Link
+                    {(mayUpdate || mayDelete) ? <div className="admin-table-actions">{mayUpdate ? <Link
                       className="table-action"
                       to={`/admin/marcas/${item.id}/editar`}
                     >
                       <AdminIcon name="edit" />Editar
-                    </Link>
-                    <button
+                    </Link> : null}
+                    {mayDelete ? <button
                       type="button"
                       className="table-action table-action--button table-action--danger"
                       onClick={() => void handleDelete(item)}
                     >
                       <AdminIcon name="trash" />Eliminar
-                    </button></div>
+                    </button> : null}</div> : null}
                   </td>
                 </tr>
               ))}

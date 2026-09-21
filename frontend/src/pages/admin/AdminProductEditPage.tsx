@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { can, PERMISSIONS } from "../../auth/permissions";
+import { useAdminUser } from "../../components/admin/ProtectedRoute";
 import { useSystemDialog } from "../../context/SystemDialogContext";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { ProductEditorLayout } from "../../components/admin/ProductEditorLayout";
@@ -88,6 +90,9 @@ const PLACEHOLDER_IMAGE =
 const PRODUCT_EDIT_FORM_ID = "admin-product-edit-form";
 
 export function AdminProductEditPage() {
+  const user = useAdminUser() ?? undefined;
+  const mayManageImages = can(user, PERMISSIONS.productImagesManage);
+  const mayDelete = can(user, PERMISSIONS.productsDelete);
   const { requestConfirmation } = useSystemDialog();
   const location = useLocation();
   const navigate = useNavigate();
@@ -428,7 +433,7 @@ export function AdminProductEditPage() {
               submitBlockedMessage="Espera a que termine la optimización de imágenes antes de guardar el producto."
               error={error}
               onValuesChange={setFormValues}
-              beforeActions={
+              beforeActions={mayManageImages ?
                 <ProductImageManager
                   existingImages={sortedImages}
                   pendingImages={pending.images}
@@ -446,7 +451,7 @@ export function AdminProductEditPage() {
                   onSelectExisting={handleSetMainImage}
                   onDeleteExisting={handleDeleteImage}
                   onUpload={handleCreateImages}
-                />
+                /> : undefined
               }
             />
           }
@@ -456,7 +461,7 @@ export function AdminProductEditPage() {
                 <h2>Vista previa pública</h2>
                 <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} existingImageId={selectedPending ? null : mainImage?.id} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
               </section>
-              <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
+              {mayDelete ? <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
                 <h2>Eliminar producto</h2>
                 <p className="ui-note">
                   Esta acción es irreversible. Para eliminar, el producto debe estar sin publicar y sin destacar.
@@ -481,7 +486,7 @@ export function AdminProductEditPage() {
                     </div>
                   </div>
                 )}
-              </section>
+              </section> : null}
             </div>
           }
         />
