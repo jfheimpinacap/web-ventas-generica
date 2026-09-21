@@ -1,4 +1,4 @@
-import { PERMISSIONS, type AppPermission } from './permissions'
+import { PERMISSIONS, type AppPermission } from './permissions.ts'
 
 export const PERMISSION_GROUPS = [
   'Productos', 'Imágenes de productos', 'Especificaciones', 'Fichas técnicas',
