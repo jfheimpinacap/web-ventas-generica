@@ -304,7 +304,9 @@ public sealed class AdminCommercialQuoteEndpointTests
         public async Task AddUserAsync(string username, string role, string? sellerCode)
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = SellerPhone, IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password); db.Add(user); await db.SaveChangesAsync();
+            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = SellerPhone, IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password);
+            if (role == AppRoles.Seller) DefaultSellerPermissions.EnsureAssigned(user);
+            db.Add(user); await db.SaveChangesAsync();
         }
         public async Task<(int ProfileId, int ProductId)> AddCatalogDataAsync()
         {
