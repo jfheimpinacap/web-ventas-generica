@@ -261,7 +261,7 @@ public sealed class SeedDataTests
     {
         var services = new ServiceCollection();
         var databaseName = InMemoryTestDatabase.CreateDatabaseName("SeedDataTests");
-        var databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        var databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
 
         services.AddLogging(builder =>
         {

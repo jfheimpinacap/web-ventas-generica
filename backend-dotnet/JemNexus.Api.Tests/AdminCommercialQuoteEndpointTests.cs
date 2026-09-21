@@ -278,7 +278,7 @@ public sealed class AdminCommercialQuoteEndpointTests
     public sealed class QuoteApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _name = InMemoryTestDatabase.CreateDatabaseName("AdminCommercialQuoteEndpointTests");
-        private readonly InMemoryDatabaseRoot _root = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _root = InMemoryTestDatabase.GetSharedDatabaseRoot();
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Test");

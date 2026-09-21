@@ -355,7 +355,7 @@ public sealed class AdminUserEndpointTests
     public sealed class AdminApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("AdminUserEndpointTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Test");

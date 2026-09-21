@@ -396,7 +396,7 @@ public sealed class AuthEndpointTests : IClassFixture<AuthEndpointTests.AuthApiF
     public sealed class AuthApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("AuthEndpointTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {

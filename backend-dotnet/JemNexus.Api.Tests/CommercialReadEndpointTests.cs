@@ -258,7 +258,7 @@ public sealed class CommercialReadEndpointTests : IClassFixture<CommercialReadEn
     public sealed class CommercialApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName("CommercialReadEndpointTests");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
         private readonly SemaphoreSlim _seedLock = new(1, 1);
         private bool _seeded;
 

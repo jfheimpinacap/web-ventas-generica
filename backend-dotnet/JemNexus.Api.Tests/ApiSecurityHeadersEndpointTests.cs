@@ -167,7 +167,7 @@ public sealed class ApiSecurityHeadersEndpointTests
     private sealed class SecurityHeadersApiFactory(string environment) : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName($"ApiSecurityHeaders-{environment}");
-        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.CreateDatabaseRoot();
+        private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
