@@ -47,7 +47,7 @@ public sealed class AdminUserEndpointTests
     }
 
     [Fact]
-    public async Task SupportAdminListsSearchesAndFiltersOnlySellersWithoutSecrets()
+    public async Task SupportAdminListsBothRolesSearchesFiltersAndOmitsSecrets()
     {
         await using var factory = new AdminApiFactory();
         await AddSellerAsync(factory, "inactive.one", "find-email@example.test", "Nombre Buscable", false);
@@ -69,10 +69,13 @@ public sealed class AdminUserEndpointTests
         Assert.DoesNotContain("\"username\":\"support\"", inactive);
         var active = await client.GetStringAsync("/api/admin/users?is_active=true");
         Assert.DoesNotContain("inactive.one", active);
+        Assert.Contains("\"username\":\"support\"", active);
+        Assert.Contains("\"role\":\"support_admin\"", await client.GetStringAsync("/api/admin/users?role=support_admin"));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/admin/users?role=admin")).StatusCode);
     }
 
     [Fact]
-    public async Task CreateForcesSellerPrivilegesHashesPasswordAndAllowsLogin()
+    public async Task CreateSellerIgnoresInternalFieldsHashesPasswordAndAssignsDefaults()
     {
         await using var factory = new AdminApiFactory();
         using var client = factory.CreateClient();
@@ -80,7 +83,7 @@ public sealed class AdminUserEndpointTests
         var response = await client.PostAsJsonAsync("/api/admin/users", new
         {
             username = " new.seller ", email = " new@example.test ", full_name = " New Seller ", phone = " +56 9 1234 5678 ", password = NewPassword,
-            role = AppRoles.SupportAdmin, is_staff = false, is_superuser = true, seller_code = "VEN-9999"
+            role = AppRoles.Seller, is_staff = false, is_superuser = true, seller_code = "VEN-9999"
         });
         var body = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -230,22 +233,81 @@ public sealed class AdminUserEndpointTests
     }
 
     [Fact]
-    public async Task SupportAdminIdentifiersAreHiddenFromEveryMutation()
+    public async Task CurrentSupportAdminCanBeReadAndEditedButCannotDeactivateOrDemoteItself()
     {
         await using var factory = new AdminApiFactory();
         using var admin = factory.CreateClient();
         var login = await AuthenticateAsync(admin, "support", Password);
         var adminId = new JwtSecurityTokenHandler().ReadJwtToken(login.Access).Claims.Single(claim => claim.Type == JwtRegisteredClaimNames.Sub).Value;
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/admin/users/{adminId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.PutAsJsonAsync($"/api/admin/users/{adminId}", new { username = "hacked", is_active = false, password = NewPassword })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.PatchAsJsonAsync($"/api/admin/users/{adminId}", new { username = "hacked" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.DeleteAsync($"/api/admin/users/{adminId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/api/admin/users/{adminId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PatchAsJsonAsync($"/api/admin/users/{adminId}", new { is_active = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PatchAsJsonAsync($"/api/admin/users/{adminId}", new { role = AppRoles.Seller })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.DeleteAsync($"/api/admin/users/{adminId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(factory.CreateClient(), "support", Password)).StatusCode);
+    }
+
+    [Fact]
+    public async Task CatalogIsDeterministicAndSeparatesGrantableAndReservedPermissions()
+    {
+        await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
+        var payload = JsonDocument.Parse(await admin.GetStringAsync("/api/admin/users/permission-catalog")).RootElement;
+        Assert.Equal([AppRoles.Seller, AppRoles.SupportAdmin], payload.GetProperty("roles").EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.Equal(29, payload.GetProperty("seller_grantable").GetArrayLength());
+        Assert.Equal([AppPermissions.UsersManage], payload.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()).ToArray());
+    }
+
+    [Theory]
+    [InlineData("unknown", "products.create")]
+    [InlineData("seller", "unknown.permission")]
+    [InlineData("seller", "users.manage")]
+    [InlineData("seller", " Products.create")]
+    public async Task InvalidRolesUnknownReservedAndNonCanonicalPermissionsAreRejected(string role, string permission)
+    {
+        await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/admin/users", new { username = $"invalid{permission.Length}", password = NewPassword, role, permissions = new[] { permission } })).StatusCode);
+    }
+
+    [Fact]
+    public async Task DuplicatePermissionsAreRejectedWithoutCreatingUser()
+    {
+        await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
+        var response = await admin.PostAsJsonAsync("/api/admin/users", new { username = "duplicate.permissions", password = NewPassword, permissions = new[] { AppPermissions.ProductsCreate, AppPermissions.ProductsCreate } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.AnyAsync(user => user.Username == "duplicate.permissions"));
+    }
+
+    [Fact]
+    public async Task SellerPermissionSetsSupportOmittedSubsetEmptyAndReplacementSemantics()
+    {
+        await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
+        var defaults = await admin.PostAsJsonAsync("/api/admin/users", new { username = "defaults", password = NewPassword });
+        var subset = await admin.PostAsJsonAsync("/api/admin/users", new { username = "subset", password = NewPassword, permissions = new[] { AppPermissions.ProductsCreate } });
+        var empty = await admin.PostAsJsonAsync("/api/admin/users", new { username = "empty", password = NewPassword, permissions = Array.Empty<string>() });
+        Assert.Equal(29, JsonDocument.Parse(await defaults.Content.ReadAsStringAsync()).RootElement.GetProperty("permissions").GetArrayLength());
+        Assert.Single(JsonDocument.Parse(await subset.Content.ReadAsStringAsync()).RootElement.GetProperty("permissions").EnumerateArray());
+        var emptyPayload = JsonDocument.Parse(await empty.Content.ReadAsStringAsync()).RootElement; Assert.Empty(emptyPayload.GetProperty("permissions").EnumerateArray());
+        var id = emptyPayload.GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await admin.PatchAsJsonAsync($"/api/admin/users/{id}", new { permissions = new[] { AppPermissions.BrandsCreate } })).StatusCode);
+        Assert.Single(JsonDocument.Parse(await admin.GetStringAsync($"/api/admin/users/{id}")).RootElement.GetProperty("permissions").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RoleTransitionsApplyFlagsSellerCodeAndPersistentPermissionRules()
+    {
+        await using var factory = new AdminApiFactory(); using var admin = factory.CreateClient(); await AuthenticateAsync(admin, "support", Password);
+        var created = JsonDocument.Parse(await (await admin.PostAsJsonAsync("/api/admin/users", new { username = "transition", password = NewPassword, permissions = new[] { AppPermissions.ProductsCreate } })).Content.ReadAsStringAsync()).RootElement;
+        var id = created.GetProperty("id").GetInt32();
+        var promoted = JsonDocument.Parse(await (await admin.PatchAsJsonAsync($"/api/admin/users/{id}", new { role = AppRoles.SupportAdmin, permissions = Array.Empty<string>() })).Content.ReadAsStringAsync()).RootElement;
+        Assert.True(promoted.GetProperty("is_superuser").GetBoolean()); Assert.Equal(JsonValueKind.Null, promoted.GetProperty("seller_code").ValueKind); Assert.Equal(30, promoted.GetProperty("permissions").GetArrayLength());
+        var demoted = JsonDocument.Parse(await (await admin.PatchAsJsonAsync($"/api/admin/users/{id}", new { role = AppRoles.Seller, permissions = Array.Empty<string>() })).Content.ReadAsStringAsync()).RootElement;
+        Assert.False(demoted.GetProperty("is_superuser").GetBoolean()); Assert.StartsWith("VEN-", demoted.GetProperty("seller_code").GetString()); Assert.Empty(demoted.GetProperty("permissions").EnumerateArray());
     }
 
     private static IEnumerable<HttpRequestMessage> CreateAllRequests()
     {
         yield return new(HttpMethod.Get, "/api/admin/users");
+        yield return new(HttpMethod.Get, "/api/admin/users/permission-catalog");
         yield return new(HttpMethod.Get, "/api/admin/users/1");
         yield return JsonRequest(HttpMethod.Post, "/api/admin/users");
         yield return JsonRequest(HttpMethod.Put, "/api/admin/users/1");
