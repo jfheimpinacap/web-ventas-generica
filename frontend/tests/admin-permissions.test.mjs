@@ -76,7 +76,16 @@ test('el formulario integra nombre visible en Datos de acceso y conserva teléfo
   assert.match(form, /value=\{String\(fields\[key\]\)\}/)
   assert.match(form, /onChange=\{\(event\) => setText\(key, event\.target\.value\)\}/)
   assert.ok(accessBlock.indexOf('htmlFor="role"') < accessBlock.indexOf("field('fullName'"), 'Rol y nombre visible deben formar la tercera fila lógica')
-  assert.match(form, /return <form className="admin-user-form-page"[^>]*>\s*<section className="admin-block admin-access-block">/)
+  const formStartMarker = 'return <form className="admin-user-form-page"'
+  const accessBlockMarker = '<section className="admin-block admin-access-block">'
+  const formStart = form.indexOf(formStartMarker)
+  assert.notEqual(formStart, -1, 'No se encontró el comienzo del formulario de usuarios')
+  const firstAccessBlock = form.indexOf(accessBlockMarker, formStart + formStartMarker.length)
+  assert.notEqual(firstAccessBlock, -1, 'No se encontró el bloque Datos de acceso dentro del formulario')
+  assert.ok(firstAccessBlock > formStart, 'Datos de acceso debe aparecer después del comienzo del formulario')
+  const contentBeforeAccessBlock = form.slice(formStart + formStartMarker.length, firstAccessBlock)
+  assert.doesNotMatch(contentBeforeAccessBlock, /<section\b/, 'Datos de acceso debe ser la primera sección del formulario')
+  assert.doesNotMatch(contentBeforeAccessBlock, /className="[^"]*\badmin-block\b/, 'Ningún bloque administrativo debe preceder a Datos de acceso')
 
   const fields = { username: 'soporte', email: '', fullName: 'Nombre existente', phone: '+56 9 1234 5678', password: '', confirmation: '', role: 'seller', permissions: [] }
   const payload = buildManagedUserPayload(fields, { roles: ['seller'], seller_grantable: [], reserved: [] }, 'edit')
