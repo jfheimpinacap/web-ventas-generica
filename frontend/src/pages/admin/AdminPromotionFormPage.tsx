@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { PromotionForm } from '../../components/admin/PromotionForm'
 import { createPromotion, getAdminProducts, getAdminPromotion, updatePromotion } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import type { ProductListItem, PromotionFormValues } from '../../types/catalog'
 
 const INITIAL_VALUES: PromotionFormValues = {
@@ -22,6 +24,7 @@ const INITIAL_VALUES: PromotionFormValues = {
 export function AdminPromotionFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const toast = useToast()
   const isEdit = Boolean(id)
   const [products, setProducts] = useState<ProductListItem[]>([])
   const [initialValues, setInitialValues] = useState(INITIAL_VALUES)
@@ -68,8 +71,10 @@ export function AdminPromotionFormPage() {
       setError(null)
       if (id) await updatePromotion(Number(id), values)
       else await createPromotion(values)
+      toast.success(id ? ADMIN_TOASTS.promotion.update.success : ADMIN_TOASTS.promotion.create.success)
       navigate('/admin/ofertas-hero')
     } catch {
+      toast.error(id ? ADMIN_TOASTS.promotion.update.error : ADMIN_TOASTS.promotion.create.error)
       setError('No se pudo guardar la oferta.')
     } finally {
       setIsSubmitting(false)

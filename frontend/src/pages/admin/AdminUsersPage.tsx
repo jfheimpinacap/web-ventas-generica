@@ -8,11 +8,13 @@ import { safeUserMutationError } from '../../components/admin/UserForm'
 import { ApiError } from '../../services/api'
 import { clearSession } from '../../services/authApi'
 import { deactivateManagedUser, getUserPermissionCatalog, listManagedUsers, type ManagedRole, type ManagedUser } from '../../services/adminUsersApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 
 type StatusFilter = 'all' | 'active' | 'inactive'; type RoleFilter = 'all' | ManagedRole
 function formatDate(value: string | null) { if (!value) return 'Nunca'; const date = new Date(value); return Number.isNaN(date.getTime()) ? 'Fecha no disponible' : new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short' }).format(date) }
 export function AdminUsersPage() {
-  const navigate = useNavigate(); const location = useLocation(); const session = useAdminUser()
+  const navigate = useNavigate(); const toast = useToast(); const location = useLocation(); const session = useAdminUser()
   const [users, setUsers] = useState<ManagedUser[]>([]); const [search, setSearch] = useState(''); const [query, setQuery] = useState(''); const [status, setStatus] = useState<StatusFilter>('all'); const [role, setRole] = useState<RoleFilter>('all'); const [permissionTotal, setPermissionTotal] = useState(29)
   const [loading, setLoading] = useState(true); const [loadError, setLoadError] = useState(false); const [target, setTarget] = useState<ManagedUser | null>(null); const [mutationError, setMutationError] = useState<string | null>(null); const [submitting, setSubmitting] = useState(false); const [reload, setReload] = useState(0); const [notice, setNotice] = useState<string | null>(() => (location.state as { notice?: string } | null)?.notice ?? null)
   const opener = useRef<HTMLElement | null>(null); const cancel = useRef<HTMLButtonElement>(null)
@@ -21,7 +23,7 @@ export function AdminUsersPage() {
   useEffect(() => { const controller = new AbortController(); setLoading(true); setLoadError(false); listManagedUsers({ search: query || undefined, is_active: status === 'all' ? undefined : status === 'active', role: role === 'all' ? undefined : role }, controller.signal).then(setUsers).catch((error) => { if (error instanceof DOMException && error.name === 'AbortError') return; if (error instanceof ApiError && error.status === 401) { clearSession(); navigate('/login', { replace: true }); return } setLoadError(true) }).finally(() => { if (!controller.signal.aborted) setLoading(false) }); return () => controller.abort() }, [navigate, query, reload, role, status])
   useEffect(() => { if (!target) return; cancel.current?.focus(); const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !submitting) close() }; document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key) }, [target, submitting])
   const close = () => { setTarget(null); setMutationError(null); window.setTimeout(() => opener.current?.focus(), 0) }
-  const confirm = async () => { if (!target || submitting) return; setSubmitting(true); try { await deactivateManagedUser(target.id); setNotice('Cuenta desactivada correctamente.'); close(); setReload((value) => value + 1) } catch (error) { setMutationError(safeUserMutationError(error)) } finally { setSubmitting(false) } }
+  const confirm = async () => { if (!target || submitting) return; setSubmitting(true); try { await deactivateManagedUser(target.id); toast.success(ADMIN_TOASTS.user.deactivate.success); close(); setReload((value) => value + 1) } catch (error) { toast.error(ADMIN_TOASTS.user.deactivate.error); setMutationError(safeUserMutationError(error)) } finally { setSubmitting(false) } }
   const criteria = Boolean(query) || status !== 'all' || role !== 'all'
   return <AdminLayout>
     <AdminPageHeader title="Usuarios" description="Administra cuentas, roles y permisos de acceso al panel." actions={<button className="btn btn--accent" onClick={() => navigate('/admin/usuarios/nuevo')}><AdminIcon name="plus" /> Crear usuario</button>} />

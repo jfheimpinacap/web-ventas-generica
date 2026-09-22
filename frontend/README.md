@@ -43,6 +43,19 @@ Los listados y escrituras administrativas consumen la API .NET mediante Bearer. 
 
 No uses validaciones manuales para alterar datos reales sin autorización expresa.
 
+### Notificaciones de mutaciones
+
+Las escrituras confirmadas del panel muestran notificaciones globales: verde para éxito,
+rojo para error, ámbar para advertencias que requieren atención y azul para información
+neutral. Los errores detallados y las validaciones permanecen junto al formulario; el toast
+solo aporta un resumen contextual. Una desactivación confirmada se muestra como éxito porque
+es reversible y no equivale a eliminar el registro.
+
+Las mutaciones nuevas deben importar `useToast` y un mensaje de `ADMIN_TOASTS`, emitir
+`toast.success(...)` únicamente después del `await` confirmado y `toast.error(...)` en el
+único bloque de error de la operación. El `ToastProvider` global conserva el aviso durante
+la navegación y no debe sustituirse por estado persistente.
+
 ## Rutas comerciales de maquinaria
 
 Las rutas públicas `/maquinaria-nueva` y `/maquinaria-usada` reutilizan el catálogo con filtros fijos `product_type=machinery` y, respectivamente, `condition=new` o `condition=used`. Esos valores definidos por la ruta tienen prioridad sobre parámetros manipulables de la URL; las subcategorías, marcas, disponibilidad, búsqueda y ordenamiento siguen disponibles.

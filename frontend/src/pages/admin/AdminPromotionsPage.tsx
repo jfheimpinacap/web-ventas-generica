@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useSystemDialog } from '../../context/SystemDialogContext'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { getSafeApiErrorMessage } from '../../services/api'
@@ -14,6 +16,7 @@ export function AdminPromotionsPage() {
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.promotionsCreate), mayUpdate = can(user, PERMISSIONS.promotionsUpdate), mayDelete = can(user, PERMISSIONS.promotionsDelete)
   const { requestConfirmation } = useSystemDialog()
+  const toast = useToast()
   const [items, setItems] = useState<Promotion[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
@@ -59,7 +62,9 @@ export function AdminPromotionsPage() {
     try {
       await deletePromotion(item.id)
       await load()
+      toast.success(ADMIN_TOASTS.promotion.deactivate.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.promotion.deactivate.error)
       setError(
         getSafeApiErrorMessage(error, 'No se pudo eliminar la oferta de Hero.'),
       )

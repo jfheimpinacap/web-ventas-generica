@@ -6,6 +6,8 @@ import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { useSystemDialog } from '../../context/SystemDialogContext'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { deactivateCustomer, listCustomers, reactivateCustomer, type CustomerStatus } from '../../services/customerProfilesApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import { can, PERMISSIONS } from '../../auth/permissions'
 import { useAdminUser } from '../../components/admin/ProtectedRoute'
 import type { CustomerProfile } from '../../types/commercialQuote'
@@ -15,6 +17,7 @@ const PAGE_SIZE = 20
 const statusValues = new Set<CustomerStatus>(['active', 'inactive', 'all'])
 
 export function AdminCustomersPage() {
+  const toast = useToast()
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.customersCreate), mayUpdate = can(user, PERMISSIONS.customersUpdate), maySetStatus = can(user, PERMISSIONS.customersSetStatus)
   const { requestConfirmation } = useSystemDialog()
@@ -74,7 +77,8 @@ export function AdminCustomersPage() {
         if (!remaining.length && page > 1) updateParams({ page: page - 1 })
       }
       setFeedback(activate ? 'Cliente reactivado correctamente.' : 'Cliente desactivado correctamente.')
-    } catch (caught) { setError(getSafeApiErrorMessage(caught, activate ? 'No se pudo reactivar el cliente.' : 'No se pudo desactivar el cliente.')) }
+      toast.success(activate ? ADMIN_TOASTS.customer.reactivate.success : ADMIN_TOASTS.customer.deactivate.success)
+    } catch (caught) { toast.error(activate ? ADMIN_TOASTS.customer.reactivate.error : ADMIN_TOASTS.customer.deactivate.error); setError(getSafeApiErrorMessage(caught, activate ? 'No se pudo reactivar el cliente.' : 'No se pudo desactivar el cliente.')) }
     finally { setBusy(current => { const next = new Set(current); next.delete(customer.id); return next }) }
   }
   const pages = Math.ceil(data.count / PAGE_SIZE)

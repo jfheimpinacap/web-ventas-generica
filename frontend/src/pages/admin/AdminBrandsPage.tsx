@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useSystemDialog } from '../../context/SystemDialogContext'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -15,6 +17,7 @@ export function AdminBrandsPage() {
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.brandsCreate), mayUpdate = can(user, PERMISSIONS.brandsUpdate), mayDelete = can(user, PERMISSIONS.brandsDelete)
   const { requestConfirmation } = useSystemDialog()
+  const toast = useToast()
   const [items, setItems] = useState<Brand[]>([])
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -59,7 +62,9 @@ export function AdminBrandsPage() {
     try {
       await deleteBrand(item.id)
       await load()
+      toast.success(ADMIN_TOASTS.brand.remove.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.brand.remove.error)
       setError(getSafeApiErrorMessage(error, 'No se pudo eliminar la marca.'))
     }
   }

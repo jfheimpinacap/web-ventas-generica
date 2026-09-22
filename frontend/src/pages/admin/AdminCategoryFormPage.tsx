@@ -5,6 +5,8 @@ import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { CategoryForm } from '../../components/admin/CategoryForm'
 import { createCategory, getAdminCategories, getAdminCategory, updateCategory } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import type { Category, CategoryFormValues } from '../../types/catalog'
 
 const INITIAL_VALUES: CategoryFormValues = { name: '', slug: '', parent: null, product_type: 'machinery', description: '', is_active: true, order: 0 }
@@ -12,6 +14,7 @@ const INITIAL_VALUES: CategoryFormValues = { name: '', slug: '', parent: null, p
 export function AdminCategoryFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const toast = useToast()
   const [searchParams] = useSearchParams()
   const requestedParentId = Number(searchParams.get('parent')) || null
   const isEdit = Boolean(id)
@@ -57,8 +60,10 @@ export function AdminCategoryFormPage() {
       setError(null)
       if (isEdit && id) await updateCategory(Number(id), values)
       else await createCategory(values)
+      toast.success(isEdit ? ADMIN_TOASTS.category.update.success : ADMIN_TOASTS.category.create.success)
       navigate('/admin/categorias')
     } catch {
+      toast.error(isEdit ? ADMIN_TOASTS.category.update.error : ADMIN_TOASTS.category.create.error)
       setError('No se pudo guardar la categoría.')
     } finally {
       setIsSubmitting(false)

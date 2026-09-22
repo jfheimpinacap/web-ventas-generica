@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getAdminQuote, updateQuote } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import {
   PREFERRED_CONTACT_METHOD_LABELS,
   QUOTE_STATUS_LABELS,
@@ -14,6 +16,7 @@ import {
 const formatQuoteFolio = (id: number) => `COT-${String(id).padStart(6, '0')}`
 
 export function AdminQuoteDetailPage() {
+  const toast = useToast()
   const { id } = useParams()
   const navigate = useNavigate()
   const [item, setItem] = useState<QuoteRequestAdmin | null>(null)
@@ -57,7 +60,9 @@ export function AdminQuoteDetailPage() {
       })
       setItem(updated)
       setSuccess('Cotización actualizada correctamente.')
+      toast.success(ADMIN_TOASTS.quoteRequest.status.success)
     } catch {
+      toast.error(ADMIN_TOASTS.quoteRequest.status.error)
       setError('No se pudieron guardar los cambios.')
     } finally {
       setSaving(false)

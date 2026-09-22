@@ -9,10 +9,13 @@ import { createTechnicalSheet, deleteTechnicalSheet, getTechnicalSheets, renameT
 import type { TechnicalSheet } from '../../types/catalog'
 import { can, PERMISSIONS } from '../../auth/permissions'
 import { useAdminUser } from '../../components/admin/ProtectedRoute'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 
 const MAX_SIZE = 10 * 1024 * 1024
 
 export function AdminTechnicalSheetsPage() {
+  const toast = useToast()
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.technicalSheetsCreate), mayUpdate = can(user, PERMISSIONS.technicalSheetsUpdate), mayDelete = can(user, PERMISSIONS.technicalSheetsDelete)
   const { requestConfirmation, requestText } = useSystemDialog()
@@ -54,7 +57,8 @@ export function AdminTechnicalSheetsPage() {
     try {
       const created = await createTechnicalSheet(name.trim(), file!)
       setItems(current => [created, ...current]); setShowCreate(false); setName(''); setFile(null); setMessage('Ficha técnica agregada correctamente.')
-    } catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo agregar la ficha técnica.')) }
+      toast.success(ADMIN_TOASTS.technicalSheet.create.success)
+    } catch (e) { toast.error(ADMIN_TOASTS.technicalSheet.create.error); setError(getSafeApiErrorMessage(e, 'No se pudo agregar la ficha técnica.')) }
     finally { setBusy(false) }
   }
 
@@ -63,8 +67,8 @@ export function AdminTechnicalSheetsPage() {
     if (next === null || next.trim() === item.name) return
     if (!next.trim()) { setError('El nombre es obligatorio.'); return }
     setBusy(true)
-    try { const updated = await renameTechnicalSheet(item.id, next.trim()); setItems(xs => xs.map(x => x.id === item.id ? updated : x)); setMessage('Nombre actualizado.') }
-    catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo cambiar el nombre.')) }
+    try { const updated = await renameTechnicalSheet(item.id, next.trim()); setItems(xs => xs.map(x => x.id === item.id ? updated : x)); setMessage('Nombre actualizado.'); toast.success(ADMIN_TOASTS.technicalSheet.update.success) }
+    catch (e) { toast.error(ADMIN_TOASTS.technicalSheet.update.error); setError(getSafeApiErrorMessage(e, 'No se pudo cambiar el nombre.')) }
     finally { setBusy(false) }
   }
 
@@ -72,16 +76,16 @@ export function AdminTechnicalSheetsPage() {
     const id = replacingId.current; const validation = validateFile(selected)
     if (!id || validation) { if (validation) setError(validation); return }
     setBusy(true)
-    try { const updated = await replaceTechnicalSheetFile(id, selected!); setItems(xs => xs.map(x => x.id === id ? updated : x)); setMessage('Archivo reemplazado correctamente.') }
-    catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo reemplazar el archivo.')) }
+    try { const updated = await replaceTechnicalSheetFile(id, selected!); setItems(xs => xs.map(x => x.id === id ? updated : x)); setMessage('Archivo reemplazado correctamente.'); toast.success(ADMIN_TOASTS.technicalSheet.replace.success) }
+    catch (e) { toast.error(ADMIN_TOASTS.technicalSheet.replace.error); setError(getSafeApiErrorMessage(e, 'No se pudo reemplazar el archivo.')) }
     finally { setBusy(false); if (replaceInput.current) replaceInput.current.value = '' }
   }
 
   const remove = async (item: TechnicalSheet) => {
     if (!await requestConfirmation({ title: 'Eliminar ficha técnica', message: `¿Eliminar la ficha técnica "${item.name}"? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', variant: 'danger' })) return
     setBusy(true)
-    try { await deleteTechnicalSheet(item.id); setItems(xs => xs.filter(x => x.id !== item.id)); setMessage('Ficha técnica eliminada.') }
-    catch (e) { setError(getSafeApiErrorMessage(e, 'No se pudo eliminar la ficha técnica.')) }
+    try { await deleteTechnicalSheet(item.id); setItems(xs => xs.filter(x => x.id !== item.id)); setMessage('Ficha técnica eliminada.'); toast.success(ADMIN_TOASTS.technicalSheet.remove.success) }
+    catch (e) { toast.error(ADMIN_TOASTS.technicalSheet.remove.error); setError(getSafeApiErrorMessage(e, 'No se pudo eliminar la ficha técnica.')) }
     finally { setBusy(false) }
   }
 
