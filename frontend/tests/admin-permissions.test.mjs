@@ -84,3 +84,22 @@ test('listado mantiene datos, acciones y estructura responsive', async () => {
   assert.match(styles, /@media \(max-width: 780px\)/)
   assert.match(styles, /@media \(max-width: 480px\)/)
 })
+
+test('emisión de cotizaciones separa el flujo seller del selector obligatorio de support_admin', async () => {
+  const editor = await readFile(new URL('../src/pages/admin/CommercialQuoteEditorPage.tsx', import.meta.url), 'utf8')
+  const quoteTypes = await readFile(new URL('../src/types/commercialQuote.ts', import.meta.url), 'utf8')
+  const userApi = await readFile(new URL('../src/services/adminUsersApi.ts', import.meta.url), 'utf8')
+
+  assert.match(editor, /const supportAdmin = isSupportAdmin/)
+  assert.match(editor, /if \(!supportAdmin \|\| routeId\) return/)
+  assert.match(editor, /listManagedUsers\(\{ role: 'seller', is_active: true \}/)
+  assert.match(editor, /setSelectedSellerId\] = useState<number \| null>\(null\)/)
+  assert.match(editor, /Vendedor responsable \*/)
+  assert.match(editor, /<option value="">Seleccione un vendedor<\/option>/)
+  assert.match(editor, /eligibleSellers\.length === 0 \|\| selectedSellerId === null/)
+  assert.match(editor, /supportAdmin && selectedSellerId !== null \? \{ seller_user_id: selectedSellerId \} : \{\}/)
+  assert.match(editor, /catch\(e\) \{ setError\(/)
+  assert.doesNotMatch(editor, /setSelectedSellerId\([^)]*catch/)
+  assert.match(quoteTypes, /seller_user_id\?: number/)
+  assert.match(userApi, /authFetch<ManagedUser\[]>\('\/admin\/users'/)
+})

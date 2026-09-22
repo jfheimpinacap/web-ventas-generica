@@ -153,10 +153,12 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.HasIndex(quote => quote.Folio).HasDatabaseName("UX_CommercialQuotes_Folio").IsUnique().HasFilter("[Folio] IS NOT NULL");
             entity.HasIndex(quote => new { quote.FolioYear, quote.FolioSequenceNumber }).HasDatabaseName("UX_CommercialQuotes_FolioYear_Sequence").IsUnique().HasFilter("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL");
             entity.HasIndex(quote => quote.ResponsibleSellerId);
+            entity.HasIndex(quote => quote.IssuedById);
             entity.HasIndex(quote => quote.CustomerProfileId);
             entity.HasIndex(quote => quote.CreatedAt);
             entity.HasOne(quote => quote.CustomerProfile).WithMany().HasForeignKey(quote => quote.CustomerProfileId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(quote => quote.ResponsibleSeller).WithMany().HasForeignKey(quote => quote.ResponsibleSellerId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(quote => quote.IssuedBy).WithMany().HasForeignKey(quote => quote.IssuedById).OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<CommercialQuoteFolioCounter>(entity =>

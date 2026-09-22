@@ -60,13 +60,13 @@ public static class AdminCommercialQuoteEndpoints
         var count = await query.CountAsync(ct);
         var results = await query.OrderByDescending(quote => quote.UpdatedAt).ThenByDescending(quote => quote.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.ValidityDays, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
+            .Select(quote => new CommercialQuoteSummaryResponse(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.Currency, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerContactName, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.IssuedById, quote.IssuedBy.Username, quote.ValidityDays, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.Items.Count, quote.CreatedAt, quote.UpdatedAt)).ToListAsync(ct);
         return Results.Ok(new CommercialQuotePageResponse(results, page, pageSize, count));
     }
 
     private static async Task<IResult> GetAsync(int id, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
     {
-        var query = db.CommercialQuotes.AsNoTracking().Include(quote => quote.Items).Where(quote => quote.Id == id);
+        var query = db.CommercialQuotes.AsNoTracking().Include(quote => quote.Items).Include(quote => quote.IssuedBy).Where(quote => quote.Id == id);
         if (!principal.IsInRole(AppRoles.SupportAdmin)) query = query.Where(quote => quote.ResponsibleSellerId == UserId(principal));
         var quote = await query.SingleOrDefaultAsync(ct);
         return quote is null ? Results.NotFound() : Results.Ok(ToDetail(quote));
@@ -97,8 +97,11 @@ public static class AdminCommercialQuoteEndpoints
     private static async Task<IResult> IssueAsync(CommercialQuoteIssueRequest request, ClaimsPrincipal principal, JemNexusDbContext db, TimeProvider timeProvider,
         CommercialQuoteIssueCoordinator coordinator, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
     {
-        var seller = await ActiveSellerAsync(principal, db, ct);
-        if (seller is null) return Results.Forbid();
+        var effective = await ResolveEffectiveSellerAsync(request.SellerUserId, principal, db, ct);
+        if (effective.Forbidden) return Results.Forbid();
+        if (effective.Errors.Count > 0) return Results.ValidationProblem(effective.Errors);
+        var actor = effective.Actor!;
+        var seller = effective.Seller!;
         if (string.IsNullOrWhiteSpace(idempotencyKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia es obligatoria."] });
         if (!Guid.TryParse(idempotencyKey, out var parsedKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotency_key"] = ["La clave de idempotencia debe ser un UUID válido."] });
         var effectiveValidityDays = request.ValidityDays ?? CommercialQuoteRules.DefaultValidityDays;
@@ -117,6 +120,8 @@ public static class AdminCommercialQuoteEndpoints
         quote.ResponsibleSellerCode = seller.SellerCode!;
         quote.ResponsibleSellerEmail = seller.Email;
         quote.ResponsibleSellerPhone = seller.Phone;
+        quote.IssuedById = actor.Id;
+        quote.IssuedBy = actor;
         var errors = await ValidateForIssueAsync(quote, db, ct);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
         CommercialQuoteCalculator.Calculate(quote);
@@ -146,6 +151,7 @@ public static class AdminCommercialQuoteEndpoints
 
     private static Task<CommercialQuoteIssueIdempotencyRecord?> FindIdempotencyRecordAsync(JemNexusDbContext db, int sellerId, Guid key, CancellationToken ct) =>
         db.CommercialQuoteIssueIdempotencyRecords.AsNoTracking().Include(record => record.CommercialQuote).ThenInclude(quote => quote.Items)
+            .Include(record => record.CommercialQuote).ThenInclude(quote => quote.IssuedBy)
             .SingleOrDefaultAsync(record => record.ResponsibleSellerId == sellerId && record.IdempotencyKey == key, ct);
 
     private static IResult ReplayOrConflict(CommercialQuoteIssueIdempotencyRecord record, string fingerprint) =>
@@ -232,10 +238,41 @@ public static class AdminCommercialQuoteEndpoints
         return new PreparedQuote(errors.Count == 0 ? quote : null, errors);
     }
 
-    private static async Task<AppUser?> ActiveSellerAsync(ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct) =>
-        await db.AppUsers.SingleOrDefaultAsync(user => user.Id == UserId(principal) && user.IsActive && user.Role == AppRoles.Seller && user.SellerCode != null, ct);
+    private static async Task<EffectiveSellerResolution> ResolveEffectiveSellerAsync(int? selectedSellerId, ClaimsPrincipal principal, JemNexusDbContext db, CancellationToken ct)
+    {
+        var actorId = UserId(principal);
+        var actor = await db.AppUsers.SingleOrDefaultAsync(user => user.Id == actorId && user.IsActive, ct);
+        if (actor is null) return EffectiveSellerResolution.Forbid();
+
+        if (principal.IsInRole(AppRoles.SupportAdmin))
+        {
+            if (actor.Role != AppRoles.SupportAdmin) return EffectiveSellerResolution.Forbid();
+            if (selectedSellerId is null)
+                return EffectiveSellerResolution.Invalid("El vendedor responsable es obligatorio para un superadministrador.");
+            var selected = await db.AppUsers.SingleOrDefaultAsync(user => user.Id == selectedSellerId.Value, ct);
+            return IsEligibleSeller(selected)
+                ? EffectiveSellerResolution.Success(actor, selected!)
+                : EffectiveSellerResolution.Invalid("El vendedor responsable no existe, está inactivo o no es elegible para emitir cotizaciones.");
+        }
+
+        if (actor.Role != AppRoles.Seller || !principal.IsInRole(AppRoles.Seller) || !IsEligibleSeller(actor))
+            return EffectiveSellerResolution.Forbid();
+        if (selectedSellerId.HasValue && selectedSellerId.Value != actor.Id)
+            return EffectiveSellerResolution.Invalid("Un vendedor no puede emitir una cotización en nombre de otro usuario.");
+        return EffectiveSellerResolution.Success(actor, actor);
+    }
+
+    private static bool IsEligibleSeller(AppUser? user) => user is { IsActive: true, Role: AppRoles.Seller }
+        && !string.IsNullOrWhiteSpace(user.SellerCode);
+
     private static int UserId(ClaimsPrincipal principal) => int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub"), out var id) ? id : 0;
     private static void ValidateText(Dictionary<string, string[]> errors, string key, string value, int min, int max) { if (value.Length < min || value.Length > max) errors[key] = [$"El campo debe tener entre {min} y {max} caracteres."]; }
-    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
+    private static CommercialQuoteDetailResponse ToDetail(CommercialQuote quote) => new(quote.Id, quote.Status, quote.Folio, quote.IssuedAtUtc, quote.IssuedOn, quote.CustomerProfileId, quote.CustomerBusinessName, quote.CustomerRut, quote.CustomerBusinessActivity, quote.CustomerAddress, quote.CustomerPhone, quote.CustomerCityOrCommune, quote.CustomerContactName, quote.CustomerEmail, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone, quote.IssuedById, quote.IssuedBy.Username, quote.Currency, quote.SaleCondition, quote.ValidityDays, quote.DetailedDescription, quote.TaxRatePercent, quote.NetAmount, quote.TaxAmount, quote.TotalAmount, quote.CreatedAt, quote.UpdatedAt, quote.Items.OrderBy(item => item.Position).Select(item => new CommercialQuoteItemResponse(item.Id, item.Position, item.Origin, item.ProductId, item.ProductName, item.BrandName, item.ModelName, item.Quantity, item.UnitNetAmount, item.DiscountPercent, item.FinalUnitNetAmount, item.LineNetAmount)).ToList());
     private sealed record PreparedQuote(CommercialQuote? Quote, Dictionary<string, string[]> Errors);
+    private sealed record EffectiveSellerResolution(AppUser? Actor, AppUser? Seller, bool Forbidden, Dictionary<string, string[]> Errors)
+    {
+        public static EffectiveSellerResolution Success(AppUser actor, AppUser seller) => new(actor, seller, false, []);
+        public static EffectiveSellerResolution Forbid() => new(null, null, true, []);
+        public static EffectiveSellerResolution Invalid(string message) => new(null, null, false, new() { ["seller_user_id"] = [message] });
+    }
 }

@@ -335,6 +335,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<int?>("FolioYear").HasColumnType("int");
                     b.Property<long?>("FolioSequenceNumber").HasColumnType("bigint");
                     b.Property<DateTime?>("IssuedAtUtc").HasColumnType("datetime2");
+                    b.Property<int>("IssuedById").HasColumnType("int");
                     b.Property<DateOnly?>("IssuedOn").HasColumnType("date");
                     b.Property<DateTimeOffset>("CreatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
                     b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
@@ -361,7 +362,7 @@ namespace JemNexus.Api.Data.Migrations
                     b.Property<decimal>("TotalAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<DateTimeOffset>("UpdatedAt").ValueGeneratedOnAdd().HasColumnType("datetimeoffset").HasDefaultValueSql("SYSUTCDATETIME()");
                     b.Property<int>("ValidityDays").ValueGeneratedOnAdd().HasColumnType("int").HasDefaultValue(15);
-                    b.HasKey("Id"); b.HasIndex("CreatedAt"); b.HasIndex("CustomerProfileId"); b.HasIndex("ResponsibleSellerId"); b.HasIndex("Status"); b.HasIndex("Folio").IsUnique().HasDatabaseName("UX_CommercialQuotes_Folio").HasFilter("[Folio] IS NOT NULL"); b.HasIndex("FolioYear", "FolioSequenceNumber").IsUnique().HasDatabaseName("UX_CommercialQuotes_FolioYear_Sequence").HasFilter("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL"); b.ToTable("CommercialQuotes");
+                    b.HasKey("Id"); b.HasIndex("CreatedAt"); b.HasIndex("CustomerProfileId"); b.HasIndex("IssuedById"); b.HasIndex("ResponsibleSellerId"); b.HasIndex("Status"); b.HasIndex("Folio").IsUnique().HasDatabaseName("UX_CommercialQuotes_Folio").HasFilter("[Folio] IS NOT NULL"); b.HasIndex("FolioYear", "FolioSequenceNumber").IsUnique().HasDatabaseName("UX_CommercialQuotes_FolioYear_Sequence").HasFilter("[FolioYear] IS NOT NULL AND [FolioSequenceNumber] IS NOT NULL"); b.ToTable("CommercialQuotes");
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteFolioCounter", b =>
@@ -1328,8 +1329,9 @@ namespace JemNexus.Api.Data.Migrations
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuote", b =>
                 {
                     b.HasOne("JemNexus.Api.Models.CustomerProfile", "CustomerProfile").WithMany().HasForeignKey("CustomerProfileId").OnDelete(DeleteBehavior.SetNull);
+                    b.HasOne("JemNexus.Api.Models.AppUser", "IssuedBy").WithMany().HasForeignKey("IssuedById").OnDelete(DeleteBehavior.NoAction).IsRequired();
                     b.HasOne("JemNexus.Api.Models.AppUser", "ResponsibleSeller").WithMany().HasForeignKey("ResponsibleSellerId").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.Navigation("CustomerProfile"); b.Navigation("ResponsibleSeller");
+                    b.Navigation("CustomerProfile"); b.Navigation("IssuedBy"); b.Navigation("ResponsibleSeller");
                 });
 
             modelBuilder.Entity("JemNexus.Api.Models.CommercialQuoteItem", b =>

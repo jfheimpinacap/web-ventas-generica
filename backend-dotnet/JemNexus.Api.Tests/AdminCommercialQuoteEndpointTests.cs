@@ -36,16 +36,77 @@ public sealed class AdminCommercialQuoteEndpointTests
         Assert.Equal(1, quote.GetProperty("items").GetArrayLength());
         Assert.Equal("seller@example.test", quote.GetProperty("seller_email").GetString());
         Assert.Equal("+56 9 1111 2222", quote.GetProperty("seller_phone").GetString());
+        var persisted = await factory.QuoteIdentityAsync(quote.GetProperty("id").GetInt32());
+        Assert.Equal(persisted.ResponsibleSellerId, persisted.IssuedById);
+        Assert.Equal("seller", quote.GetProperty("issued_by_username").GetString());
         Assert.Equal(1, await factory.QuoteCountAsync());
     }
 
-    [Theory]
-    [InlineData("support", HttpStatusCode.Forbidden)]
-    public async Task OnlySellerCanIssue(string username, HttpStatusCode expected)
+    [Fact]
+    public async Task SupportAdminMustSelectAnEligibleSeller()
     {
-        await using var factory = new QuoteApiFactory(); using var client = await factory.AuthorizedClientAsync(username);
-        Assert.Equal(expected, (await IssueAsync(client, ValidIssue())).StatusCode);
+        await using var factory = new QuoteApiFactory(); using var client = await factory.AuthorizedClientAsync("support");
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(client, ValidIssue())).StatusCode);
         Assert.Equal(0, await factory.QuoteCountAsync());
+    }
+
+    [Fact]
+    public async Task SellerCannotSelectAnotherSellerOrSupportAdmin()
+    {
+        await using var factory = new QuoteApiFactory();
+        await factory.AddUserAsync("other-seller", AppRoles.Seller, "VEN-0002");
+        using var seller = await factory.AuthorizedClientAsync("seller");
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(seller, ValidIssue(sellerUserId: await factory.UserIdAsync("other-seller")))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(seller, ValidIssue(sellerUserId: await factory.UserIdAsync("support")))).StatusCode);
+        Assert.Equal(0, await factory.QuoteCountAsync());
+    }
+
+    [Fact]
+    public async Task SupportAdminIssuesForSelectedSellerWithSeparateActorAndSellerSnapshots()
+    {
+        await using var factory = new QuoteApiFactory();
+        await factory.AddUserAsync("selected-seller", AppRoles.Seller, "VEN-0099");
+        var sellerId = await factory.UserIdAsync("selected-seller"); var supportId = await factory.UserIdAsync("support");
+        using var support = await factory.AuthorizedClientAsync("support");
+        using var response = await IssueAsync(support, ValidIssue(sellerUserId: sellerId));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var quote = await JsonAsync(response); var id = quote.GetProperty("id").GetInt32();
+        var identity = await factory.QuoteIdentityAsync(id);
+        Assert.Equal(sellerId, identity.ResponsibleSellerId); Assert.Equal(supportId, identity.IssuedById);
+        Assert.Equal("selected-seller", identity.ResponsibleSellerName); Assert.Equal("VEN-0099", identity.ResponsibleSellerCode);
+        Assert.Equal("selected-seller@example.test", identity.ResponsibleSellerEmail); Assert.Equal(SellerPhone, identity.ResponsibleSellerPhone);
+        Assert.Equal(supportId, quote.GetProperty("issued_by_id").GetInt32()); Assert.Equal("support", quote.GetProperty("issued_by_username").GetString());
+        Assert.Equal("selected-seller", quote.GetProperty("seller_name").GetString()); Assert.Equal("VEN-0099", quote.GetProperty("seller_code").GetString());
+    }
+
+    [Fact]
+    public async Task SupportAdminRejectsMissingInactiveUnknownCodeMissingAndNonSellerSelections()
+    {
+        await using var factory = new QuoteApiFactory();
+        await factory.AddUserAsync("inactive-seller", AppRoles.Seller, "VEN-0003", false);
+        await factory.AddUserAsync("code-missing", AppRoles.Seller, null);
+        using var support = await factory.AuthorizedClientAsync("support");
+        foreach (var id in new[] { 999999, await factory.UserIdAsync("inactive-seller"), await factory.UserIdAsync("code-missing"), await factory.UserIdAsync("support") })
+            Assert.Equal(HttpStatusCode.BadRequest, (await IssueAsync(support, ValidIssue(sellerUserId: id))).StatusCode);
+        Assert.Equal(0, await factory.QuoteCountAsync());
+    }
+
+    [Fact]
+    public async Task SupportIdempotencyIsScopedByEffectiveSellerAndReplayPreservesOriginalActor()
+    {
+        await using var factory = new QuoteApiFactory();
+        await factory.AddUserAsync("seller-two", AppRoles.Seller, "VEN-0002");
+        await factory.AddUserAsync("support-two", AppRoles.SupportAdmin, null);
+        var firstSellerId = await factory.UserIdAsync("seller"); var secondSellerId = await factory.UserIdAsync("seller-two"); var supportId = await factory.UserIdAsync("support");
+        using var support = await factory.AuthorizedClientAsync("support"); using var otherSupport = await factory.AuthorizedClientAsync("support-two"); var key = Guid.NewGuid();
+        using var first = await IssueAsync(support, ValidIssue(sellerUserId: firstSellerId), key);
+        using var replay = await IssueAsync(otherSupport, ValidIssue(sellerUserId: firstSellerId), key);
+        using var second = await IssueAsync(support, ValidIssue(sellerUserId: secondSellerId), key);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode); Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var firstJson = await JsonAsync(first); var replayJson = await JsonAsync(replay); var secondJson = await JsonAsync(second);
+        Assert.Equal(firstJson.GetProperty("id").GetInt32(), replayJson.GetProperty("id").GetInt32()); Assert.NotEqual(firstJson.GetProperty("id").GetInt32(), secondJson.GetProperty("id").GetInt32());
+        Assert.Equal(supportId, (await factory.QuoteIdentityAsync(firstJson.GetProperty("id").GetInt32())).IssuedById);
+        Assert.Equal(2, await factory.QuoteCountAsync()); Assert.Equal(2, await factory.IdempotencyCountAsync());
     }
 
     [Fact]
@@ -254,7 +315,7 @@ public sealed class AdminCommercialQuoteEndpointTests
             Assert.DoesNotContain(forbidden, raw, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static object ValidIssue(string rut = "12.345.678-5", string currency = "CLP", object[]? items = null, int? validityDays = 15, bool includeValidity = true, string saleCondition = CommercialQuoteSaleConditions.Cash)
+    private static object ValidIssue(string rut = "12.345.678-5", string currency = "CLP", object[]? items = null, int? validityDays = 15, bool includeValidity = true, string saleCondition = CommercialQuoteSaleConditions.Cash, int? sellerUserId = null)
     {
         var payload = new Dictionary<string, object?>
         {
@@ -265,6 +326,7 @@ public sealed class AdminCommercialQuoteEndpointTests
             ["items"] = items ?? [new { source = "FreeText", product_name = "Servicio", quantity = 2, unit_net_amount = 100m, discount_percent = 0m }]
         };
         if (includeValidity) payload["validity_days"] = validityDays;
+        if (sellerUserId.HasValue) payload["seller_user_id"] = sellerUserId.Value;
         return payload;
     }
     private static async Task<HttpResponseMessage> IssueAsync(HttpClient client, object payload, Guid? key = null)
@@ -301,10 +363,10 @@ public sealed class AdminCommercialQuoteEndpointTests
             Assert.Equal(HttpStatusCode.OK, login.StatusCode); var json = await JsonAsync(login);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", json.GetProperty("access").GetString()); return client;
         }
-        public async Task AddUserAsync(string username, string role, string? sellerCode)
+        public async Task AddUserAsync(string username, string role, string? sellerCode, bool isActive = true)
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>(); var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
-            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = SellerPhone, IsActive = true, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password);
+            var user = new AppUser { Username = username, Role = role, SellerCode = sellerCode, FullName = username, Email = $"{username}@example.test", Phone = SellerPhone, IsActive = isActive, IsStaff = true }; user.PasswordHash = hasher.HashPassword(user, Password);
             if (role == AppRoles.Seller) DefaultSellerPermissions.EnsureAssigned(user);
             db.Add(user); await db.SaveChangesAsync();
         }
@@ -328,6 +390,7 @@ public sealed class AdminCommercialQuoteEndpointTests
         public async Task<int> IdempotencyCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteIssueIdempotencyRecords.CountAsync(); }
         public async Task<int> FolioCounterCountAsync() { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuoteFolioCounters.AsNoTracking().CountAsync(); }
         public async Task<int> UserIdAsync(string username) { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().AppUsers.AsNoTracking().Where(user => user.Username == username).Select(user => user.Id).SingleAsync(); }
+        public async Task<QuoteIdentitySnapshot> QuoteIdentityAsync(int id) { using var scope = Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<JemNexusDbContext>().CommercialQuotes.AsNoTracking().Where(quote => quote.Id == id).Select(quote => new QuoteIdentitySnapshot(quote.ResponsibleSellerId, quote.IssuedById, quote.ResponsibleSellerName, quote.ResponsibleSellerCode, quote.ResponsibleSellerEmail, quote.ResponsibleSellerPhone)).SingleAsync(); }
         public async Task<List<IdempotencyRecordSnapshot>> IdempotencyRecordsAsync()
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
@@ -340,4 +403,5 @@ public sealed class AdminCommercialQuoteEndpointTests
     }
 
     public sealed record IdempotencyRecordSnapshot(int ResponsibleSellerId, Guid IdempotencyKey, string RequestFingerprint, int CommercialQuoteId, int QuoteResponsibleSellerId);
+    public sealed record QuoteIdentitySnapshot(int ResponsibleSellerId, int IssuedById, string ResponsibleSellerName, string ResponsibleSellerCode, string? ResponsibleSellerEmail, string? ResponsibleSellerPhone);
 }
