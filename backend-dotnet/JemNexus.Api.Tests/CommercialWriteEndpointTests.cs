@@ -448,9 +448,12 @@ public sealed class CommercialWriteEndpointTests : IDisposable
     public async Task DeleteQuotedProductPreservesQuoteItemSnapshotsAndNullsHistoricalReferences()
     {
         await _factory.SeedCommercialDataAsync();
+        int sellerId;
         using (var scope = _factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var seller = await dbContext.AppUsers.SingleAsync(user => user.Username == "demo");
+            sellerId = seller.Id;
             var product = await dbContext.Products.SingleAsync(product => product.Id == 1);
             product.IsPublished = false;
             product.IsFeatured = false;
@@ -464,7 +467,8 @@ public sealed class CommercialWriteEndpointTests : IDisposable
                 SaleCondition = CommercialQuoteSaleConditions.Cash, ValidityDays = 30,
                 CustomerBusinessName = "Cliente histórico", CustomerRut = "12.345.678-5", CustomerBusinessActivity = "Construcción",
                 CustomerAddress = "Dirección 123", CustomerPhone = "+56912345678", CustomerCityOrCommune = "Santiago",
-                CustomerContactName = "Contacto", ResponsibleSellerId = 1, ResponsibleSellerName = "Vendedor", ResponsibleSellerCode = "VEN-0001"
+                CustomerContactName = "Contacto", ResponsibleSellerId = seller.Id, ResponsibleSeller = seller,
+                IssuedById = seller.Id, IssuedBy = seller, ResponsibleSellerName = "Vendedor", ResponsibleSellerCode = "VEN-0001"
             };
             quote.Items.Add(new CommercialQuoteItem
             {
@@ -490,6 +494,7 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, pdfResponse.StatusCode);
         Assert.Equal("application/pdf", pdfResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(sellerId, detail.GetProperty("issued_by_id").GetInt32());
         var item = detail.GetProperty("items")[0];
         Assert.Equal(JsonValueKind.Null, item.GetProperty("product_id").ValueKind);
         Assert.Equal(CommercialQuoteItemOrigins.Catalog, item.GetProperty("source").GetString());
@@ -506,7 +511,8 @@ public sealed class CommercialWriteEndpointTests : IDisposable
         using var assertScope = _factory.Services.CreateScope();
         var assertContext = assertScope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
         Assert.False(await assertContext.Products.AnyAsync(product => product.Id == 1));
-        Assert.True(await assertContext.CommercialQuotes.AnyAsync(quote => quote.Id == 20));
+        Assert.True(await assertContext.CommercialQuotes.AnyAsync(quote => quote.Id == 20
+            && quote.ResponsibleSellerId == sellerId && quote.IssuedById == sellerId));
         Assert.True(await assertContext.CommercialQuoteItems.AnyAsync(quoteItem => quoteItem.Id == 20 && quoteItem.ProductId == null));
         Assert.True(await assertContext.QuoteRequests.AnyAsync(quote => quote.Id == 1 && quote.ProductId == null));
     }
