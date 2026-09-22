@@ -44,7 +44,30 @@ public sealed class MigrationMetadataTests
         Assert.Contains("20260824010000_AddSellerContactQuoteSnapshots", discoveredMigrationIds);
         Assert.Contains("20260825010000_AddCustomerProfileStatus", discoveredMigrationIds);
         Assert.Contains("20260830000000_PreserveQuotesWhenDeletingProducts", discoveredMigrationIds);
+        Assert.Contains("20260922000000_AddCommercialQuoteIssuedBy", discoveredMigrationIds);
         Assert.DoesNotContain(declaredMigrationIds.GroupBy(id => id, StringComparer.Ordinal), group => group.Count() > 1);
+    }
+
+    [Fact]
+    public void CommercialQuoteIssuedByMigrationBackfillsBeforeRequiringActorAndDownOnlyRemovesNewObjects()
+    {
+        var options = new DbContextOptionsBuilder<JemNexusDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=JemNexus_QuoteIssuedByScriptTests;Trusted_Connection=True;TrustServerCertificate=True").Options;
+        using var context = new JemNexusDbContext(options); var migrator = context.GetService<IMigrator>();
+        var up = migrator.GenerateScript("20260830000000_PreserveQuotesWhenDeletingProducts", "20260922000000_AddCommercialQuoteIssuedBy");
+        var addNullable = up.IndexOf("ADD [IssuedById] int NULL", StringComparison.Ordinal);
+        var backfill = up.IndexOf("SET [IssuedById] = [ResponsibleSellerId]", StringComparison.Ordinal);
+        var requireActor = up.IndexOf("ALTER COLUMN [IssuedById] int NOT NULL", StringComparison.Ordinal);
+        var createIndex = up.IndexOf("CREATE INDEX [IX_CommercialQuotes_IssuedById]", StringComparison.Ordinal);
+        var addForeignKey = up.IndexOf("FK_CommercialQuotes_AppUsers_IssuedById", StringComparison.Ordinal);
+        Assert.True(addNullable >= 0 && addNullable < backfill && backfill < requireActor && requireActor < createIndex && createIndex < addForeignKey);
+        Assert.Contains("REFERENCES [AppUsers] ([Id])", up); Assert.DoesNotContain("DROP TABLE", up); Assert.DoesNotContain("DELETE FROM [CommercialQuotes]", up);
+        Assert.DoesNotContain("DROP COLUMN [ResponsibleSellerId]", up); Assert.DoesNotContain("ALTER COLUMN [ResponsibleSellerId]", up);
+
+        var down = migrator.GenerateScript("20260922000000_AddCommercialQuoteIssuedBy", "20260830000000_PreserveQuotesWhenDeletingProducts");
+        Assert.Contains("DROP CONSTRAINT [FK_CommercialQuotes_AppUsers_IssuedById]", down);
+        Assert.Contains("DROP INDEX [IX_CommercialQuotes_IssuedById]", down); Assert.Contains("DROP COLUMN [IssuedById]", down);
+        Assert.DoesNotContain("DROP TABLE", down); Assert.DoesNotContain("ResponsibleSellerId", down);
     }
 
     [Fact]

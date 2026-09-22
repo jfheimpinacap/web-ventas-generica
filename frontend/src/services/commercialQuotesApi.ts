@@ -14,13 +14,15 @@ export async function saveCustomer(customer: CustomerProfileInput, id?: number) 
 export function getCommercialQuotes({ search, page, pageSize = 20, signal }: { search?: string; page: number; pageSize?: number; signal?: AbortSignal }) {
   return authFetch<CommercialQuotePage>('/api/admin/commercial-quotes', { params: { search, page, page_size: pageSize }, signal })
 }
-type RawCommercialQuoteDetail = Omit<CommercialQuoteDetail, 'responsibleSellerName' | 'responsibleSellerCode' | 'responsibleSellerEmail' | 'responsibleSellerPhone' | 'validityDays'> & {
+type RawCommercialQuoteDetail = Omit<CommercialQuoteDetail, 'responsibleSellerName' | 'responsibleSellerCode' | 'responsibleSellerEmail' | 'responsibleSellerPhone' | 'issuedById' | 'issuedByUsername' | 'validityDays'> & {
   responsible_seller_name?: string
   responsible_seller_code?: string
   responsible_seller_email?: string | null
   responsible_seller_phone?: string | null
   seller_email?: string | null
   seller_phone?: string | null
+  issued_by_id?: number
+  issued_by_username?: string
   validity_days?: CommercialQuoteValidityDays
   validityDays?: CommercialQuoteValidityDays
 }
@@ -32,6 +34,8 @@ function normalizeCommercialQuoteDetail(quote: RawCommercialQuoteDetail): Commer
     responsibleSellerCode: quote.responsible_seller_code ?? quote.seller_code,
     responsibleSellerEmail: quote.responsible_seller_email ?? quote.seller_email ?? null,
     responsibleSellerPhone: quote.responsible_seller_phone ?? quote.seller_phone ?? null,
+    issuedById: quote.issued_by_id ?? 0,
+    issuedByUsername: quote.issued_by_username ?? '',
     validityDays: quote.validity_days ?? quote.validityDays ?? 15,
   }
 }

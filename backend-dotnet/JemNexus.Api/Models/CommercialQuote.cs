@@ -26,6 +26,8 @@ public sealed class CommercialQuote
     public string? CustomerEmail { get; set; }
     public int ResponsibleSellerId { get; set; }
     public AppUser ResponsibleSeller { get; set; } = null!;
+    public int IssuedById { get; set; }
+    public AppUser IssuedBy { get; set; } = null!;
     public string ResponsibleSellerName { get; set; } = string.Empty;
     public string ResponsibleSellerCode { get; set; } = string.Empty;
     public string? ResponsibleSellerEmail { get; set; }

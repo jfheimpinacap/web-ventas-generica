@@ -38,7 +38,7 @@ export interface CommercialQuoteItemInput {
 
 export interface CommercialQuoteIssueInput extends CustomerSnapshot {
   currency: QuoteCurrency; sale_condition: SaleCondition; validity_days: CommercialQuoteValidityDays
-  detailed_description?: string; items: CommercialQuoteItemInput[]
+  detailed_description?: string; items: CommercialQuoteItemInput[]; seller_user_id?: number
 }
 
 export interface CommercialQuoteItem extends CommercialQuoteItemInput {
@@ -50,6 +50,7 @@ export interface CommercialQuoteDetail extends CustomerSnapshot {
   seller_name: string; seller_code: string; currency: QuoteCurrency; sale_condition: SaleCondition
   responsibleSellerName: string; responsibleSellerCode: string
   responsibleSellerEmail: string | null; responsibleSellerPhone: string | null
+  issuedById: number; issuedByUsername: string
   validityDays: CommercialQuoteValidityDays; detailed_description: string | null; tax_rate_percent: number
   net_amount: number; tax_amount: number; total_amount: number; created_at: string; updated_at: string
   items: CommercialQuoteItem[]
@@ -59,6 +60,7 @@ export interface CommercialQuoteSummary {
   id: number; status: 'Draft' | 'Issued'; folio: string | null; issued_at: string | null; issued_on: string | null
   currency: QuoteCurrency; customer_business_name: string; customer_rut: string; customer_contact_name: string
   seller_name: string; seller_code: string; net_amount: number; tax_amount: number; total_amount: number
+  issued_by_id: number; issued_by_username: string
   item_count: number; created_at: string; updated_at: string
 }
 
