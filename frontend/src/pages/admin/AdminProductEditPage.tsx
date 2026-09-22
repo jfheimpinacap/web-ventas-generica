@@ -42,6 +42,8 @@ import type {
   SupplierSummary,
   TechnicalSheet,
 } from "../../types/catalog";
+import { useToast } from "../../toasts/ToastContext";
+import { ADMIN_TOASTS } from "../../toasts/adminToastMessages";
 
 function mapProductToFormValues(
   product: Awaited<ReturnType<typeof getAdminProduct>>,
@@ -90,6 +92,7 @@ const PLACEHOLDER_IMAGE =
 const PRODUCT_EDIT_FORM_ID = "admin-product-edit-form";
 
 export function AdminProductEditPage() {
+  const toast = useToast();
   const user = useAdminUser() ?? undefined;
   const mayManageImages = can(user, PERMISSIONS.productImagesManage);
   const mayDelete = can(user, PERMISSIONS.productsDelete);
@@ -226,7 +229,9 @@ export function AdminProductEditPage() {
       const persistedValues = mapProductToFormValues(updated);
       setInitialValues(persistedValues);
       setFormValues(persistedValues);
+      toast.success(ADMIN_TOASTS.product.update.success);
     } catch (submitError) {
+      toast.error(ADMIN_TOASTS.product.update.error);
       setError(getSafeApiErrorMessage(submitError, "No se pudo actualizar el producto."));
     } finally {
       submittingRef.current = false;
@@ -261,6 +266,9 @@ export function AdminProductEditPage() {
       }
     }
 
+    if (uploaded > 0) toast.success(ADMIN_TOASTS.image.add.success);
+    if (uploaded < queue.length) toast.error(ADMIN_TOASTS.image.add.error);
+
     pending.removeSuccessfulImages(successfulIds);
     if (successfulIds.has(selectedPendingId ?? "")) setSelectedPendingId(null);
     try {
@@ -287,7 +295,9 @@ export function AdminProductEditPage() {
       await updateProductImage(imageId, { is_main: true });
       await refreshImages(productId);
       setImageStatus("Imagen principal actualizada.");
+      toast.success(ADMIN_TOASTS.image.primary.success);
     } catch {
+      toast.error(ADMIN_TOASTS.image.primary.error);
       setImageError("No se pudo actualizar la imagen principal.");
     } finally {
       imageSavingRef.current = false;
@@ -307,7 +317,9 @@ export function AdminProductEditPage() {
       await deleteProductImage(imageId);
       await refreshImages(productId);
       setImageStatus("Imagen eliminada.");
+      toast.success(ADMIN_TOASTS.image.remove.success);
     } catch {
+      toast.error(ADMIN_TOASTS.image.remove.error);
       setImageError("No se pudo eliminar la imagen.");
     } finally {
       imageSavingRef.current = false;
@@ -333,7 +345,9 @@ export function AdminProductEditPage() {
       await refreshMediaData(productId);
       setSpecForm(initialSpecForm);
       setSpecStatus("Especificación agregada.");
+      toast.success(ADMIN_TOASTS.specification.create.success);
     } catch {
+      toast.error(ADMIN_TOASTS.specification.create.error);
       setSpecError("No se pudo crear la especificación.");
     } finally {
       setSpecSaving(false);
@@ -353,7 +367,9 @@ export function AdminProductEditPage() {
       await updateProductSpec(specId, payload);
       await refreshMediaData(productId);
       setSpecStatus("Especificación actualizada.");
+      toast.success(ADMIN_TOASTS.specification.update.success);
     } catch {
+      toast.error(ADMIN_TOASTS.specification.update.error);
       setSpecError("No se pudo actualizar la especificación.");
     } finally {
       setSpecSaving(false);
@@ -371,7 +387,9 @@ export function AdminProductEditPage() {
       await deleteProductSpec(specId);
       await refreshMediaData(productId);
       setSpecStatus("Especificación eliminada.");
+      toast.success(ADMIN_TOASTS.specification.remove.success);
     } catch {
+      toast.error(ADMIN_TOASTS.specification.remove.error);
       setSpecError("No se pudo eliminar la especificación.");
     } finally {
       setSpecSaving(false);
@@ -385,8 +403,10 @@ export function AdminProductEditPage() {
       setIsDeleting(true);
       setDeleteError(null);
       await deleteProduct(slug);
+      toast.success(ADMIN_TOASTS.product.remove.success);
       navigate("/admin/productos?status=deleted");
     } catch (error) {
+      toast.error(ADMIN_TOASTS.product.remove.error);
       setDeleteError(
         getSafeApiErrorMessage(
           error,

@@ -8,6 +8,8 @@ import { useCommercialQuotePdfDownload } from '../../hooks/useCommercialQuotePdf
 import { can, PERMISSIONS } from '../../auth/permissions'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { getAdminQuotes, updateQuote } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import { getCommercialQuotes } from '../../services/commercialQuotesApi'
 import type { CommercialQuoteSummary } from '../../types/commercialQuote'
 import { money } from '../../utils/commercialQuote'
@@ -30,6 +32,7 @@ const STATUS_OPTIONS: Array<{ value: QuoteStatus; label: string }> = [
 ]
 
 function QuoteRequestsView() {
+  const toast = useToast()
   const user = useAdminUser() ?? undefined
   const mayUpdate = can(user, PERMISSIONS.quoteRequestsUpdate)
   const [items, setItems] = useState<QuoteRequestAdmin[]>([])
@@ -91,7 +94,9 @@ function QuoteRequestsView() {
       setError(null)
       const updated = await updateQuote(item.id, { status: nextStatus })
       setItems((current) => current.map((candidate) => (candidate.id === item.id ? updated : candidate)))
+      toast.success(ADMIN_TOASTS.quoteRequest.status.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.quoteRequest.status.error)
       setError(getSafeApiErrorMessage(error, 'No se pudo actualizar el estado de la cotización.'))
     } finally {
       setUpdatingId(null)

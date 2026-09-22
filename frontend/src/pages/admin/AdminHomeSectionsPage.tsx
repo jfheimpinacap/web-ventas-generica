@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
+
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import {
@@ -403,6 +406,7 @@ function SectionPreview({
 }
 
 export function AdminHomeSectionsPage() {
+  const toast = useToast()
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.homeSectionsCreate), mayUpdate = can(user, PERMISSIONS.homeSectionsUpdate), mayDelete = can(user, PERMISSIONS.homeSectionsDelete)
   const [items, setItems] = useState<HomeSectionItem[]>([])
@@ -560,7 +564,9 @@ export function AdminHomeSectionsPage() {
       setSectionFeedback(section, {
         success: `Producto agregado en el slot ${nextPosition}.`,
       })
+      toast.success(ADMIN_TOASTS.homeSection.create.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.homeSection.create.error)
       await refreshItems().catch(() => undefined)
       setSectionFeedback(section, {
         error: getErrorMessage(error, 'No fue posible agregar el producto.'),
@@ -586,7 +592,9 @@ export function AdminHomeSectionsPage() {
       setSectionFeedback(section, {
         success: `Producto movido al slot ${nextPosition}. Si el slot estaba ocupado, se intercambiaron las posiciones.`,
       })
+      toast.success(ADMIN_TOASTS.homeSection.reorder.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.homeSection.reorder.error)
       await refreshItems().catch(() => undefined)
       setSectionFeedback(section, {
         error: getErrorMessage(
@@ -613,7 +621,9 @@ export function AdminHomeSectionsPage() {
       setSectionFeedback(section, {
         success: `Producto quitado. El slot ${item.position} quedó disponible.`,
       })
+      toast.success(ADMIN_TOASTS.homeSection.remove.success)
     } catch (error) {
+      toast.error(ADMIN_TOASTS.homeSection.remove.error)
       await refreshItems().catch(() => undefined)
       setPendingRemoval((current) =>
         current?.item.id === item.id ? null : current,

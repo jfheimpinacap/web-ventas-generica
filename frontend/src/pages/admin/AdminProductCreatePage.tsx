@@ -10,6 +10,8 @@ import { usePendingProductImages } from '../../hooks/usePendingProductImages'
 import { createProduct, createProductImage, getTechnicalSheets } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import { getSafeApiErrorMessage } from '../../services/api'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import type { Brand, Category, ProductFormValues, SupplierSummary, TechnicalSheet } from '../../types/catalog'
 
 const INITIAL_VALUES: ProductFormValues = {
@@ -47,6 +49,7 @@ const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Produ
 const PRODUCT_CREATE_FORM_ID = 'admin-product-create-form'
 
 export function AdminProductCreatePage() {
+  const toast = useToast()
   const navigate = useNavigate()
   const [categories, setCategories] = useState<Category[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
@@ -104,6 +107,7 @@ export function AdminProductCreatePage() {
       setIsSubmitting(true)
       setError(null)
       const createdProduct = await createProduct(values)
+      toast.success(ADMIN_TOASTS.product.create.success)
       const queuedImages = pending.images
       let uploaded = 0
       for (let index = 0; index < queuedImages.length; index += 1) {
@@ -123,6 +127,8 @@ export function AdminProductCreatePage() {
           pending.updateImage(image.id, { status: 'error', error: getSafeApiErrorMessage(uploadError, 'No se pudo cargar esta imagen.') })
         }
       }
+      if (uploaded > 0) toast.success(ADMIN_TOASTS.image.add.success)
+      if (uploaded < queuedImages.length) toast.error(ADMIN_TOASTS.image.add.error)
       if (uploaded < queuedImages.length) {
         const failed = queuedImages.length - uploaded
         navigate(`/admin/productos/${createdProduct.slug}/editar`, { state: { imageError: `El producto fue creado. Se cargaron ${uploaded} de ${queuedImages.length} imágenes; ${failed} no ${failed === 1 ? 'pudo' : 'pudieron'} cargarse. Puedes volver a seleccionarlas y reintentar desde esta sección.` } })
@@ -131,6 +137,7 @@ export function AdminProductCreatePage() {
       pending.clearImages()
       navigate('/admin/productos?status=created')
     } catch (submitError) {
+      toast.error(ADMIN_TOASTS.product.create.error)
       setError(getSafeApiErrorMessage(submitError, 'No se pudo crear el producto.'))
     } finally {
       submittingRef.current = false

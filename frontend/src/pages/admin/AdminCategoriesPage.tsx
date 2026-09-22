@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useSystemDialog } from '../../context/SystemDialogContext'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { AdminIcon } from '../../components/admin/AdminIcon'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
@@ -15,6 +17,7 @@ export function AdminCategoriesPage() {
   const user = useAdminUser() ?? undefined
   const mayCreate = can(user, PERMISSIONS.categoriesCreate), mayUpdate = can(user, PERMISSIONS.categoriesUpdate), mayDelete = can(user, PERMISSIONS.categoriesDelete)
   const { requestConfirmation } = useSystemDialog()
+  const toast = useToast()
   const [items, setItems] = useState<Category[]>([])
   const [selectedRootId, setSelectedRootId] = useState<number | null>(null)
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
@@ -62,8 +65,10 @@ export function AdminCategoriesPage() {
     try {
       await deleteCategory(item.id)
       setSuccess('Categoría borrada.')
+      toast.success(ADMIN_TOASTS.category.remove.success)
       await load()
     } catch (error) {
+      toast.error(ADMIN_TOASTS.category.remove.error)
       setError(getSafeApiErrorMessage(error, 'No se pudo borrar la categoría.'))
     }
   }

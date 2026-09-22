@@ -5,6 +5,8 @@ import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { BrandForm } from '../../components/admin/BrandForm'
 import { createBrand, getAdminBrand, updateBrand } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import type { BrandFormValues } from '../../types/catalog'
 
 const INITIAL_VALUES: BrandFormValues = { name: '', slug: '', description: '', logo: null, is_active: true }
@@ -12,6 +14,7 @@ const INITIAL_VALUES: BrandFormValues = { name: '', slug: '', description: '', l
 export function AdminBrandFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const toast = useToast()
   const isEdit = Boolean(id)
   const [initialValues, setInitialValues] = useState(INITIAL_VALUES)
   const [initialLogoUrl, setInitialLogoUrl] = useState<string | null>(null)
@@ -41,8 +44,10 @@ export function AdminBrandFormPage() {
       setError(null)
       if (id) await updateBrand(Number(id), values)
       else await createBrand(values)
+      toast.success(id ? ADMIN_TOASTS.brand.update.success : ADMIN_TOASTS.brand.create.success)
       navigate('/admin/marcas')
     } catch {
+      toast.error(id ? ADMIN_TOASTS.brand.update.error : ADMIN_TOASTS.brand.create.error)
       setError('No se pudo guardar la marca.')
     } finally {
       setIsSubmitting(false)

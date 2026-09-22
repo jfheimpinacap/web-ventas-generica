@@ -5,6 +5,8 @@ import { AdminEditorLayout } from '../../components/admin/AdminEditorLayout'
 import { AdminLayout } from '../../components/admin/AdminLayout'
 import { SupplierForm } from '../../components/admin/SupplierForm'
 import { createSupplier, getAdminSupplier, updateSupplier } from '../../services/adminApi'
+import { useToast } from '../../toasts/ToastContext'
+import { ADMIN_TOASTS } from '../../toasts/adminToastMessages'
 import type { SupplierFormValues } from '../../types/catalog'
 
 const INITIAL_VALUES: SupplierFormValues = {
@@ -19,6 +21,7 @@ const INITIAL_VALUES: SupplierFormValues = {
 export function AdminSupplierFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const toast = useToast()
   const isEdit = Boolean(id)
   const [initialValues, setInitialValues] = useState(INITIAL_VALUES)
   const [loading, setLoading] = useState(isEdit)
@@ -53,8 +56,10 @@ export function AdminSupplierFormPage() {
       setError(null)
       if (id) await updateSupplier(Number(id), values)
       else await createSupplier(values)
+      toast.success(id ? ADMIN_TOASTS.supplier.update.success : ADMIN_TOASTS.supplier.create.success)
       navigate('/admin/proveedores')
     } catch {
+      toast.error(id ? ADMIN_TOASTS.supplier.update.error : ADMIN_TOASTS.supplier.create.error)
       setError('No se pudo guardar el proveedor.')
     } finally {
       setIsSubmitting(false)
