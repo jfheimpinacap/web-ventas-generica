@@ -16,6 +16,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         cls.protector = cls.script[cls.script.index("function ConvertTo-ProtectedMigrationSql"):cls.script.index("function Assert-ProtectedMigrationSql")]
         cls.protected_validator = cls.script[cls.script.index("function Assert-ProtectedMigrationSql"):cls.script.index("function Get-SqlPreflight")]
         cls.postflight = cls.script[cls.script.index("function Get-SqlPostflight"):cls.script.index("$repoRoot =")]
+        cls.dynamic_postflight = cls.postflight[cls.postflight.index("-- BEGIN VALIDACION POSTFLIGHT DINAMICA"):cls.postflight.index("-- END VALIDACION POSTFLIGHT DINAMICA")]
 
     @staticmethod
     def parse_marker_sequence(sql):
@@ -123,7 +124,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         for marker in (
             "SET XACT_ABORT ON",
             "DB_NAME() <> N'$ExpectedDatabase'",
-            "SCHEMA_NAME() <> N'$ExpectedSchema'",
+            "@DefaultSchema <> N'$ExpectedSchema'",
             "$ExpectedSchema = 'jemnexusb_api'",
             "#JemNexusReleasePreflight",
             ") <> 20 THROW",
@@ -170,7 +171,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         self.assertIn("Where-Object { -not [string]::IsNullOrWhiteSpace($_) }", self.protector)
         loop = self.protector.index("for ($index = 0; $index -lt $batches.Count; $index++)")
         guard = self.protector.index("-- BEGIN LOTE EF PROTEGIDO $ordinal", loop)
-        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';", guard)
+        body = self.protector.index("$execution", guard)
         advance = self.protector.index("SET [LastCompletedBatch] = $ordinal", body)
         self.assertLess(guard, body)
         self.assertLess(body, advance)
@@ -244,17 +245,16 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         transaction = guard.index("IF XACT_STATE() <> 1")
         read_ordinal = guard.index("SELECT @Value = [LastCompletedBatch]")
         expected = guard.index("IF @ObservedOrdinal$ordinal <> $previousOrdinal")
-        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
         self.assertLess(sentinel, transaction)
         self.assertLess(transaction, read_ordinal)
         self.assertLess(read_ordinal, expected)
-        self.assertLess(expected, body)
+        self.assertLess(expected, len(guard))
 
     def test_batch_success_advances_only_after_body_and_next_batch_requires_it(self):
-        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
+        compare = self.protector.index("IF @ObservedOrdinal$ordinal <> $previousOrdinal")
+        body = self.protector.index("$execution", compare)
         transaction_after_body = self.protector.index("IF XACT_STATE() <> 1 THROW 51001", body)
         advance = self.protector.index("SET [LastCompletedBatch] = $ordinal", body)
-        compare = self.protector.index("IF @ObservedOrdinal$ordinal <> $previousOrdinal")
         self.assertLess(compare, body)
         self.assertLess(body, transaction_after_body)
         self.assertLess(transaction_after_body, advance)
@@ -276,7 +276,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         self.assertIn("ConvertTo-ProtectedMigrationSql $efSql", assembly)
         self.assertIn("$protectedEf.Sql", assembly)
         self.assertNotIn("$efSql.Trim()", assembly)
-        self.assertIn("Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount", assembly)
+        self.assertIn("Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount $protectedEf.DirectTransactionBatchCount $protectedEf.DynamicBatchCount", assembly)
         self.assertIn("EXEC sys.sp_executesql N'$escapedBody';", self.protector)
 
     def test_postflight_requires_final_sequence_before_commit_and_success(self):
@@ -298,7 +298,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
 
     def test_failed_preflight_leaves_every_later_mutation_behind_a_guard(self):
         guard = self.protector.index("IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NULL")
-        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
+        body = self.protector.index("$execution", guard)
         blocked_commit = self.postflight.index("postflight y COMMIT bloqueados")
         commit = self.postflight.index("COMMIT TRANSACTION;")
         self.assertLess(guard, body)
@@ -310,11 +310,104 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         for marker in (
             "proteccion_fail_safe_entre_lotes = $true",
             "lotes_ef_protegidos = $protectedEf.BatchCount",
+            "lotes_control_transaccion_directos = $protectedEf.DirectTransactionBatchCount",
+            "lotes_ef_dinamicos = $protectedEf.DynamicBatchCount",
+            "postflight_compilacion_diferida = $true",
             "tabla temporal de sesion con ordinal secuencial y marcador de fallo",
             "postflight_exige_secuencia_completa = $true",
             "commit_exterior_despues_de_secuencia = $true",
         ):
             self.assertIn(marker, manifest)
+
+    def test_msg_266_cause_is_structurally_excluded(self):
+        self.assertIn("CONTROL TRANSACCIONAL EF DIRECTO", self.protector)
+        self.assertNotIn("EXEC sys.sp_executesql N'$body'", self.protector)
+
+    def test_pure_begin_transaction_is_classified_and_executed_directly(self):
+        self.assertIn("$isBeginTransaction = $body -match '(?is)^BEGIN\\s+TRANSACTION\\s*;?\\s*$'", self.protector)
+        self.assertIn("    $body", self.protector)
+
+    def test_pure_commit_is_classified_and_executed_directly(self):
+        self.assertIn("$isCommit = $body -match '(?is)^COMMIT\\s*;?\\s*$'", self.protector)
+        self.assertIn("if ($isBeginTransaction -or $isCommit)", self.protector)
+
+    def test_transaction_control_inside_dynamic_body_is_rejected(self):
+        self.assertIn("$containsTransactionControl", self.protector)
+        self.assertIn("mezcla o usa una variante inesperada", self.protector)
+        self.assertIn("Un control transaccional quedo dentro de sp_executesql", self.protected_validator)
+
+    def test_mixed_transaction_batch_is_fail_closed(self):
+        self.assertIn("$containsTransactionControl -and -not ($isBeginTransaction -or $isCommit)", self.protector)
+
+    def test_exactly_two_begin_and_two_commit_batches_are_derived(self):
+        self.assertIn("$beginCount -ne 2 -or $commitCount -ne 2", self.protector)
+        self.assertIn("BeginTransactionBatchCount = $beginCount", self.protector)
+        self.assertIn("CommitBatchCount = $commitCount", self.protector)
+
+    def test_all_direct_batches_keep_the_common_ordinal_advance(self):
+        direct_choice = self.protector.index("if ($isBeginTransaction -or $isCommit)")
+        common_advance = self.protector.index("SET [LastCompletedBatch] = $ordinal", direct_choice)
+        self.assertLess(direct_choice, common_advance)
+        self.assertIn("DirectTransactionBatchCount = $directTransactionCount", self.protector)
+
+    def test_non_transaction_batches_remain_dynamic(self):
+        self.assertIn("$dynamicBatchCount++", self.protector)
+        self.assertIn("$execution = \"    EXEC sys.sp_executesql N'$escapedBody';\"", self.protector)
+
+    def test_new_schema_references_are_only_inside_dynamic_postflight(self):
+        dynamic_start = self.postflight.index("-- BEGIN VALIDACION POSTFLIGHT DINAMICA")
+        dynamic_end = self.postflight.index("-- END VALIDACION POSTFLIGHT DINAMICA")
+        outer = self.postflight[:dynamic_start] + self.postflight[dynamic_end:]
+        self.assertNotIn("[IssuedById]", outer)
+        self.assertNotIn("[AppUserPermissions]", outer)
+
+    def test_dynamic_postflight_starts_after_all_guards(self):
+        sequence = self.postflight.index("IF @PostflightOrdinal <> $FinalBatchOrdinal OR @PostflightFailed <> 0")
+        dynamic = self.postflight.index("-- BEGIN VALIDACION POSTFLIGHT DINAMICA")
+        self.assertLess(sequence, dynamic)
+
+    def test_dynamic_postflight_returns_all_counts_through_output_parameters(self):
+        for name in ("TargetMigrations", "SellerCount", "SellerPermissionCount", "CommercialQuoteCount", "QuoteRequestCount"):
+            self.assertIn(f"@{name}Out", self.dynamic_postflight)
+            self.assertIn(f"@{name} OUTPUT", self.dynamic_postflight)
+
+    def test_dynamic_postflight_has_no_transaction_control_statement(self):
+        sql_payload = self.dynamic_postflight[self.dynamic_postflight.index("EXEC sys.sp_executesql"):]
+        self.assertIsNone(re.search(r"(?im)^\s*(BEGIN|COMMIT|ROLLBACK)\s+TRANSACTION\b", sql_payload))
+
+    def test_outer_commit_is_direct_and_after_dynamic_validation(self):
+        dynamic_end = self.postflight.index("-- END VALIDACION POSTFLIGHT DINAMICA")
+        state = self.postflight.index("IF XACT_STATE() <> 1 THROW 51002", dynamic_end)
+        commit = self.postflight.index("COMMIT TRANSACTION;", state)
+        self.assertLess(dynamic_end, state)
+        self.assertLess(state, commit)
+
+    def test_final_row_uses_only_precalculated_values(self):
+        commit = self.postflight.index("COMMIT TRANSACTION;")
+        final_select = self.postflight[commit:self.postflight.index("DROP TABLE #JemNexusReleasePreflight", commit)]
+        self.assertIn("@TargetMigrations AS [TargetMigrations]", final_select)
+        self.assertNotIn("AppUserPermissions", final_select)
+        self.assertNotIn("IssuedById", final_select)
+        self.assertEqual(self.postflight.count("N'POSTFLIGHT_OK'"), 1)
+
+    def test_missing_migrations_cannot_compile_new_schema_before_sequence_guard(self):
+        sequence_end = self.postflight.index("BEGIN TRY", self.postflight.index("IF @PostflightOrdinal <>"))
+        guarded_prefix = self.postflight[:sequence_end]
+        self.assertNotIn("IssuedById", guarded_prefix)
+        self.assertNotIn("AppUserPermissions", guarded_prefix)
+
+    def test_derived_counts_are_not_manifest_constants(self):
+        manifest = self.script[self.script.index("$manifest = [ordered]@{"):self.script.index("ConvertTo-Json -Depth 8")]
+        self.assertNotRegex(manifest, r"lotes_(?:ef_protegidos|control_transaccion_directos|ef_dinamicos)\s*=\s*\d+")
+
+    def test_current_sql_contract_requires_41_total_4_direct_and_37_dynamic(self):
+        self.assertIn("$directTransactionCount -ne 4", self.protector)
+        self.assertIn("($DirectTransactionBatchCount + $DynamicBatchCount) -ne $BatchCount", self.protected_validator)
+        self.assertIn("41 lotes protegidos, cuatro directos y 37 dinamicos", self.doc)
+
+    def test_documentation_records_both_incident_causes_and_clean_rollback(self):
+        for marker in ("Msg 266", "sp_executesql", "Msg 207", "IssuedById", "rollback limpio", "490cdcf41dfb"):
+            self.assertIn(marker, self.doc)
 
     def test_manifest_hashes_and_preserve_contract(self):
         for marker in ("manifest.json", "SHA256SUMS.txt", "Get-FileHash", "size_bytes", "sha256"):

@@ -238,10 +238,29 @@ function ConvertTo-ProtectedMigrationSql {
     if ($batches.Count -eq 0) { throw 'El SQL EF no contiene lotes ejecutables.' }
 
     $protected = New-Object System.Collections.Generic.List[string]
+    $directTransactionCount = 0
+    $dynamicBatchCount = 0
     for ($index = 0; $index -lt $batches.Count; $index++) {
         $ordinal = $index + 1
         $previousOrdinal = $index
-        $escapedBody = $batches[$index].Trim().Replace("'", "''")
+        $body = $batches[$index].Trim()
+        $isBeginTransaction = $body -match '(?is)^BEGIN\s+TRANSACTION\s*;?\s*$'
+        $isCommit = $body -match '(?is)^COMMIT\s*;?\s*$'
+        $containsTransactionControl = $body -match '(?im)^\s*(?:BEGIN\s+(?:TRANSACTION|TRAN)|COMMIT(?:\s+(?:TRANSACTION|TRAN))?|ROLLBACK(?:\s+(?:TRANSACTION|TRAN))?)\b'
+        if ($containsTransactionControl -and -not ($isBeginTransaction -or $isCommit)) {
+            throw "El lote EF $ordinal mezcla o usa una variante inesperada de control transaccional."
+        }
+        if ($isBeginTransaction -or $isCommit) {
+            $directTransactionCount++
+            $execution = @"
+    -- CONTROL TRANSACCIONAL EF DIRECTO: no puede cruzar sp_executesql
+    $body
+"@
+        } else {
+            $dynamicBatchCount++
+            $escapedBody = $body.Replace("'", "''")
+            $execution = "    EXEC sys.sp_executesql N'$escapedBody';"
+        }
         $protected.Add(@"
 -- BEGIN LOTE EF PROTEGIDO $ordinal; REQUIERE ORDINAL $previousOrdinal
 IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NULL
@@ -264,7 +283,7 @@ BEGIN
     THROW 51001, 'Secuencia de lotes EF invalida; lote bloqueado.', 1;
 END;
 BEGIN TRY
-    EXEC sys.sp_executesql N'$escapedBody';
+$execution
     IF XACT_STATE() <> 1 THROW 51001, 'El lote EF dejo inactiva o invalida la transaccion exterior.', 1;
     UPDATE #JemNexusReleasePreflight
        SET [LastCompletedBatch] = $ordinal
@@ -281,12 +300,17 @@ END CATCH;
 GO
 "@)
     }
-    return [pscustomobject]@{ Sql = ($protected -join "`r`n"); BatchCount = $batches.Count }
+    if ($directTransactionCount -ne 4 -or $dynamicBatchCount -ne ($batches.Count - $directTransactionCount)) { throw 'La clasificacion derivada de lotes EF no es consistente.' }
+    $beginCount = @($batches | Where-Object { $_.Trim() -match '(?is)^BEGIN\s+TRANSACTION\s*;?\s*$' }).Count
+    $commitCount = @($batches | Where-Object { $_.Trim() -match '(?is)^COMMIT\s*;?\s*$' }).Count
+    if ($beginCount -ne 2 -or $commitCount -ne 2) { throw "El SQL EF debe contener exactamente dos BEGIN TRANSACTION y dos COMMIT puros; se derivaron $beginCount y $commitCount." }
+    return [pscustomobject]@{ Sql = ($protected -join "`r`n"); BatchCount = $batches.Count; DirectTransactionBatchCount = $directTransactionCount; DynamicBatchCount = $dynamicBatchCount; BeginTransactionBatchCount = $beginCount; CommitBatchCount = $commitCount }
 }
 
 function Assert-ProtectedMigrationSql {
-    param([Parameter(Mandatory = $true)][string]$Sql, [Parameter(Mandatory = $true)][int]$BatchCount)
+    param([Parameter(Mandatory = $true)][string]$Sql, [Parameter(Mandatory = $true)][int]$BatchCount, [Parameter(Mandatory = $true)][int]$DirectTransactionBatchCount, [Parameter(Mandatory = $true)][int]$DynamicBatchCount)
     if ($BatchCount -le 0) { throw 'La cantidad de lotes EF protegidos debe ser positiva.' }
+    if ($BatchCount -ne 41) { throw "El SQL EF actual debe derivar exactamente 41 lotes; se derivaron $BatchCount." }
     $lines = [regex]::Split($Sql, "\r\n|\n|\r")
     $markerPattern = '^-- BEGIN LOTE EF PROTEGIDO (?<Ordinal>\d+); REQUIERE ORDINAL (?<PreviousOrdinal>\d+)$'
     $markers = @($lines | ForEach-Object { [regex]::Match($_, $markerPattern) } | Where-Object { $_.Success })
@@ -296,12 +320,41 @@ function Assert-ProtectedMigrationSql {
         $marker = $markers[$ordinal - 1]
         if ([int]$marker.Groups['Ordinal'].Value -ne $ordinal -or [int]$marker.Groups['PreviousOrdinal'].Value -ne $previousOrdinal) { throw "Falta la guarda secuencial exacta del lote EF $ordinal." }
         if ($Sql.IndexOf("SET [LastCompletedBatch] = $ordinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta el avance posterior del lote EF $ordinal." }
+        if ($Sql.IndexOf("-- END LOTE EF PROTEGIDO $ordinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta el marcador final exacto del lote EF $ordinal." }
     }
     if ([regex]::Matches($Sql, "OBJECT_ID\(N'tempdb\.\.#JemNexusReleasePreflight'").Count -lt ($BatchCount + 1)) { throw 'Faltan comprobaciones del centinela entre lotes.' }
     if ([regex]::Matches($Sql, 'IF XACT_STATE\(\) <> 1').Count -lt ($BatchCount + 1)) { throw 'Faltan comprobaciones de la transaccion exterior.' }
-    if ([regex]::Matches($Sql, 'EXEC sys\.sp_executesql N''').Count -lt $BatchCount) { throw 'Un cuerpo EF no esta aislado detras de su guarda.' }
+    $efRegionStart = $Sql.IndexOf('-- BEGIN SQL EMITIDO POR EF CORE;', [StringComparison]::Ordinal)
+    if ($efRegionStart -lt 0) { throw 'Falta el limite inicial exacto del SQL EF protegido.' }
+    $efRegionEnd = $Sql.IndexOf('-- END SQL EMITIDO POR EF CORE;', $efRegionStart, [StringComparison]::Ordinal)
+    if ($efRegionEnd -lt 0) { throw 'Falta el limite final exacto del SQL EF protegido.' }
+    $efRegion = $Sql.Substring($efRegionStart, $efRegionEnd - $efRegionStart)
+    $directMarkers = [regex]::Matches($efRegion, '(?m)^\s*-- CONTROL TRANSACCIONAL EF DIRECTO:')
+    if ($directMarkers.Count -ne $DirectTransactionBatchCount -or $DirectTransactionBatchCount -ne 4) { throw 'Los cuatro lotes de control transaccional no quedaron directos y protegidos.' }
+    $dynamicBodies = [regex]::Matches($efRegion, '(?m)^\s*EXEC sys\.sp_executesql N''(?!(?:SELECT @Value|SELECT @Ordinal))')
+    if ($dynamicBodies.Count -ne $DynamicBatchCount -or ($DirectTransactionBatchCount + $DynamicBatchCount) -ne $BatchCount) { throw 'La clasificacion de cuerpos EF directos y dinamicos no coincide con los lotes derivados.' }
+    if ($DynamicBatchCount -ne 37) { throw "El SQL EF actual debe derivar 37 cuerpos dinamicos; se derivaron $DynamicBatchCount." }
+    foreach ($dynamicBody in $dynamicBodies) {
+        $payloadEnd = $efRegion.IndexOf("`n    IF XACT_STATE() <> 1 THROW 51001", $dynamicBody.Index, [StringComparison]::Ordinal)
+        if ($payloadEnd -lt 0) { throw 'No se pudo delimitar un cuerpo EF dinamico.' }
+        $payload = $efRegion.Substring($dynamicBody.Index, $payloadEnd - $dynamicBody.Index)
+        if ($payload -match '(?im)^\s*(?:BEGIN\s+TRANSACTION|COMMIT(?:\s+TRANSACTION)?|ROLLBACK\s+TRANSACTION)\s*;?\s*$') { throw 'Un control transaccional quedo dentro de sp_executesql.' }
+    }
     if ($Sql.IndexOf('IF @PostflightOrdinal <>', [StringComparison]::Ordinal) -lt 0) { throw 'El postflight no exige la secuencia EF completa.' }
-    if ($Sql.IndexOf('COMMIT TRANSACTION;', [StringComparison]::Ordinal) -lt $Sql.IndexOf('IF @PostflightOrdinal <>', [StringComparison]::Ordinal)) { throw 'El COMMIT exterior precede la comprobacion secuencial.' }
+    $postflightStart = $Sql.IndexOf('-- BEGIN POSTFLIGHT PROTEGIDO;', [StringComparison]::Ordinal)
+    if ($postflightStart -lt 0) { throw 'Falta el limite inicial exacto del postflight protegido.' }
+    $dynamicPostflightStart = $Sql.IndexOf('-- BEGIN VALIDACION POSTFLIGHT DINAMICA', $postflightStart, [StringComparison]::Ordinal)
+    if ($dynamicPostflightStart -lt 0) { throw 'Falta el limite inicial de la validacion dinamica del postflight.' }
+    $dynamicPostflightEnd = $Sql.IndexOf('-- END VALIDACION POSTFLIGHT DINAMICA', $dynamicPostflightStart, [StringComparison]::Ordinal)
+    if ($dynamicPostflightEnd -lt 0) { throw 'Falta el limite final de la validacion dinamica del postflight.' }
+    $postflightPrefix = $Sql.Substring($postflightStart, $dynamicPostflightStart - $postflightStart)
+    if ($postflightPrefix -match '(?i)\[IssuedById\]|\[AppUserPermissions\]|IX_CommercialQuotes_IssuedById|FK_CommercialQuotes_AppUsers_IssuedById') { throw 'Una referencia al schema nuevo aparece antes de la compilacion diferida del postflight.' }
+    $dynamicPostflight = $Sql.Substring($dynamicPostflightStart, $dynamicPostflightEnd - $dynamicPostflightStart)
+    if ($dynamicPostflight -match '(?im)^\s*(?:BEGIN|COMMIT|ROLLBACK)\s+TRANSACTION\b') { throw 'La validacion dinamica del postflight contiene control transaccional.' }
+    $outerCommit = $Sql.IndexOf('COMMIT TRANSACTION;', $dynamicPostflightEnd, [StringComparison]::Ordinal)
+    $success = $Sql.IndexOf("N'POSTFLIGHT_OK'", $outerCommit, [StringComparison]::Ordinal)
+    $cleanup = $Sql.IndexOf('DROP TABLE #JemNexusReleasePreflight;', $success, [StringComparison]::Ordinal)
+    if ($outerCommit -lt $dynamicPostflightEnd -or $success -lt $outerCommit -or $cleanup -lt $success) { throw 'El orden postflight debe ser validacion, COMMIT exterior, POSTFLIGHT_OK y limpieza.' }
 }
 
 function Get-SqlPreflight {
@@ -353,24 +406,30 @@ BEGIN
     THROW 51002, 'La secuencia completa de lotes EF no fue confirmada; postflight y COMMIT bloqueados.', 1;
 END;
 BEGIN TRY
-IF DB_NAME() <> N'$ExpectedDatabase' OR SCHEMA_NAME() <> N'$ExpectedSchema' THROW 51000, 'Destino cambio durante la ejecucion.', 1;
-IF EXISTS (SELECT [MigrationId] FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration') GROUP BY [MigrationId] HAVING COUNT(*) <> 1) OR (SELECT COUNT(*) FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration')) <> 2 THROW 51000, 'Las migraciones destino no quedaron registradas una vez.', 1;
-IF OBJECT_ID(N'[$ExpectedSchema].[AppUserPermissions]', N'U') IS NULL THROW 51000, 'AppUserPermissions no existe tras migrar.', 1;
-IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[AppUsers] u WHERE u.[Role] = N'seller' AND (SELECT COUNT(*) FROM [$ExpectedSchema].[AppUserPermissions] p WHERE p.[UserId] = u.[Id]) <> 29) THROW 51000, 'Un seller no tiene exactamente 29 permisos.', 1;
-IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[AppUserPermissions] p INNER JOIN [$ExpectedSchema].[AppUsers] u ON u.[Id] = p.[UserId] WHERE u.[Role] = N'seller' AND p.[Permission] = N'users.manage') THROW 51000, 'Un seller posee users.manage.', 1;
-IF EXISTS (SELECT 1 FROM sys.columns WHERE [object_id] = OBJECT_ID(N'[$ExpectedSchema].[CommercialQuotes]') AND [name] = N'IssuedById' AND [is_nullable] <> 0) OR COL_LENGTH(N'[$ExpectedSchema].[CommercialQuotes]', N'IssuedById') IS NULL THROW 51000, 'IssuedById falta o permite NULL.', 1;
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[$ExpectedSchema].[CommercialQuotes]') AND [name] = N'IX_CommercialQuotes_IssuedById') THROW 51000, 'Falta el indice IssuedById.', 1;
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE [parent_object_id] = OBJECT_ID(N'[$ExpectedSchema].[CommercialQuotes]') AND [name] = N'FK_CommercialQuotes_AppUsers_IssuedById' AND [delete_referential_action_desc] = N'NO_ACTION') THROW 51000, 'Falta la FK IssuedById NO_ACTION.', 1;
-IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[CommercialQuotes] WHERE [IssuedById] IS NULL) THROW 51000, 'Hay cotizaciones sin emisor.', 1;
-IF (SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests]) <> (SELECT [QuoteRequestCount] FROM #JemNexusReleasePreflight) THROW 51000, 'Cambio el conteo de QuoteRequests.', 1;
+DECLARE @TargetMigrations int, @SellerCount bigint, @SellerPermissionCount bigint, @CommercialQuoteCount bigint, @QuoteRequestCount bigint;
+-- BEGIN VALIDACION POSTFLIGHT DINAMICA (sin control transaccional)
+EXEC sys.sp_executesql N'
+IF DB_NAME() <> N''$ExpectedDatabase'' OR SCHEMA_NAME() <> N''$ExpectedSchema'' THROW 51000, ''Destino cambio durante la ejecucion.'', 1;
+IF EXISTS (SELECT [MigrationId] FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N''$PermissionMigration'', N''$EndMigration'') GROUP BY [MigrationId] HAVING COUNT(*) <> 1) OR (SELECT COUNT(*) FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N''$PermissionMigration'', N''$EndMigration'')) <> 2 THROW 51000, ''Las migraciones destino no quedaron registradas una vez.'', 1;
+IF OBJECT_ID(N''[$ExpectedSchema].[AppUserPermissions]'', N''U'') IS NULL THROW 51000, ''AppUserPermissions no existe tras migrar.'', 1;
+IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[AppUsers] u WHERE u.[Role] = N''seller'' AND (SELECT COUNT(*) FROM [$ExpectedSchema].[AppUserPermissions] p WHERE p.[UserId] = u.[Id]) <> 29) THROW 51000, ''Un seller no tiene exactamente 29 permisos.'', 1;
+IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[AppUserPermissions] p INNER JOIN [$ExpectedSchema].[AppUsers] u ON u.[Id] = p.[UserId] WHERE u.[Role] = N''seller'' AND p.[Permission] = N''users.manage'') THROW 51000, ''Un seller posee users.manage.'', 1;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE [object_id] = OBJECT_ID(N''[$ExpectedSchema].[CommercialQuotes]'') AND [name] = N''IssuedById'' AND [is_nullable] <> 0) OR COL_LENGTH(N''[$ExpectedSchema].[CommercialQuotes]'', N''IssuedById'') IS NULL THROW 51000, ''IssuedById falta o permite NULL.'', 1;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N''[$ExpectedSchema].[CommercialQuotes]'') AND [name] = N''IX_CommercialQuotes_IssuedById'') THROW 51000, ''Falta el indice IssuedById.'', 1;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE [parent_object_id] = OBJECT_ID(N''[$ExpectedSchema].[CommercialQuotes]'') AND [name] = N''FK_CommercialQuotes_AppUsers_IssuedById'' AND [delete_referential_action_desc] = N''NO_ACTION'') THROW 51000, ''Falta la FK IssuedById NO_ACTION.'', 1;
+IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[CommercialQuotes] WHERE [IssuedById] IS NULL) THROW 51000, ''Hay cotizaciones sin emisor.'', 1;
+IF (SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests]) <> (SELECT [QuoteRequestCount] FROM #JemNexusReleasePreflight) THROW 51000, ''Cambio el conteo de QuoteRequests.'', 1;
+SELECT @TargetMigrationsOut = COUNT(*) FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N''$PermissionMigration'', N''$EndMigration'');
+SELECT @SellerCountOut = COUNT_BIG(*) FROM [$ExpectedSchema].[AppUsers] WHERE [Role] = N''seller'';
+SELECT @SellerPermissionCountOut = COUNT_BIG(*) FROM [$ExpectedSchema].[AppUserPermissions] p INNER JOIN [$ExpectedSchema].[AppUsers] u ON u.[Id] = p.[UserId] WHERE u.[Role] = N''seller'';
+SELECT @CommercialQuoteCountOut = COUNT_BIG(*) FROM [$ExpectedSchema].[CommercialQuotes];
+SELECT @QuoteRequestCountOut = COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests];',
+N'@TargetMigrationsOut int OUTPUT, @SellerCountOut bigint OUTPUT, @SellerPermissionCountOut bigint OUTPUT, @CommercialQuoteCountOut bigint OUTPUT, @QuoteRequestCountOut bigint OUTPUT',
+@TargetMigrationsOut = @TargetMigrations OUTPUT, @SellerCountOut = @SellerCount OUTPUT, @SellerPermissionCountOut = @SellerPermissionCount OUTPUT, @CommercialQuoteCountOut = @CommercialQuoteCount OUTPUT, @QuoteRequestCountOut = @QuoteRequestCount OUTPUT;
+-- END VALIDACION POSTFLIGHT DINAMICA
+IF XACT_STATE() <> 1 THROW 51002, 'La validacion postflight dejo invalida la transaccion exterior.', 1;
 COMMIT TRANSACTION;
-SELECT DB_NAME() AS [DatabaseName], SCHEMA_NAME() AS [DefaultSchema],
- (SELECT COUNT(*) FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration')) AS [TargetMigrations],
- (SELECT COUNT(*) FROM [$ExpectedSchema].[AppUsers] WHERE [Role] = N'seller') AS [SellerCount],
- (SELECT COUNT(*) FROM [$ExpectedSchema].[AppUserPermissions] p INNER JOIN [$ExpectedSchema].[AppUsers] u ON u.[Id] = p.[UserId] WHERE u.[Role] = N'seller') AS [SellerPermissionCount],
- (SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[CommercialQuotes]) AS [CommercialQuoteCount],
- (SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests]) AS [QuoteRequestCount],
- N'POSTFLIGHT_OK' AS [Result];
+SELECT DB_NAME() AS [DatabaseName], SCHEMA_NAME() AS [DefaultSchema], @TargetMigrations AS [TargetMigrations], @SellerCount AS [SellerCount], @SellerPermissionCount AS [SellerPermissionCount], @CommercialQuoteCount AS [CommercialQuoteCount], @QuoteRequestCount AS [QuoteRequestCount], N'POSTFLIGHT_OK' AS [Result];
 DROP TABLE #JemNexusReleasePreflight;
 END TRY
 BEGIN CATCH
@@ -494,7 +553,7 @@ try {
     Assert-GeneratedMigrationSql $efSql
     $protectedEf = ConvertTo-ProtectedMigrationSql $efSql
     $finalSql = (Get-SqlPreflight) + "`r`n-- BEGIN SQL EMITIDO POR EF CORE; CUERPOS SIN CAMBIOS, EJECUCION PROTEGIDA`r`n" + $protectedEf.Sql + "`r`n-- END SQL EMITIDO POR EF CORE; CUERPOS SIN CAMBIOS, EJECUCION PROTEGIDA`r`n" + (Get-SqlPostflight $protectedEf.BatchCount)
-    Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount
+    Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount $protectedEf.DirectTransactionBatchCount $protectedEf.DynamicBatchCount
     [IO.File]::WriteAllText((Join-Path $releaseStaging $sqlName), $finalSql, [Text.UTF8Encoding]::new($false))
     $stages.Add([ordered]@{ name = 'sql_generate_static_validation'; result = 'passed' })
 
@@ -521,7 +580,10 @@ try {
         sql = [ordered]@{
             proteccion_fail_safe_entre_lotes = $true
             lotes_ef_protegidos = $protectedEf.BatchCount
+            lotes_control_transaccion_directos = $protectedEf.DirectTransactionBatchCount
+            lotes_ef_dinamicos = $protectedEf.DynamicBatchCount
             centinela = 'tabla temporal de sesion con ordinal secuencial y marcador de fallo'
+            postflight_compilacion_diferida = $true
             postflight_exige_secuencia_completa = $true
             commit_exterior_despues_de_secuencia = $true
         }
