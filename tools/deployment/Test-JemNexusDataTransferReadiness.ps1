@@ -71,7 +71,12 @@ function Assert-NoReparsePoint([string]$Path, [string]$AllowedRoot) {
     while ($null -ne $cursor -and (Get-CanonicalPath $cursor.FullName).StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         if (($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail "Enlace simbolico/reparse point rechazado: $($cursor.FullName)" }
         if ((Get-CanonicalPath $cursor.FullName) -eq $root) { break }
-        $cursor = $cursor.Parent
+        # Get-Item returns FileInfo for media files (FileInfo has Directory, not Parent)
+        # and DirectoryInfo while walking their ancestors. Keep that distinction explicit
+        # so this works under StrictMode in Windows PowerShell 5.1.
+        if ($cursor -is [IO.FileInfo]) { $cursor = $cursor.Directory }
+        elseif ($cursor -is [IO.DirectoryInfo]) { $cursor = [IO.Directory]::GetParent($cursor.FullName) }
+        else { Fail "Tipo de elemento de sistema de archivos inesperado: $($cursor.GetType().FullName)" }
     }
 }
 function Resolve-SafeFile([string]$Root, [string]$Relative) {

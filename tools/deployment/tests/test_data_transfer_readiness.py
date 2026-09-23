@@ -70,6 +70,20 @@ def safe_file(root, relative):
     if root not in resolved.parents: raise ValueError("outside")
     return resolved
 
+def assert_no_reparse_point(path, allowed_root):
+    """Portable model of the FileInfo/DirectoryInfo ancestor walk."""
+    root = pathlib.Path(allowed_root).resolve(strict=True)
+    item = pathlib.Path(path)
+    try:
+        item.relative_to(root)
+    except ValueError as error:
+        raise ValueError("outside") from error
+    cursor = item
+    while True:
+        if cursor.is_symlink(): raise ValueError("symlink")
+        if cursor == root: return
+        cursor = cursor.parent
+
 def local_identity_allowed(effective_server, database, is_localdb):
     """Portable model of the post-connect identity decision (not a SQL mock)."""
     del effective_server  # SQL Server's dynamic LocalDB name is diagnostic only.
@@ -145,6 +159,33 @@ class ReadinessBehaviorTests(unittest.TestCase):
             try: link.symlink_to(outside)
             except OSError: self.skipTest("symlinks unavailable")
             with self.assertRaises(ValueError): safe_file(root, "link")
+
+    def test_reparse_walk_handles_file_and_directory_and_rejects_escape(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp, "uploads"); root.mkdir()
+            directory = root / "product-images"; directory.mkdir()
+            media = directory / "ok.bin"; media.write_bytes(b"ok")
+            self.assertIsNone(assert_no_reparse_point(media, root))
+            self.assertIsNone(assert_no_reparse_point(directory, root))
+            outside = pathlib.Path(temp, "outside.bin"); outside.write_bytes(b"x")
+            with self.assertRaisesRegex(ValueError, "outside"):
+                assert_no_reparse_point(outside, root)
+            with self.assertRaises(ValueError): safe_file(root, "../outside.bin")
+
+            link = directory / "linked.bin"
+            try: link.symlink_to(media)
+            except OSError: self.skipTest("symlinks unavailable")
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                assert_no_reparse_point(link, root)
+
+    def test_powershell_ancestor_walk_uses_confirmed_item_types(self):
+        guard = self.source[self.source.index("function Assert-NoReparsePoint"):self.source.index("function Resolve-SafeFile")]
+        self.assertIn("$cursor -is [IO.FileInfo]", guard)
+        self.assertIn("$cursor.Directory", guard)
+        self.assertIn("$cursor -is [IO.DirectoryInfo]", guard)
+        self.assertIn("[IO.Directory]::GetParent($cursor.FullName)", guard)
+        self.assertNotRegex(guard, r"\$cursor\.Parent\b")
+        self.assertNotRegex(self.source, r"\.Parent\b")
 
     def test_plan_only_guard_precedes_output_and_connection(self):
         plan = self.source.index("if ($Mode -eq 'PlanOnly')")
