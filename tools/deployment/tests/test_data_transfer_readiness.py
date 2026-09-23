@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import tempfile
 import unittest
 
@@ -78,6 +79,16 @@ def connection_target_allowed(instance, database="JemNexus_Local", schema="dbo")
     """Portable model of the exact pre-connect parameter guard."""
     return (instance == r"(localdb)\MSSQLLocalDB" and
             database == "JemNexus_Local" and schema == "dbo")
+
+def validate_sql_bindings(sql, parameter_specs, command_parameters):
+    """Portable model of the helper's same-command, explicit-type contract."""
+    placeholders = set(re.findall(r"(?<!@)@([A-Za-z_][A-Za-z0-9_]*)", sql))
+    declared = set(parameter_specs)
+    if placeholders != declared:
+        return False
+    if any("Value" not in spec or "SqlDbType" not in spec for spec in parameter_specs.values()):
+        return False
+    return declared == set(command_parameters)
 
 class ReadinessBehaviorTests(unittest.TestCase):
     @classmethod
@@ -191,5 +202,32 @@ class ReadinessBehaviorTests(unittest.TestCase):
         for line in sql_calls:
             padded = " " + line.lower() + " "
             self.assertFalse(any(word in padded for word in forbidden), line)
+
+    def test_sql_binding_contract_rejects_missing_and_other_command_parameters(self):
+        sql = "SELECT name FROM sys.schemas WHERE name=@schema"
+        spec = {"schema": {"Value": "dbo", "SqlDbType": "NVarChar"}}
+        self.assertFalse(validate_sql_bindings(sql, {}, set()))
+        self.assertFalse(validate_sql_bindings(sql, spec, set()))  # Bound to a different command.
+        self.assertFalse(validate_sql_bindings(sql, {"schema": {"Value": "dbo"}}, {"schema"}))
+        self.assertTrue(validate_sql_bindings(sql, spec, {"schema"}))
+
+    def test_inventory_parameterized_queries_bind_typed_parameters_before_fill(self):
+        helper = self.source[self.source.index("function Invoke-SelectTable"):self.source.index("function Get-Scalar")]
+        add = helper.index('$command.Parameters.Add("@$key"')
+        fill = helper.index("$adapter.Fill($table)")
+        self.assertLess(add, fill)
+        self.assertIn("$command.Parameters", helper)
+        self.assertNotIn("AddWithValue", helper)
+        self.assertIn("Falta el parametro SQL", helper)
+        self.assertIn("Value y SqlDbType explicitos", helper)
+        self.assertIn("return ,$table", helper)
+
+        inventory = self.source[self.source.index("if ($Mode -eq 'InventoryLocal')"):]
+        self.assertEqual(inventory.count("@schema"), 2)
+        self.assertIn("$metadata = Invoke-SelectTable $connection", inventory)
+        self.assertIn('WHERE s.name=@schema\" $schemaParameter', inventory)
+        self.assertIn("$integrityRows = Invoke-SelectTable $connection $integritySql $schemaParameter", inventory)
+        self.assertIn("SqlDbType = [Data.SqlDbType]::NVarChar", inventory)
+        self.assertIn("Size = 128", inventory)
 
 if __name__ == "__main__": unittest.main()

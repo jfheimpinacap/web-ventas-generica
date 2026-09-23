@@ -87,7 +87,16 @@ function Resolve-SafeFile([string]$Root, [string]$Relative) {
 function Invoke-SelectTable([Data.SqlClient.SqlConnection]$Connection, [string]$Sql, [hashtable]$Parameters = @{}) {
     if ($Sql -notmatch '^\s*SELECT\b' -and $Sql -notmatch '^\s*WITH\b') { Fail 'La herramienta solo permite consultas SELECT/CTE.' }
     $command = $Connection.CreateCommand(); $command.CommandText = $Sql; $command.CommandTimeout = 60
-    foreach ($key in $Parameters.Keys) { [void]$command.Parameters.AddWithValue("@$key", $Parameters[$key]) }
+    $placeholders = @([regex]::Matches($Sql, '(?<!@)@[A-Za-z_][A-Za-z0-9_]*') | ForEach-Object { $_.Value.Substring(1) } | Sort-Object -Unique)
+    foreach ($placeholder in $placeholders) { if (-not $Parameters.ContainsKey($placeholder)) { Fail "Falta el parametro SQL @$placeholder." } }
+    foreach ($key in $Parameters.Keys) {
+        if ($placeholders -notcontains $key) { Fail "El parametro SQL @$key no aparece en la consulta." }
+        $specification = $Parameters[$key]
+        if ($specification -isnot [hashtable] -or -not $specification.ContainsKey('Value') -or -not $specification.ContainsKey('SqlDbType')) { Fail "El parametro SQL @$key requiere Value y SqlDbType explicitos." }
+        $parameter = $command.Parameters.Add("@$key", [Data.SqlDbType]$specification.SqlDbType)
+        if ($specification.ContainsKey('Size')) { $parameter.Size = [int]$specification.Size }
+        $parameter.Value = if ($null -eq $specification.Value) { [DBNull]::Value } else { $specification.Value }
+    }
     $table = New-Object Data.DataTable
     $adapter = New-Object Data.SqlClient.SqlDataAdapter $command
     try { [void]$adapter.Fill($table); return ,$table } finally { $adapter.Dispose(); $command.Dispose() }
@@ -147,7 +156,8 @@ if ($Mode -eq 'InventoryLocal') {
         if ($isLocalDb -is [DBNull] -or $isLocalDb -isnot [int] -or $isLocalDb -ne 1) { Fail "SERVERPROPERTY('IsLocalDB') no confirmo inequívocamente una instancia LocalDB." }
         Write-Verbose 'Servidor efectivo confirmado como LocalDB (nombre efectivo omitido del diagnostico).'
         $migrationCount = [int](Get-Scalar $connection "SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[__EFMigrationsHistory]")
-        $metadata = Invoke-SelectTable $connection "SELECT t.name AS TableName, c.name AS ColumnName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id WHERE s.name=@schema"
+        $schemaParameter = @{ schema = @{ Value = $ExpectedSchema; SqlDbType = [Data.SqlDbType]::NVarChar; Size = 128 } }
+        $metadata = Invoke-SelectTable $connection "SELECT t.name AS TableName, c.name AS ColumnName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id WHERE s.name=@schema" $schemaParameter
         $available = @{}; foreach ($row in $metadata.Rows) { if (-not $available.ContainsKey([string]$row.TableName)) { $available[[string]$row.TableName] = @{} }; $available[[string]$row.TableName][[string]$row.ColumnName]=$true }
         $missingTables = @(); $missingColumns = @()
         foreach ($tableName in $RequiredColumns.Keys) { if (-not $available.ContainsKey($tableName)) { $missingTables += $tableName } else { foreach ($column in $RequiredColumns[$tableName]) { if (-not $available[$tableName].ContainsKey($column)) { $missingColumns += "$tableName.$column" } } } }
@@ -156,7 +166,7 @@ if ($Mode -eq 'InventoryLocal') {
         $images = Invoke-SelectTable $connection "SELECT [Id],[ProductId],[Image] FROM [$ExpectedSchema].[ProductImages] ORDER BY [Id]"
         $sheets = Invoke-SelectTable $connection "SELECT [Id],[StorageKey],[SizeBytes] FROM [$ExpectedSchema].[TechnicalSheets] ORDER BY [Id]"
         $users = Invoke-SelectTable $connection "SELECT [Username] FROM [$ExpectedSchema].[AppUsers] ORDER BY [Id]"
-        $integrityRows = Invoke-SelectTable $connection @"
+        $integritySql = @"
 SELECT
  CAST((SELECT COUNT_BIG(*) FROM [dbo].[Products] p LEFT JOIN [dbo].[Categories] c ON c.Id=p.CategoryId WHERE c.Id IS NULL) +
       (SELECT COUNT_BIG(*) FROM [dbo].[ProductImages] i LEFT JOIN [dbo].[Products] p ON p.Id=i.ProductId WHERE p.Id IS NULL) +
@@ -165,8 +175,9 @@ SELECT
  CAST((SELECT COUNT_BIG(*) FROM (SELECT Username FROM [dbo].[AppUsers] GROUP BY Username HAVING COUNT_BIG(*)>1) d) +
       (SELECT COUNT_BIG(*) FROM (SELECT Slug FROM [dbo].[Products] GROUP BY Slug HAVING COUNT_BIG(*)>1) d) +
       (SELECT COUNT_BIG(*) FROM (SELECT CommercialQuoteId,Position FROM [dbo].[CommercialQuoteItems] GROUP BY CommercialQuoteId,Position HAVING COUNT_BIG(*)>1) d) AS bigint) AS DuplicateUniqueKeys,
- CAST(CASE WHEN (SELECT COUNT_BIG(*) FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name='dbo' AND ((t.name='AppUsers' AND i.is_unique=1) OR (t.name='CommercialQuoteItems' AND i.is_unique=1) OR (t.name='CommercialQuoteIssueIdempotencyRecords' AND i.is_unique=1))) >= 6 THEN 1 ELSE 0 END AS bit) AS RequiredIndexesPresent
+ CAST(CASE WHEN (SELECT COUNT_BIG(*) FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=@schema AND ((t.name='AppUsers' AND i.is_unique=1) OR (t.name='CommercialQuoteItems' AND i.is_unique=1) OR (t.name='CommercialQuoteIssueIdempotencyRecords' AND i.is_unique=1))) >= 6 THEN 1 ELSE 0 END AS bit) AS RequiredIndexesPresent
 "@
+        $integrityRows = Invoke-SelectTable $connection $integritySql $schemaParameter
         $manifest = @(); $referencedImagePaths = @{}
         $prefix = $PublicBasePath.TrimEnd('/').Replace('\','/') + '/product-images/'
         foreach ($row in $images.Rows) {
