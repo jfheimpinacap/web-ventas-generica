@@ -287,10 +287,14 @@ GO
 function Assert-ProtectedMigrationSql {
     param([Parameter(Mandatory = $true)][string]$Sql, [Parameter(Mandatory = $true)][int]$BatchCount)
     if ($BatchCount -le 0) { throw 'La cantidad de lotes EF protegidos debe ser positiva.' }
-    if ([regex]::Matches($Sql, '(?m)^-- BEGIN LOTE EF PROTEGIDO \d+; REQUIERE ORDINAL \d+$').Count -ne $BatchCount) { throw 'No todos los lotes EF quedaron protegidos.' }
+    $lines = [regex]::Split($Sql, "\r\n|\n|\r")
+    $markerPattern = '^-- BEGIN LOTE EF PROTEGIDO (?<Ordinal>\d+); REQUIERE ORDINAL (?<PreviousOrdinal>\d+)$'
+    $markers = @($lines | ForEach-Object { [regex]::Match($_, $markerPattern) } | Where-Object { $_.Success })
+    if ($markers.Count -ne $BatchCount) { throw 'No todos los lotes EF quedaron protegidos.' }
     for ($ordinal = 1; $ordinal -le $BatchCount; $ordinal++) {
         $previousOrdinal = $ordinal - 1
-        if ($Sql.IndexOf("-- BEGIN LOTE EF PROTEGIDO $ordinal; REQUIERE ORDINAL $previousOrdinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta la guarda secuencial exacta del lote EF $ordinal." }
+        $marker = $markers[$ordinal - 1]
+        if ([int]$marker.Groups['Ordinal'].Value -ne $ordinal -or [int]$marker.Groups['PreviousOrdinal'].Value -ne $previousOrdinal) { throw "Falta la guarda secuencial exacta del lote EF $ordinal." }
         if ($Sql.IndexOf("SET [LastCompletedBatch] = $ordinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta el avance posterior del lote EF $ordinal." }
     }
     if ([regex]::Matches($Sql, "OBJECT_ID\(N'tempdb\.\.#JemNexusReleasePreflight'").Count -lt ($BatchCount + 1)) { throw 'Faltan comprobaciones del centinela entre lotes.' }

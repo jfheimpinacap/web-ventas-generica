@@ -14,7 +14,13 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         cls.script = SCRIPT.read_text(encoding="utf-8")
         cls.doc = DOC.read_text(encoding="utf-8")
         cls.protector = cls.script[cls.script.index("function ConvertTo-ProtectedMigrationSql"):cls.script.index("function Assert-ProtectedMigrationSql")]
+        cls.protected_validator = cls.script[cls.script.index("function Assert-ProtectedMigrationSql"):cls.script.index("function Get-SqlPreflight")]
         cls.postflight = cls.script[cls.script.index("function Get-SqlPostflight"):cls.script.index("$repoRoot =")]
+
+    @staticmethod
+    def parse_marker_sequence(sql):
+        marker = re.compile(r"^-- BEGIN LOTE EF PROTEGIDO (\d+); REQUIERE ORDINAL (\d+)$")
+        return [tuple(map(int, match.groups())) for line in re.split(r"\r\n|\n|\r", sql) if (match := marker.fullmatch(line))]
 
     def test_plan_only_precedes_all_build_and_output_mutation(self):
         plan = self.script.index("if ($PlanOnly)")
@@ -169,6 +175,68 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         self.assertLess(guard, body)
         self.assertLess(body, advance)
         self.assertIn("BatchCount = $batches.Count", self.protector[advance:])
+
+    def test_marker_validation_splits_lf_crlf_and_bare_cr_explicitly(self):
+        self.assertIn('[regex]::Split($Sql, "\\r\\n|\\n|\\r")', self.protected_validator)
+        self.assertNotIn("(?m)^-- BEGIN LOTE EF PROTEGIDO \\d+; REQUIERE ORDINAL \\d+$", self.script)
+
+    def test_marker_validation_accepts_lf_with_and_without_final_newline(self):
+        fixture = "header\n-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\nbody"
+        self.assertEqual(self.parse_marker_sequence(fixture), [(1, 0)])
+        self.assertEqual(self.parse_marker_sequence(fixture + "\n"), [(1, 0)])
+
+    def test_marker_validation_accepts_crlf_with_and_without_final_newline(self):
+        fixture = "header\r\n-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\r\nbody"
+        self.assertEqual(self.parse_marker_sequence(fixture), [(1, 0)])
+        self.assertEqual(self.parse_marker_sequence(fixture + "\r\n"), [(1, 0)])
+
+    def test_marker_validation_accepts_mixed_line_endings(self):
+        fixture = (
+            "-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\r\nbody 1\n"
+            "-- BEGIN LOTE EF PROTEGIDO 2; REQUIERE ORDINAL 1\rbody 2"
+        )
+        self.assertEqual(self.parse_marker_sequence(fixture), [(1, 0), (2, 1)])
+
+    def test_marker_validation_rejects_a_malformed_marker(self):
+        fixture = "-- BEGIN LOTE EF PROTEGIDO 1 REQUIERE ORDINAL 0\r\nbody"
+        self.assertEqual(self.parse_marker_sequence(fixture), [])
+
+    def test_marker_validation_rejects_a_missing_ordinal(self):
+        fixture = (
+            "-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\n"
+            "-- BEGIN LOTE EF PROTEGIDO 3; REQUIERE ORDINAL 2"
+        )
+        self.assertNotEqual(self.parse_marker_sequence(fixture), [(1, 0), (2, 1)])
+
+    def test_marker_validation_rejects_a_duplicate_ordinal(self):
+        fixture = (
+            "-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\r\n"
+            "-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0"
+        )
+        self.assertNotEqual(self.parse_marker_sequence(fixture), [(1, 0), (2, 1)])
+
+    def test_marker_validation_rejects_an_incorrect_predecessor(self):
+        fixture = (
+            "-- BEGIN LOTE EF PROTEGIDO 1; REQUIERE ORDINAL 0\n"
+            "-- BEGIN LOTE EF PROTEGIDO 2; REQUIERE ORDINAL 0"
+        )
+        self.assertNotEqual(self.parse_marker_sequence(fixture), [(1, 0), (2, 1)])
+
+    def test_marker_validator_keeps_exact_count_and_sequence_checks(self):
+        for contract in (
+            "if ($BatchCount -le 0)",
+            "if ($markers.Count -ne $BatchCount)",
+            "$marker = $markers[$ordinal - 1]",
+            "[int]$marker.Groups['Ordinal'].Value -ne $ordinal",
+            "[int]$marker.Groups['PreviousOrdinal'].Value -ne $previousOrdinal",
+        ):
+            self.assertIn(contract, self.protected_validator)
+        self.assertIn("SET [LastCompletedBatch] = $ordinal", self.protected_validator)
+        self.assertIn("OBJECT_ID\\(N'tempdb\\.\\.#JemNexusReleasePreflight'", self.protected_validator)
+        self.assertIn("IF XACT_STATE\\(\\) <> 1", self.protected_validator)
+        self.assertIn("EXEC sys\\.sp_executesql N''", self.protected_validator)
+        self.assertIn("IF @PostflightOrdinal <>", self.protected_validator)
+        self.assertIn("COMMIT TRANSACTION;", self.protected_validator)
 
     def test_batch_guard_requires_sentinel_transaction_and_exact_predecessor(self):
         guard = self.protector[self.protector.index("-- BEGIN LOTE EF PROTEGIDO"):self.protector.index("BEGIN TRY")]
