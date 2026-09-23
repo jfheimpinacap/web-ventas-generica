@@ -13,6 +13,8 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.script = SCRIPT.read_text(encoding="utf-8")
         cls.doc = DOC.read_text(encoding="utf-8")
+        cls.protector = cls.script[cls.script.index("function ConvertTo-ProtectedMigrationSql"):cls.script.index("function Assert-ProtectedMigrationSql")]
+        cls.postflight = cls.script[cls.script.index("function Get-SqlPostflight"):cls.script.index("$repoRoot =")]
 
     def test_plan_only_precedes_all_build_and_output_mutation(self):
         plan = self.script.index("if ($PlanOnly)")
@@ -125,7 +127,7 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.script)
         self.assertIn("Assert-GeneratedMigrationSql $efSql", self.script)
-        self.assertIn("SQL EMITIDO POR EF CORE; NO MODIFICADO", self.script)
+        self.assertIn("SQL EMITIDO POR EF CORE; CUERPOS SIN CAMBIOS, EJECUCION PROTEGIDA", self.script)
 
     def test_sql_state_survives_go_and_outer_commit_follows_postflight(self):
         create = self.script.index("CREATE TABLE #JemNexusReleasePreflight")
@@ -141,9 +143,110 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         self.assertLess(first_go, read)
         self.assertLess(read, commit)
         self.assertLess(commit, drop)
-        self.assertNotIn("BEGIN TRY", self.script)
-        self.assertNotIn("END TRY", self.script)
+        self.assertIn("BEGIN TRY", self.script)
+        self.assertIn("END TRY", self.script)
         self.assertIn("una única ventana, conexión y sesión de SSMS", self.doc)
+
+    def test_sql_sentinel_contains_count_sequence_and_failure_state(self):
+        table = re.search(r"CREATE TABLE #JemNexusReleasePreflight \((.*?)\);", self.script)
+        self.assertIsNotNone(table)
+        for column in ("[QuoteRequestCount] bigint NOT NULL", "[LastCompletedBatch] int NOT NULL", "[ExecutionFailed] bit NOT NULL"):
+            self.assertIn(column, table.group(1))
+        insert = self.script.index("INSERT INTO #JemNexusReleasePreflight")
+        begin = self.script.index("BEGIN TRANSACTION;", insert)
+        first_go = self.script.index("GO", begin)
+        self.assertIn("SELECT COUNT_BIG(*), 0, 0", self.script[insert:begin])
+        self.assertLess(insert, begin)
+        self.assertLess(begin, first_go)
+
+    def test_every_nonempty_ef_batch_is_wrapped_and_counted(self):
+        self.assertIn("[regex]::Split($Sql, '(?im)^\\s*GO", self.protector)
+        self.assertIn("Where-Object { -not [string]::IsNullOrWhiteSpace($_) }", self.protector)
+        loop = self.protector.index("for ($index = 0; $index -lt $batches.Count; $index++)")
+        guard = self.protector.index("-- BEGIN LOTE EF PROTEGIDO $ordinal", loop)
+        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';", guard)
+        advance = self.protector.index("SET [LastCompletedBatch] = $ordinal", body)
+        self.assertLess(guard, body)
+        self.assertLess(body, advance)
+        self.assertIn("BatchCount = $batches.Count", self.protector[advance:])
+
+    def test_batch_guard_requires_sentinel_transaction_and_exact_predecessor(self):
+        guard = self.protector[self.protector.index("-- BEGIN LOTE EF PROTEGIDO"):self.protector.index("BEGIN TRY")]
+        sentinel = guard.index("OBJECT_ID(N'tempdb..#JemNexusReleasePreflight'")
+        transaction = guard.index("IF XACT_STATE() <> 1")
+        read_ordinal = guard.index("SELECT @Value = [LastCompletedBatch]")
+        expected = guard.index("IF @ObservedOrdinal$ordinal <> $previousOrdinal")
+        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
+        self.assertLess(sentinel, transaction)
+        self.assertLess(transaction, read_ordinal)
+        self.assertLess(read_ordinal, expected)
+        self.assertLess(expected, body)
+
+    def test_batch_success_advances_only_after_body_and_next_batch_requires_it(self):
+        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
+        transaction_after_body = self.protector.index("IF XACT_STATE() <> 1 THROW 51001", body)
+        advance = self.protector.index("SET [LastCompletedBatch] = $ordinal", body)
+        compare = self.protector.index("IF @ObservedOrdinal$ordinal <> $previousOrdinal")
+        self.assertLess(compare, body)
+        self.assertLess(body, transaction_after_body)
+        self.assertLess(transaction_after_body, advance)
+        self.assertLess(body, advance)
+        self.assertIn("$previousOrdinal = $index", self.protector)
+        self.assertIn("$ordinal = $index + 1", self.protector)
+        self.assertIn("WHERE [LastCompletedBatch] = $previousOrdinal AND [ExecutionFailed] = 0", self.protector[advance:])
+
+    def test_catch_rolls_back_marks_failure_and_rethrows(self):
+        catch = self.protector[self.protector.index("BEGIN CATCH"):self.protector.index("END CATCH")]
+        rollback = catch.index("IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;")
+        mark = catch.index("UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;")
+        rethrow = catch.index("THROW;")
+        self.assertLess(rollback, mark)
+        self.assertLess(mark, rethrow)
+
+    def test_raw_ef_sql_has_no_unprotected_mutable_path(self):
+        assembly = self.script[self.script.index("$efSql ="):self.script.index("[IO.File]::WriteAllText((Join-Path $releaseStaging $sqlName)")]
+        self.assertIn("ConvertTo-ProtectedMigrationSql $efSql", assembly)
+        self.assertIn("$protectedEf.Sql", assembly)
+        self.assertNotIn("$efSql.Trim()", assembly)
+        self.assertIn("Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount", assembly)
+        self.assertIn("EXEC sys.sp_executesql N'$escapedBody';", self.protector)
+
+    def test_postflight_requires_final_sequence_before_commit_and_success(self):
+        sentinel = self.postflight.index("OBJECT_ID(N'tempdb..#JemNexusReleasePreflight'")
+        transaction = self.postflight.index("IF XACT_STATE() <> 1")
+        sequence = self.postflight.index("IF @PostflightOrdinal <> $FinalBatchOrdinal OR @PostflightFailed <> 0")
+        migrations = self.postflight.index("Las migraciones destino no quedaron registradas una vez")
+        count = self.postflight.index("Cambio el conteo de QuoteRequests")
+        commit = self.postflight.index("COMMIT TRANSACTION;")
+        success = self.postflight.index("N'POSTFLIGHT_OK'")
+        drop = self.postflight.index("DROP TABLE #JemNexusReleasePreflight")
+        self.assertLess(sentinel, transaction)
+        self.assertLess(transaction, sequence)
+        self.assertLess(sequence, migrations)
+        self.assertLess(migrations, count)
+        self.assertLess(count, commit)
+        self.assertLess(commit, success)
+        self.assertLess(success, drop)
+
+    def test_failed_preflight_leaves_every_later_mutation_behind_a_guard(self):
+        guard = self.protector.index("IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NULL")
+        body = self.protector.index("EXEC sys.sp_executesql N'$escapedBody';")
+        blocked_commit = self.postflight.index("postflight y COMMIT bloqueados")
+        commit = self.postflight.index("COMMIT TRANSACTION;")
+        self.assertLess(guard, body)
+        self.assertLess(blocked_commit, commit)
+        self.assertNotIn("$efSql.Trim()", self.script)
+
+    def test_manifest_records_cross_batch_fail_safe_contract(self):
+        manifest = self.script[self.script.index("$manifest = [ordered]@{"):self.script.index("ConvertTo-Json -Depth 8")]
+        for marker in (
+            "proteccion_fail_safe_entre_lotes = $true",
+            "lotes_ef_protegidos = $protectedEf.BatchCount",
+            "tabla temporal de sesion con ordinal secuencial y marcador de fallo",
+            "postflight_exige_secuencia_completa = $true",
+            "commit_exterior_despues_de_secuencia = $true",
+        ):
+            self.assertIn(marker, manifest)
 
     def test_manifest_hashes_and_preserve_contract(self):
         for marker in ("manifest.json", "SHA256SUMS.txt", "Get-FileHash", "size_bytes", "sha256"):

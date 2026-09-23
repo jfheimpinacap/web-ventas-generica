@@ -232,6 +232,74 @@ function Assert-GeneratedMigrationSql {
     if ($Sql -match '(?i)ON\s+DELETE\s+CASCADE[^;]*IssuedBy|IssuedBy[^;]*ON\s+DELETE\s+CASCADE') { throw 'La FK IssuedBy no puede usar cascada.' }
 }
 
+function ConvertTo-ProtectedMigrationSql {
+    param([Parameter(Mandatory = $true)][string]$Sql)
+    $batches = @([regex]::Split($Sql, '(?im)^\s*GO\s*(?:--[^\r\n]*)?\r?$') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($batches.Count -eq 0) { throw 'El SQL EF no contiene lotes ejecutables.' }
+
+    $protected = New-Object System.Collections.Generic.List[string]
+    for ($index = 0; $index -lt $batches.Count; $index++) {
+        $ordinal = $index + 1
+        $previousOrdinal = $index
+        $escapedBody = $batches[$index].Trim().Replace("'", "''")
+        $protected.Add(@"
+-- BEGIN LOTE EF PROTEGIDO $ordinal; REQUIERE ORDINAL $previousOrdinal
+IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NULL
+BEGIN
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    THROW 51001, 'Centinela de release ausente; lote EF bloqueado.', 1;
+END;
+IF XACT_STATE() <> 1
+BEGIN
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW 51001, 'Transaccion exterior ausente o no confirmable; lote EF bloqueado.', 1;
+END;
+DECLARE @ObservedOrdinal$ordinal int;
+EXEC sys.sp_executesql N'SELECT @Value = [LastCompletedBatch] FROM #JemNexusReleasePreflight WHERE [ExecutionFailed] = 0;', N'@Value int OUTPUT', @Value = @ObservedOrdinal$ordinal OUTPUT;
+IF @ObservedOrdinal$ordinal <> $previousOrdinal
+BEGIN
+    ROLLBACK TRANSACTION;
+    UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW 51001, 'Secuencia de lotes EF invalida; lote bloqueado.', 1;
+END;
+BEGIN TRY
+    EXEC sys.sp_executesql N'$escapedBody';
+    IF XACT_STATE() <> 1 THROW 51001, 'El lote EF dejo inactiva o invalida la transaccion exterior.', 1;
+    UPDATE #JemNexusReleasePreflight
+       SET [LastCompletedBatch] = $ordinal
+     WHERE [LastCompletedBatch] = $previousOrdinal AND [ExecutionFailed] = 0;
+    IF @@ROWCOUNT <> 1 THROW 51001, 'No se pudo registrar el avance secuencial del lote EF.', 1;
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NOT NULL
+        UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW;
+END CATCH;
+-- END LOTE EF PROTEGIDO $ordinal
+GO
+"@)
+    }
+    return [pscustomobject]@{ Sql = ($protected -join "`r`n"); BatchCount = $batches.Count }
+}
+
+function Assert-ProtectedMigrationSql {
+    param([Parameter(Mandatory = $true)][string]$Sql, [Parameter(Mandatory = $true)][int]$BatchCount)
+    if ($BatchCount -le 0) { throw 'La cantidad de lotes EF protegidos debe ser positiva.' }
+    if ([regex]::Matches($Sql, '(?m)^-- BEGIN LOTE EF PROTEGIDO \d+; REQUIERE ORDINAL \d+$').Count -ne $BatchCount) { throw 'No todos los lotes EF quedaron protegidos.' }
+    for ($ordinal = 1; $ordinal -le $BatchCount; $ordinal++) {
+        $previousOrdinal = $ordinal - 1
+        if ($Sql.IndexOf("-- BEGIN LOTE EF PROTEGIDO $ordinal; REQUIERE ORDINAL $previousOrdinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta la guarda secuencial exacta del lote EF $ordinal." }
+        if ($Sql.IndexOf("SET [LastCompletedBatch] = $ordinal", [StringComparison]::Ordinal) -lt 0) { throw "Falta el avance posterior del lote EF $ordinal." }
+    }
+    if ([regex]::Matches($Sql, "OBJECT_ID\(N'tempdb\.\.#JemNexusReleasePreflight'").Count -lt ($BatchCount + 1)) { throw 'Faltan comprobaciones del centinela entre lotes.' }
+    if ([regex]::Matches($Sql, 'IF XACT_STATE\(\) <> 1').Count -lt ($BatchCount + 1)) { throw 'Faltan comprobaciones de la transaccion exterior.' }
+    if ([regex]::Matches($Sql, 'EXEC sys\.sp_executesql N''').Count -lt $BatchCount) { throw 'Un cuerpo EF no esta aislado detras de su guarda.' }
+    if ($Sql.IndexOf('IF @PostflightOrdinal <>', [StringComparison]::Ordinal) -lt 0) { throw 'El postflight no exige la secuencia EF completa.' }
+    if ($Sql.IndexOf('COMMIT TRANSACTION;', [StringComparison]::Ordinal) -lt $Sql.IndexOf('IF @PostflightOrdinal <>', [StringComparison]::Ordinal)) { throw 'El COMMIT exterior precede la comprobacion secuencial.' }
+}
+
 function Get-SqlPreflight {
     $values = ($KnownMigrations | ForEach-Object { "    (N'$_')" }) -join ",`r`n"
     return @"
@@ -250,15 +318,37 @@ IF (SELECT TOP (1) [MigrationId] FROM [$ExpectedSchema].[__EFMigrationsHistory] 
 IF EXISTS (SELECT 1 FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration')) THROW 51000, 'Una migracion destino ya esta registrada.', 1;
 IF OBJECT_ID(N'[$ExpectedSchema].[AppUserPermissions]', N'U') IS NOT NULL THROW 51000, 'AppUserPermissions ya existe.', 1;
 IF COL_LENGTH(N'[$ExpectedSchema].[CommercialQuotes]', N'IssuedById') IS NOT NULL THROW 51000, 'IssuedById ya existe.', 1;
-CREATE TABLE #JemNexusReleasePreflight ([QuoteRequestCount] bigint NOT NULL);
-INSERT INTO #JemNexusReleasePreflight SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests];
+CREATE TABLE #JemNexusReleasePreflight ([QuoteRequestCount] bigint NOT NULL, [LastCompletedBatch] int NOT NULL, [ExecutionFailed] bit NOT NULL);
+INSERT INTO #JemNexusReleasePreflight ([QuoteRequestCount], [LastCompletedBatch], [ExecutionFailed]) SELECT COUNT_BIG(*), 0, 0 FROM [$ExpectedSchema].[QuoteRequests];
 BEGIN TRANSACTION;
 GO
 "@
 }
 
 function Get-SqlPostflight {
+    param([Parameter(Mandatory = $true)][int]$FinalBatchOrdinal)
     return @"
+-- BEGIN POSTFLIGHT PROTEGIDO; REQUIERE ORDINAL $FinalBatchOrdinal
+IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NULL
+BEGIN
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    THROW 51002, 'Centinela de release ausente; postflight y COMMIT bloqueados.', 1;
+END;
+IF XACT_STATE() <> 1
+BEGIN
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW 51002, 'Transaccion exterior ausente o no confirmable; postflight y COMMIT bloqueados.', 1;
+END;
+DECLARE @PostflightOrdinal int, @PostflightFailed bit;
+EXEC sys.sp_executesql N'SELECT @Ordinal = [LastCompletedBatch], @Failed = [ExecutionFailed] FROM #JemNexusReleasePreflight;', N'@Ordinal int OUTPUT, @Failed bit OUTPUT', @Ordinal = @PostflightOrdinal OUTPUT, @Failed = @PostflightFailed OUTPUT;
+IF @PostflightOrdinal <> $FinalBatchOrdinal OR @PostflightFailed <> 0
+BEGIN
+    ROLLBACK TRANSACTION;
+    UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW 51002, 'La secuencia completa de lotes EF no fue confirmada; postflight y COMMIT bloqueados.', 1;
+END;
+BEGIN TRY
 IF DB_NAME() <> N'$ExpectedDatabase' OR SCHEMA_NAME() <> N'$ExpectedSchema' THROW 51000, 'Destino cambio durante la ejecucion.', 1;
 IF EXISTS (SELECT [MigrationId] FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration') GROUP BY [MigrationId] HAVING COUNT(*) <> 1) OR (SELECT COUNT(*) FROM [$ExpectedSchema].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'$PermissionMigration', N'$EndMigration')) <> 2 THROW 51000, 'Las migraciones destino no quedaron registradas una vez.', 1;
 IF OBJECT_ID(N'[$ExpectedSchema].[AppUserPermissions]', N'U') IS NULL THROW 51000, 'AppUserPermissions no existe tras migrar.', 1;
@@ -278,6 +368,14 @@ SELECT DB_NAME() AS [DatabaseName], SCHEMA_NAME() AS [DefaultSchema],
  (SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[QuoteRequests]) AS [QuoteRequestCount],
  N'POSTFLIGHT_OK' AS [Result];
 DROP TABLE #JemNexusReleasePreflight;
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    IF OBJECT_ID(N'tempdb..#JemNexusReleasePreflight', N'U') IS NOT NULL
+        UPDATE #JemNexusReleasePreflight SET [ExecutionFailed] = 1;
+    THROW;
+END CATCH;
+-- END POSTFLIGHT PROTEGIDO
 GO
 "@
 }
@@ -390,7 +488,9 @@ try {
     Invoke-CheckedCommand dotnet $efArgs
     $efSql = [IO.File]::ReadAllText($rawSql)
     Assert-GeneratedMigrationSql $efSql
-    $finalSql = (Get-SqlPreflight) + "`r`n-- BEGIN SQL EMITIDO POR EF CORE; NO MODIFICADO`r`n" + $efSql.Trim() + "`r`n-- END SQL EMITIDO POR EF CORE; NO MODIFICADO`r`n" + (Get-SqlPostflight)
+    $protectedEf = ConvertTo-ProtectedMigrationSql $efSql
+    $finalSql = (Get-SqlPreflight) + "`r`n-- BEGIN SQL EMITIDO POR EF CORE; CUERPOS SIN CAMBIOS, EJECUCION PROTEGIDA`r`n" + $protectedEf.Sql + "`r`n-- END SQL EMITIDO POR EF CORE; CUERPOS SIN CAMBIOS, EJECUCION PROTEGIDA`r`n" + (Get-SqlPostflight $protectedEf.BatchCount)
+    Assert-ProtectedMigrationSql $finalSql $protectedEf.BatchCount
     [IO.File]::WriteAllText((Join-Path $releaseStaging $sqlName), $finalSql, [Text.UTF8Encoding]::new($false))
     $stages.Add([ordered]@{ name = 'sql_generate_static_validation'; result = 'passed' })
 
@@ -414,6 +514,13 @@ try {
         api_public_url = $apiUrl
         frontend_validation = $frontendValidation
         migrations = [ordered]@{ from = $StartMigration; to = $EndMigration }
+        sql = [ordered]@{
+            proteccion_fail_safe_entre_lotes = $true
+            lotes_ef_protegidos = $protectedEf.BatchCount
+            centinela = 'tabla temporal de sesion con ordinal secuencial y marcador de fallo'
+            postflight_exige_secuencia_completa = $true
+            commit_exterior_despues_de_secuencia = $true
+        }
         artifacts = $artifacts
         exclusions = [ordered]@{ backend = $BackendExclusions; frontend = $FrontendExclusions }
         commands = $commands

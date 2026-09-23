@@ -1,4 +1,4 @@
-# Generación reproducible de release productivo — Prompts 346 y 347
+# Generación reproducible de release productivo — Prompts 346, 347 y 348
 
 ## 1. Propósito y alcance
 
@@ -155,7 +155,7 @@ No edite un artefacto después de calcular hashes; regenere todo desde el mismo 
 Abra el `.sql` en un editor de texto, no en una acción automática de ejecución. Revise en este orden:
 
 1. preflight agregado por la herramienta;
-2. bloque marcado `BEGIN/END SQL EMITIDO POR EF CORE; NO MODIFICADO`;
+2. lotes marcados `BEGIN/END LOTE EF PROTEGIDO`, cuyos cuerpos proceden sin cambios funcionales del SQL emitido por EF Core;
 3. postflight y `SELECT` final verificable.
 
 El cuerpo central procede literalmente de `dotnet ef migrations script` no idempotente entre:
@@ -165,15 +165,29 @@ El cuerpo central procede literalmente de `dotnet ef migrations script` no idemp
 
 Debe registrar una vez `20260917000000_AddGranularSellerPermissions` y una vez `20260922000000_AddCommercialQuoteIssuedBy`, y ninguna otra migración. La herramienta comprueba creación/backfill de `AppUserPermissions`, `IssuedById` nullable, backfill único desde `ResponsibleSellerId`, conversión a obligatorio, índice, FK a `AppUsers` sin cascada, y ausencia de `DROP TABLE`, `DROP COLUMN`, `TRUNCATE` y borrados de tablas críticas. No genera ni ejecuta `Down` o rollback.
 
-## 11. Preflight, schema obligatorio y postflight
+## 11. Preflight, centinela secuencial y postflight
 
-El preflight usa `SET XACT_ABORT ON` y `THROW`. Exige `DB_NAME() = N'jemnexusb_prod'`, `SCHEMA_NAME() = N'jemnexusb_api'`, historial en `[jemnexusb_api].[__EFMigrationsHistory]`, exactamente las 20 migraciones conocidas, última migración exacta, ninguna desconocida, destinos aún ausentes, tabla `AppUserPermissions` ausente e `IssuedById` ausente. Antes del primer `GO`, crea la tabla temporal de sesión `#JemNexusReleasePreflight`, guarda allí el conteo inicial de `QuoteRequests` e inicia la transacción exterior.
+El preflight usa `SET XACT_ABORT ON` y `THROW`. Exige `DB_NAME() = N'jemnexusb_prod'`, `SCHEMA_NAME() = N'jemnexusb_api'`, historial en `[jemnexusb_api].[__EFMigrationsHistory]`, exactamente las 20 migraciones conocidas, última migración exacta, ninguna desconocida, destinos aún ausentes, tabla `AppUserPermissions` ausente e `IssuedById` ausente. Antes de abrir la transacción exterior crea la tabla temporal de sesión `#JemNexusReleasePreflight`. En ella guarda el conteo inicial de `QuoteRequests`, el ordinal del último lote EF completado y un marcador inequívoco de fallo. El ordinal inicial `0` solo queda disponible para el lote siguiente después de que el preflight haya terminado y haya abierto la transacción exterior; entonces llega el primer `GO`.
 
-El default schema `jemnexusb_api` es obligatorio porque las migraciones EF actuales emiten identificadores no cualificados. La herramienta no reescribe SQL con regex y no asume `dbo`: el default schema correcto hace que esos nombres resuelvan al schema productivo confirmado. El script completo debe ejecutarse de una sola vez en **una única ventana, conexión y sesión de SSMS**. La tabla temporal sobrevive a los separadores `GO`, a diferencia de una variable escalar; no existe un `TRY/CATCH` que atraviese lotes.
+El default schema `jemnexusb_api` es obligatorio porque las migraciones EF actuales emiten identificadores no cualificados. La herramienta no altera la lógica funcional de las migraciones ni asume `dbo`: el default schema correcto hace que sus nombres resuelvan al schema productivo confirmado. El script completo debe ejecutarse de una sola vez en **una única ventana, conexión y sesión de SSMS**. La tabla temporal sobrevive a los separadores `GO`, a diferencia de una variable escalar; un `TRY/CATCH` no puede atravesar lotes.
 
-El SQL de EF puede emitir sus propios `BEGIN TRANSACTION` y `COMMIT`. En SQL Server son transacciones anidadas por contador: esos `COMMIT` internos reducen `@@TRANCOUNT`, pero no hacen persistentes los cambios mientras la transacción exterior siga abierta. `SET XACT_ABORT ON` permanece activo entre lotes de la misma conexión. El wrapper no realiza ningún commit deliberado ante un fallo; si SSMS detiene la ejecución, el operador debe conservar la sesión para inspección y ejecutar el rollback aprobado, o cerrar la conexión para que SQL Server revierta la transacción pendiente.
+`THROW` y `SET XACT_ABORT ON` no bastan por sí solos ante `GO`: `GO` es un separador del cliente, y SSMS puede seguir enviando lotes aunque el preflight haya lanzado un error. En ese caso la transacción exterior todavía no existe, de modo que `XACT_ABORT` no tiene nada que revertir. Por ello la seguridad principal está en el SQL del servidor y no depende de `:ON ERROR EXIT`, `sqlcmd -b`, de que SSMS se detenga ni de que el operador pulse Cancelar.
 
-El postflight exige ambas migraciones una vez, tabla de permisos, exactamente 29 permisos por seller calculados mediante joins/subconsultas (sin IDs de usuario hardcodeados), ausencia de `users.manage`, columna obligatoria, índice, FK `NO_ACTION`, cero cotizaciones con emisor nulo y conteo de `QuoteRequests` igual al valor leído desde `#JemNexusReleasePreflight`. Solo después de todas las verificaciones ejecuta el `COMMIT` exterior; luego emite el `SELECT` verificable y elimina la tabla temporal antes de finalizar correctamente.
+La herramienta divide el SQL EF solo por sus separadores `GO` y encapsula **cada lote EF no vacío** en su propia guarda server-side. Antes de compilar y ejecutar el cuerpo mediante `sp_executesql`, la guarda exige: (1) que exista el centinela temporal; (2) que `XACT_STATE() = 1`, es decir, que la transacción exterior siga activa y confirmable; (3) que el marcador de fallo esté limpio; y (4) que el ordinal sea exactamente el del lote anterior. El cuerpo conserva las instrucciones EF; el ordinal avanza únicamente después de que el cuerpo entero termina. El lote siguiente exige ese avance exacto.
+
+Ante un error capturable, el `CATCH` revierte cualquier transacción pendiente, marca el centinela como fallido si todavía existe y vuelve a emitir el error. Un error de compilación del cuerpo dinámico también es capturable por ese wrapper. Si `XACT_ABORT` ya dejó la transacción inválida, la guarda o el `CATCH` la revierte antes de marcar el fallo. Si un error impide por completo actualizar el ordinal, este queda atrasado: eso basta para que el lote siguiente se bloquee. Aunque SSMS continúe procesando, las guardas posteriores vuelven inertes sus cuerpos mutables.
+
+Si el preflight falla antes del primer `GO`, no crea un estado utilizable y no abre la transacción. Cada lote posterior encuentra ausente el centinela y lanza su propio error **antes** de compilar o ejecutar el cuerpo EF. Por tanto no puede crear tablas, insertar permisos, alterar columnas, crear índices o claves foráneas, registrar migraciones, alcanzar el `COMMIT` exterior ni producir `POSTFLIGHT_OK`.
+
+El SQL de EF puede emitir sus propios `BEGIN TRANSACTION` y `COMMIT`. En SQL Server son transacciones anidadas por contador: esos `COMMIT` internos reducen `@@TRANCOUNT`, pero no hacen persistentes los cambios mientras la transacción exterior siga abierta. Las guardas vuelven a exigir que esa transacción siga activa y confirmable después de cada `GO`.
+
+El postflight tiene su propia guarda y exige el ordinal final exacto de todos los lotes EF. Después exige ambas migraciones una vez, tabla de permisos, exactamente 29 permisos por seller calculados mediante joins/subconsultas (sin IDs de usuario hardcodeados), ausencia de `users.manage`, columna obligatoria, índice, FK `NO_ACTION`, cero cotizaciones con emisor nulo y conteo de `QuoteRequests` igual al valor leído desde el centinela. Solo después de confirmar la secuencia completa y todas esas condiciones ejecuta el `COMMIT` exterior. Después del commit emite el único resultado `POSTFLIGHT_OK` y únicamente después de ese resultado elimina la tabla temporal. `POSTFLIGHT_OK` nunca debe aparecer si se produjo un error previo.
+
+Ante **cualquier** error, no reintente a ciegas ni continúe utilizando la misma ventana. Conserve la evidencia aprobada, cierre la conexión para eliminar cualquier estado de sesión y asegurar el rollback de una transacción aún pendiente, y concilie el estado real de schema, historial y datos antes de generar o ejecutar otro release.
+
+### Release reemplazado
+
+El release generado desde `f6f4f2027ae8` queda reemplazado por esta corrección y **no debe aplicarse en producción**. Después del merge, elimine de forma explícita el `OutputRoot` anterior, vuelva a comprobar que el checkout está en el nuevo `HEAD` de `main` limpio y genere un release completo nuevo desde ese commit. No reutilice el SQL, ZIP, manifiesto ni checksums anteriores.
 
 ## 12. Protecciones operativas y cosas que no realiza
 
