@@ -4,7 +4,7 @@
 
 `tools/deployment/Test-JemNexusDataTransferReadiness.ps1` es una herramienta **PowerShell 5.1 de solo lectura**. Inventaría `JemNexus_Local` y compara el resultado con evidencia productiva externa sanitizada. No exporta filas, no importa, no elimina, no actualiza, no ejecuta migraciones, no se conecta a producción y no escribe en `uploads`. No existe `-Apply` ni SQL aplicable.
 
-Precheck de esta tarea: rama `work`, árbol limpio y HEAD real `2c1bc705a6a16c0ea4adaa58bacb0c09ef991c60`. Ese HEAD contiene el plan 351 y el correctivo 351A (`2c0400b`, aclaración del alcance de reemplazo) integrado; no se asumió un SHA indicado por el encargo.
+Precheck de este correctivo: ruta `/workspace/web-ventas-generica`, rama `work`, árbol limpio y HEAD `43eb90276eef50ce43e858392aca672aba34fcf3`. También se confirmaron los tres archivos de alcance antes de modificarlos.
 
 `READY_FOR_DESIGN` significa únicamente que los dos inventarios permiten diseñar una tarea posterior. Nunca significa autorización para aplicar. `NO-GO` bloquea el diseño/aplicación hasta revisar el alcance. Un snapshot es evidencia histórica declarada, no una lectura actual: un preflight futuro deberá volver a observar producción inmediatamente antes de cualquier operación.
 
@@ -14,6 +14,8 @@ Precheck de esta tarea: rama `work`, árbol limpio y HEAD real `2c1bc705a6a16c0e
 * Dos raíces locales explícitas: `ImageUploadsRoot` es la raíz que contiene `product-images`; `ContentRoot` contiene `uploads\technical-sheets`.
 * `OutputRoot` absoluto o resoluble, **fuera del repositorio**. La herramienta nunca reemplaza archivos: `-AllowNewOutputFile` crea un nombre nuevo con timestamp cuando el nombre estable ya existe.
 * Cierre/congelamiento local durante el inventario para que DB y archivos no cambien mientras se calculan hashes.
+
+La identidad se comprueba en dos etapas. Antes de abrir la conexión se exigen, con coincidencia exacta, `DataSource=(localdb)\MSSQLLocalDB`, base `JemNexus_Local` y esquema `dbo`; la cadena se construye internamente con autenticación integrada, sin credenciales SQL ni `AttachDbFilename`. Por ello no se admiten IP, DNS ni instancias remotas o compartidas. Después de conectar, consultas de solo lectura exigen que `DB_NAME()` sea exactamente `JemNexus_Local` y que `SERVERPROPERTY('IsLocalDB')` sea el entero `1`; se rechazan `0`, `NULL`/`DBNull` y cualquier tipo o valor inesperado. El nombre efectivo devuelto por SQL Server es dinámico y solo diagnóstico: no se compara con `MSSQLLocalDB` ni con un equipo o sufijo `LOCALDB#` concreto.
 
 ## Modos y comandos exactos
 
@@ -101,19 +103,19 @@ Los hashes reales deben ser SHA-256 hexadecimal de los usernames productivos nor
 
 ## Criterios de aborto
 
-InventoryLocal aborta antes de emitir informe ante identidad distinta, no-LocalDB, migraciones/conteos distintos, tabla/columna faltante, FKs/IDs/índices inválidos, referencia multimedia ausente, tamaño de ficha diferente, ruta absoluta/traversal/fuera de raíz, symlink/reparse point, prefijo o ProductId inconsistente, o un número distinto de dos huérfanos. Imágenes y fichas se resuelven bajo raíces separadas.
+InventoryLocal aborta antes de emitir informe ante identidad distinta, un `IsLocalDB` distinto del entero `1`, migraciones/conteos distintos, tabla/columna faltante, FKs/IDs/índices inválidos, referencia multimedia ausente, tamaño de ficha diferente, ruta absoluta/traversal/fuera de raíz, symlink/reparse point, prefijo o ProductId inconsistente, o un número distinto de dos huérfanos. La validación de identidad ocurre antes de crear el directorio o informe. Imágenes y fichas se resuelven bajo raíces separadas.
 
 CompareSnapshot produce `NO-GO` por cualquier fallo local o por drift productivo: base/esquema/migraciones, identidades o conteo de usuarios, 29 permisos, ocho `QuoteRequests`, cualquier cotización, tablas/columnas, índices o FKs. También es bloqueo cualquier cambio no contemplado que deba agregarse al contrato del snapshot.
 
 ## Pruebas y validación posterior en Windows
 
-Las pruebas sintéticas portables no requieren SQL Server, red, .NET, Node ni PowerShell:
+Las pruebas sintéticas portables no requieren SQL Server, red, .NET, Node ni PowerShell. Cubren la aceptación de LocalDB aunque su nombre efectivo sea dinámico; el rechazo de instancia no LocalDB, `NULL`, valor inesperado o base equivocada; el rechazo previo a conexión de un DataSource remoto; y que `PlanOnly` no conecte ni escriba:
 
 ```powershell
 python -m unittest tools/deployment/tests/test_data_transfer_readiness.py -v
 ```
 
-En un Windows controlado quedan obligatorias la validación del parser y la ejecución real de `PlanOnly`, seguida de `InventoryLocal` contra la LocalDB confirmada. Verifique antes y después que `PlanOnly` no creó el directorio y que `git status --short` sigue limpio. Compare luego con un snapshot sanitizado revisado. No pruebe conexión productiva: la herramienta no la admite.
+En un Windows controlado quedan obligatorias la nueva validación del parser y la ejecución real de `PlanOnly`, seguida de `InventoryLocal` contra la LocalDB confirmada. En particular, confirme que un nombre efectivo dinámico pasa gracias a `IsLocalDB = 1`, y que base incorrecta o `IsLocalDB` no inequívoco abortan sin informe. Verifique antes y después que `PlanOnly` no creó el directorio y que `git status --short` sigue limpio. Compare luego con un snapshot sanitizado revisado. No pruebe conexión productiva: la herramienta no la admite.
 
 ## Siguiente paso
 

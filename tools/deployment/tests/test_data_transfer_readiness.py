@@ -69,6 +69,16 @@ def safe_file(root, relative):
     if root not in resolved.parents: raise ValueError("outside")
     return resolved
 
+def local_identity_allowed(effective_server, database, is_localdb):
+    """Portable model of the post-connect identity decision (not a SQL mock)."""
+    del effective_server  # SQL Server's dynamic LocalDB name is diagnostic only.
+    return database == "JemNexus_Local" and type(is_localdb) is int and is_localdb == 1
+
+def connection_target_allowed(instance, database="JemNexus_Local", schema="dbo"):
+    """Portable model of the exact pre-connect parameter guard."""
+    return (instance == r"(localdb)\MSSQLLocalDB" and
+            database == "JemNexus_Local" and schema == "dbo")
+
 class ReadinessBehaviorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -131,6 +141,35 @@ class ReadinessBehaviorTests(unittest.TestCase):
         self.assertLess(plan, self.source.index("$connection.Open()", plan))
         block = self.source[plan:self.source.index("if ($Mode -eq 'InventoryLocal')")]
         self.assertNotIn("CreateDirectory", block); self.assertNotIn("SqlConnection", block)
+
+    def test_dynamic_effective_localdb_name_is_accepted(self):
+        self.assertTrue(local_identity_allowed(r"WORKSTATION\LOCALDB#DYNAMIC", "JemNexus_Local", 1))
+        identity_block = self.source[self.source.index("$identity = Invoke-SelectTable"):self.source.index("$migrationCount")]
+        self.assertIn("SERVERPROPERTY('IsLocalDB')", identity_block)
+        self.assertNotIn("\\\\MSSQLLocalDB$", identity_block)
+        self.assertNotIn("LOCALDB#", identity_block)
+
+    def test_non_localdb_null_unexpected_value_and_wrong_database_are_rejected(self):
+        for database, is_localdb in (("JemNexus_Local", 0), ("JemNexus_Local", None),
+                                     ("JemNexus_Local", "1"), ("wrong", 1)):
+            self.assertFalse(local_identity_allowed(r"WORKSTATION\LOCALDB#DYNAMIC", database, is_localdb))
+        self.assertIn("$isLocalDb -is [DBNull]", self.source)
+        self.assertIn("$isLocalDb -isnot [int]", self.source)
+
+    def test_remote_data_source_is_rejected_before_connection(self):
+        inventory = self.source.index("if ($Mode -eq 'InventoryLocal')")
+        guard = self.source.index("$LocalInstance -cne $ExpectedInstance", inventory)
+        connection = self.source.index("New-Object Data.SqlClient.SqlConnection", inventory)
+        self.assertLess(guard, connection)
+        for remote in ("10.0.0.8", "sql.example.test", r"SERVER\SharedInstance"):
+            self.assertFalse(connection_target_allowed(remote))
+        self.assertTrue(connection_target_allowed(r"(localdb)\MSSQLLocalDB"))
+        self.assertIn("se rechazo antes de conectar", self.source[guard:connection])
+        connection_string = self.source[self.source.index('$connectionString =', inventory):connection]
+        self.assertIn("Integrated Security=True", connection_string)
+        self.assertNotIn("User ID", connection_string)
+        self.assertNotIn("Password", connection_string)
+        self.assertNotIn("AttachDbFilename", connection_string)
 
     def test_reports_have_no_secret_or_personal_fields(self):
         report = local_fixture()
