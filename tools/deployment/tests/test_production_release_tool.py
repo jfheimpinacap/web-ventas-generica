@@ -74,7 +74,42 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
         self.assertIn("$uri.Scheme -ne 'https'", self.script)
         for marker in ("localhost", "127", "192", "169", "0xFC", "0xFE"):
             self.assertIn(marker, self.script)
-        self.assertRegex(self.script, r"localhost\|127\\\.0\\\.0\\\.1")
+        self.assertIn("Test-NonPublicHost $uri", self.script)
+        self.assertIn("URL API HTTP encontrada", self.script)
+        self.assertIn("$ExpectedApiHost = 'api.jem-nexus.cl'", self.script)
+
+    def test_exact_framework_placeholder_is_allowed_only_in_javascript(self):
+        self.assertIn("$absoluteUrl -ceq 'http://localhost'", self.script)
+        self.assertIn("$file.Extension -cne '.js'", self.script)
+        for condition in ("$uri.Port -ne 80", "$uri.AbsolutePath -cne '/'", "$uri.Query", "$uri.Fragment", "$uri.UserInfo"):
+            self.assertIn(condition, self.script)
+        self.assertNotIn("$content -match '(?i)localhost|127", self.script)
+
+    def test_structured_url_validation_rejects_local_variants(self):
+        source = self.script[self.script.index("function Assert-FrontendOutput"):self.script.index("function Assert-GeneratedMigrationSql")]
+        self.assertIn("[Uri]::TryCreate($absoluteUrl", source)
+        self.assertIn("Test-NonPublicHost $uri", source)
+        self.assertIn("$hostName.EndsWith('.localhost')", self.script)
+        # These variants cannot enter the sole exact-placeholder exemption.
+        for unsafe in ("http://localhost:5173", "http://localhost/api", "https://localhost", "http://127.0.0.1"):
+            self.assertNotEqual(unsafe, "http://localhost")
+
+    def test_expected_api_and_discovered_development_fallback_are_enforced(self):
+        self.assertIn("if (-not $apiConfirmed)", self.script)
+        self.assertIn("$content.Contains($ExpectedApiUrl)", self.script)
+        self.assertIn("Get-DevelopmentApiFallback $frontendApiSource", self.script)
+        self.assertRegex(self.script, r"DEFAULT_API_BASE_URL\\s\+\*=|DEFAULT_API_BASE_URL")
+        self.assertIn("$content.Contains($DevelopmentApiFallback)", self.script)
+
+    def test_frontend_validation_evidence_is_recorded_in_manifest(self):
+        for marker in ("api_productiva_confirmada", "placeholders_framework_permitidos", "archivos_placeholders_framework"):
+            self.assertIn(marker, self.script)
+        self.assertIn("frontend_validation = $frontendValidation", self.script)
+
+    def test_bundle_validation_is_hash_and_minifier_independent(self):
+        self.assertNotIn("index-Mfu708cJ.js", self.script)
+        self.assertIn("Get-ChildItem -LiteralPath $DistPath -File -Recurse", self.script)
+        self.assertIn("[regex]::Matches($content", self.script)
 
     def test_sql_preflight_and_postflight_contracts(self):
         for marker in (
@@ -122,11 +157,47 @@ class ProductionReleaseToolContractTests(unittest.TestCase):
 
     def test_deletion_is_limited_to_exact_staging(self):
         removals = re.findall(r"Remove-Item[^\n]+", self.script)
-        self.assertEqual(len(removals), 1)
-        self.assertIn("-LiteralPath $stagingRoot", removals[0])
+        self.assertEqual(len(removals), 3)
+        self.assertTrue(any("-LiteralPath $stagingRoot" in removal for removal in removals))
+        self.assertTrue(any("-LiteralPath $published" in removal for removal in removals))
+        self.assertTrue(any("-LiteralPath $outputPath" in removal for removal in removals))
         self.assertNotIn("$HOME", self.script)
         self.assertIn("ZIP de destino ya existe", self.script)
         self.assertIn("OutputRoot debe estar completamente fuera del repositorio", self.script)
+
+    def test_every_release_artifact_is_created_in_staging(self):
+        creation_block = self.script[self.script.index("New-DeterministicZip $backendPackage"):self.script.index("# La comprobacion global de colisiones")]
+        self.assertNotIn("Join-Path $outputPath $backendName", creation_block)
+        self.assertNotIn("Join-Path $outputPath $frontendName", creation_block)
+        self.assertNotIn("Join-Path $outputPath $sqlName", creation_block)
+        for name in ("$backendName", "$frontendName", "$sqlName", "'manifest.json'", "'SHA256SUMS.txt'", "'PRESERVE_ON_SERVER.txt'"):
+            self.assertIn(name, creation_block)
+        self.assertGreaterEqual(creation_block.count("Join-Path $releaseStaging"), 8)
+
+    def test_final_validation_precedes_collision_check_and_first_move(self):
+        validate = self.script.index("$manifestCheck = Get-Content")
+        collisions = self.script.index("# La comprobacion global de colisiones")
+        move = self.script.index("Move-Item -LiteralPath")
+        self.assertLess(validate, collisions)
+        self.assertLess(collisions, move)
+        self.assertIn("foreach ($name in $releaseNames)", self.script[collisions:move])
+
+    def test_publication_failure_rolls_back_only_files_moved_by_this_run(self):
+        move = self.script.index("Move-Item -LiteralPath")
+        rollback = self.script.index("foreach ($published in $movedByThisRun)", move)
+        self.assertIn("$movedByThisRun.Add($destination)", self.script[move:rollback])
+        self.assertIn("Remove-Item -LiteralPath $published -Force", self.script[rollback:])
+        self.assertIn("se revirtieron exclusivamente los archivos de esta ejecucion", self.script)
+
+    def test_backend_and_frontend_zips_are_not_published_before_later_failures(self):
+        backend_zip = self.script.index("New-DeterministicZip $backendPackage")
+        frontend_validation = self.script.index("Assert-FrontendOutput $frontendDist")
+        sql_validation = self.script.index("Assert-GeneratedMigrationSql $efSql")
+        first_move = self.script.index("Move-Item -LiteralPath")
+        self.assertLess(backend_zip, frontend_validation)
+        self.assertLess(frontend_validation, sql_validation)
+        self.assertLess(sql_validation, first_move)
+        self.assertIn("Join-Path $releaseStaging $backendName", self.script[backend_zip:frontend_validation])
 
     def test_no_embedded_secret_assignment_or_connection_string(self):
         self.assertNotRegex(self.script, r"(?i)(password|token|connectionstring)\s*=\s*['\"][^'\"]+['\"]")

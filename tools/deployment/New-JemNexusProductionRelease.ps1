@@ -18,6 +18,7 @@ $StartMigration = '20260830000000_PreserveQuotesWhenDeletingProducts'
 $PermissionMigration = '20260917000000_AddGranularSellerPermissions'
 $EndMigration = '20260922000000_AddCommercialQuoteIssuedBy'
 $FrontendPublicUrl = 'https://jem-nexus.cl'
+$ExpectedApiHost = 'api.jem-nexus.cl'
 $ExpectedDatabase = 'jemnexusb_prod'
 $ExpectedSchema = 'jemnexusb_api'
 $BackendExclusions = @('appsettings.json', 'appsettings.Development.json', 'appsettings.Production.json', 'web.config', 'logs/', '.env', '.env.*', '*.tmp')
@@ -95,8 +96,32 @@ function Assert-ProductionHttpsUrl {
                 ($bytes.Length -eq 16 -and (($bytes[0] -band 0xFE) -eq 0xFC -or ($bytes[0] -eq 0xFE -and ($bytes[1] -band 0xC0) -eq 0x80)))
             if ($private) { throw "$Name no puede apuntar a una direccion privada, link-local o loopback." }
         }
+        if ($hostName -cne $ExpectedApiHost) { throw "$Name debe usar el host productivo permitido '$ExpectedApiHost'." }
     }
     return $uri.AbsoluteUri.TrimEnd('/')
+}
+
+function Get-DevelopmentApiFallback {
+    param([Parameter(Mandatory = $true)][string]$SourcePath)
+    $source = [IO.File]::ReadAllText($SourcePath)
+    $match = [regex]::Match($source, '(?m)^\s*const\s+DEFAULT_API_BASE_URL\s*=\s*([''"])(?<url>https?://[^''"]+)\1')
+    if (-not $match.Success) { throw "No se pudo descubrir DEFAULT_API_BASE_URL desde $SourcePath." }
+    $fallback = $null
+    if (-not [Uri]::TryCreate($match.Groups['url'].Value, [UriKind]::Absolute, [ref]$fallback)) { throw 'DEFAULT_API_BASE_URL no es una URL absoluta valida.' }
+    return $fallback.AbsoluteUri.TrimEnd('/')
+}
+
+function Test-NonPublicHost {
+    param([Parameter(Mandatory = $true)][Uri]$Uri)
+    $hostName = $Uri.DnsSafeHost.ToLowerInvariant()
+    if ($hostName -eq 'localhost' -or $hostName.EndsWith('.localhost') -or $hostName.EndsWith('.local')) { return $true }
+    $ip = $null
+    if (-not [Net.IPAddress]::TryParse($hostName, [ref]$ip)) { return $false }
+    if ($ip.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6 -and $ip.IsIPv4MappedToIPv6) { $ip = $ip.MapToIPv4() }
+    $bytes = $ip.GetAddressBytes()
+    return [Net.IPAddress]::IsLoopback($ip) -or
+        ($bytes.Length -eq 4 -and (($bytes[0] -eq 0) -or ($bytes[0] -eq 10) -or ($bytes[0] -eq 127) -or ($bytes[0] -eq 192 -and $bytes[1] -eq 168) -or ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31) -or ($bytes[0] -eq 169 -and $bytes[1] -eq 254))) -or
+        ($bytes.Length -eq 16 -and (($bytes[0] -band 0xFE) -eq 0xFC -or ($bytes[0] -eq 0xFE -and ($bytes[1] -band 0xC0) -eq 0x80)))
 }
 
 function Test-ExcludedRelativePath {
@@ -147,15 +172,41 @@ function Assert-RequiredFile {
 }
 
 function Assert-FrontendOutput {
-    param([string]$DistPath)
+    param([string]$DistPath, [string]$ExpectedApiUrl, [string]$DevelopmentApiFallback)
     Assert-RequiredFile $DistPath 'index.html'
     if (-not (Test-Path -LiteralPath (Join-Path $DistPath 'assets') -PathType Container)) { throw 'Falta el directorio frontend assets.' }
     foreach ($path in @('catalogo/index.html', 'maquinaria-nueva/index.html', 'maquinaria-usada/index.html', 'repuestos/index.html', 'servicios/index.html', 'cotizar/index.html', 'contacto/index.html', 'sobre-nosotros/index.html', 'preguntas-frecuentes/index.html', '_spa.html', '_noindex.html')) { Assert-RequiredFile $DistPath $path }
+    $apiConfirmed = $false
+    $frameworkPlaceholderFiles = New-Object System.Collections.Generic.List[string]
     foreach ($file in @(Get-ChildItem -LiteralPath $DistPath -File -Recurse)) {
-        if ($file.Extension.ToLowerInvariant() -notin @('.html', '.js', '.css', '.json', '.xml', '.txt', '.webmanifest')) { continue }
+        if ($file.Extension.ToLowerInvariant() -notin @('.html', '.js', '.css', '.json', '.xml', '.txt', '.webmanifest', '.manifest', '.config', '.ini')) { continue }
         $content = [IO.File]::ReadAllText($file.FullName)
-        if ($content -match '(?i)localhost|127\.0\.0\.1') { throw "Referencia local encontrada en $($file.FullName)." }
-        if ($content -match '(?i)http://[^\s"''<>]*(?:api|/api(?:/|\b))') { throw "URL API HTTP encontrada en $($file.FullName)." }
+        if ($content.Contains($ExpectedApiUrl)) { $apiConfirmed = $true }
+        if ($content.Contains($DevelopmentApiFallback)) { throw "Fallback API de desarrollo encontrado en $($file.FullName)." }
+        foreach ($match in [regex]::Matches($content, '(?i)https?://[^\s"''<>`]+')) {
+            $absoluteUrl = $match.Value.TrimEnd(')', ']', '}', ',', ';')
+            $uri = $null
+            if (-not [Uri]::TryCreate($absoluteUrl, [UriKind]::Absolute, [ref]$uri)) { continue }
+            $isExactFrameworkPlaceholder = $absoluteUrl -ceq 'http://localhost'
+            if ($isExactFrameworkPlaceholder) {
+                if ($file.Extension -cne '.js' -or $uri.Port -ne 80 -or $uri.AbsolutePath -cne '/' -or $uri.Query -or $uri.Fragment -or $uri.UserInfo) {
+                    throw "Placeholder localhost fuera de un JavaScript compilado: $($file.FullName)."
+                }
+                $relative = $file.FullName.Substring($DistPath.TrimEnd('\', '/').Length).TrimStart('\', '/').Replace('\', '/')
+                $frameworkPlaceholderFiles.Add($relative)
+                continue
+            }
+            if (Test-NonPublicHost $uri) { throw "URL local, privada, link-local o loopback encontrada en $($file.FullName): $absoluteUrl" }
+            if ($uri.Scheme -eq 'http' -and ($uri.DnsSafeHost -match '(?i)api' -or $uri.AbsolutePath -match '(?i)(^|/)api(?:/|$)')) {
+                throw "URL API HTTP encontrada en $($file.FullName): $absoluteUrl"
+            }
+        }
+    }
+    if (-not $apiConfirmed) { throw "La API productiva esperada '$ExpectedApiUrl' no aparece en los artefactos frontend." }
+    return [ordered]@{
+        api_productiva_confirmada = $ExpectedApiUrl
+        placeholders_framework_permitidos = $frameworkPlaceholderFiles.Count
+        archivos_placeholders_framework = @($frameworkPlaceholderFiles | Sort-Object -Unique)
     }
 }
 
@@ -266,9 +317,11 @@ $backendPublish = Join-Path $stagingRoot 'backend-publish'
 $backendPackage = Join-Path $stagingRoot 'backend-package'
 $frontendPackage = Join-Path $stagingRoot 'frontend-package'
 $rawSql = Join-Path $stagingRoot 'ef-migrations.sql'
+$releaseStaging = Join-Path $stagingRoot 'release-artifacts'
 $backendProject = Join-Path $repoRoot 'backend-dotnet\JemNexus.Api\JemNexus.Api.csproj'
 $frontendRoot = Join-Path $repoRoot 'frontend'
 $frontendDist = Join-Path $frontendRoot 'dist'
+$frontendApiSource = Join-Path $frontendRoot 'src\services\api.ts'
 
 $publishArgs = @('publish', $backendProject, '-c', 'Release', '-f', 'net8.0', '--no-restore', '-o', $backendPublish)
 $npmArgs = @('run', 'build')
@@ -306,6 +359,7 @@ if ($PlanOnly) {
 if (-not $outputAlreadyExists) { New-Item -ItemType Directory -Path $outputPath | Out-Null }
 if (Test-Path -LiteralPath $stagingRoot) { throw 'El staging exacto ya existe; no se eliminara una ruta que esta ejecucion no creo.' }
 New-Item -ItemType Directory -Path $stagingRoot | Out-Null
+New-Item -ItemType Directory -Path $releaseStaging | Out-Null
 
 $stages = New-Object System.Collections.Generic.List[object]
 $previousViteEnvironment = @{}
@@ -322,26 +376,27 @@ try {
     $stages.Add([ordered]@{ name = 'backend_publish'; result = 'passed' })
     foreach ($required in @('JemNexus.Api.dll', 'JemNexus.Api.deps.json', 'JemNexus.Api.runtimeconfig.json')) { Assert-RequiredFile $backendPublish $required }
     Copy-FilteredTree $backendPublish $backendPackage Backend
-    New-DeterministicZip $backendPackage (Join-Path $outputPath $backendName)
+    New-DeterministicZip $backendPackage (Join-Path $releaseStaging $backendName)
     $stages.Add([ordered]@{ name = 'backend_package'; result = 'passed' })
 
     Push-Location $frontendRoot
     try { Invoke-CheckedCommand npm $npmArgs } finally { Pop-Location }
-    Assert-FrontendOutput $frontendDist
+    $developmentApiFallback = Get-DevelopmentApiFallback $frontendApiSource
+    $frontendValidation = Assert-FrontendOutput $frontendDist $apiUrl $developmentApiFallback
     Copy-FilteredTree $frontendDist $frontendPackage Frontend
-    New-DeterministicZip $frontendPackage (Join-Path $outputPath $frontendName)
+    New-DeterministicZip $frontendPackage (Join-Path $releaseStaging $frontendName)
     $stages.Add([ordered]@{ name = 'frontend_build_validate_package'; result = 'passed' })
 
     Invoke-CheckedCommand dotnet $efArgs
     $efSql = [IO.File]::ReadAllText($rawSql)
     Assert-GeneratedMigrationSql $efSql
     $finalSql = (Get-SqlPreflight) + "`r`n-- BEGIN SQL EMITIDO POR EF CORE; NO MODIFICADO`r`n" + $efSql.Trim() + "`r`n-- END SQL EMITIDO POR EF CORE; NO MODIFICADO`r`n" + (Get-SqlPostflight)
-    [IO.File]::WriteAllText((Join-Path $outputPath $sqlName), $finalSql, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $releaseStaging $sqlName), $finalSql, [Text.UTF8Encoding]::new($false))
     $stages.Add([ordered]@{ name = 'sql_generate_static_validation'; result = 'passed' })
 
     $artifacts = @()
     foreach ($name in @($backendName, $frontendName, $sqlName)) {
-        $file = Get-Item -LiteralPath (Join-Path $outputPath $name)
+        $file = Get-Item -LiteralPath (Join-Path $releaseStaging $name)
         $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         $artifacts += [ordered]@{ name = $name; size_bytes = $file.Length; sha256 = $hash }
     }
@@ -357,19 +412,50 @@ try {
         tool_versions = $versions
         frontend_public_url = $siteUrl
         api_public_url = $apiUrl
+        frontend_validation = $frontendValidation
         migrations = [ordered]@{ from = $StartMigration; to = $EndMigration }
         artifacts = $artifacts
         exclusions = [ordered]@{ backend = $BackendExclusions; frontend = $FrontendExclusions }
         commands = $commands
         stages = $stages
     }
-    [IO.File]::WriteAllText((Join-Path $outputPath 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $releaseStaging 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
     $sumLines = $artifacts | ForEach-Object { "$($_.sha256)  $($_.name)" }
-    [IO.File]::WriteAllLines((Join-Path $outputPath 'SHA256SUMS.txt'), $sumLines, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllLines((Join-Path $releaseStaging 'SHA256SUMS.txt'), $sumLines, [Text.UTF8Encoding]::new($false))
     $preserve = @('Backend:', 'appsettings.json', 'web.config', 'logs', '', 'Frontend:', 'App_Data', '.user.ini', 'web.config')
-    [IO.File]::WriteAllLines((Join-Path $outputPath 'PRESERVE_ON_SERVER.txt'), $preserve, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllLines((Join-Path $releaseStaging 'PRESERVE_ON_SERVER.txt'), $preserve, [Text.UTF8Encoding]::new($false))
+
+    $releaseNames = @($backendName, $frontendName, $sqlName, 'manifest.json', 'SHA256SUMS.txt', 'PRESERVE_ON_SERVER.txt')
+    foreach ($name in $releaseNames) { Assert-RequiredFile $releaseStaging $name }
+    foreach ($artifact in $artifacts) {
+        $actualHash = (Get-FileHash -LiteralPath (Join-Path $releaseStaging $artifact.name) -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualHash -cne $artifact.sha256) { throw "Hash final inconsistente para $($artifact.name)." }
+        if ($sumLines -notcontains "$($artifact.sha256)  $($artifact.name)") { throw "Checksum final ausente para $($artifact.name)." }
+    }
+    $manifestCheck = Get-Content -LiteralPath (Join-Path $releaseStaging 'manifest.json') -Raw | ConvertFrom-Json
+    if ($manifestCheck.commit.full -cne $commit -or $manifestCheck.api_public_url -cne $apiUrl) { throw 'El manifiesto final no cumple los contratos de commit y API.' }
+    $stages.Add([ordered]@{ name = 'final_artifact_validation'; result = 'passed' })
+
+    # La comprobacion global de colisiones sucede antes del primer movimiento.
+    foreach ($name in $releaseNames) {
+        if (Test-Path -LiteralPath (Join-Path $outputPath $name)) { throw "Colision de publicacion final: $name" }
+    }
+    $movedByThisRun = New-Object System.Collections.Generic.List[string]
+    try {
+        foreach ($name in $releaseNames) {
+            $destination = Join-Path $outputPath $name
+            Move-Item -LiteralPath (Join-Path $releaseStaging $name) -Destination $destination
+            $movedByThisRun.Add($destination)
+        }
+    } catch {
+        foreach ($published in $movedByThisRun) {
+            if (Test-Path -LiteralPath $published -PathType Leaf) { Remove-Item -LiteralPath $published -Force }
+        }
+        throw "Fallo la publicacion final; se revirtieron exclusivamente los archivos de esta ejecucion. $($_.Exception.Message)"
+    }
     Write-Host "Release preparada en: $outputPath"
 } finally {
     foreach ($name in $previousViteEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $previousViteEnvironment[$name], 'Process') }
     if (Test-Path -LiteralPath $stagingRoot) { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
+    if (-not $outputAlreadyExists -and (Test-Path -LiteralPath $outputPath -PathType Container) -and @(Get-ChildItem -LiteralPath $outputPath -Force).Count -eq 0) { Remove-Item -LiteralPath $outputPath -Force }
 }

@@ -1,4 +1,4 @@
-# Generación reproducible de release productivo — Prompt 346
+# Generación reproducible de release productivo — Prompts 346 y 347
 
 ## 1. Propósito y alcance
 
@@ -54,6 +54,8 @@ $ReleaseCommit = (git rev-parse HEAD).Trim()
 
 La herramienta obtiene nuevamente el HEAD real y exige igualdad exacta con el SHA completo recibido: no acepta un SHA abreviado ni un ancestro diferente de HEAD. `ExpectedBranch` vale `main` por defecto y un detached HEAD siempre se rechaza. Solo si el directorio ya existe **y está vacío** se admite `-AllowExistingEmptyOutput`; la opción nunca autoriza borrar contenido. Todo comando con exit code no cero detiene el proceso. El staging tiene el nombre exacto `<OutputRoot>\.jem-nexus-release-staging-<short-sha>`; debe ser creado por la ejecución y solo ese staging se elimina en `finally`.
 
+Desde la corrección del Prompt 347, los ZIP, el SQL final, el manifiesto, los checksums y la lista de preservación se crean primero bajo `release-artifacts` dentro de ese staging. Ningún nombre final se publica en la raíz del output mientras falte el build frontend, la validación de URLs, la generación y validación SQL, algún auxiliar o la verificación final de hashes y contratos. Antes del primer movimiento se comprueba en conjunto que ninguno de los seis destinos exista. Si un movimiento final falla, la herramienta elimina exclusivamente los destinos que esa ejecución ya movió; nunca borra contenido previo. Un fallo anterior a la publicación solo elimina su staging. Si la herramienta creó `OutputRoot` y este termina vacío, también puede retirarlo; un output vacío preexistente y autorizado permanece.
+
 ### Comandos ejecutados
 
 Con rutas absolutas resueltas por la herramienta, el contrato equivale a:
@@ -94,7 +96,11 @@ Para un SHA corto `<short-sha>` de 12 caracteres:
 
 Ambos ZIP contienen directamente los archivos desplegables, sin carpeta exterior `publish`, `backend-package` o `dist`. Las entradas se ordenan y reciben timestamp ZIP constante. El backend exige en su raíz `JemNexus.Api.dll`, `.deps.json` y `.runtimeconfig.json`; conserva dependencias y `runtimes` si el publish los produce. El frontend exige `index.html`, `assets`, diez salidas prerender, `_spa.html` y `_noindex.html`.
 
-Después del build se vuelve a inspeccionar todo `dist` para rechazar `localhost`, `127.0.0.1` y URLs API HTTP. La validación canónica de prerender ya se ejecutó dentro de `npm run build`.
+Después del build se inspeccionan los archivos textuales desplegables y se extraen URLs absolutas para clasificarlas por esquema, host, puerto, ruta, credenciales, query, fragmento y tipo de archivo. La URL productiva normalizada indicada en `VITE_API_BASE_URL` debe aparecer en esos artefactos; su confirmación queda en `manifest.json`.
+
+Esta validación distingue un **destino configurado** de un literal sintético de framework. React Router puede incluir exactamente `http://localhost` como origen auxiliar al construir un objeto `URL` cuando no dispone del origen de una ventana; por sí solo no es el destino API de la aplicación. Se permite únicamente ese texto exacto en JavaScript compilado, sin puerto explícito, credenciales, query, fragmento ni ruta distinta de `/`, y solo cuando la API productiva esperada también está presente y no aparece una API local real. El manifiesto registra el número de placeholders permitidos y los archivos JavaScript que los contienen.
+
+La excepción no se aplica en `index.html`, HTML prerenderizado, JSON, CSS, manifests, configuraciones, atributos o redirecciones desplegables. También siguen bloqueados `http://localhost:5173`, `http://localhost/api`, `https://localhost`, cualquier host `127.0.0.1` u otro loopback, direcciones privadas o link-local, y APIs HTTP. La herramienta descubre además el valor vigente de `DEFAULT_API_BASE_URL` desde `frontend/src/services/api.ts` y rechaza el bundle si contiene ese fallback real de desarrollo; no presupone su puerto ni su ruta.
 
 ## 7. Exclusiones
 
@@ -131,7 +137,7 @@ El resto del contenido actual de `httpdocs` se reemplaza por el contenido raíz 
 
 ## 9. Manifiesto y hashes
 
-`manifest.json` registra SHA completo/corto, fecha UTC, rama, versiones dotnet/Node/npm, ambas URLs públicas, límites de migración, tamaño y SHA-256 de cada uno de los tres artefactos, exclusiones, comandos y resultado de cada etapa. No registra valores opcionales de contacto, usuario SQL, credenciales, tokens ni connection strings.
+`manifest.json` registra SHA completo/corto, fecha UTC, rama, versiones dotnet/Node/npm, ambas URLs públicas, la confirmación de API productiva, cantidad y archivos de placeholders framework permitidos, límites de migración, tamaño y SHA-256 de cada uno de los tres artefactos, exclusiones, comandos y resultado de cada etapa. No registra valores opcionales de contacto, usuario SQL, credenciales, tokens ni connection strings.
 
 En Windows PowerShell, comparar cada valor con:
 
@@ -176,6 +182,11 @@ El postflight exige ambas migraciones una vez, tabla de permisos, exactamente 29
 - No contiene ni solicita secretos; no descubre configuración local.
 - No hace restore, instalación, conexión SQL, acceso HTTP, despliegue, backup, mantenimiento, smoke tests, importación EP ni cambios de usuarios/datos.
 - Generar el SQL no lo ejecuta. Generar ZIP no autoriza su promoción.
+- La corrección del Prompt 347 no modifica código productivo frontend o backend: solo endurece y precisa la validación de artefactos y hace atómica su publicación local.
+
+### Limpieza de un output parcial de la versión anterior
+
+Una ejecución de la versión anterior podía dejar, por ejemplo, un ZIP backend con nombre final si el frontend o el SQL fallaban después. La herramienta corregida no busca ni elimina esos archivos históricos. Antes de volver a generar, el operador debe inspeccionar el output afectado, conservar cualquier evidencia necesaria y borrar **manualmente y de forma explícita** solo los artefactos parciales identificados; no debe usar globs ni apuntar al repositorio. Después debe utilizar un `OutputRoot` nuevo o uno existente, vacío y autorizado con `-AllowExistingEmptyOutput`. Con la versión corregida, un fallo previo a la promoción no deja ZIP, SQL, manifiesto ni checksums finales.
 
 ## 13. Orden posterior previsto
 
