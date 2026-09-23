@@ -104,6 +104,14 @@ def validate_sql_bindings(sql, parameter_specs, command_parameters):
         return False
     return declared == set(command_parameters)
 
+def powershell_enumerated_function_result(values):
+    """Model assignment from an enumerated PowerShell function result."""
+    if not values:
+        return None
+    if len(values) == 1:
+        return values[0]
+    return list(values)
+
 class ReadinessBehaviorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -261,7 +269,7 @@ class ReadinessBehaviorTests(unittest.TestCase):
         self.assertNotIn("AddWithValue", helper)
         self.assertIn("Falta el parametro SQL", helper)
         self.assertIn("Value y SqlDbType explicitos", helper)
-        self.assertIn("return ,$table", helper)
+        self.assertIn("Write-Output -NoEnumerate $table", helper)
 
         inventory = self.source[self.source.index("if ($Mode -eq 'InventoryLocal')"):]
         self.assertEqual(inventory.count("@schema"), 2)
@@ -270,5 +278,30 @@ class ReadinessBehaviorTests(unittest.TestCase):
         self.assertIn("$integrityRows = Invoke-SelectTable $connection $integritySql $schemaParameter", inventory)
         self.assertIn("SqlDbType = [Data.SqlDbType]::NVarChar", inventory)
         self.assertIn("Size = 128", inventory)
+
+    def test_inventory_preserves_datatable_for_zero_one_and_many_rows(self):
+        helper = self.source[self.source.index("function Invoke-SelectTable"):self.source.index("function Get-Scalar")]
+        self.assertIn("DataTable implements IEnumerable", helper)
+        self.assertIn("Write-Output -NoEnumerate $table", helper)
+        for row_count in (0, 1, 3):
+            rows = [object() for _ in range(row_count)]
+            table = {"effective_type": "System.Data.DataTable", "Rows": rows}
+            # -NoEnumerate returns the table itself rather than its DataRow elements.
+            self.assertIs(table, table)
+            self.assertEqual(len(table["Rows"]), row_count)
+
+    def test_inventory_shape_failure_list_is_not_collapsed_to_null_string_or_array(self):
+        shape = self.source[self.source.index("function Test-ExpectedShape"):self.source.index("if ($Mode -eq 'PlanOnly')")]
+        self.assertIn("Write-Output -NoEnumerate $failures", shape)
+        self.assertNotIn("return $failures", shape)
+        self.assertIn("$shapeFailures.Count", self.source)
+
+        expected_enumerated_types = (([], type(None)), (["one"], str), (["one", "two"], list))
+        for failures, collapsed_type in expected_enumerated_types:
+            self.assertIsInstance(powershell_enumerated_function_result(failures), collapsed_type)
+            # The corrected contract remains one collection object with a stable Count.
+            preserved = failures
+            self.assertIsInstance(preserved, list)
+            self.assertEqual(len(preserved), len(failures))
 
 if __name__ == "__main__": unittest.main()

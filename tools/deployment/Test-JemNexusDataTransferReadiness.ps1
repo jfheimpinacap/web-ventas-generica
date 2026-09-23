@@ -104,7 +104,12 @@ function Invoke-SelectTable([Data.SqlClient.SqlConnection]$Connection, [string]$
     }
     $table = New-Object Data.DataTable
     $adapter = New-Object Data.SqlClient.SqlDataAdapter $command
-    try { [void]$adapter.Fill($table); return ,$table } finally { $adapter.Dispose(); $command.Dispose() }
+    try {
+        [void]$adapter.Fill($table)
+        # DataTable implements IEnumerable.  Prevent PowerShell from unrolling it into
+        # zero, one or many DataRow objects; every caller relies on the DataTable contract.
+        Write-Output -NoEnumerate $table
+    } finally { $adapter.Dispose(); $command.Dispose() }
 }
 function Get-Scalar([Data.SqlClient.SqlConnection]$Connection, [string]$Sql, [hashtable]$Parameters = @{}) {
     $table = Invoke-SelectTable $Connection $Sql $Parameters
@@ -128,7 +133,10 @@ function Test-ExpectedShape($Report) {
     if ([long]$Report.media.technicalSheets.referenced -ne 85 -or [long]$Report.media.technicalSheets.present -ne 85) { $failures.Add('fichas referenciadas/fisicas incompletas') }
     if ($Report.schema.missingTables.Count -gt 0 -or $Report.schema.missingColumns.Count -gt 0) { $failures.Add('faltan tablas o columnas') }
     if ([long]$Report.integrity.orphanForeignKeys -ne 0 -or [long]$Report.integrity.duplicateUniqueKeys -ne 0 -or -not $Report.integrity.requiredIndexesPresent) { $failures.Add('IDs/FKs/indices relevantes no son validos') }
-    return $failures
+    # A generic List is also enumerable.  Without -NoEnumerate the caller receives
+    # $null, a System.String, or Object[] for zero, one or many failures respectively,
+    # making the single-failure $shapeFailures.Count access fail under StrictMode.
+    Write-Output -NoEnumerate $failures
 }
 
 if ($Mode -eq 'PlanOnly') {
