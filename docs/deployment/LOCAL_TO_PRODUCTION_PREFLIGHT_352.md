@@ -115,7 +115,7 @@ Las pruebas sintéticas portables no requieren SQL Server, red, .NET, Node ni Po
 python -m unittest tools/deployment/tests/test_data_transfer_readiness.py -v
 ```
 
-En un Windows controlado quedan obligatorias la nueva validación del parser y la ejecución real de `PlanOnly`, seguida de `InventoryLocal` contra la LocalDB confirmada. En particular, confirme que un nombre efectivo dinámico pasa gracias a `IsLocalDB = 1`, y que base incorrecta o `IsLocalDB` no inequívoco abortan sin informe. Verifique antes y después que `PlanOnly` no creó el directorio y que `git status --short` sigue limpio. Compare luego con un snapshot sanitizado revisado. No pruebe conexión productiva: la herramienta no la admite.
+En un Windows controlado quedan obligatorias la nueva validación del parser y la ejecución real de `PlanOnly`, seguida de `InventoryLocal` contra la LocalDB confirmada. Esta repetición de `InventoryLocal` debe confirmar además que las consultas de metadata e índices reciben `@schema` en el mismo `SqlCommand` antes de `SqlDataAdapter.Fill`; queda pendiente después de corregir el fallo observado `Must declare the scalar variable "@schema"`. En particular, confirme que un nombre efectivo dinámico pasa gracias a `IsLocalDB = 1`, y que base incorrecta o `IsLocalDB` no inequívoco abortan sin informe. Verifique antes y después que no se creó un informe ante ningún fallo, que `PlanOnly` no creó el directorio y que `git status --short` sigue limpio. Compare luego con un snapshot sanitizado revisado. No pruebe conexión productiva: la herramienta no la admite.
 
 ## Siguiente paso
 
