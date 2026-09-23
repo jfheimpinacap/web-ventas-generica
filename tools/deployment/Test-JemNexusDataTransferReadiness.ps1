@@ -139,10 +139,13 @@ if ($Mode -eq 'InventoryLocal') {
     $connection = New-Object Data.SqlClient.SqlConnection $connectionString
     try {
         $connection.Open()
-        $identity = Invoke-SelectTable $connection "SELECT CAST(SERVERPROPERTY('ServerName') AS nvarchar(256)) AS ServerName, DB_NAME() AS DatabaseName, SCHEMA_NAME() AS DefaultSchema"
-        if ($identity.Rows.Count -ne 1 -or [string]$identity.Rows[0].DatabaseName -cne $ExpectedDatabase -or [string]$identity.Rows[0].DefaultSchema -cne $ExpectedSchema) { Fail 'La identidad efectiva de LocalDB/base/esquema no coincide.' }
-        $serverName = [string]$identity.Rows[0].ServerName
-        if ($serverName -notmatch '\\MSSQLLocalDB$') { Fail 'El servidor efectivo no es MSSQLLocalDB.' }
+        $identity = Invoke-SelectTable $connection "SELECT CAST(SERVERPROPERTY('ServerName') AS nvarchar(256)) AS ServerName, DB_NAME() AS DatabaseName, SCHEMA_NAME() AS DefaultSchema, SERVERPROPERTY('IsLocalDB') AS IsLocalDB"
+        if ($identity.Rows.Count -ne 1) { Fail 'La consulta de identidad local no devolvio exactamente una fila.' }
+        $identityRow = $identity.Rows[0]
+        if ([string]$identityRow.DatabaseName -cne $ExpectedDatabase -or [string]$identityRow.DefaultSchema -cne $ExpectedSchema) { Fail 'La identidad efectiva de base/esquema no coincide.' }
+        $isLocalDb = $identityRow.IsLocalDB
+        if ($isLocalDb -is [DBNull] -or $isLocalDb -isnot [int] -or $isLocalDb -ne 1) { Fail "SERVERPROPERTY('IsLocalDB') no confirmo inequívocamente una instancia LocalDB." }
+        Write-Verbose 'Servidor efectivo confirmado como LocalDB (nombre efectivo omitido del diagnostico).'
         $migrationCount = [int](Get-Scalar $connection "SELECT COUNT_BIG(*) FROM [$ExpectedSchema].[__EFMigrationsHistory]")
         $metadata = Invoke-SelectTable $connection "SELECT t.name AS TableName, c.name AS ColumnName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id WHERE s.name=@schema"
         $available = @{}; foreach ($row in $metadata.Rows) { if (-not $available.ContainsKey([string]$row.TableName)) { $available[[string]$row.TableName] = @{} }; $available[[string]$row.TableName][[string]$row.ColumnName]=$true }
