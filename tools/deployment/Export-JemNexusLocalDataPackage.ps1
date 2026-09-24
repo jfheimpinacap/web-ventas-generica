@@ -16,6 +16,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'LocalDataPackageJson.ps1')
 
 $ExpectedInstance = '(localdb)\MSSQLLocalDB'
 $ExpectedDatabase = 'JemNexus_Local'
@@ -78,17 +79,6 @@ function Invoke-Select([Data.SqlClient.SqlConnection]$Connection, [Data.SqlClien
     $table = New-Object Data.DataTable
     $adapter = New-Object Data.SqlClient.SqlDataAdapter $command
     try { [void]$adapter.Fill($table); Write-Output -NoEnumerate $table } finally { $adapter.Dispose(); $command.Dispose() }
-}
-function Convert-TableRows($Table) {
-    $result = New-Object Collections.Generic.List[object]
-    foreach ($row in $Table.Rows) {
-        $record = [ordered]@{}
-        foreach ($column in $Table.Columns) { $value = $row[$column.ColumnName]; $record[$column.ColumnName] = if ($value -is [DBNull]) { $null } elseif ($value -is [byte[]]) { [Convert]::ToBase64String($value) } else { $value } }
-        $result.Add([pscustomobject]$record)
-    }
-    # Keep an empty table as [] rather than allowing pipeline enumeration to turn it
-    # into $null (and a one-row table into a scalar object).
-    Write-Output -NoEnumerate ([object[]]$result.ToArray())
 }
 function Write-Json([string]$Path, $Value) { [IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 20 -Compress), (New-Object Text.UTF8Encoding($false))) }
 function Get-Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
@@ -177,7 +167,7 @@ WHERE s.name=@schema ORDER BY t.name,c.column_id
     $connection.Close(); $connection.Dispose(); $connection=$null
 
     foreach ($name in $Tables) {
-        $file=Join-Path $dataPath ($name + '.json'); Write-Json $file $exportedRows[$name]
+        $file=Join-Path $dataPath ($name + '.json'); Write-TableJson $file $exportedRows[$name]
         $dataHashes[$name]=Get-Hash $file
     }
 
@@ -236,7 +226,11 @@ WHERE s.name=@schema ORDER BY t.name,c.column_id
     $roundTrip=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $roundTripMediaFiles=@($roundTrip.media.files)
     if ($roundTrip.status -ne 'PREPARED_LOCAL_NOT_AUTHORIZED_FOR_PRODUCTION_APPLY' -or [int]$roundTrip.tables.count -ne 17 -or [int]$roundTrip.media.count -ne 177 -or $roundTripMediaFiles.Count -ne 177) { Fail 'Validacion final del manifiesto fallo.' }
-    foreach ($name in $Tables) { if ((Get-Hash (Join-Path $dataPath ($name+'.json'))) -cne [string]$roundTrip.tables.sha256.$name) { Fail "Hash de datos invalido: $name" } }
+    foreach ($name in $Tables) {
+        $tablePath=Join-Path $dataPath ($name+'.json')
+        Read-AndAssertTableJson $tablePath ([long]$counts[$name])
+        if ((Get-Hash $tablePath) -cne [string]$roundTrip.tables.sha256.$name) { Fail "Hash de datos invalido: $name" }
+    }
     foreach ($item in $roundTripMediaFiles) { $path=Join-Path $staging ([string]$item.packagePath).Replace('/',[IO.Path]::DirectorySeparatorChar); if ((Get-Hash $path) -cne [string]$item.sha256) { Fail 'Hash multimedia invalido.' } }
     [IO.Directory]::Move($staging,$finalPath)
     Write-Output "PACKAGE_PREPARED_LOCAL_ONLY: $finalPath"
