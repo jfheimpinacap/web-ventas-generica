@@ -32,7 +32,10 @@ try {
         Read-AndAssertTableJson $path $count
         $raw = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
         if ($count -eq 0 -and $raw -cne '[]') { throw "Una tabla vacia no produjo []: $raw" }
-        $roundTrip = @($raw | ConvertFrom-Json)
+        $roundTrip = $raw | ConvertFrom-Json
+        if ($roundTrip -isnot [object[]]) {
+            throw "ConvertFrom-Json no devolvio un array superior: $($roundTrip.GetType().FullName)"
+        }
         $actualCount = [long]($roundTrip.Count)
         if ($actualCount -isnot [long] -or $actualCount -ne [long]$count) { throw "Conteo round-trip inesperado: $actualCount" }
         for ($index = 0; $index -lt $count; $index++) {
