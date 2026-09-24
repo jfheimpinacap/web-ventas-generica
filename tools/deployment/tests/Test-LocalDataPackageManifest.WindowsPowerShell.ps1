@@ -24,7 +24,11 @@ function Test-ManifestRoundTrip([int]$Count) {
         })
     }
 
-    Assert-Equal 'System.Collections.Generic.List`1[System.Object]' $media.GetType().FullName 'Tipo efectivo de media inesperado'
+    $expectedMediaType = [System.Collections.Generic.List[object]]
+    $actualMediaType = $media.GetType()
+    if ($actualMediaType -ne $expectedMediaType) {
+        throw "Tipo efectivo de media inesperado (esperado=$($expectedMediaType.FullName), actual=$($actualMediaType.FullName))"
+    }
     $mediaFiles = [object[]]$media.ToArray()
     $manifest = [ordered]@{
         packageVersion = 1
