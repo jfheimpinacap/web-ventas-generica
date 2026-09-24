@@ -241,6 +241,24 @@ class ExportContractTests(unittest.TestCase):
         self.assertIn("foreach ($count in 0, 1, 3)", harness)
         self.assertIn("$raw -cne '[]'", harness)
 
+    def test_table_json_cardinality_casts_the_scalar_count_not_the_collection(self):
+        helper = JSON_HELPER.read_text(encoding="utf-8")
+        harness = PS51_TABLE_JSON_TEST.read_text(encoding="utf-8")
+        self.assertIn("$actualCount = [long]($items.Count)", helper)
+        self.assertNotIn("[long]@($value).Count", helper)
+        self.assertIn("$actualCount = [long]($roundTrip.Count)", harness)
+        self.assertIn("[long]($roundTrip[$index].Id)", harness)
+        self.assertNotIn("[long]$roundTrip[$index].Id", harness)
+
+    def test_real_prepublication_validator_rejects_unsafe_table_json_shapes(self):
+        helper = JSON_HELPER.read_text(encoding="utf-8")
+        harness = PS51_TABLE_JSON_TEST.read_text(encoding="utf-8")
+        self.assertIn("$item -isnot [pscustomobject]", helper)
+        for fixture in ("empty.json", "invalid.json", "object.json", "scalar-row.json", "wrong-count.json"):
+            self.assertIn(f"'{fixture}'", harness)
+        self.assertIn("Read-AndAssertTableJson $Path $ExpectedCount", harness)
+        self.assertLess(TEXT.index("Read-AndAssertTableJson $tablePath"), TEXT.index("[IO.Directory]::Move($staging,$finalPath)"))
+
 
 if __name__ == "__main__":
     unittest.main()
