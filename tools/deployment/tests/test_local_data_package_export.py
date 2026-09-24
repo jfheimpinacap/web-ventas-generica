@@ -250,6 +250,15 @@ class ExportContractTests(unittest.TestCase):
         self.assertIn("[long]($roundTrip[$index].Id)", harness)
         self.assertNotIn("[long]$roundTrip[$index].Id", harness)
 
+    def test_table_json_harness_preserves_convertfrom_json_top_level_array(self):
+        """Offline source regression; PowerShell 5.1 behavior is tested by the harness."""
+        harness = PS51_TABLE_JSON_TEST.read_text(encoding="utf-8")
+        self.assertIn("#requires -Version 5.1", harness)
+        self.assertIn("$roundTrip = $raw | ConvertFrom-Json", harness)
+        self.assertIn("$roundTrip -isnot [object[]]", harness)
+        self.assertIn("$actualCount = [long]($roundTrip.Count)", harness)
+        self.assertNotIn("$roundTrip = @($raw | ConvertFrom-Json)", harness)
+
     def test_real_prepublication_validator_rejects_unsafe_table_json_shapes(self):
         helper = JSON_HELPER.read_text(encoding="utf-8")
         harness = PS51_TABLE_JSON_TEST.read_text(encoding="utf-8")
