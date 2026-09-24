@@ -9,6 +9,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "tools/deployment/Export-JemNexusLocalDataPackage.ps1"
 TEXT = SCRIPT.read_text(encoding="utf-8")
 PS51_MANIFEST_TEST = ROOT / "tools/deployment/tests/Test-LocalDataPackageManifest.WindowsPowerShell.ps1"
+PS51_TABLE_JSON_TEST = ROOT / "tools/deployment/tests/Test-LocalDataPackageTableJson.WindowsPowerShell.ps1"
+JSON_HELPER = ROOT / "tools/deployment/LocalDataPackageJson.ps1"
 
 TRANSFER_TABLES = [
     "AppUsers", "AppUserPermissions", "Brands", "Categories", "Suppliers",
@@ -127,13 +129,14 @@ class ExportContractTests(unittest.TestCase):
         first_media_resolution = TEXT.index("Resolve-SafeFile $imageRoot")
         self.assertLess(commit, media_inventory)
         self.assertLess(commit, first_media_resolution)
-        self.assertLess(commit, TEXT.index("Write-Json $file $exportedRows[$name]"))
+        self.assertLess(commit, TEXT.index("Write-TableJson $file $exportedRows[$name]"))
         self.assertIn("$transaction.Dispose(); $transaction=$null", TEXT[commit:media_inventory])
         self.assertIn("$connection.Close(); $connection.Dispose(); $connection=$null", TEXT[commit:media_inventory])
 
     def test_ids_and_relationship_fields_are_serialized_without_projection(self):
-        self.assertIn("foreach ($column in $Table.Columns)", TEXT)
-        self.assertIn("$record[$column.ColumnName]", TEXT)
+        helper = JSON_HELPER.read_text(encoding="utf-8")
+        self.assertIn("foreach ($column in $Table.Columns)", helper)
+        self.assertIn("$record[$column.ColumnName]", helper)
         self.assertIn("CASE WHEN pk.column_id IS NULL", TEXT)
         self.assertIn("ORDER BY {2}", TEXT)
         self.assertIn("fk.is_disabled=1 OR fk.is_not_trusted=1", TEXT)
@@ -225,6 +228,18 @@ class ExportContractTests(unittest.TestCase):
         self.assertIn("foreach ($count in 0, 1, 177)", harness)
         self.assertIn("$files = @($roundTrip.media.files)", harness)
         self.assertIn("$files[$index].sha256", harness)
+
+    def test_table_json_uses_shared_non_enumerating_serializer_and_is_revalidated(self):
+        helper = JSON_HELPER.read_text(encoding="utf-8")
+        harness = PS51_TABLE_JSON_TEST.read_text(encoding="utf-8")
+        self.assertIn(". (Join-Path $PSScriptRoot 'LocalDataPackageJson.ps1')", TEXT)
+        self.assertIn("Write-TableJson $file $exportedRows[$name]", TEXT)
+        self.assertIn("ConvertTo-Json -InputObject ([object[]]$Rows)", helper)
+        self.assertIn("Read-AndAssertTableJson $tablePath ([long]$counts[$name])", TEXT)
+        self.assertLess(TEXT.index("Read-AndAssertTableJson $tablePath"), TEXT.index("[IO.Directory]::Move($staging,$finalPath)"))
+        self.assertIn(". (Join-Path $PSScriptRoot '..\\LocalDataPackageJson.ps1')", harness)
+        self.assertIn("foreach ($count in 0, 1, 3)", harness)
+        self.assertIn("$raw -cne '[]'", harness)
 
 
 if __name__ == "__main__":

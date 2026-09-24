@@ -75,6 +75,27 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual("VERIFIED_OFFLINE_PLAN_ONLY", json.loads(result.stdout)["status"])
         self.assertNotIn("SYNTHETIC_SECRET", result.stdout)
 
+    def test_accepts_empty_array_for_every_zero_count_table(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package = build_package(Path(temp))
+            for table in ("Suppliers", "Promotions", "HomeSectionItems", "QuoteRequests"):
+                self.assertEqual("[]", (package / "data" / f"{table}.json").read_text())
+            result = self.run_cli("--mode", "VerifyPackage", "--package", str(package.resolve()))
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertEqual(429, json.loads(result.stdout)["counts"]["rows"])
+
+    def test_rejects_empty_or_invalid_json_even_with_matching_manifest_hash(self):
+        for contents in ("", "not-json"):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as temp:
+                package = build_package(Path(temp)); table = package / "data" / "Suppliers.json"
+                table.write_text(contents)
+                manifest_path = package / "manifest.json"; manifest = json.loads(manifest_path.read_text())
+                manifest["tables"]["sha256"]["Suppliers"] = digest(table)
+                manifest_path.write_text(json.dumps(manifest, separators=(",", ":")))
+                result = self.run_cli("--mode", "VerifyPackage", "--package", str(package.resolve()))
+            self.assertEqual(2, result.returncode)
+            self.assertEqual(["JSON_INVALID"], json.loads(result.stdout)["blockers"])
+
     def test_rejects_hash_mismatch_and_reports_only_code(self):
         with tempfile.TemporaryDirectory() as temp:
             package = build_package(Path(temp)); (package / "data" / "AppUsers.json").write_text("[]")

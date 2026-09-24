@@ -1,5 +1,39 @@
 # Tarea 360 — verificación offline y diseño del ensayo desechable
 
+## Corrección 361 — regeneración obligatoria del paquete
+
+El paquete ya publicado bajo `C:\Users\Franz\JemNexus-private-transfer-20260924-v2` queda **rechazado para importar**: cuatro archivos correspondientes a tablas con cero filas no contienen JSON válido. Debe conservarse intacto como evidencia privada; no se repara en el sitio, no se copia al repositorio y no se solicita ni divulga su contenido.
+
+La causa se comprobó en el camino real del exportador. `Convert-TableRows` ya materializaba un `object[]`, pero `Write-Json` enviaba ese valor por el pipeline a `ConvertTo-Json`. Windows PowerShell enumera el array en ese límite: con cero filas no invoca al cmdlet y se escribe un archivo vacío; con una fila entrega un objeto escalar y se pierde el array superior; con varias entrega la colección de objetos que `ConvertTo-Json` sí representa como array, en su orden original. La corrección compartida usa `ConvertTo-Json -InputObject` sobre el `object[]`: así produce respectivamente `[]`, `[ {...} ]` y un array ordenado de varios registros. Antes del rename, el exportador relee desde disco los 17 archivos, exige sintaxis JSON, array superior y la cardinalidad capturada, y además conserva la comprobación SHA-256. Un fallo sigue eliminando exclusivamente el `.staging-*` de esa ejecución.
+
+Después del merge, ejecute primero el harness que usa exactamente las funciones compartidas por el exportador (no una reproducción):
+
+```powershell
+$Repo = 'C:\src\web-ventas-generica'
+& "$Repo\tools\deployment\tests\Test-LocalDataPackageTableJson.WindowsPowerShell.ps1"
+if (-not $?) { throw 'Harness de JSON de tablas fallo' }
+```
+
+Debe ejecutarse con **Windows PowerShell 5.1** y terminar con `WINDOWS_POWERSHELL_5_1_TABLE_JSON_TEST_OK`. Solo entonces repita `ExportLocal` con los parámetros privados ya validados, pero con un `OutputRoot` nuevo y distinto:
+
+```powershell
+$NewPrivateRoot = 'C:\Users\Franz\JemNexus-private-transfer-20260924-v3'
+& "$Repo\tools\deployment\Export-JemNexusLocalDataPackage.ps1" `
+  -Mode ExportLocal `
+  -InventoryPath $Inventory `
+  -ImageUploadsRoot $ImageRoot `
+  -TechnicalSheetsRoot $SheetRoot `
+  -OutputRoot $NewPrivateRoot
+if (-not $?) { throw 'Nueva exportacion local fallo' }
+
+$NewPackage = Get-ChildItem -LiteralPath $NewPrivateRoot -Directory -Filter 'jemnexus-local-data-package-*' |
+  Sort-Object Name -Descending | Select-Object -First 1
+py -3 "$Repo\tools\deployment\verify_local_data_package.py" --mode VerifyPackage --package $NewPackage.FullName
+if ($LASTEXITCODE -ne 0) { throw 'Verificacion del paquete v3 fallo' }
+```
+
+No ejecute `VerifyPackage` como aprobación del paquete `v2`: el único candidato nuevo será el generado en `v3` después de que pase el harness.
+
 ## Estado y límite de seguridad
 
 El paquete privado confirmado en Windows **no forma parte del repositorio** y no debe adjuntarse, copiarse ni mostrarse. Esta entrega implementa solamente un verificador offline y un plan determinista. No contiene cliente SQL, cadena de conexión, credenciales, SQL de escritura, copia/promoción de multimedia ni modo `Apply`. Por ello no puede modificar LocalDB, una base remota ni producción.
@@ -18,7 +52,7 @@ La sustitución de las 8 `QuoteRequests` productivas por las 0 locales, de las c
 
 ### Supuestos que requieren ensayo dinámico en Windows
 
-* Que el paquete privado concreto pasa nuevamente todos los hashes, estructura, IDs y relaciones del verificador de esta entrega.
+* Que el nuevo paquete privado `v3` pasa todos los hashes, estructura, IDs y relaciones del verificador de esta entrega; el paquete `v2` está rechazado.
 * Que un SQL Server de ensayo tiene exactamente las 22 migraciones, el esquema, columnas, tipos, nulabilidad, PK, identity, FK/delete actions, checks, índices/filtros, secuencia, collation y permisos esperados.
 * Que la instancia es local, la base es nueva y desechable, no es `JemNexus_Local` ni `jemnexusb_prod`, y ningún alias/DNS/linked server conduce a un host remoto. Nada en esta entrega intenta demostrarlo conectándose.
 * Que el baseline clonado que representa producción todavía tiene exactamente 8 solicitudes y el estado inventariado de cuentas/cotizaciones; deberá medirse otra vez justo antes de cualquier aplicación futura.
@@ -42,7 +76,7 @@ Use una consola privada y una ruta fuera del checkout. Estos comandos no conecta
 
 ```powershell
 $Repo = 'C:\src\web-ventas-generica'
-$Package = 'C:\Users\Franz\JemNexus-private-transfer-20260924-v2\jemnexus-local-data-package-20260924T205443076Z'
+$Package = $NewPackage.FullName # paquete nuevo bajo JemNexus-private-transfer-20260924-v3
 
 # Debe funcionar aunque $Package no exista, porque PlanOnly ni siquiera acepta la ruta.
 py -3 "$Repo\tools\deployment\verify_local_data_package.py" --mode PlanOnly
