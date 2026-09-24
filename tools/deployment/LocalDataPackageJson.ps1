@@ -26,7 +26,14 @@ function Read-AndAssertTableJson([string]$Path, [long]$ExpectedCount) {
     if (-not $json.TrimStart().StartsWith('[', [StringComparison]::Ordinal)) {
         throw "JSON de tabla no es un array: $([IO.Path]::GetFileName($Path))"
     }
-    if ([long]@($value).Count -ne $ExpectedCount) {
+    $items = @($value)
+    $actualCount = [long]($items.Count)
+    if ($actualCount -ne $ExpectedCount) {
         throw "Cardinalidad JSON de tabla invalida: $([IO.Path]::GetFileName($Path))"
+    }
+    foreach ($item in $items) {
+        if ($null -eq $item -or $item -isnot [pscustomobject]) {
+            throw "Fila JSON de tabla invalida: $([IO.Path]::GetFileName($Path))"
+        }
     }
 }
