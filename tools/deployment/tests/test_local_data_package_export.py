@@ -8,6 +8,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "tools/deployment/Export-JemNexusLocalDataPackage.ps1"
 TEXT = SCRIPT.read_text(encoding="utf-8")
+PS51_MANIFEST_TEST = ROOT / "tools/deployment/tests/Test-LocalDataPackageManifest.WindowsPowerShell.ps1"
 
 TRANSFER_TABLES = [
     "AppUsers", "AppUserPermissions", "Brands", "Categories", "Suppliers",
@@ -206,6 +207,22 @@ class ExportContractTests(unittest.TestCase):
         self.assertIn("[IO.Directory]::Move($staging,$finalPath)", TEXT)
         self.assertIn("[IO.Directory]::Delete($staging,$true)", TEXT)
         self.assertLess(TEXT.index("Get-Hash $inventoryFile"), TEXT.index("[IO.Directory]::Move($staging,$finalPath)"))
+
+    def test_generic_media_list_is_materialized_without_array_subexpression(self):
+        self.assertIn("$media=New-Object Collections.Generic.List[object]", TEXT)
+        self.assertIn("$mediaFiles=[object[]]$media.ToArray()", TEXT)
+        self.assertIn("files=$mediaFiles", TEXT)
+        self.assertNotIn("files=@($media)", TEXT)
+        self.assertIn("$roundTripMediaFiles.Count -ne 177", TEXT)
+
+    def test_windows_powershell_manifest_harness_covers_required_cardinalities(self):
+        harness = PS51_MANIFEST_TEST.read_text(encoding="utf-8")
+        self.assertIn("#requires -Version 5.1", harness)
+        self.assertIn("New-Object Collections.Generic.List[object]", harness)
+        self.assertIn("[object[]]$media.ToArray()", harness)
+        self.assertIn("foreach ($count in 0, 1, 177)", harness)
+        self.assertIn("$files = @($roundTrip.media.files)", harness)
+        self.assertIn("$files[$index].sha256", harness)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,20 @@
-# Prompt 357 — preparación local controlada del paquete
+# Prompts 357–358 — preparación local controlada del paquete
+
+## Corrección 358 para Windows PowerShell 5.1
+
+La primera ejecución posterior a 357 llegó a copiar y verificar las 177 piezas multimedia, pero Windows PowerShell 5.1 lanzó `System.ArgumentException: Los tipos de argumentos no coinciden` al construir el diccionario ordenado del manifiesto. `$media` es concretamente un `System.Collections.Generic.List[System.Object]`: sus elementos son los 92 registros de imagen y las 85 fichas, cada uno como `PSCustomObject`. La revisión de todas las expresiones del bloque aisló como candidata `files=@($media)`: los diccionarios ordenados anidados, sus escalares, los dos arrays literales y `$media.Count` no requieren enlazar ni enumerar ese tipo genérico. En Windows PowerShell 5.1, el enlazador de `@(...)` puede fallar al enumerar ese `List[object]` dentro de la construcción del diccionario. La corrección usa el API nativo, `[object[]]$media.ToArray()`, antes de construir el manifiesto; no modifica entradas, rutas, tamaños ni hashes. Este diagnóstico queda provisional hasta ejecutar la comprobación siguiente en la versión afectada.
+
+Antes de intentar otra exportación real, ejecute esta comprobación sintética **en Windows PowerShell 5.1**. No usa SQL, LocalDB, archivos multimedia ni datos personales. Construye el mismo tipo efectivo de colección y entradas, y comprueba para 0, 1 y 177 elementos la construcción del manifiesto, JSON de ida y vuelta, ausencia de arrays anidados, cardinalidad, 17 tablas y conservación de cada hash:
+
+```powershell
+$Repo = 'C:\src\web-ventas-generica'
+& "$Repo\tools\deployment\tests\Test-LocalDataPackageManifest.WindowsPowerShell.ps1"
+if (-not $?) { throw 'Prueba sintetica fallo' }
+```
+
+El resultado requerido es `WINDOWS_POWERSHELL_5_1_MANIFEST_TEST_OK`. No repita `ExportLocal` si esta comprobación falla. En entornos donde no se haya ejecutado todavía con Windows PowerShell 5.1, la atribución al enlazador de `@($media)` debe considerarse una hipótesis pendiente de esa validación, aunque coincide con la expresión, el tipo efectivo y el punto de fallo observados.
+
+La ejecución fallida no publicó un paquete y limpió su propio staging. **No borre, reutilice ni sobrescriba la carpeta raíz usada por aquella ejecución.** Para el próximo intento defina un `OutputRoot` nuevo, privado, vacío y fuera del repositorio, por ejemplo `D:\JemNexus-private-transfer-358`, y conserve la ubicación anterior intacta como evidencia operativa.
 
 ## Alcance y resultado
 
@@ -14,7 +30,7 @@ Abra **Windows PowerShell 5.1** desde el checkout y use una ruta privada fuera d
 
 ```powershell
 $Repo = 'C:\src\web-ventas-generica'
-$PrivateRoot = 'D:\JemNexus-private-transfer'
+$PrivateRoot = 'D:\JemNexus-private-transfer-358'
 & "$Repo\tools\deployment\Export-JemNexusLocalDataPackage.ps1" `
   -Mode PlanOnly `
   -OutputRoot $PrivateRoot
@@ -31,7 +47,7 @@ Antes de ejecutar `ExportLocal`, detenga temporalmente el backend local y manté
 
 ```powershell
 $Repo = 'C:\src\web-ventas-generica'
-$PrivateRoot = 'D:\JemNexus-private-transfer'
+$PrivateRoot = 'D:\JemNexus-private-transfer-358'
 $Inventory = 'D:\JemNexus-private-evidence\jemnexus-local-sanitized-inventory.json'
 $ImageRoot = 'C:\ruta-real-imagenes'
 $SheetRoot = 'C:\ruta-real-fichas'

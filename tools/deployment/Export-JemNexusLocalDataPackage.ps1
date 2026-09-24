@@ -216,21 +216,28 @@ WHERE s.name=@schema ORDER BY t.name,c.column_id
     $orphanCount=@($physicalImages | Where-Object {-not $seen.ContainsKey((Canonical $_.FullName))}).Count
     if ($orphanCount -ne 2 -or $media.Count -ne 177) { Fail 'Conteo de multimedia/exclusion de huerfanos inesperado.' }
 
+    # Windows PowerShell 5.1 cannot reliably bind @($media) when $media is a
+    # Collections.Generic.List[object] (it can throw "Argument types do not
+    # match" while the surrounding ordered dictionary is being constructed).
+    # Materialize the entries through the collection's native API instead of
+    # asking the array-subexpression operator to enumerate the generic list.
+    $mediaFiles=[object[]]$media.ToArray()
     $manifest=[ordered]@{
         packageVersion=$PackageVersion; packageType='JemNexusLocalDataPackage'; createdUtc=[DateTime]::UtcNow.ToString('o')
         status='PREPARED_LOCAL_NOT_AUTHORIZED_FOR_PRODUCTION_APPLY'
         source=[ordered]@{instance=$ExpectedInstance;database=$ExpectedDatabase;schema=$ExpectedSchema;inventorySha256=(Get-Hash $inventoryFile)}
         exclusions=[ordered]@{tables=@('AppRefreshTokens','__EFMigrationsHistory');refreshTokenRowsIncluded=0;orphanImageFilesIncluded=0;observedOrphanImageFiles=$orphanCount}
         tables=[ordered]@{count=17;rowCounts=$counts;sha256=$dataHashes}
-        media=[ordered]@{count=$media.Count;files=@($media)}
+        media=[ordered]@{count=$mediaFiles.Count;files=$mediaFiles}
         limitations=@('No contiene importador, SQL destructivo ni autorizacion de apply.','Debe verificarse nuevamente contra la fuente y produccion antes de disenar cualquier aplicacion.')
     }
     $manifestPath=Join-Path $staging 'manifest.json'; Write-Json $manifestPath $manifest
     # Validacion final desde disco antes de la unica publicacion (rename atomico en el mismo volumen).
     $roundTrip=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if ($roundTrip.status -ne 'PREPARED_LOCAL_NOT_AUTHORIZED_FOR_PRODUCTION_APPLY' -or [int]$roundTrip.tables.count -ne 17 -or [int]$roundTrip.media.count -ne 177) { Fail 'Validacion final del manifiesto fallo.' }
+    $roundTripMediaFiles=@($roundTrip.media.files)
+    if ($roundTrip.status -ne 'PREPARED_LOCAL_NOT_AUTHORIZED_FOR_PRODUCTION_APPLY' -or [int]$roundTrip.tables.count -ne 17 -or [int]$roundTrip.media.count -ne 177 -or $roundTripMediaFiles.Count -ne 177) { Fail 'Validacion final del manifiesto fallo.' }
     foreach ($name in $Tables) { if ((Get-Hash (Join-Path $dataPath ($name+'.json'))) -cne [string]$roundTrip.tables.sha256.$name) { Fail "Hash de datos invalido: $name" } }
-    foreach ($item in $roundTrip.media.files) { $path=Join-Path $staging ([string]$item.packagePath).Replace('/',[IO.Path]::DirectorySeparatorChar); if ((Get-Hash $path) -cne [string]$item.sha256) { Fail 'Hash multimedia invalido.' } }
+    foreach ($item in $roundTripMediaFiles) { $path=Join-Path $staging ([string]$item.packagePath).Replace('/',[IO.Path]::DirectorySeparatorChar); if ((Get-Hash $path) -cne [string]$item.sha256) { Fail 'Hash multimedia invalido.' } }
     [IO.Directory]::Move($staging,$finalPath)
     Write-Output "PACKAGE_PREPARED_LOCAL_ONLY: $finalPath"
 } catch {
