@@ -219,6 +219,8 @@ class ExportContractTests(unittest.TestCase):
         harness = PS51_MANIFEST_TEST.read_text(encoding="utf-8")
         self.assertIn("#requires -Version 5.1", harness)
         self.assertIn("New-Object Collections.Generic.List[object]", harness)
+        self.assertIn("$actualMediaType -ne $expectedMediaType", harness)
+        self.assertNotIn("Assert-Equal 'System.Collections.Generic.List`1[System.Object]'", harness)
         self.assertIn("[object[]]$media.ToArray()", harness)
         self.assertIn("foreach ($count in 0, 1, 177)", harness)
         self.assertIn("$files = @($roundTrip.media.files)", harness)
