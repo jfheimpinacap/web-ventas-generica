@@ -18,10 +18,17 @@ def valid_observation():
     return {
         "isLocalDb": 1, "database": policy.EXPECTED_DATABASE,
         "markerCount": 1, "markerValue": policy.EXPECTED_MARKER,
+        "applicationSchema": policy.APPLICATION_SCHEMA,
+        "historySchema": policy.HISTORY_SCHEMA,
+        "sequenceSchema": policy.SEQUENCE_SCHEMA,
+        "markerScope": policy.MARKER_SCOPE,
         "migrations": 22, "importTables": 17,
         "schemaFingerprints": fingerprints.copy(), "permissionsOk": True,
         "foliosOk": True,
-    }, fingerprints
+    }, {"schema": policy.APPLICATION_SCHEMA,
+        "historySchema": policy.HISTORY_SCHEMA,
+        "sequenceSchema": policy.SEQUENCE_SCHEMA,
+        "markerScope": policy.MARKER_SCOPE, **fingerprints}
 
 
 class DisposableRehearsalPolicyTests(unittest.TestCase):
@@ -53,6 +60,34 @@ class DisposableRehearsalPolicyTests(unittest.TestCase):
                 observed, baseline = valid_observation()
                 observed["schemaFingerprints"][kind] = "different"
                 self.assertEqual("NO-GO", policy.evaluate(observed, baseline)[0])
+
+    def test_rejects_dbo_only_application_tables(self):
+        observed, baseline = valid_observation()
+        observed["applicationSchema"] = "dbo"
+        observed["importTables"] = 17
+        self.assertIn("APPLICATION_SCHEMA_MISMATCH", policy.evaluate(observed, baseline)[1])
+
+    def test_rejects_wrong_baseline_application_schema(self):
+        observed, baseline = valid_observation()
+        baseline["schema"] = "dbo"
+        self.assertIn("PRODUCTION_BASELINE_INVALID", policy.evaluate(observed, baseline)[1])
+
+    def test_rejects_wrong_sequence_or_history_location(self):
+        for key, blocker in (("sequenceSchema", "SELLER_SEQUENCE_SCHEMA_MISMATCH"),
+                             ("historySchema", "MIGRATION_HISTORY_SCHEMA_MISMATCH")):
+            with self.subTest(key=key):
+                observed, baseline = valid_observation()
+                observed[key] = "dbo"
+                self.assertIn(blocker, policy.evaluate(observed, baseline)[1])
+
+    def test_schema_queries_and_output_use_fixed_effective_locations(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$ApplicationSchema = 'jemnexusb_api'", source)
+        self.assertIn("[$HistorySchema].[__EFMigrationsHistory]", source)
+        self.assertIn("s.name='$SequenceSchema'", source)
+        self.assertIn("applicationSchema=$ApplicationSchema", source)
+        self.assertNotIn("s.name='dbo'", source)
+        self.assertNotIn("FROM dbo.", source)
 
     def test_plan_only_contract_precedes_every_connection_or_file_read(self):
         source = SCRIPT.read_text(encoding="utf-8")

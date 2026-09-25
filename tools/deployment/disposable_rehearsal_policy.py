@@ -5,6 +5,10 @@ enforces the same constants against live, read-only catalog observations.
 """
 
 EXPECTED_DATABASE = "JemNexus_DisposableRehearsal_364"
+APPLICATION_SCHEMA = "jemnexusb_api"
+HISTORY_SCHEMA = "jemnexusb_api"
+SEQUENCE_SCHEMA = "jemnexusb_api"
+MARKER_SCOPE = "database"
 EXPECTED_MARKER = "TASK-364|READONLY-PREFLIGHT|DISPOSABLE"
 FINGERPRINT_KINDS = (
     "columns", "primaryKeys", "foreignKeys", "indexes", "checks",
@@ -21,6 +25,19 @@ def evaluate(observation, production_baseline):
     if (observation.get("markerCount") != 1 or
             observation.get("markerValue") != EXPECTED_MARKER):
         blockers.append("DISPOSABLE_MARKER_MISSING_OR_AMBIGUOUS")
+    if observation.get("applicationSchema") != APPLICATION_SCHEMA:
+        blockers.append("APPLICATION_SCHEMA_MISMATCH")
+    if observation.get("historySchema") != HISTORY_SCHEMA:
+        blockers.append("MIGRATION_HISTORY_SCHEMA_MISMATCH")
+    if observation.get("sequenceSchema") != SEQUENCE_SCHEMA:
+        blockers.append("SELLER_SEQUENCE_SCHEMA_MISMATCH")
+    if observation.get("markerScope") != MARKER_SCOPE:
+        blockers.append("DISPOSABLE_MARKER_SCOPE_MISMATCH")
+    if production_baseline.get("schema") != APPLICATION_SCHEMA or \
+            production_baseline.get("historySchema") != HISTORY_SCHEMA or \
+            production_baseline.get("sequenceSchema") != SEQUENCE_SCHEMA or \
+            production_baseline.get("markerScope") != MARKER_SCOPE:
+        blockers.append("PRODUCTION_BASELINE_INVALID")
     if observation.get("migrations") != 22:
         blockers.append("MIGRATIONS_MISMATCH")
     if observation.get("importTables") != 17:
