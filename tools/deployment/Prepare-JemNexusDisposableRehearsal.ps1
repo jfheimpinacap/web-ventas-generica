@@ -56,7 +56,7 @@ try{
     $master=New-Object Data.SqlClient.SqlConnection $b.ConnectionString;$master.Open()
     $cmd=$master.CreateCommand();$cmd.CommandText=@"
 SET XACT_ABORT ON;
-IF CONVERT(int,SERVERPROPERTY('IsLocalDB'))<>1 OR CONVERT(nvarchar(128),SERVERPROPERTY('InstanceName')) COLLATE Latin1_General_100_BIN2<>N'MSSQLLocalDB' THROW 51000,'SERVER_NOT_EXPECTED_LOCALDB',1;
+IF COALESCE(TRY_CONVERT(int,SERVERPROPERTY('IsLocalDB')),0)<>1 OR CONVERT(nvarchar(128),SERVERPROPERTY('InstanceName')) COLLATE Latin1_General_100_BIN2<>N'MSSQLLocalDB' THROW 51000,'SERVER_NOT_EXPECTED_LOCALDB',1;
 IF DB_NAME()<>N'master' THROW 51000,'MASTER_IDENTITY_MISMATCH',1;
 IF DB_ID(N'$Database') IS NOT NULL THROW 51000,'DATABASE_ALREADY_EXISTS',1;
 CREATE DATABASE [$Database];
@@ -64,13 +64,28 @@ CREATE DATABASE [$Database];
     [void]$cmd.ExecuteNonQuery();$cmd.Dispose();$master.Dispose();$master=$null
 
     $b.InitialCatalog=$Database;$target=New-Object Data.SqlClient.SqlConnection $b.ConnectionString;$target.Open()
-    $cmd=$target.CreateCommand();$cmd.CommandText="IF CONVERT(int,SERVERPROPERTY('IsLocalDB'))<>1 OR DB_NAME()<>N'$Database' THROW 51000,'TARGET_IDENTITY_MISMATCH',1; CREATE SCHEMA [$Schema] AUTHORIZATION [dbo]; CREATE USER [JemNexusTask364MigrationUser] WITHOUT LOGIN WITH DEFAULT_SCHEMA=[$Schema]; EXECUTE AS USER=N'JemNexusTask364MigrationUser';";[void]$cmd.ExecuteNonQuery();$cmd.Dispose()
+    $cmd=$target.CreateCommand();$cmd.CommandText=@"
+IF COALESCE(TRY_CONVERT(int,SERVERPROPERTY('IsLocalDB')),0)<>1 OR DB_NAME()<>N'$Database' THROW 51000,'TARGET_IDENTITY_MISMATCH',1;
+CREATE SCHEMA [$Schema] AUTHORIZATION [dbo];
+CREATE USER [JemNexusTask364MigrationUser] WITHOUT LOGIN WITH DEFAULT_SCHEMA=[$Schema];
+GRANT CREATE TABLE, CREATE SEQUENCE TO [JemNexusTask364MigrationUser];
+GRANT ALTER, REFERENCES, SELECT, INSERT, UPDATE ON SCHEMA::[$Schema] TO [JemNexusTask364MigrationUser];
+EXECUTE AS USER=N'JemNexusTask364MigrationUser';
+IF HAS_PERMS_BY_NAME(DB_NAME(),N'DATABASE',N'CREATE TABLE')<>1
+ OR HAS_PERMS_BY_NAME(DB_NAME(),N'DATABASE',N'CREATE SEQUENCE')<>1
+ OR HAS_PERMS_BY_NAME(N'$Schema',N'SCHEMA',N'ALTER')<>1
+ OR HAS_PERMS_BY_NAME(N'$Schema',N'SCHEMA',N'REFERENCES')<>1
+ OR HAS_PERMS_BY_NAME(N'$Schema',N'SCHEMA',N'SELECT')<>1
+ OR HAS_PERMS_BY_NAME(N'$Schema',N'SCHEMA',N'INSERT')<>1
+ OR HAS_PERMS_BY_NAME(N'$Schema',N'SCHEMA',N'UPDATE')<>1
+ THROW 51000,'IMPERSONATED_MIGRATION_PERMISSIONS_INSUFFICIENT',1;
+"@;[void]$cmd.ExecuteNonQuery();$cmd.Dispose()
 
     # Execute every canonical GO batch in the same impersonated session so every
     # unqualified object resolves to $Schema.
     foreach($batch in [regex]::Split($sql,'(?im)^\s*GO\s*(?:--.*)?$')){if(-not [string]::IsNullOrWhiteSpace($batch)){$cmd=$target.CreateCommand();$cmd.CommandTimeout=300;$cmd.CommandText=$batch;[void]$cmd.ExecuteNonQuery();$cmd.Dispose()}}
     $migrationValues=(($MigrationIds|ForEach-Object{"(N'$_')"}) -join ',')
-    $cmd=$target.CreateCommand();$cmd.CommandText="REVERT; IF DB_NAME()<>N'$Database' OR CONVERT(int,SERVERPROPERTY('IsLocalDB'))<>1 THROW 51000,'POST_MIGRATION_IDENTITY_MISMATCH',1; IF (SELECT COUNT(*) FROM [$Schema].[__EFMigrationsHistory])<>22 OR EXISTS(SELECT MigrationId FROM [$Schema].[__EFMigrationsHistory] EXCEPT SELECT v.Id FROM (VALUES $migrationValues)v(Id)) OR EXISTS(SELECT v.Id FROM (VALUES $migrationValues)v(Id) EXCEPT SELECT MigrationId FROM [$Schema].[__EFMigrationsHistory]) THROW 51000,'MIGRATIONS_MISMATCH',1; IF (SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'$Schema')<>19 THROW 51000,'TABLE_SET_MISMATCH',1; IF OBJECT_ID(N'[$Schema].[__EFMigrationsHistory]',N'U') IS NULL OR NOT EXISTS(SELECT 1 FROM sys.sequences q JOIN sys.schemas s ON s.schema_id=q.schema_id WHERE s.name=N'$Schema' AND q.name=N'SellerCodeSequence') THROW 51000,'REQUIRED_OBJECTS_MISSING',1; EXEC sys.sp_addextendedproperty @name=N'$MarkerName',@value=N'$MarkerValue';";[void]$cmd.ExecuteNonQuery();$cmd.Dispose()
+    $cmd=$target.CreateCommand();$cmd.CommandText="REVERT; IF DB_NAME()<>N'$Database' OR COALESCE(TRY_CONVERT(int,SERVERPROPERTY('IsLocalDB')),0)<>1 THROW 51000,'POST_MIGRATION_IDENTITY_MISMATCH',1; IF (SELECT COUNT(*) FROM [$Schema].[__EFMigrationsHistory])<>22 OR EXISTS(SELECT MigrationId FROM [$Schema].[__EFMigrationsHistory] EXCEPT SELECT v.Id FROM (VALUES $migrationValues)v(Id)) OR EXISTS(SELECT v.Id FROM (VALUES $migrationValues)v(Id) EXCEPT SELECT MigrationId FROM [$Schema].[__EFMigrationsHistory]) THROW 51000,'MIGRATIONS_MISMATCH',1; IF (SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'$Schema')<>19 THROW 51000,'TABLE_SET_MISMATCH',1; IF OBJECT_ID(N'[$Schema].[__EFMigrationsHistory]',N'U') IS NULL OR NOT EXISTS(SELECT 1 FROM sys.sequences q JOIN sys.schemas s ON s.schema_id=q.schema_id WHERE s.name=N'$Schema' AND q.name=N'SellerCodeSequence') THROW 51000,'REQUIRED_OBJECTS_MISSING',1; EXEC sys.sp_addextendedproperty @name=N'$MarkerName',@value=N'$MarkerValue';";[void]$cmd.ExecuteNonQuery();$cmd.Dispose()
     $target.Dispose();$target=$null
     $inspection=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $InspectorPath -Mode InspectDisposable -ProductionBaselinePath $item.FullName
     if($LASTEXITCODE -ne 0 -or (($inspection|Select-Object -Last 1|ConvertFrom-Json).status -cne 'READY_FOR_DISPOSABLE_REHEARSAL')){throw 'POST_PREPARATION_INSPECTION_FAILED'}
