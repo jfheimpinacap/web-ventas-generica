@@ -10,6 +10,11 @@
   scrollbar-color: var(--admin-primary) #e2e8f0;
 }
 
+.admin-table-wrapper:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
 .admin-table {
   width: 100%;
   min-width: 760px;
@@ -215,8 +220,8 @@
 .technical-sheet-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; }
 .technical-sheet-form__filename { max-width: 100%; overflow-wrap: anywhere; }
 
-.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: 100%; max-width: 100%; overflow: visible; }
-.admin-technical-sheets-table { width: 100%; min-width: 0; table-layout: fixed; }
+.admin-technical-sheets-table-wrapper { box-sizing: border-box; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.admin-technical-sheets-table { width: 100%; min-width: 720px; table-layout: fixed; }
 .admin-technical-sheets-table th:nth-child(1), .admin-technical-sheets-table td:nth-child(1) { width: 20%; overflow-wrap: anywhere; }
 .admin-technical-sheets-table th:nth-child(2), .admin-technical-sheets-table td:nth-child(2) { width: 22%; overflow-wrap: anywhere; }
 .admin-technical-sheets-table th:nth-child(3), .admin-technical-sheets-table td:nth-child(3) { width: 10%; }
