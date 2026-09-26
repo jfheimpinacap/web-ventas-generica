@@ -58,6 +58,29 @@ class ProductionBaselineCaptureTests(unittest.TestCase):
         self.assertIn("Move-Item -LiteralPath $temp",PS);self.assertIn("BASELINE_CAPTURE_VERIFIED_AND_SAVED",PS)
         self.assertIn("CommandTimeout=30",PS);self.assertIn("finally{$c.Dispose()}",PS)
 
+    def test_endpoint_and_expected_identity_are_routed_independently(self):
+        self.assertIn("[string]$ConnectionEndpoint",PS)
+        self.assertIn("[string]$ExpectedServerIdentity",PS)
+        self.assertNotIn("ExpectedProductionServer",PS+SQL)
+        self.assertIn("-Server $ConnectionEndpoint",PS)
+        self.assertNotIn("-Server $ExpectedServerIdentity",PS)
+        self.assertIn("$(ExpectedServerIdentity)",SQL)
+        self.assertNotIn("$(ConnectionEndpoint)",SQL)
+        self.assertIn("$ExpectedServerIdentity.Replace(\"'\",\"''\")",PS_CONNECTION_FACTORY)
+        self.assertIn("$endpoint='tcp:synthetic-endpoint.invalid,1444'",PS_CREDENTIAL_TEST)
+        self.assertIn("$expectedIdentity=\"SYNTHETIC\\INSTANCE'O\"",PS_CREDENTIAL_TEST)
+        self.assertIn("-Server $endpoint",PS_CREDENTIAL_TEST)
+        self.assertIn("-ExpectedServerIdentity $expectedIdentity",PS_CREDENTIAL_TEST)
+        self.assertNotIn(".Open(",PS_CREDENTIAL_TEST)
+
+    def test_both_explicit_target_values_reject_empty_and_placeholder(self):
+        self.assertIn("IsNullOrWhiteSpace($ConnectionEndpoint)",PS)
+        self.assertIn("$ConnectionEndpoint-cin @('REPLACE_ME','ENDPOINT-SQL-APROBADO')",PS)
+        self.assertIn("IsNullOrWhiteSpace($ExpectedServerIdentity)",PS)
+        self.assertIn("$ExpectedServerIdentity-cin @('REPLACE_ME','IDENTIDAD-INTERNA-SQL-EXACTA')",PS)
+        self.assertIn("CONNECTION_ENDPOINT_REQUIRED",PS)
+        self.assertIn("EXPECTED_SERVER_IDENTITY_REQUIRED",PS)
+
     def test_sql_credential_is_prompted_and_never_enters_connection_string(self):
         self.assertIn("ValidateSet('SqlCredential','Integrated')",PS)
         self.assertIn("Get-Credential -Message",PS)

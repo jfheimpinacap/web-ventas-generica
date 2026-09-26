@@ -1,7 +1,8 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][string]$ExpectedProductionServer,
+    [Parameter(Mandatory=$true)][string]$ConnectionEndpoint,
+    [Parameter(Mandatory=$true)][string]$ExpectedServerIdentity,
     [Parameter(Mandatory=$true)][string]$OutputPath,
     [Parameter(Mandatory=$true)][ValidateSet('SqlCredential','Integrated')][string]$Authentication
 )
@@ -19,8 +20,8 @@ $KnownMigrations=@('20260603182917_InitialCommercialSchema','20260604020543_AddA
 function Hash([Data.DataTable]$Table,[string[]]$Names){$lines=@($Table.Rows|ForEach-Object{$r=$_;(@($Names|ForEach-Object{$v=$r[$_];if($v -is [DBNull]){'<NULL>'}else{([string]$v).Replace("`r",'').Replace("`n",' ')}})-join '|')}|Sort-Object -CaseSensitive);$sha=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($lines-join "`n")))).Replace('-','').ToLowerInvariant())}finally{$sha.Dispose()}}
 function Observe {
  $template=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Capture-JemNexusProductionSchemaBaseline.sql') -Raw
- $sql=$template.Replace('$(ExpectedProductionServer)',$ExpectedProductionServer.Replace("'","''"))
- $c=New-JemNexusProductionBaselineSqlConnection -Server $ExpectedProductionServer -Database $Database -Authentication $Authentication -Credential $SqlCredential
+ $sql=New-JemNexusProductionBaselineCommandText -Template $template -ExpectedServerIdentity $ExpectedServerIdentity
+ $c=New-JemNexusProductionBaselineSqlConnection -Server $ConnectionEndpoint -Database $Database -Authentication $Authentication -Credential $SqlCredential
  try{
   try{$c.Open()}catch{throw 'AUTHENTICATION_OR_TLS_CONNECTION_FAILED'}
   $cmd=$c.CreateCommand();$cmd.CommandText=$sql;$cmd.CommandTimeout=30;$ds=New-Object Data.DataSet;$a=New-Object Data.SqlClient.SqlDataAdapter $cmd
@@ -32,7 +33,8 @@ function Observe {
  [ordered]@{reportType=[string]$h.reportType;database=[string]$h.database;schema=[string]$h.schema;historySchema=[string]$h.historySchema;sequenceSchema=[string]$h.sequenceSchema;markerScope=[string]$h.markerScope;migrationCount=22;migrationIds=$ids;schemaFingerprints=$fp}
 }
 try {
- if([string]::IsNullOrWhiteSpace($ExpectedProductionServer)-or $ExpectedProductionServer-ceq 'REPLACE_ME'){throw 'EXPECTED_PRODUCTION_SERVER_REQUIRED'}
+ if([string]::IsNullOrWhiteSpace($ConnectionEndpoint)-or $ConnectionEndpoint-cin @('REPLACE_ME','ENDPOINT-SQL-APROBADO')){throw 'CONNECTION_ENDPOINT_REQUIRED'}
+ if([string]::IsNullOrWhiteSpace($ExpectedServerIdentity)-or $ExpectedServerIdentity-cin @('REPLACE_ME','IDENTIDAD-INTERNA-SQL-EXACTA')){throw 'EXPECTED_SERVER_IDENTITY_REQUIRED'}
  $full=[IO.Path]::GetFullPath($OutputPath);$parent=Split-Path -Parent $full
  if(-not(Test-Path -LiteralPath $parent -PathType Container)){throw 'OUTPUT_DIRECTORY_MISSING'}
  if(Test-Path -LiteralPath $full){throw 'OUTPUT_ALREADY_EXISTS'}
@@ -50,7 +52,7 @@ try {
  $temp=Join-Path $parent ('.baseline-'+[Guid]::NewGuid().ToString('N')+'.tmp');try{[IO.File]::WriteAllText($temp,$json,(New-Object Text.UTF8Encoding($false)));Move-Item -LiteralPath $temp -Destination $full -ErrorAction Stop}finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
  Write-Output 'BASELINE_CAPTURE_VERIFIED_AND_SAVED'
 } catch {
- $allowed=@('EXPECTED_PRODUCTION_SERVER_REQUIRED','OUTPUT_DIRECTORY_MISSING','OUTPUT_ALREADY_EXISTS','SQL_CREDENTIAL_REQUIRED','CONNECTION_CONFIGURATION_INVALID','AUTHENTICATION_CONFIGURATION_INVALID','AUTHENTICATION_OR_TLS_CONNECTION_FAILED','READ_ONLY_OBSERVATION_FAILED','INCOMPLETE_OBSERVATION','MIGRATIONS_MISMATCH','OBSERVATIONS_DIFFER_NO_GO')
+ $allowed=@('CONNECTION_ENDPOINT_REQUIRED','EXPECTED_SERVER_IDENTITY_REQUIRED','OUTPUT_DIRECTORY_MISSING','OUTPUT_ALREADY_EXISTS','SQL_CREDENTIAL_REQUIRED','CONNECTION_CONFIGURATION_INVALID','AUTHENTICATION_CONFIGURATION_INVALID','AUTHENTICATION_OR_TLS_CONNECTION_FAILED','READ_ONLY_OBSERVATION_FAILED','INCOMPLETE_OBSERVATION','MIGRATIONS_MISMATCH','OBSERVATIONS_DIFFER_NO_GO')
  $diagnostic=$(if($_.Exception.Message-cin $allowed){$_.Exception.Message}else{'BASELINE_CAPTURE_FAILED'})
  Write-Error ('NO-GO: '+$diagnostic);exit 2
 } finally {if($null-ne $Secret){$Secret.Dispose();$Secret=$null};$SqlCredential=$null}

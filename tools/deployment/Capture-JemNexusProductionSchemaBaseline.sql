@@ -1,7 +1,7 @@
 SET NOCOUNT ON;
 IF DB_NAME() <> N'jemnexusb_prod' THROW 51000, 'PRODUCTION_DATABASE_IDENTITY_MISMATCH', 1;
-IF CONVERT(nvarchar(128),SERVERPROPERTY('ServerName')) COLLATE Latin1_General_100_BIN2 <> N'$(ExpectedProductionServer)' COLLATE Latin1_General_100_BIN2
-    OR N'$(ExpectedProductionServer)' IN (N'',N'REPLACE_ME')
+IF CONVERT(nvarchar(128),SERVERPROPERTY('ServerName')) COLLATE Latin1_General_100_BIN2 <> N'$(ExpectedServerIdentity)' COLLATE Latin1_General_100_BIN2
+    OR N'$(ExpectedServerIdentity)' IN (N'',N'REPLACE_ME',N'IDENTIDAD-INTERNA-SQL-EXACTA')
     THROW 51000, 'PRODUCTION_SERVER_IDENTITY_MISMATCH', 1;
 IF USER_NAME() COLLATE Latin1_General_100_BIN2 <> N'jemnexusb_api' COLLATE Latin1_General_100_BIN2
     THROW 51000, 'PRODUCTION_DATABASE_PRINCIPAL_MISMATCH', 1;

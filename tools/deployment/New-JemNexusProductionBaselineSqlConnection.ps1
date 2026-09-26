@@ -1,5 +1,18 @@
 #requires -Version 5.1
 
+function New-JemNexusProductionBaselineCommandText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Template,
+        [Parameter(Mandatory=$true)][string]$ExpectedServerIdentity
+    )
+
+    if([string]::IsNullOrWhiteSpace($ExpectedServerIdentity)-or $ExpectedServerIdentity-cin @('REPLACE_ME','IDENTIDAD-INTERNA-SQL-EXACTA')){
+        throw 'EXPECTED_SERVER_IDENTITY_REQUIRED'
+    }
+    return $Template.Replace('$(ExpectedServerIdentity)',$ExpectedServerIdentity.Replace("'","''"))
+}
+
 function New-JemNexusProductionBaselineSqlConnection {
     [CmdletBinding()]
     param(
