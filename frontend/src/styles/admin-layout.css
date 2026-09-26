@@ -23,6 +23,9 @@
 .admin-sidebar nav {
   display: grid;
   gap: 0.4rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-sidebar__title {
@@ -102,16 +105,35 @@
     transform: translateX(-105%);
     transition: transform 0.2s ease;
     width: min(84vw, 320px);
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
     z-index: 1003;
     padding-top: 0.75rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
   .admin-sidebar--mobile-open { transform: translateX(0); }
 
   .admin-sidebar__mobile-header {
     display: flex;
+    flex: 0 0 auto;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .admin-sidebar nav {
+    flex: 1 1 auto;
+    padding-right: 0.2rem;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-sidebar__footer {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid #334155;
   }
 
   .admin-sidebar__mobile-header h2 { margin: 0; font-size: 1rem; }
