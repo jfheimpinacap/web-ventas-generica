@@ -86,6 +86,8 @@ try {
     if(-not ($baselineItem -is [IO.FileInfo]) -or ($baselineItem.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'PRODUCTION_BASELINE_INVALID'}
     $baseline=Get-Content -LiteralPath $baselineItem.FullName -Raw | ConvertFrom-Json
     if($baseline.reportType -cne 'JemNexusProductionSchemaBaseline' -or $baseline.database -cne 'jemnexusb_prod' -or $baseline.schema -cne $ApplicationSchema -or $baseline.historySchema -cne $HistorySchema -or $baseline.sequenceSchema -cne $SequenceSchema -or $baseline.markerScope -cne $MarkerScope -or [int]$baseline.migrationCount -ne 22 -or [string]::IsNullOrWhiteSpace([string]$baseline.evidenceCapturedUtc)){throw 'PRODUCTION_BASELINE_INVALID'}
+    $baselineMigrations=@($baseline.migrationIds|ForEach-Object{[string]$_})
+    if($baselineMigrations.Count -ne 22 -or (Compare-Object $KnownMigrations $baselineMigrations -CaseSensitive)){throw 'PRODUCTION_BASELINE_INVALID'}
     foreach($kind in $FingerprintKinds){if(([string]$baseline.schemaFingerprints.$kind) -notmatch '^[0-9a-f]{64}$'){throw 'PRODUCTION_BASELINE_INVALID'}}
 
     $builder=New-Object Data.SqlClient.SqlConnectionStringBuilder

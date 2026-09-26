@@ -1,12 +1,16 @@
 SET NOCOUNT ON;
 IF DB_NAME() <> N'jemnexusb_prod' THROW 51000, 'PRODUCTION_DATABASE_IDENTITY_MISMATCH', 1;
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE database_id=DB_ID() AND snapshot_isolation_state_desc=N'ON')
-    THROW 51000, 'NO_GO_SNAPSHOT_ISOLATION_NOT_ENABLED', 1;
-SET XACT_ABORT ON;
-SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
-BEGIN TRY
-    BEGIN TRANSACTION;
-    EXEC sys.sp_executesql N'IF EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE t.name IN (N''__EFMigrationsHistory'',N''AppUsers'',N''AppUserPermissions'',N''Brands'',N''Categories'',N''Suppliers'',N''TechnicalSheets'',N''Products'',N''ProductImages'',N''ProductSpecs'',N''Promotions'',N''HomeSectionItems'',N''QuoteRequests'',N''CustomerProfiles'',N''CommercialQuotes'',N''CommercialQuoteItems'',N''CommercialQuoteFolioCounters'',N''CommercialQuoteIssueIdempotencyRecords'',N''AppRefreshTokens'') AND s.name<>N''jemnexusb_api'') THROW 51000,''SCHEMA_MISMATCH'',1;
+IF CONVERT(nvarchar(128),SERVERPROPERTY('ServerName')) COLLATE Latin1_General_100_BIN2 <> N'$(ExpectedProductionServer)' COLLATE Latin1_General_100_BIN2
+    OR N'$(ExpectedProductionServer)' IN (N'',N'REPLACE_ME')
+    THROW 51000, 'PRODUCTION_SERVER_IDENTITY_MISMATCH', 1;
+IF USER_NAME() COLLATE Latin1_General_100_BIN2 <> N'jemnexusb_api' COLLATE Latin1_General_100_BIN2
+    THROW 51000, 'PRODUCTION_DATABASE_PRINCIPAL_MISMATCH', 1;
+IF @@TRANCOUNT <> 0 THROW 51000, 'PRODUCTION_SESSION_HAS_OPEN_TRANSACTION', 1;
+IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE database_id=DB_ID() AND snapshot_isolation_state_desc=N'OFF' AND is_read_committed_snapshot_on=0)
+    THROW 51000, 'PRODUCTION_ISOLATION_CONFIGURATION_UNEXPECTED', 1;
+SET LOCK_TIMEOUT 15000;
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+EXEC sys.sp_executesql N'IF EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE t.name IN (N''__EFMigrationsHistory'',N''AppUsers'',N''AppUserPermissions'',N''Brands'',N''Categories'',N''Suppliers'',N''TechnicalSheets'',N''Products'',N''ProductImages'',N''ProductSpecs'',N''Promotions'',N''HomeSectionItems'',N''QuoteRequests'',N''CustomerProfiles'',N''CommercialQuotes'',N''CommercialQuoteItems'',N''CommercialQuoteFolioCounters'',N''CommercialQuoteIssueIdempotencyRecords'',N''AppRefreshTokens'') AND s.name<>N''jemnexusb_api'') THROW 51000,''SCHEMA_MISMATCH'',1;
 SELECT N''JemNexusProductionSchemaBaseline'' reportType,DB_NAME() [database],N''jemnexusb_api'' [schema],N''jemnexusb_api'' historySchema,N''jemnexusb_api'' sequenceSchema,N''database'' markerScope,SYSUTCDATETIME() evidenceCapturedUtc,(SELECT COUNT_BIG(*) FROM [jemnexusb_api].[__EFMigrationsHistory]) migrationCount;
 SELECT MigrationId FROM [jemnexusb_api].[__EFMigrationsHistory] ORDER BY MigrationId;
 SELECT t.name TableName,c.column_id Ordinal,c.name ColumnName,ty.name TypeName,c.max_length MaxLength,c.precision Precision,c.scale Scale,c.is_nullable Nullable,c.collation_name Collation FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id WHERE s.name=N''jemnexusb_api'' AND t.name IN (N''AppUsers'',N''AppUserPermissions'',N''Brands'',N''Categories'',N''Suppliers'',N''TechnicalSheets'',N''Products'',N''ProductImages'',N''ProductSpecs'',N''Promotions'',N''HomeSectionItems'',N''QuoteRequests'',N''CustomerProfiles'',N''CommercialQuotes'',N''CommercialQuoteItems'',N''CommercialQuoteFolioCounters'',N''CommercialQuoteIssueIdempotencyRecords'') ORDER BY t.name,c.column_id;
@@ -16,11 +20,5 @@ SELECT t.name TableName,i.name IndexName,i.is_unique IsUnique,i.filter_definitio
 SELECT t.name TableName,cc.name CheckName,cc.definition Definition,cc.is_disabled IsDisabled,cc.is_not_trusted IsNotTrusted FROM sys.check_constraints cc JOIN sys.tables t ON t.object_id=cc.parent_object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N''jemnexusb_api'' AND t.name IN (N''AppUsers'',N''AppUserPermissions'',N''Brands'',N''Categories'',N''Suppliers'',N''TechnicalSheets'',N''Products'',N''ProductImages'',N''ProductSpecs'',N''Promotions'',N''HomeSectionItems'',N''QuoteRequests'',N''CustomerProfiles'',N''CommercialQuotes'',N''CommercialQuoteItems'',N''CommercialQuoteFolioCounters'',N''CommercialQuoteIssueIdempotencyRecords'') ORDER BY t.name,cc.name;
 SELECT t.name TableName,ic.name ColumnName,CONVERT(nvarchar(40),ic.seed_value) SeedValue,CONVERT(nvarchar(40),ic.increment_value) IncrementValue FROM sys.identity_columns ic JOIN sys.tables t ON t.object_id=ic.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N''jemnexusb_api'' AND t.name IN (N''AppUsers'',N''AppUserPermissions'',N''Brands'',N''Categories'',N''Suppliers'',N''TechnicalSheets'',N''Products'',N''ProductImages'',N''ProductSpecs'',N''Promotions'',N''HomeSectionItems'',N''QuoteRequests'',N''CustomerProfiles'',N''CommercialQuotes'',N''CommercialQuoteItems'',N''CommercialQuoteFolioCounters'',N''CommercialQuoteIssueIdempotencyRecords'') ORDER BY t.name,ic.name;
 SELECT s.name SchemaName,q.name SequenceName,CONVERT(nvarchar(40),q.start_value) StartValue,CONVERT(nvarchar(40),q.increment) IncrementValue FROM sys.sequences q JOIN sys.schemas s ON s.schema_id=q.schema_id WHERE s.name=N''jemnexusb_api'' AND q.name=N''SellerCodeSequence'';';
-    ROLLBACK TRANSACTION;
-    IF @@TRANCOUNT <> 0 THROW 51000, 'BASELINE_TRANSACTION_NOT_CLOSED', 1;
-    SELECT N'BASELINE_CAPTURE_COMPLETE' CaptureStatus;
-END TRY
-BEGIN CATCH
-    IF XACT_STATE() <> 0 OR @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-    THROW;
-END CATCH;
+IF @@TRANCOUNT <> 0 THROW 51000, 'PRODUCTION_SESSION_TRANSACTION_LEAK', 1;
+SELECT N'OBSERVATION_COMPLETE' CaptureStatus;
