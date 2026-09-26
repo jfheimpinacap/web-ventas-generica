@@ -71,35 +71,31 @@ class PreparationContractTests(unittest.TestCase):
 
     def test_production_sql_is_read_only_and_identity_guarded(self):
         self.assertIn("DB_NAME() <> N'jemnexusb_prod'", CAPTURE)
-        snapshot_guard = CAPTURE.index("snapshot_isolation_state_desc=N'ON'")
-        snapshot_transaction = CAPTURE.index("SET TRANSACTION ISOLATION LEVEL SNAPSHOT")
-        self.assertLess(CAPTURE.index("DB_NAME() <> N'jemnexusb_prod'"), snapshot_guard)
-        self.assertLess(snapshot_guard, snapshot_transaction)
-        self.assertIn("NO_GO_SNAPSHOT_ISOLATION_NOT_ENABLED", CAPTURE)
-        self.assertNotIn("ENABLE_ALLOW_SNAPSHOT", CAPTURE)
-        self.assertNotIn("is_read_committed_snapshot_on", CAPTURE.lower())
+        server_guard = CAPTURE.index("SERVERPROPERTY('ServerName')")
+        isolation_guard = CAPTURE.index("snapshot_isolation_state_desc=N'OFF'")
+        read_committed = CAPTURE.index("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        self.assertLess(CAPTURE.index("DB_NAME() <> N'jemnexusb_prod'"), server_guard)
+        self.assertLess(server_guard, isolation_guard)
+        self.assertLess(isolation_guard, read_committed)
+        self.assertIn("is_read_committed_snapshot_on=0", CAPTURE)
+        self.assertIn("@@TRANCOUNT <> 0", CAPTURE)
+        self.assertNotIn("SET TRANSACTION ISOLATION LEVEL SNAPSHOT", CAPTURE)
         for verb in ("INSERT ", "UPDATE ", "DELETE ", "MERGE ", "CREATE ", "ALTER ", "DROP ", "TRUNCATE "):
             self.assertNotIn(verb, CAPTURE.upper())
-        self.assertIn("ROLLBACK TRANSACTION", CAPTURE)
+        self.assertNotIn("BEGIN TRANSACTION", CAPTURE.upper())
 
-    def test_capture_rolls_back_intermediate_execution_or_compilation_failure(self):
-        begin_try = CAPTURE.index("BEGIN TRY")
-        dynamic = CAPTURE.index("EXEC sys.sp_executesql", begin_try)
-        catch = CAPTURE.index("BEGIN CATCH", dynamic)
-        catch_body = CAPTURE[catch:]
-        self.assertIn("IF XACT_STATE() <> 0 OR @@TRANCOUNT > 0 ROLLBACK TRANSACTION", catch_body)
-        self.assertIn("THROW;", catch_body)
+    def test_capture_has_no_transaction_to_leak_on_intermediate_failure(self):
+        self.assertIn("EXEC sys.sp_executesql", CAPTURE)
+        self.assertNotIn("BEGIN TRANSACTION", CAPTURE.upper())
+        self.assertIn("PRODUCTION_SESSION_HAS_OPEN_TRANSACTION", CAPTURE)
+        self.assertIn("PRODUCTION_SESSION_TRANSACTION_LEAK", CAPTURE)
         self.assertNotIn("\nGO\n", CAPTURE.upper())
 
-    def test_capture_success_signal_requires_closed_transaction(self):
-        rollback = CAPTURE.index("ROLLBACK TRANSACTION;", CAPTURE.index("EXEC sys.sp_executesql"))
-        closed = CAPTURE.index("IF @@TRANCOUNT <> 0 THROW", rollback)
-        success = CAPTURE.index("BASELINE_CAPTURE_COMPLETE", closed)
-        catch = CAPTURE.index("BEGIN CATCH", success)
-        self.assertLess(rollback, closed)
+    def test_observation_signal_requires_closed_session(self):
+        closed = CAPTURE.rindex("IF @@TRANCOUNT <> 0 THROW")
+        success = CAPTURE.index("OBSERVATION_COMPLETE", closed)
         self.assertLess(closed, success)
-        self.assertLess(success, catch)
-        self.assertEqual(1, CAPTURE.count("BASELINE_CAPTURE_COMPLETE"))
+        self.assertEqual(1, CAPTURE.count("OBSERVATION_COMPLETE"))
 
 
 if __name__ == "__main__":

@@ -24,8 +24,42 @@ Antes y después, confirmar que no se configuraron variables para producción y 
 
 ## Baseline productivo, procedimiento separado
 
-`Capture-JemNexusProductionSchemaBaseline.sql` se entrega para revisión DBA. Se ejecuta **solo** dentro de una sesión read-only ya autenticada por el operador en producción. Primero exige `DB_NAME() = jemnexusb_prod` y después comprueba en `sys.databases` que `ALLOW_SNAPSHOT_ISOLATION` está realmente `ON`, antes de seleccionar ese aislamiento o iniciar la transacción. `READ_COMMITTED_SNAPSHOT` no satisface ni sustituye esta guarda. Si está deshabilitado, termina con `NO_GO_SNAPSHOT_ISOLATION_NOT_ENABLED`, sin sugerir ni intentar cambios de configuración en producción, sin iniciar la captura y sin emitir una señal de éxito.
+La configuración real confirmada de `jemnexusb_prod` es `SnapshotIsolation = OFF`, `ReadCommittedSnapshot = 0` y `@@TRANCOUNT = 0`; la consulta que lo confirmó fue de solo lectura. **No se autoriza cambiar esas opciones.** La captura se adaptó a ese contrato: no usa snapshot ni serializable, no abre transacción y no toma bloqueos explícitos. Cada consulta corre en `READ COMMITTED` con `LOCK_TIMEOUT 15000`; cualquier timeout/error hace `NO-GO`. El coste es deliberadamente acotado a catálogos, los 22 IDs de migración y agregados, sin filas personales.
 
-Con la opción ya habilitada, usa una transacción snapshot consistente y ejecuta las consultas dependientes del esquema a un nivel dinámico inferior para que tanto los fallos de ejecución como los de compilación/resolución entren en el mismo `CATCH`. Ante cualquiera de ellos revierte toda transacción abierta y relanza el error. `BASELINE_CAPTURE_COMPLETE` aparece una sola vez, únicamente después del `ROLLBACK` normal y de comprobar `@@TRANCOUNT = 0`. El operador debe tratar cualquier conjunto de resultados sin esa señal final como **captura incompleta**, abortar y descartar todos sus resultados parciales; jamás se convierten en JSON ni constituyen un baseline válido. Los result sets completos deben pasarse por el mismo algoritmo canónico del inspector (UTF-8, `NULL` como `<NULL>`, columnas en el orden declarado, filas ordenadas ordinalmente) para construir exactamente los campos documentados en 364. No contiene cuentas, contraseñas ni filas de negocio.
+`Capture-JemNexusProductionSchemaBaseline.ps1` es el orquestador obligatorio. Abre **dos conexiones independientes**, y en cada una ejecuta la consulta completa. Antes de metadata, el SQL exige por igualdad ordinal `DB_NAME() = jemnexusb_prod`, el `SERVERPROPERTY('ServerName')` esperado por el DBA y el principal efectivo de base `USER_NAME() = jemnexusb_api`, además de las dos opciones `OFF` y `@@TRANCOUNT = 0`. Cada observación contiene exactamente los 22 IDs y las siete tablas de metadata. El orquestador aplica exactamente el algoritmo del inspector: columnas en el orden contractual, `NULL` como `<NULL>`, CR eliminado, LF convertido en espacio, líneas ordenadas con comparación case-sensitive, unión por LF y SHA-256 de UTF-8.
+
+Solo si ambas observaciones completas tienen **los mismos 22 IDs y las mismas siete huellas**, el orquestador escribe el JSON mediante archivo temporal y rename y muestra `BASELINE_CAPTURE_VERIFIED_AND_SAVED`. La ruta final debe no existir (un baseline anterior se archiva fuera de esa ruta antes de empezar). Un cambio entre pasadas, migración ausente/adicional, identidad inesperada, timeout, error o result set parcial produce `NO-GO`, cierra conexión, elimina el temporal y no deja baseline utilizable. No se debe convertir ni copiar manualmente una cuadrícula de SSMS: `OBSERVATION_COMPLETE` solo completa una pasada y nunca equivale a un baseline.
+
+### Comandos exactos en estación Windows aprobada
+
+En **Windows PowerShell 5.1**, desde la raíz del checkout revisado, cree previamente una carpeta privada con ACL limitada. Sustituya el nombre por el valor exacto que el DBA haya confirmado; no use alias, comodines ni `REPLACE_ME`:
+
+La evidencia SSMS solo demuestra el principal productivo `jemnexusb_api`; no demuestra que la cuenta Windows local pueda autenticarse. Por ello se debe elegir explícitamente un modo. El modo normal solicita localmente una credencial SQL mediante el cuadro seguro de `Get-Credential`; la contraseña permanece como `SecureString`, se marca como solo lectura antes de construir `SqlCredential`, se reutiliza únicamente en memoria para las dos conexiones y se libera al finalizar. Cancelar el diálogo aborta antes de construir o abrir una conexión:
+
+```powershell
+$server = 'NOMBRE-SQL-PRODUCTIVO-EXACTO'
+$evidence = 'C:\JemNexus-Evidence-Private\production-schema-baseline.json'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ExpectedProductionServer $server -OutputPath $evidence -Authentication SqlCredential
+if ($LASTEXITCODE -ne 0) { throw 'NO-GO: baseline no creado' }
+Get-FileHash -LiteralPath $evidence -Algorithm SHA256 | Format-List Algorithm,Hash
+```
+
+No escriba la contraseña en el comando, la consola, variables de entorno ni archivos. Si el DBA confirmó previamente que la identidad Windows del proceso tiene acceso y se desea usarla de forma explícita, el único comando alternativo es el siguiente; este modo no solicita credenciales y no intenta fallback a SQL:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ExpectedProductionServer $server -OutputPath $evidence -Authentication Integrated
+```
+
+Ambos modos mantienen `Encrypt=True` y `TrustServerCertificate=False`. Un error de autenticación, cadena de confianza, nombre del certificado o conexión termina con el diagnóstico sanitizado `AUTHENTICATION_OR_TLS_CONNECTION_FAILED`: es **NO-GO**. No se permite activar `TrustServerCertificate`, deshabilitar cifrado ni cambiar automáticamente de autenticación. `ApplicationIntent=ReadOnly` expresa intención al servidor, pero **no es un permiso ni una barrera contra escrituras**; la protección de la herramienta es que su superficie ejecutable está fijada al SQL de lectura auditado, sin aceptar consultas arbitrarias.
+
+Para revisión DBA en **SSMS**, active `Query > SQLCMD Mode`, conéctese explícitamente a `jemnexusb_prod`, no abra una transacción, anteponga esta línea al archivo SQL y ejecute una sola observación:
+
+```sql
+:setvar ExpectedProductionServer "NOMBRE-SQL-PRODUCTIVO-EXACTO"
+```
+
+El resultado SSMS es solo diagnóstico: debe terminar en `OBSERVATION_COMPLETE`, no se guarda como baseline y no sustituye las dos conexiones del orquestador. No use “Results to File” como mecanismo de conversión. Guarde el JSON y su hash únicamente en la carpeta privada aprobada; registre en el ticket privado hora UTC, operador, equipo controlado, servidor esperado, estado final y SHA-256. No pegue en chat grandes result sets, rutas internas, nombres reales de host, cadenas, usuarios ni ninguna evidencia sensible.
+
+Dos observaciones iguales son evidencia suficiente para diseñar y ensayar en LocalDB; **no garantizan el estado productivo futuro**. Debe repetirse el control de drift inmediatamente antes de cualquier eventual Apply. Este cambio no implementa ni autoriza Apply.
 
 El preparador LocalDB jamás carga ni ejecuta ese SQL ni abre producción. El JSON resultante es evidencia fechada: **no sustituye** el control de drift inmediatamente anterior a un eventual Apply. Este trabajo no implementa Apply, las 429 filas, multimedia, restauración o borrado de bases.

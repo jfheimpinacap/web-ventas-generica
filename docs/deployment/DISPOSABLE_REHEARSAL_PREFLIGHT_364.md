@@ -44,6 +44,7 @@ El archivo se obtiene mediante el procedimiento productivo read-only revisado y 
   "markerScope": "database",
   "evidenceCapturedUtc": "2026-09-24T00:00:00Z",
   "migrationCount": 22,
+  "migrationIds": ["los 22 IDs exactos enumerados por el inspector"],
   "schemaFingerprints": {
     "columns": "<sha256>",
     "primaryKeys": "<sha256>",

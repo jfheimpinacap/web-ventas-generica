@@ -36,6 +36,8 @@ try{
     if(-not ($item -is [IO.FileInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'PRODUCTION_BASELINE_INVALID'}
     $baseline=Get-Content -LiteralPath $item.FullName -Raw|ConvertFrom-Json
     if($baseline.reportType -cne 'JemNexusProductionSchemaBaseline' -or $baseline.database -cne 'jemnexusb_prod' -or $baseline.schema -cne $Schema -or $baseline.historySchema -cne $Schema -or $baseline.sequenceSchema -cne $Schema -or $baseline.markerScope -cne 'database' -or [int]$baseline.migrationCount -ne 22 -or [string]::IsNullOrWhiteSpace([string]$baseline.evidenceCapturedUtc)){throw 'PRODUCTION_BASELINE_INVALID'}
+    $baselineMigrations=@($baseline.migrationIds|ForEach-Object{[string]$_})
+    if($baselineMigrations.Count -ne 22 -or (Compare-Object $MigrationIds $baselineMigrations -CaseSensitive)){throw 'PRODUCTION_BASELINE_INVALID'}
     foreach($kind in @('columns','primaryKeys','foreignKeys','indexes','checks','identities','sequence')){if([string]$baseline.schemaFingerprints.$kind -notmatch '^[0-9a-f]{64}$'){throw 'PRODUCTION_BASELINE_INVALID'}}
 
     # Everything required to generate and inspect is proven usable before SQL is
