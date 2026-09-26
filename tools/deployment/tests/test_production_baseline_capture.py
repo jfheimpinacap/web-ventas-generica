@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 from pathlib import Path
+import re
 import unittest
 
 ROOT=Path(__file__).parents[1]
@@ -9,6 +10,7 @@ policy=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(policy)
 SQL=(ROOT/"Capture-JemNexusProductionSchemaBaseline.sql").read_text(encoding="utf-8")
 PS=(ROOT/"Capture-JemNexusProductionSchemaBaseline.ps1").read_text(encoding="utf-8")
 PS_CREDENTIAL_TEST=(ROOT/"tests"/"Test-ProductionBaselineSqlCredential.WindowsPowerShell.ps1").read_text(encoding="utf-8")
+PS_CONNECTION_FACTORY=(ROOT/"New-JemNexusProductionBaselineSqlConnection.ps1").read_text(encoding="utf-8")
 MIGRATIONS=[f"migration-{n:02d}" for n in range(22)]
 
 
@@ -61,31 +63,46 @@ class ProductionBaselineCaptureTests(unittest.TestCase):
         self.assertIn("Get-Credential -Message",PS)
         self.assertIn("Data.SqlClient.SqlCredential",PS)
         self.assertIn("if(-not $Secret.IsReadOnly()){$Secret.MakeReadOnly()}",PS)
-        self.assertIn("$c.Credential=$SqlCredential",PS)
-        builder=PS[PS.index("$b=New-Object"):PS.index("$c=New-Object")]
-        self.assertNotIn("$b.UserID=",builder);self.assertNotIn("$b.Password=",builder)
+        self.assertIn("New-JemNexusProductionBaselineSqlConnection",PS)
+        self.assertIn("$connection.Credential=$Credential",PS_CONNECTION_FACTORY)
+        self.assertNotIn("['User ID']=",PS_CONNECTION_FACTORY);self.assertNotIn("['Password']=",PS_CONNECTION_FACTORY)
         self.assertNotIn("ConvertTo-SecureString",PS)
         self.assertNotIn("NetworkCredential",PS)
+
+    def test_connection_factory_uses_ps51_compatible_builder_indexer(self):
+        self.assertIn("New-JemNexusProductionBaselineSqlConnection.ps1",PS)
+        self.assertIn("New-JemNexusProductionBaselineSqlConnection.ps1",PS_CREDENTIAL_TEST)
+        for key in ("Data Source","Initial Catalog","Integrated Security","Encrypt",
+                    "TrustServerCertificate","ApplicationIntent","Application Name","User ID","Password"):
+            self.assertIn("['"+key+"']",PS_CONNECTION_FACTORY)
+        self.assertIn("$builder.ConnectionString",PS_CONNECTION_FACTORY)
+        incompatible=re.compile(r"\$builder\.(?:DataSource|InitialCatalog|IntegratedSecurity|Encrypt|TrustServerCertificate|ApplicationIntent|ApplicationName|UserID|Password)\b")
+        for name,text in (("factory",PS_CONNECTION_FACTORY),("capture",PS),("harness",PS_CREDENTIAL_TEST)):
+            with self.subTest(file=name):
+                self.assertIsNone(incompatible.search(text))
 
     def test_windows_powershell_constructor_fixture_never_opens_connection(self):
         self.assertIn("#requires -Version 5.1",PS_CREDENTIAL_TEST)
         self.assertIn("$secret.MakeReadOnly()",PS_CREDENTIAL_TEST)
         self.assertIn("Data.SqlClient.SqlCredential",PS_CREDENTIAL_TEST)
-        self.assertIn("$builder.IntegratedSecurity=$false",PS_CREDENTIAL_TEST)
-        self.assertIn("$connection.Credential=$credential",PS_CREDENTIAL_TEST)
+        self.assertIn("-Authentication SqlCredential -Credential $credential",PS_CREDENTIAL_TEST)
+        self.assertIn("-Authentication Integrated",PS_CREDENTIAL_TEST)
+        self.assertIn("$sqlConnection.Credential,$credential",PS_CREDENTIAL_TEST)
+        self.assertIn("$null-ne $integratedConnection.Credential",PS_CREDENTIAL_TEST)
         self.assertNotIn(".Open(",PS_CREDENTIAL_TEST)
         self.assertNotIn("Password=",PS_CREDENTIAL_TEST)
-        self.assertIn("$connection.Dispose()",PS_CREDENTIAL_TEST)
+        self.assertIn("$sqlConnection.Dispose()",PS_CREDENTIAL_TEST)
+        self.assertIn("$integratedConnection.Dispose()",PS_CREDENTIAL_TEST)
         self.assertIn("$secret.Dispose()",PS_CREDENTIAL_TEST)
 
     def test_integrated_auth_is_explicit_and_has_no_fallback(self):
-        self.assertIn("IntegratedSecurity=($Authentication-ceq 'Integrated')",PS)
+        self.assertIn("['Integrated Security']=($Authentication-ceq 'Integrated')",PS_CONNECTION_FACTORY)
         self.assertEqual(1,PS.count("Get-Credential"))
         self.assertNotIn("Authentication='Integrated'",PS)
         self.assertNotIn("Authentication = 'Integrated'",PS)
 
     def test_auth_tls_failures_are_sanitized_and_resources_are_closed(self):
-        self.assertIn("TrustServerCertificate=$false",PS);self.assertIn("Encrypt=$true",PS)
+        self.assertIn("['TrustServerCertificate']=$false",PS_CONNECTION_FACTORY);self.assertIn("['Encrypt']=$true",PS_CONNECTION_FACTORY)
         self.assertIn("AUTHENTICATION_OR_TLS_CONNECTION_FAILED",PS)
         self.assertNotIn("$_.Exception.ToString",PS)
         self.assertIn("'BASELINE_CAPTURE_FAILED'",PS)

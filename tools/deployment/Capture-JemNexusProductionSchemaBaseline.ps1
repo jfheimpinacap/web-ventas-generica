@@ -7,6 +7,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'New-JemNexusProductionBaselineSqlConnection.ps1')
 $Database='jemnexusb_prod'
 $SqlCredential=$null
 $Secret=$null
@@ -19,10 +20,7 @@ function Hash([Data.DataTable]$Table,[string[]]$Names){$lines=@($Table.Rows|ForE
 function Observe {
  $template=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Capture-JemNexusProductionSchemaBaseline.sql') -Raw
  $sql=$template.Replace('$(ExpectedProductionServer)',$ExpectedProductionServer.Replace("'","''"))
- $b=New-Object Data.SqlClient.SqlConnectionStringBuilder;$b.DataSource=$ExpectedProductionServer;$b.InitialCatalog=$Database;$b.IntegratedSecurity=($Authentication-ceq 'Integrated');$b.Encrypt=$true;$b.TrustServerCertificate=$false;$b.ApplicationIntent=[Data.SqlClient.ApplicationIntent]::ReadOnly;$b.ApplicationName='JemNexusBaselineReadOnly'
- if($Authentication-ceq 'SqlCredential' -and ($b.IntegratedSecurity-or -not [string]::IsNullOrEmpty($b.UserID)-or -not [string]::IsNullOrEmpty($b.Password))){throw 'AUTHENTICATION_CONFIGURATION_INVALID'}
- $c=New-Object Data.SqlClient.SqlConnection $b.ConnectionString
- if($Authentication-ceq 'SqlCredential'){$c.Credential=$SqlCredential}
+ $c=New-JemNexusProductionBaselineSqlConnection -Server $ExpectedProductionServer -Database $Database -Authentication $Authentication -Credential $SqlCredential
  try{
   try{$c.Open()}catch{throw 'AUTHENTICATION_OR_TLS_CONNECTION_FAILED'}
   $cmd=$c.CreateCommand();$cmd.CommandText=$sql;$cmd.CommandTimeout=30;$ds=New-Object Data.DataSet;$a=New-Object Data.SqlClient.SqlDataAdapter $cmd
@@ -52,7 +50,7 @@ try {
  $temp=Join-Path $parent ('.baseline-'+[Guid]::NewGuid().ToString('N')+'.tmp');try{[IO.File]::WriteAllText($temp,$json,(New-Object Text.UTF8Encoding($false)));Move-Item -LiteralPath $temp -Destination $full -ErrorAction Stop}finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
  Write-Output 'BASELINE_CAPTURE_VERIFIED_AND_SAVED'
 } catch {
- $allowed=@('EXPECTED_PRODUCTION_SERVER_REQUIRED','OUTPUT_DIRECTORY_MISSING','OUTPUT_ALREADY_EXISTS','SQL_CREDENTIAL_REQUIRED','AUTHENTICATION_CONFIGURATION_INVALID','AUTHENTICATION_OR_TLS_CONNECTION_FAILED','READ_ONLY_OBSERVATION_FAILED','INCOMPLETE_OBSERVATION','MIGRATIONS_MISMATCH','OBSERVATIONS_DIFFER_NO_GO')
+ $allowed=@('EXPECTED_PRODUCTION_SERVER_REQUIRED','OUTPUT_DIRECTORY_MISSING','OUTPUT_ALREADY_EXISTS','SQL_CREDENTIAL_REQUIRED','CONNECTION_CONFIGURATION_INVALID','AUTHENTICATION_CONFIGURATION_INVALID','AUTHENTICATION_OR_TLS_CONNECTION_FAILED','READ_ONLY_OBSERVATION_FAILED','INCOMPLETE_OBSERVATION','MIGRATIONS_MISMATCH','OBSERVATIONS_DIFFER_NO_GO')
  $diagnostic=$(if($_.Exception.Message-cin $allowed){$_.Exception.Message}else{'BASELINE_CAPTURE_FAILED'})
  Write-Error ('NO-GO: '+$diagnostic);exit 2
 } finally {if($null-ne $Secret){$Secret.Dispose();$Secret=$null};$SqlCredential=$null}
