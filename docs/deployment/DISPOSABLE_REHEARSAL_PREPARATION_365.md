@@ -32,14 +32,15 @@ Solo si ambas observaciones completas tienen **los mismos 22 IDs y las mismas si
 
 ### Comandos exactos en estación Windows aprobada
 
-En **Windows PowerShell 5.1**, desde la raíz del checkout revisado, cree previamente una carpeta privada con ACL limitada. Sustituya el nombre por el valor exacto que el DBA haya confirmado; no use alias, comodines ni `REPLACE_ME`:
+En **Windows PowerShell 5.1**, desde la raíz del checkout revisado, cree previamente una carpeta privada con ACL limitada. Declare por separado (1) el **endpoint de conexión** aprobado —el valor que irá en `Data Source`— y (2) la **identidad interna exacta** que el DBA haya confirmado que devuelve `SERVERPROPERTY('ServerName')`. Pueden y normalmente podrán ser diferentes: no deduzca una de la otra. No use valores vacíos, comodines ni `REPLACE_ME`. Para esta ejecución cree una ruta privada **nueva**, con un nombre de JSON que nunca se haya usado; el comando aborta si ya existe:
 
 La evidencia SSMS solo demuestra el principal productivo `jemnexusb_api`; no demuestra que la cuenta Windows local pueda autenticarse. Por ello se debe elegir explícitamente un modo. El modo normal solicita localmente una credencial SQL mediante el cuadro seguro de `Get-Credential`; la contraseña permanece como `SecureString`, se marca como solo lectura antes de construir `SqlCredential`, se reutiliza únicamente en memoria para las dos conexiones y se libera al finalizar. Cancelar el diálogo aborta antes de construir o abrir una conexión:
 
 ```powershell
-$server = 'NOMBRE-SQL-PRODUCTIVO-EXACTO'
-$evidence = 'C:\JemNexus-Evidence-Private\production-schema-baseline.json'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ExpectedProductionServer $server -OutputPath $evidence -Authentication SqlCredential
+$connectionEndpoint = 'ENDPOINT-SQL-APROBADO'
+$expectedServerIdentity = 'IDENTIDAD-INTERNA-SQL-EXACTA'
+$evidence = 'C:\JemNexus-Evidence-Private\NUEVA-RUTA-PRIVADA\production-schema-baseline-prompt370-new.json'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ConnectionEndpoint $connectionEndpoint -ExpectedServerIdentity $expectedServerIdentity -OutputPath $evidence -Authentication SqlCredential
 if ($LASTEXITCODE -ne 0) { throw 'NO-GO: baseline no creado' }
 Get-FileHash -LiteralPath $evidence -Algorithm SHA256 | Format-List Algorithm,Hash
 ```
@@ -47,18 +48,18 @@ Get-FileHash -LiteralPath $evidence -Algorithm SHA256 | Format-List Algorithm,Ha
 No escriba la contraseña en el comando, la consola, variables de entorno ni archivos. Si el DBA confirmó previamente que la identidad Windows del proceso tiene acceso y se desea usarla de forma explícita, el único comando alternativo es el siguiente; este modo no solicita credenciales y no intenta fallback a SQL:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ExpectedProductionServer $server -OutputPath $evidence -Authentication Integrated
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deployment\Capture-JemNexusProductionSchemaBaseline.ps1 -ConnectionEndpoint $connectionEndpoint -ExpectedServerIdentity $expectedServerIdentity -OutputPath $evidence -Authentication Integrated
 ```
 
 Ambos modos mantienen `Encrypt=True` y `TrustServerCertificate=False`. Un error de autenticación, cadena de confianza, nombre del certificado o conexión termina con el diagnóstico sanitizado `AUTHENTICATION_OR_TLS_CONNECTION_FAILED`: es **NO-GO**. No se permite activar `TrustServerCertificate`, deshabilitar cifrado ni cambiar automáticamente de autenticación. `ApplicationIntent=ReadOnly` expresa intención al servidor, pero **no es un permiso ni una barrera contra escrituras**; la protección de la herramienta es que su superficie ejecutable está fijada al SQL de lectura auditado, sin aceptar consultas arbitrarias.
 
-Para revisión DBA en **SSMS**, active `Query > SQLCMD Mode`, conéctese explícitamente a `jemnexusb_prod`, no abra una transacción, anteponga esta línea al archivo SQL y ejecute una sola observación:
+Para revisión DBA en **SSMS**, seleccione explícitamente el endpoint aprobado en el diálogo de conexión, conéctese a `jemnexusb_prod`, active `Query > SQLCMD Mode`, no abra una transacción y anteponga al archivo SQL la identidad interna esperada (no el endpoint). Ejecute una sola observación:
 
 ```sql
-:setvar ExpectedProductionServer "NOMBRE-SQL-PRODUCTIVO-EXACTO"
+:setvar ExpectedServerIdentity "IDENTIDAD-INTERNA-SQL-EXACTA"
 ```
 
-El resultado SSMS es solo diagnóstico: debe terminar en `OBSERVATION_COMPLETE`, no se guarda como baseline y no sustituye las dos conexiones del orquestador. No use “Results to File” como mecanismo de conversión. Guarde el JSON y su hash únicamente en la carpeta privada aprobada; registre en el ticket privado hora UTC, operador, equipo controlado, servidor esperado, estado final y SHA-256. No pegue en chat grandes result sets, rutas internas, nombres reales de host, cadenas, usuarios ni ninguna evidencia sensible.
+El resultado SSMS es solo diagnóstico: debe terminar en `OBSERVATION_COMPLETE`, no se guarda como baseline y no sustituye las dos conexiones del orquestador. No use “Results to File” como mecanismo de conversión. Guarde el JSON y su hash únicamente en la carpeta privada aprobada; registre en el ticket privado hora UTC, operador, equipo controlado, endpoint aprobado, identidad interna esperada, estado final y SHA-256. No pegue en chat grandes result sets, rutas internas, nombres reales de host, cadenas, usuarios ni ninguna evidencia sensible.
 
 Dos observaciones iguales son evidencia suficiente para diseñar y ensayar en LocalDB; **no garantizan el estado productivo futuro**. Debe repetirse el control de drift inmediatamente antes de cualquier eventual Apply. Este cambio no implementa ni autoriza Apply.
 
