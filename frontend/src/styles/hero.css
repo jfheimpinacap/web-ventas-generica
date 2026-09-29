@@ -8,7 +8,7 @@
   max-width: none;
   background: linear-gradient(120deg, var(--color-primary-dark), var(--color-primary) 56%, var(--color-accent));
   color: #ffffff;
-  border-radius: var(--radius-block);
+  border-radius: 0;
   padding: 2rem 3.4rem;
   box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
   overflow: hidden;

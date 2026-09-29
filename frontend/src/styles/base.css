@@ -73,6 +73,16 @@ a {
   margin: 0 auto;
 }
 
+.app-shell__body--edge-hero {
+  width: 100%;
+  max-width: none;
+  padding-inline: 0;
+}
+
+.app-shell__body--edge-hero .main-content > :not(.hero-section) {
+  margin-inline: 1rem;
+}
+
 
 
 .footer {

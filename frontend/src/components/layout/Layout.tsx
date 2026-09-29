@@ -10,9 +10,10 @@ interface LayoutProps extends PropsWithChildren {
   onSearch?: (term: string) => void
   mobileProduct?: { id: number; name: string; product_type: string } | null
   suppressMobileConversion?: boolean
+  fullWidthHero?: boolean
 }
 
-export function Layout({ children, mobileProduct, suppressMobileConversion = false }: LayoutProps) {
+export function Layout({ children, mobileProduct, suppressMobileConversion = false, fullWidthHero = false }: LayoutProps) {
   const location = useLocation()
   const showSidebar = ['/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios'].includes(location.pathname)
   const generalRoutes = ['/', '/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios', '/sobre-nosotros', '/preguntas-frecuentes']
@@ -21,7 +22,7 @@ export function Layout({ children, mobileProduct, suppressMobileConversion = fal
   return (
     <div className={`app-shell${showMobileConversion ? ' app-shell--mobile-conversion' : ''}`}>
       <Topbar />
-      <div className={`app-shell__body ${showSidebar ? "" : "app-shell__body--full"}`.trim()}>
+      <div className={`app-shell__body ${showSidebar ? "" : "app-shell__body--full"} ${fullWidthHero ? 'app-shell__body--edge-hero' : ''}`.trim()}>
         {showSidebar ? <Sidebar /> : null}
         <main id="main-content" className="main-content" tabIndex={-1}>{children}</main>
       </div>

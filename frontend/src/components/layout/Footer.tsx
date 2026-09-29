@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 
 const CATEGORY_FALLBACKS = {
   maquinaria: '/catalogo',
-  repuestos: '/repuestos',
   servicios: '/servicios',
 }
 
@@ -37,9 +36,6 @@ export function Footer() {
           </li>
           <li>
             <Link to={CATEGORY_FALLBACKS.maquinaria}>Catálogo de maquinaria</Link>
-          </li>
-          <li>
-            <Link to={CATEGORY_FALLBACKS.repuestos}>Repuestos</Link>
           </li>
           <li>
             <Link to={CATEGORY_FALLBACKS.servicios}>Servicios</Link>

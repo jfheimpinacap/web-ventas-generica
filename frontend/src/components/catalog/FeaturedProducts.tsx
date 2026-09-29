@@ -51,28 +51,12 @@ export function FeaturedProducts() {
 
 
   const machineryConfigured = useMemo(() => fromSection(homeItems, 'machinery_promotions'), [homeItems])
-  const sparePartsConfigured = useMemo(() => fromSection(homeItems, 'spare_parts_offers'), [homeItems])
   const servicesConfigured = useMemo(() => fromSection(homeItems, 'repair_services'), [homeItems])
 
   const machineryProducts = useMemo(
     () => (machineryConfigured.length > 0 ? machineryConfigured.slice(0, 12) : sourceProducts.filter((product) => product.product_type === 'machinery').slice(0, 12)),
     [machineryConfigured, sourceProducts],
   )
-  const sparePartsDisplayCount = isMobile ? 4 : 6
-
-  const sparePartProducts = useMemo(() => {
-    const automaticProducts = sourceProducts.filter((product) => product.product_type === 'spare_part').slice(0, sparePartsDisplayCount)
-
-    if (sparePartsConfigured.length === 0) {
-      return automaticProducts
-    }
-
-    const configuredIds = new Set(sparePartsConfigured.map((product) => product.id))
-    const fallbackProducts = automaticProducts.filter((product) => !configuredIds.has(product.id))
-
-    return [...sparePartsConfigured, ...fallbackProducts].slice(0, sparePartsDisplayCount)
-  }, [sparePartsConfigured, sourceProducts, sparePartsDisplayCount])
-
   const serviceProducts = useMemo(
     () => (servicesConfigured.length > 0 ? servicesConfigured.slice(0, 4) : sourceProducts.filter((product) => product.product_type === 'service').slice(0, 4)),
     [servicesConfigured, sourceProducts],
@@ -148,40 +132,6 @@ export function FeaturedProducts() {
         <div className="home-section__more">
           <Link className="btn btn--outline" to="/maquinaria-nueva">
             Ver maquinaria nueva
-          </Link>
-        </div>
-      </section>
-
-      <section className="spare-offers">
-        <div className="section-heading">
-          <h2>Oferta en repuestos</h2>
-        </div>
-
-        <div className="spare-offers__grid">
-          {sparePartProducts.map((product, index) => {
-            const imageUrl = resolveMediaUrl(product?.main_image?.image) || PLACEHOLDER_IMAGE
-            return (
-              <article key={product.id} className={`spare-offer-card ${index === 0 || index === 5 ? 'spare-offer-card--large' : ''}`}>
-                <Link className="spare-offer-card__image-link" to={`/producto/${product.slug}`} aria-label={`Ver detalle de ${product.name}`}>
-                  <img src={imageUrl} alt={product?.main_image?.alt_text || product.name} loading="lazy" />
-                </Link>
-                <div className="spare-offer-card__content">
-                  <span>Oferta destacada</span>
-                  <h3>{product.name}</h3>
-                  <p className="home-product-price">{formatPrice(product) || 'Consulta precio y disponibilidad'}</p>
-                  {product.slug ? (
-                    <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: 'spare_offers' })}>
-                      Ver detalle
-                    </Link>
-                  ) : null}
-                </div>
-              </article>
-            )
-          })}
-        </div>
-        <div className="home-section__more">
-          <Link className="btn btn--outline" to="/repuestos">
-            Ver repuestos
           </Link>
         </div>
       </section>

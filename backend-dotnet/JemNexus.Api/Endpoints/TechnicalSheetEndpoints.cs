@@ -28,11 +28,21 @@ public static class TechnicalSheetEndpoints
         return endpoints;
     }
 
-    private static async Task<IResult> ListAsync(string? search, JemNexusDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListAsync(string? search, int? page, int? pageSize, JemNexusDbContext db, CancellationToken ct)
     {
         var query = db.TechnicalSheets.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.Name.Contains(search.Trim()));
-        var items = await query.OrderByDescending(x => x.UpdatedAt).ToListAsync(ct);
+        var ordered = query.OrderByDescending(x => x.UpdatedAt);
+        if (page.HasValue || pageSize.HasValue)
+        {
+            var requestedPage = Math.Max(1, page ?? 1);
+            var requestedPageSize = Math.Clamp(pageSize ?? 20, 1, 50);
+            var totalCount = await query.CountAsync(ct);
+            var itemsPage = await ordered.Skip((requestedPage - 1) * requestedPageSize).Take(requestedPageSize).ToListAsync(ct);
+            var results = itemsPage.Select(TechnicalSheetDtoMapper.ToResponse).ToList();
+            return Results.Ok(new TechnicalSheetPageResponse(results, requestedPage, requestedPageSize, totalCount, Math.Max(1, (int)Math.Ceiling(totalCount / (double)requestedPageSize))));
+        }
+        var items = await ordered.ToListAsync(ct);
         return Results.Ok(items.Select(TechnicalSheetDtoMapper.ToResponse));
     }
 

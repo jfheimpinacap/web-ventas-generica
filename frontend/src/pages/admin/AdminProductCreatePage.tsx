@@ -7,7 +7,7 @@ import { ProductForm } from '../../components/admin/ProductForm'
 import { ProductImageManager } from '../../components/admin/ProductImageManager'
 import { ProductAdminPreview } from '../../components/admin/ProductAdminPreview'
 import { usePendingProductImages } from '../../hooks/usePendingProductImages'
-import { createProduct, createProductImage, getTechnicalSheets } from '../../services/adminApi'
+import { createProduct, createProductImage } from '../../services/adminApi'
 import { getAdminBrands, getAdminCategories, getAdminSuppliers } from '../../services/adminApi'
 import { getSafeApiErrorMessage } from '../../services/api'
 import { useToast } from '../../toasts/ToastContext'
@@ -68,16 +68,14 @@ export function AdminProductCreatePage() {
     const load = async () => {
       try {
         setError(null)
-        const [categoriesData, brandsData, suppliersData, technicalSheetsData] = await Promise.all([
+        const [categoriesData, brandsData, suppliersData] = await Promise.all([
           getAdminCategories(),
           getAdminBrands(),
           getAdminSuppliers(),
-          getTechnicalSheets(),
         ])
         setCategories(categoriesData)
         setBrands(brandsData)
         setSuppliers(suppliersData)
-        setTechnicalSheets(technicalSheetsData)
       } catch {
         setError('No fue posible cargar datos del formulario.')
       } finally {

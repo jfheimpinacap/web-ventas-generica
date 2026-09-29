@@ -36,7 +36,7 @@ export function HomePage() {
   const pageJsonLd = buildPageJsonLd('/', 'WebPage', false)
 
   return (
-    <Layout onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')}>
+    <Layout fullWidthHero onSearch={(term) => navigate(term ? `/catalogo?search=${encodeURIComponent(term)}` : '/')}>
       <Seo
         {...getStaticSeo('/')}
         ogType="website"

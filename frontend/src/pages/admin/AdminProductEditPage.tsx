@@ -19,7 +19,6 @@ import {
   getAdminProduct,
   getProductImages,
   getProductSpecs,
-  getTechnicalSheets,
   updateProduct,
   updateProductImage,
   updateProductSpec,
@@ -166,13 +165,12 @@ export function AdminProductEditPage() {
     const load = async () => {
       try {
         setError(null);
-        const [product, categoriesData, brandsData, suppliersData, technicalSheetsData] =
+        const [product, categoriesData, brandsData, suppliersData] =
           await Promise.all([
             getAdminProduct(slug),
             getAdminCategories(),
             getAdminBrands(),
             getAdminSuppliers(),
-            getTechnicalSheets(),
           ]);
 
         const [imagesData, specsData] = await Promise.all([
@@ -187,7 +185,7 @@ export function AdminProductEditPage() {
         setCategories(categoriesData);
         setBrands(brandsData);
         setSuppliers(suppliersData);
-        setTechnicalSheets(technicalSheetsData);
+        setTechnicalSheets(product.technical_sheet ? [product.technical_sheet] : []);
         setImages(imagesData);
         setSpecs(specsData);
       } catch {
