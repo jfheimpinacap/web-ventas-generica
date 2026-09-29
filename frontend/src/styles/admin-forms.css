@@ -1107,7 +1107,9 @@
 .admin-technical-sheet-picker { display: grid; gap: .45rem; align-content: start; }
 .admin-technical-sheet-picker__controls { display: flex; flex-wrap: wrap; gap: .5rem; }
 .admin-technical-sheet-picker output { color: var(--admin-text-muted, #475569); }
-.technical-sheet-search__results { list-style: none; margin: 0; padding: 0 1.25rem; }
+.technical-sheet-search-modal { width: min(480px, 100%); }
+.technical-sheet-search__results { min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0 1.25rem; }
 .technical-sheet-search__results li { border-bottom: 1px solid var(--admin-border, #cbd5e1); }
-.technical-sheet-search__results button { display: flex; justify-content: space-between; gap: 1rem; width: 100%; padding: .85rem 0; border: 0; background: transparent; text-align: left; }
+.technical-sheet-search__results button { display: block; width: 100%; padding: .85rem 0; border: 0; background: transparent; text-align: left; }
+.technical-sheet-search__results strong { display: block; min-width: 0; overflow-wrap: anywhere; }
 .technical-sheet-search__results button:hover, .technical-sheet-search__results button:focus-visible { color: var(--admin-primary, #185f87); background: #f1f5f9; }

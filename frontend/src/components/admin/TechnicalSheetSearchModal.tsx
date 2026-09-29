@@ -48,11 +48,11 @@ export function TechnicalSheetSearchModal({ onSelect, onClose }: { onSelect: (sh
 
   const message = status === 'initial' ? 'Escribe al menos 2 caracteres del modelo o nombre de la ficha.' : status === 'loading' ? 'Buscando fichas técnicas…' : status === 'empty' ? 'No se encontraron fichas técnicas.' : status === 'error' ? 'No fue posible realizar la búsqueda. Intenta nuevamente.' : null
   return <div className="commercial-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}>
-    <div ref={panelRef} className="commercial-modal__panel product-search-modal" role="dialog" aria-modal="true" aria-labelledby="technical-sheet-search-title">
+    <div ref={panelRef} className="commercial-modal__panel product-search-modal technical-sheet-search-modal" role="dialog" aria-modal="true" aria-labelledby="technical-sheet-search-title">
       <header className="product-search-modal__header"><h2 id="technical-sheet-search-title">Buscar ficha técnica</h2><button className="product-search-modal__close" type="button" onClick={close} aria-label="Cerrar búsqueda"><AdminIcon name="close" /></button></header>
       <label className="product-search-modal__search" htmlFor="technical-sheet-search">Modelo de la máquina o nombre de la ficha<input ref={inputRef} id="technical-sheet-search" type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} autoComplete="off" /></label>
       {message ? <div className="product-search-modal__status" role={status === 'error' ? 'alert' : 'status'}>{message}</div> : null}
-      {status === 'results' ? <ul className="technical-sheet-search__results">{items.map((sheet) => <li key={sheet.id}><button type="button" onClick={() => onSelect(sheet)}><strong>{sheet.name || 'Ficha sin nombre'}</strong><span>ID {sheet.id}</span></button></li>)}</ul> : null}
+      {status === 'results' ? <ul className="technical-sheet-search__results">{items.map((sheet) => <li key={sheet.id}><button type="button" onClick={() => onSelect(sheet)}><strong>{sheet.name || 'Ficha sin nombre'}</strong></button></li>)}</ul> : null}
       {status === 'results' && totalPages > 1 ? <nav className="commercial-pagination" aria-label="Páginas de fichas"><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {totalPages}</span><button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</button></nav> : null}
       <footer className="product-search-modal__actions"><button className="btn btn--secondary" type="button" onClick={close}>Cancelar</button></footer>
     </div>
