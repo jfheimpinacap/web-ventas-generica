@@ -6,10 +6,6 @@ export const sidebarMenu: SidebarMenuItem[] = [
     to: '/catalogo',
   },
   {
-    label: 'Repuestos',
-    to: '/repuestos',
-  },
-  {
     label: 'Servicios',
     to: '/servicios',
   },

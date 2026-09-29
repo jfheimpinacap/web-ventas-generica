@@ -23,7 +23,7 @@ export function PublicSearchStrip({ onSearch }: PublicSearchStripProps) {
       <div className="public-search-strip__inner">
         <SearchBox
           className="search-box--primary"
-          placeholder="Busca maquinaria, repuestos y servicios"
+          placeholder="Busca maquinaria y servicios"
           onSearch={handleSearch}
           showCatalogButton
         />

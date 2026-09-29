@@ -37,7 +37,7 @@ import { AdminCustomerFormPage } from '../pages/admin/AdminCustomerFormPage'
 
 const newMachineryConfig: CommercialCatalogConfig = {
   title: 'Maquinaria nueva',
-  description: 'Revisa equipos publicados como nuevos, consulta su información técnica y prepara una solicitud de cotización.',
+  description: '',
   canonicalPath: '/maquinaria-nueva',
   fixedProductType: 'machinery',
   fixedCondition: 'new',
@@ -45,7 +45,7 @@ const newMachineryConfig: CommercialCatalogConfig = {
 
 const usedMachineryConfig: CommercialCatalogConfig = {
   title: 'Maquinaria usada',
-  description: 'Compara los equipos publicados como usados y revisa los antecedentes disponibles antes de solicitar una cotización.',
+  description: '',
   canonicalPath: '/maquinaria-usada',
   fixedProductType: 'machinery',
   fixedCondition: 'used',

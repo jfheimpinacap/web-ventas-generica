@@ -65,36 +65,44 @@
   min-height: 44px;
   padding: 0.42rem 0.72rem;
   border-radius: var(--radius-button);
-  border: 1px solid var(--color-accent-soft);
-  background: rgba(202, 240, 248, 0.14);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--color-text-on-dark);
   font-weight: 600;
-  line-height: 1;
+  font-size: 1rem;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
 .topbar__search {
-  display: flex;
+  display: block;
+  position: relative;
   width: 100%;
   min-width: 0;
-  gap: 0.45rem;
 }
 
 .topbar__search input {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
+  padding-right: 3rem;
 }
 
 .topbar__search button {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
   min-width: 44px;
   min-height: 44px;
   flex: 0 0 auto;
-  border-radius: var(--radius-button);
-  border: 1px solid var(--color-accent-soft);
-  background: var(--color-primary);
-  color: #ffffff;
+  border: 0;
+  border-radius: 0 var(--radius-button) var(--radius-button) 0;
+  background: transparent;
+  color: var(--color-primary-dark);
   padding: 0.4rem 0.6rem;
 }
+
+.topbar__search button svg { width: 1.2rem; height: 1.2rem; }
 
 .topbar__actions {
   display: flex;
@@ -116,30 +124,33 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.42rem 0.68rem;
   border-radius: var(--radius-button);
-  border: 1px solid var(--color-accent-soft);
-  background: var(--color-primary-dark);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--color-text-on-dark);
   font-weight: 600;
+  font-size: 1rem;
   line-height: 1.1;
   white-space: nowrap;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .topbar__top-link:hover,
-.topbar__top-link.active {
+.topbar__top-link.active,
+.topbar__top-link:focus-visible,
+.topbar__categories-btn:hover,
+.topbar__categories-btn:focus-visible {
   background: var(--color-primary);
   border-color: var(--color-accent);
   color: #ffffff;
 }
 
 .topbar__top-link--quote {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #ffffff;
-  font-weight: 700;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 600;
 }
 
 .topbar__whatsapp-contact {
@@ -147,13 +158,16 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-button);
   border: 1px solid #22c55e;
   background: #16a34a;
   color: #ffffff;
   white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
 }
 
 .topbar__whatsapp-icon {

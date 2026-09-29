@@ -163,6 +163,20 @@ public sealed class TechnicalSheetTests : IDisposable
         Assert.Equal("Ficha Genie", items[0].GetProperty("name").GetString());
     }
 
+    [Fact]
+    public async Task SearchCanReturnABoundedPage()
+    {
+        using var client = await CreateAuthorizedClientAsync();
+        await CreateAsync(client, "Modelo Uno", "uno.pdf", "%PDF-a"u8.ToArray());
+        await CreateAsync(client, "Modelo Dos", "dos.pdf", "%PDF-b"u8.ToArray());
+
+        var page = await ReadJsonAsync<JsonElement>(await client.GetAsync("/api/technical-sheets/?search=Modelo&page=1&page_size=1"));
+
+        Assert.Single(page.GetProperty("results").EnumerateArray());
+        Assert.Equal(2, page.GetProperty("total_count").GetInt32());
+        Assert.Equal(2, page.GetProperty("total_pages").GetInt32());
+    }
+
     [Theory]
     [InlineData("GET", "/api/technical-sheets/999/")]
     [InlineData("PATCH", "/api/technical-sheets/999/")]

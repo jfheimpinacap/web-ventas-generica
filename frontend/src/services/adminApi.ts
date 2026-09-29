@@ -935,6 +935,11 @@ export async function getTechnicalSheets(search = '') {
   return authFetch<TechnicalSheet[]>('/technical-sheets/', { params: { search } })
 }
 
+export interface TechnicalSheetPage { results: TechnicalSheet[]; page: number; page_size: number; total_count: number; total_pages: number }
+export async function searchTechnicalSheets(search: string, page = 1, signal?: AbortSignal) {
+  return authFetch<TechnicalSheetPage>('/technical-sheets/', { params: { search, page, page_size: 10 }, signal })
+}
+
 export async function createTechnicalSheet(name: string, file: File) {
   const body = new FormData()
   body.append('name', name)

@@ -32,7 +32,6 @@ export function AboutPage() {
 
         <div className="trust-page__grid">
           <article className="trust-page__card"><h2>Maquinaria</h2><p>Equipos para operación industrial con información comercial y técnica.</p></article>
-          <article className="trust-page__card"><h2>Repuestos</h2><p>Componentes y piezas para continuidad operativa según requerimiento.</p></article>
           <article className="trust-page__card"><h2>Servicios</h2><p>Opciones asociadas a reparación y mantención industrial, según disponibilidad.</p></article>
           <article className="trust-page__card"><h2>Atención comercial</h2><p>Acompañamiento para validar disponibilidad, precio y alternativa adecuada.</p></article>
         </div>

@@ -1104,3 +1104,10 @@
 .admin-confirm-dialog__actions { display: flex; justify-content: flex-end; gap: .75rem; padding: 1rem 1.25rem; border-top: 1px solid var(--admin-border); background: var(--admin-surface-muted, #f8fafc); }
 .admin-confirm-dialog :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 @media (max-width: 480px) { .admin-confirm-dialog__actions { flex-direction: column-reverse; } .admin-confirm-dialog__actions .btn { width: 100%; } }
+.admin-technical-sheet-picker { display: grid; gap: .45rem; align-content: start; }
+.admin-technical-sheet-picker__controls { display: flex; flex-wrap: wrap; gap: .5rem; }
+.admin-technical-sheet-picker output { color: var(--admin-text-muted, #475569); }
+.technical-sheet-search__results { list-style: none; margin: 0; padding: 0 1.25rem; }
+.technical-sheet-search__results li { border-bottom: 1px solid var(--admin-border, #cbd5e1); }
+.technical-sheet-search__results button { display: flex; justify-content: space-between; gap: 1rem; width: 100%; padding: .85rem 0; border: 0; background: transparent; text-align: left; }
+.technical-sheet-search__results button:hover, .technical-sheet-search__results button:focus-visible { color: var(--admin-primary, #185f87); background: #f1f5f9; }

@@ -6,12 +6,12 @@ import { useCategories } from '../../hooks/useCategories'
 import { sidebarMenu } from '../../data/sidebarMenu'
 import { buildSidebarMenuFromCategories } from '../../utils/formatters'
 import { SidebarMenu } from './SidebarMenu'
+import { publicCategories } from '../../utils/publicCategories'
 
 const CONDITION_OPTIONS = [
   { value: 'new', label: 'Nuevo' },
   { value: 'used', label: 'Usado' },
   { value: 'refurbished', label: 'Reacondicionado' },
-  { value: 'not_applicable', label: 'No aplica' },
 ]
 
 
@@ -28,8 +28,6 @@ type MobileFilterSection = {
 const STOCK_OPTIONS = [
   { value: 'available', label: 'Disponible' },
   { value: 'on_request', label: 'A pedido' },
-  { value: 'reserved', label: 'Reservado' },
-  { value: 'sold', label: 'Vendido' },
 ]
 
 export function Sidebar() {
@@ -44,11 +42,11 @@ export function Sidebar() {
 
   const menuItems = useMemo(() => {
     if (categories.length === 0 || error) return sidebarMenu
-    return buildSidebarMenuFromCategories(categories)
+    return buildSidebarMenuFromCategories(publicCategories(categories))
   }, [categories, error])
 
   const activeCategories = useMemo(
-    () => categories
+    () => publicCategories(categories)
       .filter((category) => category.is_active !== false)
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
     [categories],

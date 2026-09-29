@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { Category } from '../../types/catalog'
+import { publicCategories } from '../../utils/publicCategories'
 
 interface CategoriesMegaMenuProps {
   isOpen: boolean
@@ -33,9 +34,10 @@ function chunkByCount<T>(items: T[], columns: number) {
 export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null, onClose }: CategoriesMegaMenuProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(activeCategoryId)
   const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<number[]>([])
+  const visibleCategories = useMemo(() => publicCategories(categories), [categories])
 
   const roots = useMemo<MenuCategory[]>(() => {
-    const apiRoots = categories
+    const apiRoots = visibleCategories
       .filter((category) => category.parent === null && category.is_active !== false)
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
       .map((category) => ({
@@ -46,11 +48,11 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
       }))
 
     return apiRoots
-  }, [categories])
+  }, [visibleCategories])
 
   const childrenByParent = useMemo(() => {
     const map = new Map<number, Category[]>()
-    categories
+    visibleCategories
       .filter((category) => category.parent !== null && category.is_active !== false)
       .forEach((category) => {
         const parentId = category.parent as number
@@ -67,7 +69,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
     })
 
     return map
-  }, [categories])
+  }, [visibleCategories])
 
   useEffect(() => {
     if (!isOpen) return

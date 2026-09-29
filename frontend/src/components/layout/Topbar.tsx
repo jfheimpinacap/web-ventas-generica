@@ -64,12 +64,10 @@ export function Topbar() {
             type="search"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Busca maquinaria, repuestos y servicios"
+            placeholder="Busca maquinaria y servicios"
             aria-label="Buscar productos"
           />
-          <button type="submit" aria-label="Buscar">
-            🔍
-          </button>
+          <button type="submit" aria-label="Buscar"><svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m16 16 5 5" fill="none" stroke="currentColor" strokeWidth="2" /></svg></button>
         </form>
 
         <Link className="topbar__top-link topbar__top-link--contact" to="/contacto">

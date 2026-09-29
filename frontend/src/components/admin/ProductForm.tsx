@@ -4,6 +4,7 @@ import type { Brand, Category, ProductCondition, ProductFormValues, ProductPower
 import { getRootCategory, inferProductTypeFromRootCategory, isValidChileanPriceInput, normalizeChileanPriceInput } from '../../utils/formatters'
 import { ProductEditorActions } from './ProductEditorActions'
 import { ConfirmDialog } from './ConfirmDialog'
+import { TechnicalSheetSearchModal } from './TechnicalSheetSearchModal'
 
 interface ProductFormProps {
   initialValues: ProductFormValues
@@ -131,6 +132,8 @@ export function ProductForm({
   const [shortDescriptionError, setShortDescriptionError] = useState<string | null>(null)
   const shortDescriptionRef = useRef<HTMLTextAreaElement>(null)
   const [pendingProductType, setPendingProductType] = useState<ProductType | null>(null)
+  const [technicalSheetModalOpen, setTechnicalSheetModalOpen] = useState(false)
+  const [selectedTechnicalSheet, setSelectedTechnicalSheet] = useState<TechnicalSheet | null>(() => technicalSheets.find((item) => item.id === initialValues.technical_sheet) ?? null)
   const pendingTabRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -171,7 +174,9 @@ export function ProductForm({
   const isExistingRootSelection = usesOptionalSubcategory && selectedCategory?.id === selectedRoot?.id
   const brandsOptions = useMemo(() => brands.filter((item) => item.is_active), [brands])
   const suppliersOptions = useMemo(() => suppliers.filter((item) => item.is_active), [suppliers])
-  const technicalSheetOptions = useMemo(() => [...technicalSheets].sort((a, b) => a.name.localeCompare(b.name, 'es')), [technicalSheets])
+  useEffect(() => {
+    setSelectedTechnicalSheet(technicalSheets.find((item) => item.id === initialValues.technical_sheet) ?? null)
+  }, [initialValues.technical_sheet, technicalSheets])
 
   const setField = <K extends keyof ProductFormValues>(field: K, nextValue: ProductFormValues[K]) => {
     setValues((prev) => {
@@ -557,13 +562,14 @@ export function ProductForm({
         </> : null}
 
         {values.product_type !== 'service' ? (
-        <label>
-          Ficha técnica
-          <select value={values.technical_sheet ?? ''} onChange={(e) => setField('technical_sheet', toNullableNumber(e.target.value))}>
-            <option value="">Sin ficha técnica</option>
-            {technicalSheetOptions.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.original_file_name}</option>)}
-          </select>
-        </label>
+        <div className="admin-technical-sheet-picker">
+          <span>Ficha técnica</span>
+          <div className="admin-technical-sheet-picker__controls">
+            <button className="btn btn--secondary" type="button" onClick={() => setTechnicalSheetModalOpen(true)}>Buscar ficha técnica</button>
+            {values.technical_sheet ? <button className="btn btn--ghost" type="button" onClick={() => { setField('technical_sheet', null); setSelectedTechnicalSheet(null) }}>Quitar selección</button> : null}
+          </div>
+          <output>{selectedTechnicalSheet ? `${selectedTechnicalSheet.name || 'Ficha sin nombre'} (ID ${selectedTechnicalSheet.id})` : 'Sin ficha técnica'}</output>
+        </div>
         ) : null}
 
         <label className="admin-form-panel__full">
@@ -585,6 +591,7 @@ export function ProductForm({
 
       {submitBlocked && submitBlockedMessage ? <p className="ui-note" role="status" aria-live="polite">{submitBlockedMessage}</p> : null}
       <ProductEditorActions formId={formId} isSubmitting={isSubmitting} onCancel={onCancel} submitBlocked={submitBlocked} />
+      {technicalSheetModalOpen ? <TechnicalSheetSearchModal onClose={() => setTechnicalSheetModalOpen(false)} onSelect={(sheet) => { setSelectedTechnicalSheet(sheet); setField('technical_sheet', sheet.id); setTechnicalSheetModalOpen(false) }} /> : null}
     </form>
   )
 }

@@ -308,7 +308,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
 
         <div className="section-heading catalog-page__heading" ref={headingRef}>
           <h1>{searchOnlyView ? 'Resultados de búsqueda' : pageTitle}</h1>
-          {commercialConfig ? <p className="catalog-page__description">{commercialConfig.description}</p> : !searchOnlyView ? (
+          {commercialConfig?.description ? <p className="catalog-page__description">{commercialConfig.description}</p> : !commercialConfig && !searchOnlyView ? (
             <p className="catalog-page__description">Explora las publicaciones disponibles de maquinaria, repuestos y servicios.</p>
           ) : null}
         </div>
