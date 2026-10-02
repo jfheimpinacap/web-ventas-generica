@@ -11,188 +11,102 @@ interface CategoriesMegaMenuProps {
   onClose: () => void
 }
 
-type MenuCategory = {
-  id: number
-  name: string
-  href: string
-  order: number
-}
-
 function categoryHref(category: Category) {
   return `/catalogo?category=${category.id}`
 }
 
-function chunkByCount<T>(items: T[], columns: number) {
-  if (items.length === 0) return []
-  const safeColumns = Math.max(1, columns)
-  const chunkSize = Math.ceil(items.length / safeColumns)
-  return Array.from({ length: safeColumns }, (_, columnIndex) =>
-    items.slice(columnIndex * chunkSize, columnIndex * chunkSize + chunkSize),
-  ).filter((column) => column.length > 0)
+function Descendants({ parentId, childrenByParent, onClose, level = 0 }: {
+  parentId: number
+  childrenByParent: Map<number, Category[]>
+  onClose: () => void
+  level?: number
+}) {
+  const children = childrenByParent.get(parentId) ?? []
+  if (!children.length) return null
+  return (
+    <ul className="categories-modal__branch" data-level={level}>
+      {children.map((category) => (
+        <li key={category.id}>
+          <Link to={categoryHref(category)} onClick={onClose}>{category.name}</Link>
+          <Descendants parentId={category.id} childrenByParent={childrenByParent} onClose={onClose} level={level + 1} />
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null, onClose }: CategoriesMegaMenuProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(activeCategoryId)
   const [expandedMobileCategoryIds, setExpandedMobileCategoryIds] = useState<number[]>([])
-  const visibleCategories = useMemo(() => publicCategories(categories), [categories])
-
-  const roots = useMemo<MenuCategory[]>(() => {
-    const apiRoots = visibleCategories
-      .filter((category) => category.parent === null && category.is_active !== false)
-      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
-      .map((category) => ({
-        id: category.id,
-        name: category.name,
-        href: categoryHref(category),
-        order: category.order,
-      }))
-
-    return apiRoots
-  }, [visibleCategories])
-
+  const visibleCategories = useMemo(
+    () => publicCategories(categories).filter((category) => category.is_active !== false),
+    [categories],
+  )
+  const roots = useMemo(
+    () => visibleCategories.filter((category) => category.parent === null)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+    [visibleCategories],
+  )
   const childrenByParent = useMemo(() => {
     const map = new Map<number, Category[]>()
-    visibleCategories
-      .filter((category) => category.parent !== null && category.is_active !== false)
-      .forEach((category) => {
-        const parentId = category.parent as number
-        const existing = map.get(parentId) ?? []
-        existing.push(category)
-        map.set(parentId, existing)
-      })
-
-    map.forEach((items, key) => {
-      map.set(
-        key,
-        [...items].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
-      )
+    visibleCategories.forEach((category) => {
+      if (category.parent === null) return
+      map.set(category.parent, [...(map.get(category.parent) ?? []), category])
     })
-
+    map.forEach((items) => items.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)))
     return map
   }, [visibleCategories])
 
   useEffect(() => {
     if (!isOpen) return
-
-    const fallbackCategory = roots[0]?.id ?? null
-    const nextCategoryId = activeCategoryId && roots.some((category) => category.id === activeCategoryId) ? activeCategoryId : fallbackCategory
-    setSelectedCategoryId(nextCategoryId)
-    setExpandedMobileCategoryIds(nextCategoryId ? [nextCategoryId] : [])
+    const next = roots.some((root) => root.id === activeCategoryId) ? activeCategoryId : roots[0]?.id ?? null
+    setSelectedCategoryId(next)
+    setExpandedMobileCategoryIds(next ? [next] : [])
   }, [activeCategoryId, isOpen, roots])
 
   if (!isOpen) return null
-
-  const selectedCategory = roots.find((category) => category.id === selectedCategoryId) ?? roots[0] ?? null
-  const subcategories = selectedCategory ? childrenByParent.get(selectedCategory.id) ?? [] : []
-  const columns = chunkByCount(subcategories, subcategories.length > 18 ? 3 : subcategories.length > 8 ? 2 : 1)
-  const toggleMobileCategory = (categoryId: number) => {
-    setExpandedMobileCategoryIds((current) =>
-      current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId],
-    )
-  }
+  const selected = roots.find((root) => root.id === selectedCategoryId) ?? roots[0] ?? null
+  const toggleMobile = (id: number) => setExpandedMobileCategoryIds((current) =>
+    current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
 
   return (
-    <div className="categories-modal" role="presentation" onClick={onClose}>
-      <section
-        id="categories-mega-menu" className="categories-modal__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Navegación de categorías"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="categories-modal__close" onClick={onClose} aria-label="Cerrar categorías">
-          ✕
-        </button>
-
-        <div className="categories-modal__content">
-          <nav className="categories-modal__roots" aria-label="Categorías principales">
-            {roots.map((category) => {
-              const isSelected = selectedCategory?.id === category.id
-              return (
-                <Link
-                  key={category.id}
-                  to={category.href}
-                  className={`categories-modal__root-link ${isSelected ? 'categories-modal__root-link--active' : ''}`.trim()}
-                  onMouseEnter={() => setSelectedCategoryId(category.id)}
-                  onFocus={() => setSelectedCategoryId(category.id)}
-                  onClick={onClose}
-                >
-                  <span>{category.name}</span>
-                  <span aria-hidden="true">›</span>
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div className="categories-modal__subs" aria-live="polite">
-            {columns.length > 0 ? (
-              <div className="categories-modal__sub-grid">
-                {columns.map((column, index) => (
-                  <ul key={`${selectedCategory?.id ?? 'none'}-${index}`}>
-                    {column.map((subcategory) => (
-                      <li key={subcategory.id}>
-                        <Link to={categoryHref(subcategory)} onClick={onClose}>
-                          {subcategory.name}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ))}
+    <div className="categories-modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section id="categories-mega-menu" className="categories-modal__panel" aria-label="Navegación de categorías">
+        <button type="button" className="categories-modal__close" onClick={onClose} aria-label="Cerrar categorías">✕</button>
+        {roots.length ? (
+          <>
+            <div className="categories-modal__content">
+              <nav className="categories-modal__roots" aria-label="Categorías principales">
+                {roots.map((category) => {
+                  const hasChildren = Boolean(childrenByParent.get(category.id)?.length)
+                  const isSelected = selected?.id === category.id
+                  return (
+                    <div className={`categories-modal__root-row${isSelected ? ' is-active' : ''}`} key={category.id} onMouseEnter={() => setSelectedCategoryId(category.id)}>
+                      <Link to={categoryHref(category)} onClick={onClose}>{category.name}</Link>
+                      {hasChildren ? <button type="button" aria-expanded={isSelected} aria-controls={`mega-children-${category.id}`} aria-label={`Mostrar subcategorías de ${category.name}`} onClick={() => setSelectedCategoryId(category.id)}>›</button> : null}
+                    </div>
+                  )
+                })}
+              </nav>
+              <div className="categories-modal__subs" id={selected ? `mega-children-${selected.id}` : undefined}>
+                {selected ? <><h2>{selected.name}</h2><Descendants parentId={selected.id} childrenByParent={childrenByParent} onClose={onClose} /></> : null}
               </div>
-            ) : selectedCategory ? (
-              <p className="ui-note">Sin subcategorías disponibles</p>
-            ) : null}
-          </div>
-        </div>
-
-        <nav className="categories-modal__mobile-accordion" aria-label="Categorías principales para móvil">
-          {roots.map((category) => {
-            const subcategoriesForCategory = childrenByParent.get(category.id) ?? []
-            const isExpanded = expandedMobileCategoryIds.includes(category.id)
-
-            return (
-              <div className="categories-modal__mobile-item" key={`mobile-${category.id}`}>
-                <div className="categories-modal__mobile-header">
-                  <Link
-                    to={category.href}
-                    className="categories-modal__mobile-link"
-                    onClick={onClose}
-                  >
-                    {category.name}
-                  </Link>
-                  {subcategoriesForCategory.length > 0 ? (
-                    <button
-                      type="button"
-                      className="categories-modal__mobile-toggle"
-                      aria-expanded={isExpanded}
-                      aria-controls={`mobile-subs-${category.id}`}
-                      aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} subcategorías de ${category.name}`}
-                      onClick={() => toggleMobileCategory(category.id)}
-                    >
-                      <span aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>
-                    </button>
-                  ) : null}
-                </div>
-
-                {subcategoriesForCategory.length > 0 ? (
-                  <ul
-                    id={`mobile-subs-${category.id}`}
-                    className={`categories-modal__mobile-subs ${isExpanded ? 'is-expanded' : ''}`.trim()}
-                    aria-hidden={!isExpanded}
-                  >
-                    {subcategoriesForCategory.map((subcategory) => (
-                      <li key={subcategory.id}>
-                        <Link to={categoryHref(subcategory)} onClick={onClose}>
-                          {subcategory.name}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            )
-          })}
-        </nav>
+            </div>
+            <nav className="categories-modal__mobile-accordion" aria-label="Categorías principales">
+              {roots.map((category) => {
+                const hasChildren = Boolean(childrenByParent.get(category.id)?.length)
+                const expanded = expandedMobileCategoryIds.includes(category.id)
+                return <section className="categories-modal__mobile-item" key={category.id}>
+                  <div className="categories-modal__mobile-header">
+                    <Link to={categoryHref(category)} onClick={onClose}>{category.name}</Link>
+                    {hasChildren ? <button type="button" aria-expanded={expanded} aria-controls={`mobile-subs-${category.id}`} aria-label={`${expanded ? 'Contraer' : 'Expandir'} subcategorías de ${category.name}`} onClick={() => toggleMobile(category.id)}>{expanded ? '−' : '+'}</button> : null}
+                  </div>
+                  {hasChildren && expanded ? <div id={`mobile-subs-${category.id}`}><Descendants parentId={category.id} childrenByParent={childrenByParent} onClose={onClose} /></div> : null}
+                </section>
+              })}
+            </nav>
+          </>
+        ) : <p className="categories-modal__empty">No hay categorías disponibles.</p>}
       </section>
     </div>
   )

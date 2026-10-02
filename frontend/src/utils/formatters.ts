@@ -1,4 +1,4 @@
-import type { Category, ProductCondition, ProductListItem, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, StockStatus } from '../types/catalog'
+import type { Category, ProductCondition, ProductListItem, ProductPowerSource, ProductPriceCurrency, ProductPriceTaxMode, ProductTerrainType, ProductType, SidebarMenuItem, StockStatus } from '../types/catalog'
 
 export function normalizeChileanPriceInput(value: string | null | undefined) {
   if (value === null || value === undefined) return null
@@ -162,11 +162,12 @@ export function buildSidebarMenuFromCategories(categories: Category[]) {
     grouped.get(key)?.push(category)
   })
 
-  const buildNode = (category: Category): { label: string; to: string; children?: { label: string; to: string }[] } => {
-    const children = (grouped.get(category.id) ?? []).map((child) => ({
-      label: child.name,
-      to: `/catalogo?category=${child.id}`,
-    }))
+  grouped.forEach((items) => items.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)))
+
+  const buildNode = (category: Category, ancestors = new Set<number>()): SidebarMenuItem => {
+    if (ancestors.has(category.id)) return { label: category.name, to: `/catalogo?category=${category.id}` }
+    const nextAncestors = new Set(ancestors).add(category.id)
+    const children = (grouped.get(category.id) ?? []).map((child) => buildNode(child, nextAncestors))
 
     return {
       label: category.name,
@@ -176,6 +177,5 @@ export function buildSidebarMenuFromCategories(categories: Category[]) {
   }
 
   return (grouped.get(null) ?? [])
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
     .map(buildNode)
 }
