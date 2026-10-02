@@ -49,9 +49,18 @@ export async function getProductBySlug(slug: string) {
   return normalizeProductDetail(response) as ProductDetail
 }
 
-export async function getCategories() {
-  const response = await apiRequest<ApiListResponse<unknown>>(publicReadPath('/categories/'))
-  return normalizeCategoryListResponse(response) as Category[]
+let categoriesRequest: Promise<Category[]> | null = null
+
+export function getCategories() {
+  if (!categoriesRequest) {
+    categoriesRequest = apiRequest<ApiListResponse<unknown>>(publicReadPath('/categories/'))
+      .then((response) => normalizeCategoryListResponse(response) as Category[])
+      .catch((error) => {
+        categoriesRequest = null
+        throw error
+      })
+  }
+  return categoriesRequest
 }
 
 export async function getBrands() {

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { useCategories } from '../../hooks/useCategories'
@@ -11,6 +11,7 @@ const WHATSAPP_PHONE = '+56 9 4611 5064'
 export function Topbar() {
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
+  const categoriesButtonRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
   const { categories } = useCategories()
 
@@ -22,6 +23,7 @@ export function Topbar() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsCategoriesOpen(false)
+        window.requestAnimationFrame(() => categoriesButtonRef.current?.focus())
       }
     }
 
@@ -48,6 +50,7 @@ export function Topbar() {
         </Link>
 
         <button
+          ref={categoriesButtonRef}
           className="topbar__categories-btn"
           type="button"
           aria-expanded={isCategoriesOpen}

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { SidebarMenuItem } from '../../types/catalog'
 
@@ -17,11 +17,20 @@ function SidebarMenuNode({
   level?: number
 }) {
   const hasChildren = Boolean(item.children?.length)
-  const [isOpen, setIsOpen] = useState(level === 0)
+  const containsActive = (node: SidebarMenuItem): boolean => {
+    const match = node.to?.match(/[?&]category=(\d+)/)?.[1]
+    return match === activeCategoryId || Boolean(node.children?.some(containsActive))
+  }
+  const [isOpen, setIsOpen] = useState(level === 0 || containsActive(item))
   const categoryMatch = item.to?.match(/[?&]category=(\d+)/)
   const categoryId = categoryMatch?.[1] ?? null
   const isActive = Boolean(categoryId && activeCategoryId && categoryId === activeCategoryId)
+  const panelId = `sidebar-category-${categoryId ?? `${level}-${item.label.replace(/\W+/g, '-').toLowerCase()}`}`
   const handleNavigate = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  useEffect(() => {
+    if (containsActive(item)) setIsOpen(true)
+  }, [activeCategoryId])
 
   if (!hasChildren) {
     return (
@@ -64,13 +73,14 @@ function SidebarMenuNode({
           onClick={() => setIsOpen((prev) => !prev)}
           type="button"
           aria-expanded={isOpen}
+          aria-controls={panelId}
           aria-label={`${isOpen ? 'Contraer' : 'Expandir'} subcategorías de ${item.label}`}
         >
           <span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
         </button>
       </div>
       {isOpen && (
-        <ul className="sidebar-menu sidebar-menu--nested">
+        <ul id={panelId} className="sidebar-menu sidebar-menu--nested">
           {item.children?.map((child) => (
             <SidebarMenuNode key={`${item.label}-${child.label}`} item={child} activeCategoryId={activeCategoryId} level={level + 1} />
           ))}

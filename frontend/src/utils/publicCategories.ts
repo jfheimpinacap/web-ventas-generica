@@ -1,10 +1,11 @@
 import type { Category } from '../types/catalog'
 
 export function isPublicCategory(category: Pick<Category, 'slug' | 'product_type'>) {
-  return category.product_type !== 'spare_part' && category.slug.trim().toLowerCase() !== 'repuestos'
+  // Repuestos is part of the public catalogue navigation. Visibility continues
+  // to be controlled by the API's is_active flag, just like the other roots.
+  return Boolean(category.slug.trim()) && Boolean(category.product_type)
 }
 
 export function publicCategories(categories: Category[]) {
-  const hiddenRootIds = new Set(categories.filter((category) => category.parent === null && !isPublicCategory(category)).map((category) => category.id))
-  return categories.filter((category) => isPublicCategory(category) && (category.parent === null || !hiddenRootIds.has(category.parent)))
+  return categories.filter(isPublicCategory)
 }
