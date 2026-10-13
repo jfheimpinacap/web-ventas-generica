@@ -92,7 +92,7 @@ export function Sidebar() {
     return next
   })
   const option = (key: string, value: string, label: string, selectedValue: string) => (
-    <button type="button" className={`catalog-filter-option${selectedValue === value ? ' is-active' : ''}`} aria-pressed={selectedValue === value} onClick={() => updateFilter(key, value)}>{label}</button>
+    <button key={`${key}:${value}`} type="button" className={`catalog-filter-option${selectedValue === value ? ' is-active' : ''}`} aria-pressed={selectedValue === value} onClick={() => updateFilter(key, value)}>{label}</button>
   )
 
   return <aside className={`sidebar${isOpen ? ' sidebar--open' : ''}`} aria-label="Navegación y filtros del catálogo">

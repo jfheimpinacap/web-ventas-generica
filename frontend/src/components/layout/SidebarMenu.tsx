@@ -82,7 +82,7 @@ function SidebarMenuNode({
       {isOpen && (
         <ul id={panelId} className="sidebar-menu sidebar-menu--nested">
           {item.children?.map((child) => (
-            <SidebarMenuNode key={`${item.label}-${child.label}`} item={child} activeCategoryId={activeCategoryId} level={level + 1} />
+            <SidebarMenuNode key={child.to} item={child} activeCategoryId={activeCategoryId} level={level + 1} />
           ))}
         </ul>
       )}
@@ -97,7 +97,7 @@ export function SidebarMenu({ items }: SidebarMenuProps) {
   return (
     <ul className="sidebar-menu">
       {items.map((item) => (
-        <SidebarMenuNode key={item.label} item={item} activeCategoryId={activeCategoryId} />
+        <SidebarMenuNode key={item.to} item={item} activeCategoryId={activeCategoryId} />
       ))}
     </ul>
   )
