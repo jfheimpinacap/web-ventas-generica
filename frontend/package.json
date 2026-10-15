@@ -10,7 +10,7 @@
     "prerender": "node scripts/prerender.mjs",
     "validate:prerender": "node scripts/validate-prerender.mjs",
     "test:api-url": "node --experimental-strip-types --test tests/api-url.test.mjs",
-    "test:sidebar-menu": "node --experimental-strip-types --test tests/sidebar-menu.test.mjs",
+    "test:sidebar-menu": "node --experimental-strip-types --test tests/sidebar-menu.test.mjs tests/catalog-filters.test.mjs",
     "build": "tsc -b && npm run build:client && npm run build:server && npm run prerender && npm run validate:prerender",
     "preview": "vite preview"
   },
