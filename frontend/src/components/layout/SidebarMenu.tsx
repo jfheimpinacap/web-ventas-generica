@@ -1,103 +1,84 @@
+import { useId } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
 
 import type { SidebarMenuItem } from '../../types/catalog'
+import { sidebarCategoryHref, sidebarCategoryId, sidebarMenuKey } from '../../utils/sidebarAccordion'
 
 interface SidebarMenuProps {
   items: SidebarMenuItem[]
+  expandedPath: string[]
+  onToggle: (path: string[]) => void
 }
 
-function SidebarMenuNode({
-  item,
-  activeCategoryId,
-  level = 0,
-}: {
+interface SidebarMenuNodeProps {
   item: SidebarMenuItem
+  ancestors: string[]
   activeCategoryId: string | null
-  level?: number
-}) {
+  expandedPath: string[]
+  onToggle: (path: string[]) => void
+  pathname: string
+  search: string
+}
+
+function SidebarMenuNode({ item, ancestors, activeCategoryId, expandedPath, onToggle, pathname, search }: SidebarMenuNodeProps) {
+  const panelId = useId()
+  const path = [...ancestors, sidebarMenuKey(item)]
   const hasChildren = Boolean(item.children?.length)
-  const containsActive = (node: SidebarMenuItem): boolean => {
-    const match = node.to?.match(/[?&]category=(\d+)/)?.[1]
-    return match === activeCategoryId || Boolean(node.children?.some(containsActive))
-  }
-  const [isOpen, setIsOpen] = useState(level === 0 || containsActive(item))
-  const categoryMatch = item.to?.match(/[?&]category=(\d+)/)
-  const categoryId = categoryMatch?.[1] ?? null
-  const isActive = Boolean(categoryId && activeCategoryId && categoryId === activeCategoryId)
-  const panelId = `sidebar-category-${categoryId ?? `${level}-${item.label.replace(/\W+/g, '-').toLowerCase()}`}`
-  const handleNavigate = () => window.scrollTo({ top: 0, behavior: 'smooth' })
-
-  useEffect(() => {
-    if (containsActive(item)) setIsOpen(true)
-  }, [activeCategoryId])
-
-  if (!hasChildren) {
-    return (
-      <li className="sidebar-menu__leaf">
-        {item.to ? (
-          <Link
-            to={item.to}
-            className={isActive ? 'sidebar-menu__link sidebar-menu__link--active' : 'sidebar-menu__link'}
-            onClick={handleNavigate}
-          >
-            {item.label}
-          </Link>
-        ) : (
-          item.label
-        )}
-      </li>
-    )
-  }
+  const isOpen = path.every((key, index) => expandedPath[index] === key)
+  const categoryId = sidebarCategoryId(item)
+  const isActive = Boolean(categoryId && categoryId === activeCategoryId)
+  const href = sidebarCategoryHref(item, pathname, search)
+  const handleNavigate = () => window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 
   return (
     <li>
       <div className="sidebar-menu__group">
         <span className="sidebar-menu__group-label">
-          {item.to ? (
+          {href ? (
             <Link
-              to={item.to}
-              className={`sidebar-menu__link ${level === 0 ? 'sidebar-menu__link--parent' : ''} ${
-                isActive ? 'sidebar-menu__link--active' : ''
-              }`.trim()}
+              to={href}
+              className={`sidebar-menu__link${ancestors.length === 0 ? ' sidebar-menu__link--parent' : ''}${isActive ? ' sidebar-menu__link--active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
               onClick={handleNavigate}
             >
               {item.label}
             </Link>
           ) : (
-            <span className={level === 0 ? 'sidebar-menu__label sidebar-menu__label--parent' : 'sidebar-menu__label'}>{item.label}</span>
+            <span className={`sidebar-menu__label${ancestors.length === 0 ? ' sidebar-menu__label--parent' : ''}`}>{item.label}</span>
           )}
         </span>
-        <button
-          className="sidebar-menu__toggle"
-          onClick={() => setIsOpen((prev) => !prev)}
-          type="button"
-          aria-expanded={isOpen}
-          aria-controls={panelId}
-          aria-label={`${isOpen ? 'Contraer' : 'Expandir'} subcategorías de ${item.label}`}
-        >
-          <span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
-        </button>
+        {hasChildren ? (
+          <button
+            className="sidebar-menu__toggle"
+            onClick={() => onToggle(path)}
+            type="button"
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            aria-label={`${isOpen ? 'Contraer' : 'Expandir'} subcategorías de ${item.label}`}
+          >
+            <span className="sidebar-chevron" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
-      {isOpen && (
-        <ul id={panelId} className="sidebar-menu sidebar-menu--nested">
+      {hasChildren ? (
+        <ul id={panelId} className="sidebar-menu sidebar-menu--nested" hidden={!isOpen}>
           {item.children?.map((child) => (
-            <SidebarMenuNode key={child.to} item={child} activeCategoryId={activeCategoryId} level={level + 1} />
+            <SidebarMenuNode key={sidebarMenuKey(child)} item={child} ancestors={path} activeCategoryId={activeCategoryId} expandedPath={expandedPath} onToggle={onToggle} pathname={pathname} search={search} />
           ))}
         </ul>
-      )}
+      ) : null}
     </li>
   )
 }
 
-export function SidebarMenu({ items }: SidebarMenuProps) {
+export function SidebarMenu({ items, expandedPath, onToggle }: SidebarMenuProps) {
   const location = useLocation()
   const activeCategoryId = new URLSearchParams(location.search).get('category')
 
   return (
     <ul className="sidebar-menu">
       {items.map((item) => (
-        <SidebarMenuNode key={item.to} item={item} activeCategoryId={activeCategoryId} />
+        <SidebarMenuNode key={sidebarMenuKey(item)} item={item} ancestors={[]} activeCategoryId={activeCategoryId} expandedPath={expandedPath} onToggle={onToggle} pathname={location.pathname} search={location.search} />
       ))}
     </ul>
   )
