@@ -10,7 +10,7 @@ export interface SidebarAccordionState {
 type SidebarAccordionAction =
   | { type: 'toggleSection'; key: string }
   | { type: 'toggleCategory'; path: string[] }
-  | { type: 'initializeCategories'; items: SidebarMenuItem[] }
+  | { type: 'initializeCategories'; items: SidebarMenuItem[]; categoryId?: string | null }
 
 export function createSidebarAccordionState(initialCategoryId: string | null): SidebarAccordionState {
   return { openSection: 'categories', categoryPath: [], initialCategoryId, categoriesInitialized: false }
@@ -52,7 +52,7 @@ export function sidebarAccordionReducer(state: SidebarAccordionState, action: Si
       if (state.categoriesInitialized) return state
       return {
         ...state,
-        categoryPath: findCategoryPath(action.items, state.initialCategoryId) ?? [],
+        categoryPath: findCategoryPath(action.items, action.categoryId ?? state.initialCategoryId) ?? [],
         categoriesInitialized: true,
       }
   }

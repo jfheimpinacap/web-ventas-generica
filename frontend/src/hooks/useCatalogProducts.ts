@@ -1,29 +1,41 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { getProducts } from '../services/catalogApi'
 import type { ProductListItem, ProductQueryParams } from '../types/catalog'
 
-export function useCatalogProducts(params: ProductQueryParams) {
-  const [products, setProducts] = useState<ProductListItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const paramsKey = useMemo(() => JSON.stringify(params), [params])
+interface CatalogSnapshot {
+  key: string
+  products: ProductListItem[]
+  error: string | null
+}
+
+// One public dataset feeds both the list and facets. The bounded, mount-local
+// cache also shares in-flight requests when revisiting a context or search.
+export function useCatalogProducts(params: ProductQueryParams, enabled = true) {
+  const paramsKey = JSON.stringify(params)
+  const requests = useRef(new Map<string, Promise<ProductListItem[]>>())
+  const [snapshot, setSnapshot] = useState<CatalogSnapshot | null>(null)
 
   useEffect(() => {
-    const run = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        setProducts(await getProducts(params))
-      } catch {
-        setError('No fue posible cargar productos desde la API.')
-      } finally {
-        setLoading(false)
-      }
+    if (!enabled) return
+    let active = true
+    let request = requests.current.get(paramsKey)
+    if (!request) {
+      request = getProducts(JSON.parse(paramsKey) as ProductQueryParams)
+      requests.current.set(paramsKey, request)
+      if (requests.current.size > 8) requests.current.delete(requests.current.keys().next().value!)
     }
+    request.then(
+      (products) => { if (active) setSnapshot({ key: paramsKey, products, error: null }) },
+      () => {
+        requests.current.delete(paramsKey)
+        if (active) setSnapshot({ key: paramsKey, products: [], error: 'No fue posible cargar productos desde la API.' })
+      },
+    )
+    return () => { active = false }
+  }, [paramsKey, enabled])
 
-    void run()
-  }, [paramsKey])
-
-  return { products, loading, error }
+  // Suppress the old context synchronously, including the render before effects.
+  const current = enabled && snapshot?.key === paramsKey ? snapshot : null
+  return { products: current?.products ?? [], loading: enabled && current === null, error: current?.error ?? null }
 }

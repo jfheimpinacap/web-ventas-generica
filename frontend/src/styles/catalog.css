@@ -34,7 +34,7 @@
   top: calc(var(--topbar-height) + 0.45rem);
   left: 0.45rem;
   right: 0.45rem;
-  display: none;
+  display: flex;
   flex-direction: column;
   max-height: calc(100vh - var(--topbar-height) - 0.9rem);
   max-height: calc(100dvh - var(--topbar-height) - 0.9rem);
@@ -49,10 +49,19 @@
   color: #000;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
   z-index: 1011;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-0.5rem);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease, visibility 0s linear 200ms;
 }
 
 .sidebar--open .sidebar__panel {
-  display: flex;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 
 .sidebar__panel > * {
@@ -86,7 +95,7 @@
 }
 
 .catalog-accordion {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #00b4d8;
 }
 
 .catalog-accordion__trigger {
@@ -116,7 +125,7 @@
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: rotate(45deg);
-  transition: transform 0.15s ease;
+  transition: transform 200ms ease;
 }
 
 [aria-expanded="true"] > .sidebar-chevron {
@@ -127,15 +136,32 @@
   padding: 0 0 0.4rem;
 }
 
+.sidebar-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 200ms ease, visibility 0s linear 200ms;
+}
+
+.sidebar-collapse.is-expanded {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.sidebar-collapse__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .catalog-filter-options {
   display: grid;
 }
 
 .catalog-filter-option,
 .sidebar-filters__clear {
-  display: block;
   width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   padding: 0.35rem 0.4rem;
   border: 0;
   border-radius: 3px;
@@ -149,21 +175,33 @@
   cursor: pointer;
 }
 
-.catalog-filter-option.is-active,
-.sidebar-menu__link--active {
-  background: #f1f5f9;
-  font-weight: 650;
+.catalog-filter-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
 }
 
-.catalog-filter-fixed,
-.catalog-filter-route {
+.catalog-filter-option input {
+  width: 16px;
+  height: 16px;
   margin: 0;
-  padding: 0.35rem 0.4rem;
-  font-size: 0.86rem;
-  overflow-wrap: anywhere;
+  accent-color: #008da8;
+  cursor: pointer;
+}
+
+.catalog-filter-option__count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.catalog-filter-option.is-active {
+  background: #eefafd;
+  font-weight: 600;
 }
 
 .sidebar-filters__clear {
+  display: block;
   margin-top: 0.35rem;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -184,36 +222,10 @@
 
 .sidebar-menu__group {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
   gap: 0.2rem;
   border-bottom: 1px solid #f1f5f9;
-}
-
-.sidebar-menu__group-label {
-  min-width: 0;
-}
-
-.sidebar-menu__link,
-.sidebar-menu__label {
-  display: block;
-  min-height: 32px;
-  padding: 0.35rem 0.4rem;
-  border-radius: 3px;
-  color: #000;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.sidebar-menu__link--parent,
-.sidebar-menu__label--parent {
-  font-weight: 600;
-}
-
-.sidebar-menu__link--active,
-.sidebar-menu__link:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .sidebar-menu__toggle {
@@ -232,14 +244,13 @@
 
 .catalog-accordion__trigger:hover,
 .catalog-filter-option:hover,
-.sidebar-menu__link:hover,
 .sidebar-menu__toggle:hover,
 .sidebar__panel-close:hover,
 .sidebar-filters__clear:hover {
   background: #f5f5f5;
 }
 
-.sidebar :is(button, a):focus-visible {
+.sidebar :is(button, a, input):focus-visible {
   outline: 2px solid #334155;
   outline-offset: -2px;
 }
@@ -256,7 +267,7 @@
 
   .sidebar__mobile-toggle,
   .sidebar__mobile-backdrop,
-  .sidebar__panel-header {
+  .sidebar__panel-close {
     display: none;
   }
 
@@ -267,6 +278,11 @@
     max-height: calc(100vh - var(--topbar-height) - 1.5rem);
     max-height: calc(100dvh - var(--topbar-height) - 1.5rem);
     box-shadow: none;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: none;
   }
 }
 

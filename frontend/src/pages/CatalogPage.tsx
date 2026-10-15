@@ -9,11 +9,13 @@ import { Layout } from '../components/layout/Layout'
 import { useBrands } from '../hooks/useBrands'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { useCategories } from '../hooks/useCategories'
-import type { Category, ProductListItem, ProductQueryParams } from '../types/catalog'
+import type { Category, ProductListItem } from '../types/catalog'
+import { catalogFacets, catalogRequestParams, catalogSelections, contextCategories, contextProducts, filterCatalogProducts, resolveCatalogContext, type CommercialCatalogConfig } from '../utils/catalogFilters'
 import { trackCategoryView } from '../utils/analytics'
-import { getRootCategory } from '../utils/formatters'
 import { buildBreadcrumbJsonLd, buildItemListJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
 import { CATALOG_FILTER_PARAMS } from '../config/prerenderRoutes'
+
+export type { CommercialCatalogConfig } from '../utils/catalogFilters'
 
 const ORDER_OPTIONS = [
   { value: 'recommended', label: 'Recomendados' },
@@ -56,98 +58,81 @@ function getNumericPrice(product: ProductListItem) {
   return Number.isNaN(parsedPrice) ? null : parsedPrice
 }
 
-export interface CommercialCatalogConfig {
-  title: string
-  description: string
-  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada' | '/repuestos' | '/servicios'
-  fixedProductType: 'machinery' | 'spare_part' | 'service'
-  fixedCondition?: 'new' | 'used'
-}
-
 export function CatalogPage({ commercialConfig }: { commercialConfig?: CommercialCatalogConfig }) {
   const PRODUCTS_PER_PAGE = 12
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
-  const { categories } = useCategories()
-  const { brands } = useBrands()
-
-  const query = useMemo<ProductQueryParams>(
-    () => ({
-      search: searchParams.get('search') ?? '',
-      category: searchParams.get('category') ?? '',
-      brand: searchParams.get('brand') ?? '',
-      // Route configuration takes precedence over user-controlled URL parameters.
-      product_type: commercialConfig?.fixedProductType ?? (searchParams.get('product_type') as ProductQueryParams['product_type']) ?? '',
-      condition: commercialConfig?.fixedCondition ?? (searchParams.get('condition') as ProductQueryParams['condition']) ?? '',
-      stock_status: (searchParams.get('stock_status') as ProductQueryParams['stock_status']) ?? '',
-      ordering: (searchParams.get('ordering') as ProductQueryParams['ordering']) ?? '',
-    }),
-    [commercialConfig, searchParams],
-  )
-
-  const { products, loading, error } = useCatalogProducts(query)
-  const [currentPage, setCurrentPage] = useState(1)
+  const { categories, loading: categoriesLoading, error: categoriesError } = useCategories()
+  const { brands, loading: brandsLoading, error: brandsError } = useBrands()
+  const context = useMemo(() => resolveCatalogContext(categories, searchParams, commercialConfig), [categories, searchParams, commercialConfig])
+  const scopedCategories = useMemo(() => contextCategories(categories, context), [categories, context])
+  const selections = useMemo(() => catalogSelections(searchParams, scopedCategories, brands, context), [searchParams, scopedCategories, brands, context])
+  const query = useMemo(() => ({
+    search: searchParams.get('search') ?? '',
+    category: selections.category.join(','),
+    brand: selections.brand.join(','),
+    product_type: context.productType,
+    condition: context.fixedCondition ?? selections.condition.join(','),
+    stock_status: selections.stock_status.join(','),
+    ordering: searchParams.get('ordering') ?? '',
+  }), [searchParams, selections, context])
+  const requestParams = useMemo(() => catalogRequestParams(context, searchParams), [context, searchParams])
+  const { products: publicProducts, loading: productsLoading, error: productsError } = useCatalogProducts(requestParams, !categoriesLoading && !categoriesError)
+  const loading = productsLoading || categoriesLoading || brandsLoading
+  const error = productsError ?? categoriesError ?? brandsError
+  const baseProducts = useMemo(() => contextProducts(publicProducts, categories, context), [publicProducts, categories, context])
+  const products = useMemo(() => filterCatalogProducts(baseProducts, scopedCategories, selections, searchParams), [baseProducts, scopedCategories, selections, searchParams])
+  const facets = useMemo(() => catalogFacets(baseProducts, scopedCategories, brands, selections, searchParams), [baseProducts, scopedCategories, brands, selections, searchParams])
+  const catalogSidebar = { context, categories: scopedCategories, selections, facets, loading, error }
+  const paginationKey = `${location.pathname}${location.search}`
+  const [pagination, setPagination] = useState({ key: paginationKey, page: 1 })
+  const currentPage = pagination.key === paginationKey ? pagination.page : 1
   const headingRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => { setPagination({ key: paginationKey, page: 1 }) }, [paginationKey])
 
   const updateFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams)
     if (!value || value === 'recommended') next.delete(key)
     else next.set(key, value)
+    next.delete('page')
     setSearchParams(next)
   }
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [query.search, query.category, query.brand, query.product_type, query.condition, query.stock_status, query.ordering])
   const explicitSelectedCategory = useMemo(() => {
-    const categoryId = Number(query.category)
-    if (!categoryId) return null
-    return categories.find((category) => category.id === categoryId && category.is_active !== false) ?? null
-  }, [categories, query.category])
-
-  const selectedRootCategory = useMemo(() => {
-    const root = getRootCategory(explicitSelectedCategory, categories)
-    return root?.parent === null && root.is_active !== false ? root : null
-  }, [categories, explicitSelectedCategory])
-  const legacyRootCategory = useMemo(() => {
-    if (commercialConfig || query.category || !query.product_type) return null
-    return categories.find((category) => (
-      category.parent === null
-      && category.is_active !== false
-      && category.product_type === query.product_type
-    )) ?? null
-  }, [categories, commercialConfig, query.category, query.product_type])
-  const effectiveRootCategory = selectedRootCategory ?? legacyRootCategory
-
+    if (selections.category.length !== 1) return null
+    return scopedCategories.find((category) => String(category.id) === selections.category[0]) ?? null
+  }, [scopedCategories, selections.category])
+  const effectiveRootCategory = context.root
+    ?? scopedCategories.find((category) => category.parent === null && category.product_type === context.productType)
+    ?? null
   const categoryPath = useMemo(() => {
-    if (!explicitSelectedCategory || !selectedRootCategory) return effectiveRootCategory ? [effectiveRootCategory] : [] as Category[]
+    if (!explicitSelectedCategory) return effectiveRootCategory ? [effectiveRootCategory] : [] as Category[]
 
     const categoryById = new Map(categories.map((category) => [category.id, category]))
     const path: Category[] = []
     let current: Category | null = explicitSelectedCategory
 
-    while (current) {
+    const visited = new Set<number>()
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id)
       path.unshift(current)
-      current = current.parent ? categoryById.get(current.parent) ?? null : null
+      current = current.parent !== null ? categoryById.get(current.parent) ?? null : null
     }
 
     return path
-  }, [categories, effectiveRootCategory, explicitSelectedCategory, selectedRootCategory])
+  }, [categories, effectiveRootCategory, explicitSelectedCategory])
 
-  const selectedBrand = useMemo(() => {
-    const brandId = Number(query.brand)
-    if (!brandId) return null
-    return brands.find((brand) => brand.id === brandId) ?? null
-  }, [brands, query.brand])
+  const selectedBrands = useMemo(() => brands.filter((brand) => selections.brand.includes(String(brand.id))), [brands, selections.brand])
 
   const extraFilterTrail = useMemo(() => {
     const trail: string[] = []
     ;(['condition', 'stock_status'] as const).forEach((key) => {
-      const value = query[key]
-      if (value) {
+      const values = key === 'condition' && context.fixedCondition ? [] : selections[key]
+      values.forEach((value) => {
         const label = FILTER_LABELS[key][value]
         if (label) trail.push(label)
-      }
+      })
     })
 
     if (query.search) {
@@ -155,7 +140,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
     }
 
     return trail
-  }, [query])
+  }, [query.search, selections, context.fixedCondition])
 
   const hasSearch = Boolean((query.search ?? '').trim())
   const hasSpecificFilters = Boolean(query.brand || query.condition || query.stock_status || query.ordering)
@@ -170,8 +155,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
 
   const buildCatalogHref = (categoryId?: number) => {
     const next = new URLSearchParams(searchParams)
-    next.delete('product_type')
-    next.delete('condition')
+    if (context.root) next.set('catalog_root', String(context.root.id))
     if (categoryId) next.set('category', String(categoryId))
     else next.delete('category')
 
@@ -192,19 +176,13 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
       })),
     ]
 
-    if (selectedBrand?.name) trail.push({ label: selectedBrand.name })
+    selectedBrands.forEach((brand) => trail.push({ label: brand.name }))
     extraFilterTrail.forEach((item) => trail.push({ label: item }))
 
     return trail
-  }, [categoryPath, commercialConfig, selectedBrand, extraFilterTrail, searchParams])
+  }, [categoryPath, commercialConfig, selectedBrands, extraFilterTrail, searchParams])
 
-  const pageTitle = useMemo(() => {
-    if (commercialConfig) return commercialConfig.title
-    if (effectiveRootCategory) return effectiveRootCategory.name
-    if (query.product_type) return FILTER_LABELS.product_type[query.product_type] ?? 'Productos'
-    if (query.search) return 'Resultados de búsqueda'
-    return 'Catálogo'
-  }, [commercialConfig, effectiveRootCategory, query.product_type, query.search])
+  const pageTitle = context.title
 
   const sortValue = query.ordering ? query.ordering : 'recommended'
 
@@ -217,11 +195,14 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   }, [effectiveRootCategory])
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [location.pathname, location.search])
 
   const displayedProducts = useMemo(() => {
     if (!query.ordering || (query.ordering !== 'price' && query.ordering !== '-price')) {
+      if (query.ordering === 'name' || query.ordering === '-name') {
+        return [...products].sort((a, b) => (query.ordering === '-name' ? -1 : 1) * a.name.localeCompare(b.name))
+      }
       return products
     }
 
@@ -290,11 +271,11 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   }, [currentPage, totalPages])
 
   const goToPage = (page: number) => {
-    setCurrentPage(page)
-    headingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setPagination({ key: paginationKey, page })
+    headingRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
   }
   return (
-    <Layout>
+    <Layout catalogSidebar={catalogSidebar}>
       <Seo
         {...routeSeo}
         ogType="website"
