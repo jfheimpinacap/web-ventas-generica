@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using JemNexus.Api.Data;
 using JemNexus.Api.Models;
 using JemNexus.Api.Services;
+using JemNexus.Api.Services.TechnicalSheets;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,115 @@ public sealed class ApiSecurityHeadersEndpointTests
         Assert.Equal(expectedStatus, response.StatusCode);
         AssertBaseline(response);
         Assert.False(response.Headers.Contains("Strict-Transport-Security"));
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Test")]
+    [InlineData("QA")]
+    [InlineData("Production")]
+    public async Task PublicInlinePdfAllowsOnlyExplicitFrontendAncestorsAndPreservesRanges(string environment)
+    {
+        await using var factory = new SecurityHeadersApiFactory(environment);
+        byte[] bytes = "%PDF-1.7\npublic technical sheet"u8.ToArray();
+        await SeedTechnicalSheetAsync(factory, bytes);
+        using var client = CreateHttpsClient(factory);
+        client.DefaultRequestHeaders.Add("Origin", "https://attacker.example");
+        client.DefaultRequestHeaders.Referrer = new Uri("https://attacker.example/product");
+
+        using var response = await client.GetAsync("/api/public/products/header-pdf/technical-sheet/file/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.Null(response.Content.Headers.ContentDisposition);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        AssertSingleHeader(response, "X-Robots-Tag", "noindex, nofollow, noarchive");
+        AssertInlinePdfHeaders(response, environment);
+
+        using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, "/api/public/products/380/technical-sheet/file");
+        rangeRequest.Headers.Range = new RangeHeaderValue(1, 8);
+        using var partial = await client.SendAsync(rangeRequest);
+        Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode);
+        Assert.Equal(bytes[1..9], await partial.Content.ReadAsByteArrayAsync());
+        Assert.Equal($"bytes 1-8/{bytes.Length}", partial.Content.Headers.ContentRange?.ToString());
+        AssertInlinePdfHeaders(partial, environment);
+
+        using var download = await client.GetAsync("/api/public/products/header-pdf/technical-sheet/file?download=true");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        Assert.Equal(bytes, await download.Content.ReadAsByteArrayAsync());
+        Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("manual.pdf", download.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        AssertBaseline(download);
+
+        foreach (var path in new[] { "/api/public/products", "/api/public/products/header-pdf", "/api/technical-sheets/1/file" })
+        {
+            using var unrelated = await client.GetAsync(path);
+            AssertBaseline(unrelated);
+        }
+
+        using var invalidRangeRequest = new HttpRequestMessage(HttpMethod.Get, "/api/public/products/header-pdf/technical-sheet/file");
+        invalidRangeRequest.Headers.Range = new RangeHeaderValue(bytes.Length + 1, null);
+        using var invalidRange = await client.SendAsync(invalidRangeRequest);
+        Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, invalidRange.StatusCode);
+        AssertBaseline(invalidRange);
+    }
+
+    [Theory]
+    [InlineData("missing-file")]
+    [InlineData("unpublished")]
+    [InlineData("no-association")]
+    [InlineData("invalid-format")]
+    public async Task UnavailablePublicTechnicalSheetKeepsTheFullSecurityBaseline(string scenario)
+    {
+        await using var factory = new SecurityHeadersApiFactory("Development");
+        await SeedTechnicalSheetAsync(factory, "%PDF-file"u8.ToArray());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+            var product = await db.Products.Include(item => item.TechnicalSheet).SingleAsync();
+            switch (scenario)
+            {
+                case "missing-file": await factory.Storage.DeleteAsync("header.pdf", default); break;
+                case "unpublished": product.IsPublished = false; break;
+                case "no-association": product.TechnicalSheet = null; product.TechnicalSheetId = null; break;
+                case "invalid-format": product.TechnicalSheet!.ContentType = "text/html"; break;
+            }
+            await db.SaveChangesAsync();
+        }
+        using var client = CreateHttpsClient(factory);
+        using var response = await client.GetAsync("/api/public/products/header-pdf/technical-sheet/file");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertBaseline(response);
+    }
+
+    private static async Task SeedTechnicalSheetAsync(SecurityHeadersApiFactory factory, byte[] bytes)
+    {
+        factory.Storage.AddUnrelated("header.pdf", bytes);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JemNexusDbContext>();
+        db.Products.Add(new Product
+        {
+            Id = 380, Name = "Header PDF", Slug = "header-pdf", IsPublished = true,
+            ProductType = ProductTypes.Machinery, Condition = ProductConditions.New, StockStatus = StockStatuses.Available,
+            Category = new Category { Name = "Headers", Slug = "headers", ProductType = ProductTypes.Machinery, IsActive = true },
+            Brand = new Brand { Name = "Headers", Slug = "headers", IsActive = true },
+            TechnicalSheet = new TechnicalSheet
+            {
+                Name = "Manual", OriginalFileName = "manual.pdf", StorageKey = "header.pdf",
+                ContentType = "application/pdf", SizeBytes = bytes.Length
+            }
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static void AssertInlinePdfHeaders(HttpResponseMessage response, string environment)
+    {
+        var ancestors = "https://jem-nexus.cl https://www.jem-nexus.cl";
+        if (environment == "Development") ancestors += " http://localhost:5174 http://127.0.0.1:5174";
+        AssertSingleHeader(response, "Content-Security-Policy", $"default-src 'none'; base-uri 'none'; frame-ancestors {ancestors}; form-action 'none'");
+        Assert.False(response.Headers.Contains("X-Frame-Options"));
+        foreach (var header in ExpectedHeaders.Where(header => header.Key is not ("Content-Security-Policy" or "X-Frame-Options")))
+            AssertSingleHeader(response, header.Key, header.Value);
     }
 
     [Fact]
@@ -168,6 +278,7 @@ public sealed class ApiSecurityHeadersEndpointTests
     {
         private readonly string _databaseName = InMemoryTestDatabase.CreateDatabaseName($"ApiSecurityHeaders-{environment}");
         private readonly InMemoryDatabaseRoot _databaseRoot = InMemoryTestDatabase.GetSharedDatabaseRoot();
+        public TechnicalSheetTests.FakeTechnicalSheetStorage Storage { get; } = new();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -179,6 +290,8 @@ public sealed class ApiSecurityHeadersEndpointTests
                 services.RemoveAll<DbContextOptions<JemNexusDbContext>>();
                 services.RemoveAll<ISellerCodeGenerator>();
                 services.AddSingleton<ISellerCodeGenerator, TestSellerCodeGenerator>();
+                services.RemoveAll<ITechnicalSheetStorage>();
+                services.AddSingleton<ITechnicalSheetStorage>(Storage);
                 services.AddDbContext<JemNexusDbContext>(options =>
                     InMemoryTestDatabase.Configure(options, _databaseName, _databaseRoot));
             });

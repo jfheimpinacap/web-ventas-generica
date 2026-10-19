@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { ProductCard } from '../components/catalog/ProductCard'
@@ -87,7 +87,6 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   const paginationKey = `${location.pathname}${location.search}`
   const [pagination, setPagination] = useState({ key: paginationKey, page: 1 })
   const currentPage = pagination.key === paginationKey ? pagination.page : 1
-  const headingRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => { setPagination({ key: paginationKey, page: 1 }) }, [paginationKey])
 
@@ -271,9 +270,39 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
   }, [currentPage, totalPages])
 
   const goToPage = (page: number) => {
-    setPagination({ key: paginationKey, page })
-    headingRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+    setPagination({ key: paginationKey, page: Math.max(1, Math.min(totalPages, page)) })
   }
+
+  const renderPagination = (position: 'superior' | 'inferior') => totalPages > 1 ? (
+    <nav
+      className={`catalog-pagination ${position === 'superior' ? 'catalog-pagination--inline' : 'catalog-pagination--bottom'}`}
+      aria-label={`Paginación ${position} de productos`}
+    >
+      {paginationItems.map((item, index) => item < 0 ? (
+        <span key={`ellipsis-${index}`} className="catalog-pagination__ellipsis" aria-hidden="true">...</span>
+      ) : (
+        <button
+          key={item}
+          type="button"
+          className={`catalog-pagination__button${item === currentPage ? ' is-active' : ''}`}
+          onClick={() => goToPage(item)}
+          aria-current={item === currentPage ? 'page' : undefined}
+        >
+          {item}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="catalog-pagination__button catalog-pagination__button--next"
+        onClick={() => goToPage(currentPage + 1)}
+        disabled={currentPage >= totalPages}
+        aria-label="Siguiente página"
+      >
+        &gt;
+      </button>
+    </nav>
+  ) : null
+
   return (
     <Layout catalogSidebar={catalogSidebar}>
       <Seo
@@ -287,7 +316,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
       <section className="simple-page catalog-page">
         <Breadcrumb items={breadcrumbItems} ariaLabel="Ruta de productos" />
 
-        <div className="section-heading catalog-page__heading" ref={headingRef}>
+        <div className="section-heading catalog-page__heading">
           <h1>{searchOnlyView ? 'Resultados de búsqueda' : pageTitle}</h1>
           {commercialConfig?.description ? <p className="catalog-page__description">{commercialConfig.description}</p> : !commercialConfig && !searchOnlyView ? (
             <p className="catalog-page__description">Explora las publicaciones disponibles de maquinaria, repuestos y servicios.</p>
@@ -295,39 +324,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
         </div>
 
         <div className="catalog-toolbar">
-          {totalPages > 1 ? (
-            <nav className="catalog-pagination catalog-pagination--inline" aria-label="Paginación de productos">
-              {paginationItems.map((item, index) => {
-                if (item < 0) {
-                  return (
-                    <span key={`ellipsis-${index}`} className="catalog-pagination__ellipsis" aria-hidden="true">
-                      ...
-                    </span>
-                  )
-                }
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`catalog-pagination__button${item === currentPage ? ' is-active' : ''}`}
-                    onClick={() => goToPage(item)}
-                    aria-current={item === currentPage ? 'page' : undefined}
-                  >
-                    {item}
-                  </button>
-                )
-              })}
-              <button
-                type="button"
-                className="catalog-pagination__button catalog-pagination__button--next"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage >= totalPages}
-                aria-label="Siguiente página"
-              >
-                &gt;
-              </button>
-            </nav>
-          ) : null}
+          {renderPagination('superior')}
           <label className="catalog-toolbar__sort">
             <span>Ordenar por</span>
             <select value={sortValue} onChange={(event) => updateFilter('ordering', event.target.value)}>
@@ -345,11 +342,14 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
         {!loading && !error && displayedProducts.length === 0 ? <p className="ui-note">No hay productos con estos filtros.</p> : null}
 
         {!loading && !error && displayedProducts.length > 0 ? (
-          <div className="featured-products__grid">
-            {paginatedProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="featured-products__grid">
+              {paginatedProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+            {renderPagination('inferior')}
+          </>
         ) : null}
       </section>
     </Layout>

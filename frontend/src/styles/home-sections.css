@@ -311,9 +311,9 @@
 
 .product-detail__summary {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr) minmax(25.5rem, 0.95fr);
   gap: clamp(1rem, 2.5vw, 2rem);
-  align-items: start;
+  align-items: stretch;
 }
 
 .product-detail__gallery,
@@ -325,13 +325,17 @@
 }
 
 .product-detail__gallery {
-  display: grid;
-  gap: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .product-detail__main-image {
   display: grid;
+  flex: 1 1 auto;
   place-items: center;
+  align-self: stretch;
+  min-height: 0;
   aspect-ratio: 4 / 3;
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-block);
@@ -352,6 +356,7 @@
 
 .product-detail__thumbs {
   display: flex;
+  flex: 0 0 auto;
   gap: 0.7rem;
   overflow-x: auto;
   padding: 0.1rem 0 0.35rem;
@@ -391,10 +396,11 @@
   border: 1px solid #e2e8f0;
   border-radius: var(--radius-card);
   background: #fff;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
-  padding: clamp(1rem, 2.5vw, 1.5rem);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  padding: clamp(1rem, 2vw, 1.25rem);
   display: grid;
-  gap: 1rem;
+  align-content: start;
+  gap: 0.75rem;
 }
 
 .product-detail__title-block {
@@ -405,8 +411,8 @@
 .product-detail__title-block h1 {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(1.8rem, 4vw, 2.65rem);
-  line-height: 1.05;
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  line-height: 1.15;
 }
 
 .product-detail__eyebrow {
@@ -433,7 +439,7 @@
   border: 1px solid var(--color-accent-soft);
   border-radius: var(--radius-card);
   background: var(--color-surface-soft);
-  padding: 0.95rem 1rem;
+  padding: 0.7rem 0.8rem;
   display: grid;
   gap: 0.2rem;
 }
@@ -452,8 +458,8 @@
 
 .product-detail__price-box strong {
   color: var(--color-primary-text);
-  font-size: clamp(1.8rem, 4vw, 2.55rem);
-  line-height: 1;
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  line-height: 1.1;
 }
 
 .product-detail__short-description {
@@ -500,15 +506,69 @@
 .product-detail__supplier {
   color: var(--color-primary-text);
   margin: 0;
+  font-size: 0.875rem;
 }
 
 .product-detail__contact-actions {
-  display: grid;
-  gap: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0.5rem;
 }
 
-.product-detail__contact-actions .btn {
-  width: 100%;
+.product-detail .product-detail__contact-actions .btn {
+  flex: 0 0 10.5rem;
+  width: 10.5rem;
+  max-width: 100%;
+  height: 44px;
+  min-height: 44px;
+  justify-content: center;
+  text-align: center;
+  padding: 0.45rem 0.65rem;
+  border-radius: 4px;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.product-detail__contact-actions .btn--ghost {
+  background: var(--color-surface-soft);
+  color: var(--color-primary-text);
+}
+
+.product-detail__contact-actions .btn--accent {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.product-detail__contact-actions .btn:hover {
+  transform: none;
+  box-shadow: none;
+  filter: brightness(0.96);
+}
+
+.product-detail__contact-actions .btn:disabled:hover {
+  filter: none;
+}
+
+.product-detail__contact-actions .btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.product-detail__contact-actions .share-product {
+  display: contents;
+}
+
+.product-detail__contact-actions .share-product > .ui-note,
+.product-detail__contact-actions .share-product__fallback {
+  flex: 0 0 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .product-detail__technical-sheet-button {
@@ -629,12 +689,14 @@
   .product-detail__summary {
     grid-template-columns: 1fr;
   }
+
 }
 
 @media (max-width: 640px) {
   .product-detail__commercial {
     box-shadow: none;
   }
+
 
   .product-detail__facts,
   .product-detail__spec-row {
@@ -1409,14 +1471,14 @@
 .machinery-sales-card__image { display: block; width: 100%; height: auto; }
 .product-technical-sheet-modal__backdrop { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 3dvh 2vw; background: rgba(15, 23, 42, .78); }
 .product-technical-sheet-modal__dialog { display: flex; flex-direction: column; width: min(1280px, 96vw); height: 94dvh; max-width: 100%; max-height: 94dvh; overflow: hidden; border-radius: var(--radius-card); background: var(--color-surface); color: var(--color-text); }
-.product-technical-sheet-modal__header { box-sizing: border-box; display: flex; flex: 0 0 auto; justify-content: flex-end; align-items: center; min-height: 48px; padding: 4px 8px; }
 .product-technical-sheet-modal__accessible-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.product-technical-sheet-modal__close { display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; font-size: 1.5rem; line-height: 1; }
-.product-technical-sheet-modal__viewer { flex: 1 1 auto; min-height: 260px; overflow: hidden; }
+.product-technical-sheet-modal__viewer { flex: 1 1 0; min-height: 0; overflow: hidden; }
 .product-technical-sheet-modal__viewer iframe, .product-technical-sheet-modal__viewer img { width: 100%; height: 100%; border: 0; }
 .product-technical-sheet-modal__viewer--image { background: var(--color-surface-soft); }
 .product-technical-sheet-modal__viewer img { display: block; object-fit: contain; object-position: center; }
-.product-technical-sheet-modal__actions { display: flex; flex-wrap: wrap; gap: .625rem; padding: .625rem .75rem; }
+.product-technical-sheet-modal__actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; padding: .5rem .625rem; }
+.product-technical-sheet-modal__actions .btn { min-height: 36px; padding: .35rem .6rem; border-radius: 4px; font-size: .875rem; line-height: 1.25; }
+.product-technical-sheet-modal__actions .btn:hover { transform: none; box-shadow: none; filter: brightness(.96); }
 .product-technical-sheet-modal__dialog :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
-@media (max-width: 640px) { .product-technical-sheet-modal__backdrop { padding: .35rem; } .product-technical-sheet-modal__dialog { width: 100%; height: calc(100dvh - .7rem); max-height: calc(100dvh - .7rem); } .product-technical-sheet-modal__header { min-height: 52px; padding: 4px; } .product-technical-sheet-modal__close { flex-basis: 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; } .product-technical-sheet-modal__viewer { min-height: 35dvh; } .product-technical-sheet-modal__actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; padding: .625rem; } .product-technical-sheet-modal__actions .btn { min-height: 44px; width: 100%; } }
+@media (max-width: 640px) { .product-technical-sheet-modal__backdrop { padding: .35rem; } .product-technical-sheet-modal__dialog { width: 100%; height: calc(100dvh - .7rem); max-height: calc(100dvh - .7rem); } .product-technical-sheet-modal__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .product-technical-sheet-modal__actions a:first-child { grid-column: 1 / -1; } .product-technical-sheet-modal__actions .btn { min-height: 44px; width: 100%; } }
 @media (max-width: 640px) { .machinery-sales-section { padding: 1.5rem 0; } .machinery-sales-section__grid { grid-template-columns: minmax(0, 1fr); } }

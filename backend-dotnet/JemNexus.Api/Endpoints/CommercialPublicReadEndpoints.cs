@@ -257,6 +257,10 @@ public static class CommercialPublicReadEndpoints
         httpContext.Response.Headers.XContentTypeOptions = "nosniff";
         httpContext.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
         httpContext.Response.Headers.CacheControl = "no-store";
+        if (download != true && string.Equals(sheet.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            JemNexus.Api.Middleware.ApiSecurityHeadersMiddleware.AllowPublicInlinePdf(httpContext);
+        }
         return Results.File(stream, sheet.ContentType, download == true ? sheet.OriginalFileName : null, enableRangeProcessing: true);
     }
 
