@@ -260,6 +260,11 @@
   padding: 0 0.9rem 0.9rem;
 }
 
+.product-card__actions .btn {
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
 
 
 .product-card__badges {

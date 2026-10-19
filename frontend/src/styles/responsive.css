@@ -17,7 +17,5 @@
     border-top: 1px solid var(--color-border, #d7dee8); background: var(--color-surface, #fff); box-shadow: 0 -3px 12px rgba(15, 23, 42, .18);
   }
   .mobile-conversion-bar .btn { min-width: 0; min-height: 44px; padding-inline: .5rem; text-align: center; }
-  .product-detail__contact-actions { align-items: stretch; }
-  .product-detail__contact-actions > *, .share-product .btn { width: 100%; }
   .quote-confirmation__actions { display: grid; }
 }

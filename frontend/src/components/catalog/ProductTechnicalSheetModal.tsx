@@ -48,17 +48,14 @@ export function ProductTechnicalSheetModal({ open, productName, sheet, inlineUrl
   return createPortal(
     <div className="product-technical-sheet-modal__backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <div ref={dialogRef} className="product-technical-sheet-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="technical-sheet-title">
-        <header className="product-technical-sheet-modal__header">
-          <h2 id="technical-sheet-title" className="product-technical-sheet-modal__accessible-title">Ficha técnica de {productName}</h2>
-          <button ref={closeRef} type="button" className="btn btn--ghost product-technical-sheet-modal__close" onClick={onClose} aria-label="Cerrar ficha técnica">×</button>
-        </header>
+        <h2 id="technical-sheet-title" className="product-technical-sheet-modal__accessible-title">Ficha técnica de {productName}</h2>
         <div className={`product-technical-sheet-modal__viewer${isPdf ? '' : ' product-technical-sheet-modal__viewer--image'}`}>
           {isPdf ? <iframe src={inlineUrl} title={`Ficha técnica de ${productName}`} /> : <img src={inlineUrl} alt={`Ficha técnica ${sheet.name} de ${productName}`} />}
         </div>
         <footer className="product-technical-sheet-modal__actions">
           <a className="btn btn--ghost" href={inlineUrl} target="_blank" rel="noopener noreferrer">Abrir en nueva pestaña</a>
           <a className="btn btn--accent" href={downloadUrl} onClick={onDownload}>Descargar</a>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>Cerrar</button>
+          <button ref={closeRef} type="button" className="btn btn--ghost" onClick={onClose}>Cerrar</button>
         </footer>
       </div>
     </div>, document.body,
