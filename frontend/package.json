@@ -13,7 +13,8 @@
     "test:sidebar-menu": "node --experimental-strip-types --test tests/sidebar-menu.test.mjs tests/catalog-filters.test.mjs",
     "build": "tsc -b && npm run build:client && npm run build:server && npm run prerender && npm run validate:prerender",
     "preview": "vite preview",
-    "test:machinery-rental": "node --experimental-strip-types --test tests/machinery-rental.test.mjs tests/machinery-rental-render.test.mjs"
+    "test:machinery-rental": "node --experimental-strip-types --test tests/machinery-rental.test.mjs tests/machinery-rental-render.test.mjs",
+    "test:quote-request": "node --test tests/quote-request.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

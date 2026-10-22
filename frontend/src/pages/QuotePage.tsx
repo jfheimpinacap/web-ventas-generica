@@ -7,23 +7,12 @@ import { Layout } from '../components/layout/Layout'
 import { INDEX_ROBOTS, Seo } from '../components/common/Seo'
 import { Breadcrumb } from '../components/common/Breadcrumb'
 import { JsonLd } from '../components/common/JsonLd'
-import { createQuoteRequest, getProducts } from '../services/catalogApi'
 import { resolveMediaUrl } from '../services/api'
-import type { PreferredContactMethod, ProductListItem, QuoteRequestPublicPayload, ProductCondition, StockStatus } from '../types/catalog'
+import type { PreferredContactMethod, ProductDetail, ProductCondition, StockStatus } from '../types/catalog'
 import { formatPrice } from '../utils/formatters'
 import { trackGenerateLead } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildPageJsonLd, getStaticSeo } from '../utils/seo'
-
-interface QuoteFormState {
-  customer_name: string
-  customer_phone: string
-  customer_email: string
-  company_name: string
-  city: string
-  preferred_contact_method: PreferredContactMethod | ''
-  message: string
-}
-
+import { currentQuoteProductSelection, initialQuoteProductSelection, loadQuoteProductSelection, parseQuoteProductId, QUOTE_PRODUCT_LOADING_MESSAGE, submitQuoteRequest, type QuoteFormState, type QuoteProductSelection } from '../utils/quoteRequest'
 
 const CONDITION_LABELS: Record<ProductCondition, string> = {
   new: 'Nuevo',
@@ -49,26 +38,54 @@ const initialForm: QuoteFormState = {
   message: '',
 }
 
+export function QuoteProductPreview({ selection }: { selection: QuoteProductSelection }) {
+  const product = selection.product
+  const imageUrl = resolveMediaUrl(product?.main_image?.image)
+  const [imageLoadFailed, setImageLoadFailed] = useState(false)
+  useEffect(() => { setImageLoadFailed(false) }, [product?.id, imageUrl])
+
+  return <aside className="quote-preview" aria-label="Resumen del producto a cotizar" aria-busy={selection.status === 'loading'}>
+    <h2>Producto a cotizar</h2>
+    {selection.status === 'loading' ? <p role="status">Cargando producto seleccionado...</p> : product ? <>
+      <div className="quote-preview__image-wrap">
+        {imageUrl && !imageLoadFailed ? <img className="quote-preview__image" src={imageUrl} alt={product.main_image?.alt_text?.trim() || product.name} loading="lazy" onError={() => setImageLoadFailed(true)} /> : <div className="quote-preview__placeholder">Sin imagen disponible</div>}
+      </div>
+      <div className="quote-preview__meta">
+        <h3>{product.name}</h3>
+        <p><strong>Marca:</strong> {product.brand?.name ?? 'Sin marca'}</p>
+        <p><strong>Categoría:</strong> {product.category?.name ?? 'Sin categoría'}</p>
+        {isRentalProduct(product) ? <><p>Solicitud de arriendo</p><RentalRates product={product} /></> : <>
+          <p><strong>Condición:</strong> {CONDITION_LABELS[product.condition]}</p>
+          <p><strong>Disponibilidad:</strong> {STOCK_LABELS[product.stock_status]}</p>
+          <p><strong>Precio:</strong> {product.price_visible ? formatPrice(product) : 'Consultar'}</p>
+        </>}
+        <Link className="btn btn--ghost" to={`/producto/${product.slug}`}>Ver detalle</Link>
+      </div>
+    </> : <div className="quote-preview__empty">
+      {selection.status === 'unavailable' ? <p className="ui-note ui-note--error" role="alert">No fue posible cargar el producto seleccionado. Puedes continuar con una solicitud general.</p> : null}
+      <p><strong>No hay producto seleccionado.</strong></p>
+      <p>Puedes enviar una solicitud general de cotización.</p>
+      {selection.status === 'unavailable' ? <Link to="/catalogo">Volver al catálogo</Link> : null}
+    </div>}
+  </aside>
+}
+
 export function QuotePage() {
   const quoteSeo = getStaticSeo('/cotizar')
   const breadcrumbItems = [{ label: 'Inicio', to: '/' }, { label: 'Cotizar' }]
   const [searchParams] = useSearchParams()
-  const productFromQuery = useMemo(() => {
-    const value = searchParams.get('product')
-    if (!value) return undefined
-    if (!/^[1-9]\d*$/.test(value)) return null
-    const id = Number(value)
-    return Number.isSafeInteger(id) ? id : null
-  }, [searchParams])
+  const productFromQuery = useMemo(() => parseQuoteProductId(searchParams.get('product')), [searchParams])
 
-  const [selectedProduct, setSelectedProduct] = useState<ProductListItem | null>(null)
+  const [loadedSelection, setLoadedSelection] = useState(() => initialQuoteProductSelection(productFromQuery))
+  const productSelection = currentQuoteProductSelection(productFromQuery, loadedSelection)
+  const selectedProduct = productSelection.product
+  const productLoading = productSelection.status === 'loading'
   const [form, setForm] = useState(initialForm)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [submittedProduct, setSubmittedProduct] = useState<ProductDetail | null>(null)
   const [submittedContactMethod, setSubmittedContactMethod] = useState<PreferredContactMethod | ''>('')
-  const [productSelectionError, setProductSelectionError] = useState(false)
-  const [imageLoadFailed, setImageLoadFailed] = useState(false)
   const inFlightRef = useRef(false)
   const mountedRef = useRef(true)
   const confirmationHeadingRef = useRef<HTMLHeadingElement>(null)
@@ -77,47 +94,11 @@ export function QuotePage() {
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
   useEffect(() => { if (submitted) confirmationHeadingRef.current?.focus() }, [submitted])
 
-  const selectedProductImageUrl = useMemo(
-    () => resolveMediaUrl(selectedProduct?.main_image?.image),
-    [selectedProduct],
-  )
-
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [productFromQuery])
 
-  useEffect(() => {
-    let active = true
-
-    setSelectedProduct(null)
-    setProductSelectionError(false)
-    if (productFromQuery === undefined) {
-      return () => {
-        active = false
-      }
-    }
-
-    if (productFromQuery === null) { setProductSelectionError(true); return () => { active = false } }
-
-    const run = async () => {
-      try {
-        const products = await getProducts()
-        if (active) { const match = products.find((product) => product.id === productFromQuery) ?? null; setSelectedProduct(match); setProductSelectionError(!match) }
-      } catch {
-        if (active) { setSelectedProduct(null); setProductSelectionError(true) }
-      }
-    }
-
-    void run()
-
-    return () => {
-      active = false
-    }
-  }, [productFromQuery])
-
-  useEffect(() => {
-    setImageLoadFailed(false)
-  }, [selectedProduct?.id, selectedProductImageUrl])
+  useEffect(() => loadQuoteProductSelection(productFromQuery, setLoadedSelection), [productFromQuery])
 
   const validate = () => {
     if (!form.customer_name.trim()) return 'El nombre es obligatorio.'
@@ -130,6 +111,7 @@ export function QuotePage() {
     event.preventDefault()
     setError(null)
     if (inFlightRef.current || submitted) return
+    if (productLoading) { setError(QUOTE_PRODUCT_LOADING_MESSAGE); return }
 
     const validationError = validate()
     if (validationError) {
@@ -137,21 +119,10 @@ export function QuotePage() {
       return
     }
 
-    const payload: QuoteRequestPublicPayload = {
-      customer_name: form.customer_name.trim(),
-      customer_phone: form.customer_phone.trim(),
-      customer_email: form.customer_email.trim(),
-      company_name: form.company_name.trim(),
-      city: form.city.trim(),
-      preferred_contact_method: form.preferred_contact_method,
-      message: form.message.trim(),
-      ...(selectedProduct ? { product: selectedProduct.id } : {}),
-    }
-
     inFlightRef.current = true
     try {
       setLoading(true)
-      await createQuoteRequest(payload)
+      await submitQuoteRequest(form, productSelection)
       if (!mountedRef.current) return
       trackGenerateLead({
         product_id: selectedProduct?.id,
@@ -159,6 +130,7 @@ export function QuotePage() {
         preferred_contact_method: form.preferred_contact_method || undefined,
       })
       setSubmittedContactMethod(form.preferred_contact_method)
+      setSubmittedProduct(selectedProduct)
       setForm(initialForm)
       setSubmitted(true)
     } catch {
@@ -184,58 +156,21 @@ export function QuotePage() {
         <p className="quote-page__subtitle">Completa el formulario para que el equipo comercial revise los antecedentes de tu solicitud.</p>
 
         <div className="quote-layout">
-          <aside className="quote-preview" aria-label="Resumen del producto a cotizar">
-            <h2>Producto a cotizar</h2>
-            {selectedProduct ? (
-              <>
-                <div className="quote-preview__image-wrap">
-                  {selectedProductImageUrl && !imageLoadFailed ? (
-                    <img
-                      className="quote-preview__image"
-                      src={selectedProductImageUrl}
-                      alt={selectedProduct.main_image?.alt_text?.trim() || selectedProduct.name}
-                      loading="lazy"
-                      onError={() => setImageLoadFailed(true)}
-                    />
-                  ) : (
-                    <div className="quote-preview__placeholder">Sin imagen disponible</div>
-                  )}
-                </div>
-                <div className="quote-preview__meta">
-                  <h3>{selectedProduct.name}</h3>
-                  <p><strong>Marca:</strong> {selectedProduct.brand?.name ?? 'Sin marca'}</p>
-                  <p><strong>Categoría:</strong> {selectedProduct.category?.name ?? 'Sin categoría'}</p>
-                  <p><strong>Condición:</strong> {CONDITION_LABELS[selectedProduct.condition]}</p>
-                  <p><strong>Disponibilidad:</strong> {STOCK_LABELS[selectedProduct.stock_status]}</p>
-                  {isRentalProduct(selectedProduct) ? <><p>Solicitud de arriendo</p><RentalRates product={selectedProduct} /></> : <p><strong>Precio:</strong> {selectedProduct.price_visible ? formatPrice(selectedProduct) : 'Consultar'}</p>}
-                  <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
-                    Ver detalle
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <div className="quote-preview__empty">
-                {productSelectionError ? <p className="ui-note ui-note--error" role="alert">No fue posible cargar el producto seleccionado. Puedes continuar con una solicitud general.</p> : null}
-                <p><strong>No hay producto seleccionado.</strong></p>
-                <p>Puedes enviar una solicitud general de cotización.</p>
-                {productSelectionError ? <Link to="/catalogo">Volver al catálogo</Link> : null}
-              </div>
-            )}
-          </aside>
+          <QuoteProductPreview selection={productSelection} />
 
           {submitted ? (
             <section className="quote-confirmation" role="status" aria-labelledby="quote-confirmation-title">
               <h2 id="quote-confirmation-title" ref={confirmationHeadingRef} tabIndex={-1}>Solicitud recibida</h2>
               <p>Recibimos tu solicitud de cotización. El equipo comercial revisará los antecedentes enviados{submittedContactMethod ? ' y utilizará el medio de contacto indicado' : ''}.</p>
-              {selectedProduct ? <p>Producto solicitado: <strong>{selectedProduct.name}</strong></p> : null}
+              {submittedProduct ? <p>Producto solicitado: <strong>{submittedProduct.name}</strong></p> : null}
               <div className="quote-confirmation__actions">
                 <Link className="btn btn--ghost" to="/catalogo">Volver al catálogo</Link>
-                {selectedProduct ? <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>Volver al producto</Link> : null}
-                <button className="btn btn--accent" type="button" onClick={() => { setSubmitted(false); setSubmittedContactMethod(''); setError(null); setForm(initialForm); requestAnimationFrame(() => formHeadingRef.current?.focus()) }}>Enviar otra solicitud</button>
+                {submittedProduct ? <Link className="btn btn--ghost" to={`/producto/${submittedProduct.slug}`}>Volver al producto</Link> : null}
+                <button className="btn btn--accent" type="button" onClick={() => { setSubmitted(false); setSubmittedProduct(null); setSubmittedContactMethod(''); setError(null); setForm(initialForm); requestAnimationFrame(() => formHeadingRef.current?.focus()) }}>Enviar otra solicitud</button>
               </div>
             </section>
           ) : (
-          <form className="quote-form" onSubmit={onSubmit} aria-busy={loading}>
+          <form className="quote-form" onSubmit={onSubmit} aria-busy={loading || productLoading}>
           <label>
             Nombre
             <input
@@ -309,8 +244,8 @@ export function QuotePage() {
 
           {error ? <p id="quote-form-message" className="ui-note ui-note--error" role="alert">{error}</p> : null}
 
-            <button className="btn btn--accent" type="submit" disabled={loading}>
-              {loading ? 'Enviando...' : 'Enviar'}
+            <button className="btn btn--accent" type="submit" disabled={loading || productLoading}>
+              {loading ? 'Enviando...' : productLoading ? 'Cargando producto...' : 'Enviar'}
             </button>
           </form>
           )}
