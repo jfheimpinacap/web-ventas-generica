@@ -1,3 +1,5 @@
+import { isRentalProduct } from '../utils/rental'
+import { RentalRates } from '../components/catalog/RentalRates'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -205,7 +207,7 @@ export function QuotePage() {
                   <p><strong>Categoría:</strong> {selectedProduct.category?.name ?? 'Sin categoría'}</p>
                   <p><strong>Condición:</strong> {CONDITION_LABELS[selectedProduct.condition]}</p>
                   <p><strong>Disponibilidad:</strong> {STOCK_LABELS[selectedProduct.stock_status]}</p>
-                  <p><strong>Precio:</strong> {selectedProduct.price_visible ? formatPrice(selectedProduct) : 'Consultar'}</p>
+                  {isRentalProduct(selectedProduct) ? <><p>Solicitud de arriendo</p><RentalRates product={selectedProduct} /></> : <p><strong>Precio:</strong> {selectedProduct.price_visible ? formatPrice(selectedProduct) : 'Consultar'}</p>}
                   <Link className="btn btn--ghost" to={`/producto/${selectedProduct.slug}`}>
                     Ver detalle
                   </Link>

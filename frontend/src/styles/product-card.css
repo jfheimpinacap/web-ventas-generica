@@ -24,6 +24,9 @@
   position: relative;
   display: grid;
   place-items: center;
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
   aspect-ratio: 4 / 3;
   padding: 0;
   background: #f1f5f9;
@@ -34,6 +37,8 @@
 .product-card__image-link img,
 .product-card__image-link img:not([src=""]),
 .product-card__image-area img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -110,8 +115,7 @@
 
 
 .spare-offer-card__content h3,
-.repair-service-card h3,
-.promo-product-card__content h3 {
+.repair-service-card h3 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -129,6 +133,11 @@
   flex-direction: column;
   min-height: 100%;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Size query containment creates an independent formatting context, which
+   disables subgrid. Only the standalone admin preview needs this query. */
+.admin-product-preview-card {
   container-type: inline-size;
 }
 
@@ -190,10 +199,11 @@
   color: var(--color-secondary-text);
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 @container (max-width: 235px) {
-  .product-card__technical-data {
+  .admin-product-preview-card .product-card__technical-data {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -206,6 +216,7 @@
   font-size: 1rem;
   font-family: "Ubuntu", system-ui, sans-serif;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 
@@ -236,8 +247,13 @@
 
 
 
+.product-card__pricing {
+  margin-top: auto;
+  min-width: 0;
+}
+
 .product-card__price {
-  margin-top: auto !important;
+  margin: 0 !important;
   padding-top: 0.35rem;
 }
 
@@ -246,7 +262,8 @@
 .promo-product-card__price,
 .product-card__price {
   color: var(--color-public-price) !important;
-  font-size: clamp(1.35rem, 1.9vw, 1.95rem) !important;
+  font-size: 1.125rem !important;
+  white-space: nowrap;
   font-weight: 700 !important;
   font-family: "Ubuntu", system-ui, sans-serif;
   line-height: 1.1 !important;
@@ -336,7 +353,7 @@
   .home-product-price,
   .promo-product-card__price,
   .product-card__price {
-    font-size: clamp(1.2rem, 5.4vw, 1.5rem) !important;
+    font-size: 1rem !important;
   }
 
   .product-card__actions {
@@ -348,4 +365,77 @@
   .promo-product-card__content {
     gap: 0.24rem;
   }
+}
+
+/* Shared tracks align complete headings, technical rows and commercial actions.
+   Empty fields contribute no text; neighbouring cards determine each row's height. */
+@supports (grid-template-rows: subgrid) {
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    grid-row: span 10;
+    row-gap: 0;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__image-link {
+    grid-row: 1;
+  }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    grid-row: 2 / span 8;
+    row-gap: 0.35rem;
+  }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content > .product-card__badges { grid-row: 1; align-content: start; }
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content > h3 { grid-row: 2; }
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content > .product-card__model { grid-row: 3; }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content > .product-card__technical-data {
+    grid-row: 4 / span 4;
+    grid-template-rows: subgrid;
+    row-gap: 0.4rem;
+    margin-block: 0;
+  }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__content > .product-card__pricing {
+    grid-row: 8;
+    align-self: start;
+    margin-top: 0;
+  }
+
+  :is(.featured-products__grid, .machinery-carousel__slide) > .product-card > .product-card__actions {
+    grid-row: 10;
+    align-self: end;
+  }
+}
+
+.rental-commercial { min-width: 0; }
+.rental-rates {
+  display: grid;
+  gap: 0.65rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-accent-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-soft);
+}
+.rental-rates__row { display: grid; gap: 0.2rem; }
+.rental-rates dt { font-size: 0.95rem; font-weight: 600; }
+.rental-rates dd { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 0.35rem; margin: 0; white-space: nowrap; }
+.rental-rates strong, .rental-rates__hidden, .product-card__content p.rental-rates__hidden { font-size: 1.4rem; line-height: 1.25; font-weight: 700; color: var(--color-primary-dark); }
+.rental-rates dd span { font-size: 1rem; }
+.rental-commercial__notes { font-size: 0.9rem; line-height: 1.5; }
+.rental-commercial__notes p { margin: 0.2rem 0; }
+@media (max-width: 640px) {
+  .rental-rates { padding: 0.5rem; }
+  .rental-rates strong, .rental-rates__hidden, .product-card__content p.rental-rates__hidden { font-size: 1.25rem; }
+  .rental-rates dd span { font-size: 0.875rem; }
 }

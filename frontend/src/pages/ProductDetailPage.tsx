@@ -1,3 +1,7 @@
+import { MachineryDetailFacts, getAdditionalProductSpecs } from '../components/catalog/MachineryDetailFacts'
+import { ProductIncludedServices } from '../components/catalog/ProductIncludedServices'
+import { isRentalProduct } from '../utils/rental'
+import { RentalRates } from '../components/catalog/RentalRates'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -11,7 +15,7 @@ import { Layout } from '../components/layout/Layout'
 import { buildPublicTechnicalSheetUrl, getProductBySlug, getProducts } from '../services/catalogApi'
 import { ApiError, resolveMediaUrl } from '../services/api'
 import type { ProductDetail, ProductImage, ProductListItem } from '../types/catalog'
-import { formatMachineWeightKg, formatMaximumLoadCapacityKg, formatProductCondition, formatPrice, formatProductPowerSource, formatProductTerrainType, formatProductType, formatStockStatus } from '../utils/formatters'
+import { formatProductCondition, formatPrice, formatProductType, formatStockStatus } from '../utils/formatters'
 import { trackProductView, trackQuoteClick, trackTechnicalSheetDownload, trackTechnicalSheetView } from '../utils/analytics'
 import { buildBreadcrumbJsonLd, buildProductJsonLd, buildPublicUrl, getProductImageUrl, truncateSeoDescription } from '../utils/seo'
 
@@ -53,7 +57,8 @@ export function ProductDetailPage() {
         if (detail.category?.id) {
           const related = await getProducts({
             category: String(detail.category.id), ordering: '-created_at',
-            ...(detail.product_type === 'machinery' ? { product_type: 'machinery', condition: detail.condition } : {}),
+            commercial_mode: detail.commercial_mode ?? 'sale',
+            ...(detail.product_type === 'machinery' ? { product_type: 'machinery', ...(isRentalProduct(detail) ? {} : { condition: detail.condition }) } : {}),
           })
           if (active) setRelatedProducts(related.filter((item) => item.id !== detail.id).slice(0, 4))
         } else {
@@ -75,7 +80,8 @@ export function ProductDetailPage() {
   const inlineTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url) : ''
   const downloadTechnicalSheetUrl = hasTechnicalSheet ? buildPublicTechnicalSheetUrl(technicalSheet!.file_url, true) : ''
 
-  const commercialPath = product?.product_type === 'machinery' && product.condition === 'new' ? '/maquinaria-nueva'
+  const isRental = isRentalProduct(product)
+  const commercialPath = isRental ? '/maquinaria-arriendo' : product?.product_type === 'machinery' && product.condition === 'new' ? '/maquinaria-nueva'
     : product?.product_type === 'machinery' && product.condition === 'used' ? '/maquinaria-usada'
       : product?.product_type === 'spare_part' ? '/repuestos'
         : product?.product_type === 'service' ? '/servicios' : null
@@ -98,7 +104,7 @@ export function ProductDetailPage() {
     return [
       { label: 'Inicio', to: '/' },
       commercialPath
-        ? { label: product.product_type === 'spare_part' ? 'Repuestos' : product.product_type === 'service' ? 'Servicios' : product.condition === 'new' ? 'Maquinaria nueva' : 'Maquinaria usada', to: commercialPath }
+        ? { label: isRentalProduct(product) ? 'Maquinaria para arriendo' : product.product_type === 'spare_part' ? 'Repuestos' : product.product_type === 'service' ? 'Servicios' : product.condition === 'new' ? 'Maquinaria nueva' : 'Maquinaria usada', to: commercialPath }
         : { label: 'Catálogo', to: '/catalogo' },
       { label: product.name },
     ]
@@ -149,21 +155,7 @@ export function ProductDetailPage() {
   )
 
   const isMachinery = product?.product_type === 'machinery'
-  const maximumLoadCapacity = isMachinery
-    ? formatMaximumLoadCapacityKg(product.maximum_load_capacity_kg)
-    : null
-  const machineWeight = isMachinery ? formatMachineWeightKg(product.machine_weight_kg) : null
-  const powerSource = isMachinery ? formatProductPowerSource(product.power_source) : null
-  const terrainType = isMachinery ? formatProductTerrainType(product.terrain_type) : null
-  const includedServices = isMachinery
-    ? [
-        { label: 'Revisión técnica', included: product.includes_technical_review === true },
-        { label: 'Asesoría técnico-comercial', included: product.includes_commercial_technical_advice === true },
-        { label: 'Entrega coordinada', included: product.includes_coordinated_delivery === true },
-      ].filter((service) => service.included)
-    : []
-
-
+  const additionalSpecs = product ? getAdditionalProductSpecs(product) : []
   return (
     <Layout mobileProduct={!loading && !error && product ? product : null} suppressMobileConversion={technicalSheetOpen}>
       <Seo
@@ -234,29 +226,20 @@ export function ProductDetailPage() {
 
               <section className="product-detail__commercial" aria-label="Información comercial del producto">
                 <div className="product-detail__title-block">
-                  <p className="product-detail__eyebrow">{formatProductType(product.product_type)}</p>
+                  <p className="product-detail__eyebrow">{isRental ? 'Maquinaria para arriendo' : formatProductType(product.product_type)}</p>
                   <h1>{product.name}</h1>
                 </div>
 
-                <div className="product-detail__price-box">
+                {!isRental ? <div className="product-detail__price-box">
                   <span>Precio</span>
                   <strong>{formatPrice(product)}</strong>
                   {!product.price_visible || !product.price ? <small>Solicita una cotización para recibir precio actualizado.</small> : null}
-                </div>
+                </div> : null}
 
                 {!isMachinery && product.short_description?.trim() ? <p className="product-detail__short-description">{product.short_description.trim()}</p> : null}
 
                 {isMachinery ? (
-                  <dl className="product-detail__facts">
-                    {product.brand?.name ? <div><dt>Marca</dt><dd>{product.brand.name}</dd></div> : null}
-                    {machineWeight ? <div><dt>Peso</dt><dd>{machineWeight}</dd></div> : null}
-                    {product.model?.trim() ? <div><dt>Modelo</dt><dd>{product.model.trim()}</dd></div> : null}
-                    {powerSource ? <div><dt>Fuente de energía</dt><dd>{powerSource}</dd></div> : null}
-                    {maximumLoadCapacity ? <div><dt>Capacidad máxima de carga</dt><dd>{maximumLoadCapacity}</dd></div> : null}
-                    <div><dt>Condición</dt><dd>{formatProductCondition(product)}</dd></div>
-                    {terrainType ? <div><dt>Tipo de terreno</dt><dd>{terrainType}</dd></div> : null}
-                    <div><dt>Stock</dt><dd>{formatStockStatus(product.stock_status)}</dd></div>
-                  </dl>
+                  <MachineryDetailFacts product={product} />
                 ) : (
                   <dl className="product-detail__facts">
                     {product.brand?.name ? <div><dt>Marca</dt><dd>{product.brand.name}</dd></div> : null}
@@ -267,6 +250,8 @@ export function ProductDetailPage() {
                     {product.product_type === 'spare_part' && product.sku?.trim() ? <div><dt>SKU</dt><dd>{product.sku.trim()}</dd></div> : null}
                   </dl>
                 )}
+
+                {isRental ? <RentalRates product={product} /> : null}
 
                 <div className="product-detail__contact-actions">
                   <button
@@ -292,7 +277,7 @@ export function ProductDetailPage() {
                   <ShareButton slug={product.slug} title={product.name} text={product.short_description} productType={product.product_type} />
                 </div>
 
-                {product.supplier?.name ? (
+                {!isRental && product.supplier?.name ? (
                   <p className="product-detail__supplier">
                     <strong>Proveedor:</strong> {product.supplier.name}
                   </p>
@@ -300,19 +285,7 @@ export function ProductDetailPage() {
               </section>
             </div>
 
-            {isMachinery && includedServices.length > 0 ? (
-              <section className="product-detail__included-services" aria-labelledby="included-services-title">
-                <h2 id="included-services-title">Servicios incluidos</h2>
-                <ul className="product-detail__included-services-list">
-                  {includedServices.map((service) => (
-                    <li className="product-detail__included-service" key={service.label}>
-                      <span className="product-detail__included-service-icon" aria-hidden="true">✓</span>
-                      <span>{service.label}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+            <ProductIncludedServices product={product} />
 
             {(isMachinery || product.description?.trim()) ? <section className="product-detail__description-card">
               <h2>Descripción</h2>
@@ -321,11 +294,11 @@ export function ProductDetailPage() {
 
             <section className="product-detail__spec-section">
               <h2>Especificaciones técnicas</h2>
-              {product.specs.length === 0 ? (
-                <p className="product-detail__empty-specs">Sin especificaciones técnicas cargadas por el momento.</p>
+              {additionalSpecs.length === 0 ? (
+                <p className="product-detail__empty-specs">Sin especificaciones técnicas adicionales.</p>
               ) : (
                 <dl className="product-detail__specs">
-                  {[...product.specs]
+                  {[...additionalSpecs]
                     .sort((a, b) => a.order - b.order || a.id - b.id)
                     .map((spec) => (
                       <div key={spec.id} className="product-detail__spec-row">

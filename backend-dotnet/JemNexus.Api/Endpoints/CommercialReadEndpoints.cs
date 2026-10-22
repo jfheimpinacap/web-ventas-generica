@@ -68,6 +68,7 @@ public static class CommercialReadEndpoints
         [FromQuery(Name = "category")] string? category,
         [FromQuery(Name = "brand")] string? brand,
         [FromQuery(Name = "product_type")] string? productType,
+        [FromQuery(Name = "commercial_mode")] string? commercialMode,
         [FromQuery(Name = "condition")] string? condition,
         [FromQuery(Name = "stock_status")] string? stockStatus,
         [FromQuery(Name = "is_featured")] bool? isFeatured,
@@ -77,6 +78,7 @@ public static class CommercialReadEndpoints
         CancellationToken cancellationToken)
     {
         var query = ProductReadQuery(dbContext.Products);
+        if (!string.IsNullOrWhiteSpace(commercialMode)) query = query.Where(product => product.CommercialMode == commercialMode);
 
         if (includeUnpublished != true)
         {

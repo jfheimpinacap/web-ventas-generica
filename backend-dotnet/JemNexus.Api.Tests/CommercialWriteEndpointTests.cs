@@ -20,7 +20,7 @@ using Xunit;
 
 namespace JemNexus.Api.Tests;
 
-public sealed class CommercialWriteEndpointTests : IDisposable
+public sealed partial class CommercialWriteEndpointTests : IDisposable
 {
     private const string TestPassword = "DummyPassword123!";
     private readonly CommercialWriteApiFactory _factory = new();

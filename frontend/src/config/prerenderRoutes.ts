@@ -3,6 +3,7 @@ export const PRERENDER_ROUTES = [
   '/catalogo',
   '/maquinaria-nueva',
   '/maquinaria-usada',
+  '/maquinaria-arriendo',
   '/repuestos',
   '/servicios',
   '/cotizar',
@@ -13,7 +14,7 @@ export const PRERENDER_ROUTES = [
 
 export type PrerenderRoute = (typeof PRERENDER_ROUTES)[number]
 
-export const CATALOG_FILTER_PARAMS = ['search', 'category', 'catalog_root', 'brand', 'product_type', 'condition', 'stock_status', 'ordering', 'min_price', 'max_price'] as const
+export const CATALOG_FILTER_PARAMS = ['search', 'category', 'catalog_root', 'brand', 'product_type', 'commercial_mode', 'condition', 'stock_status', 'ordering', 'min_price', 'max_price'] as const
 
 export function normalizePrerenderPath(pathname: string) {
   return pathname !== '/' && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname

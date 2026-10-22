@@ -623,3 +623,5 @@
 @media (prefers-reduced-motion: reduce) {
   .categories-modal, .categories-modal__panel, .categories-modal__mobile-subs { animation: none; transition: none; }
 }
+
+.categories-modal__rental-link { display: block; padding: 0.8rem 1.25rem; font-weight: 600; color: var(--color-primary-dark); }

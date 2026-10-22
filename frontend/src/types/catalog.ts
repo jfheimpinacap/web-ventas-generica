@@ -81,6 +81,20 @@ export interface ProductSpecWritePayload {
   order?: number
 }
 
+export type ProductCommercialMode = 'sale' | 'rental'
+
+export interface RentalProductFields {
+  commercial_mode?: ProductCommercialMode
+  rental_price_day?: string | null
+  rental_price_week?: string | null
+  rental_price_month?: string | null
+  platform_height_m?: number | null
+  machine_weight_kg?: number | null
+  rental_includes_technical_advice?: boolean
+  rental_includes_onsite_service?: boolean
+  rental_includes_transport_coordination?: boolean
+}
+
 export type ProductCondition = 'new' | 'used' | 'refurbished' | 'not_applicable'
 export type StockStatus = 'available' | 'on_request' | 'sold' | 'reserved'
 export type ProductType = 'machinery' | 'spare_part' | 'service'
@@ -89,7 +103,7 @@ export type ProductTerrainType = 'indoor_smooth' | 'outdoor' | 'outdoor_slopes_a
 export type ProductPriceCurrency = 'CLP' | 'USD'
 export type ProductPriceTaxMode = 'plus_vat' | 'vat_included'
 
-export interface ProductListItem {
+export interface ProductListItem extends RentalProductFields {
   id: number
   name: string
   slug: string
@@ -242,6 +256,7 @@ export interface ProductQueryParams {
   search?: string
   category?: string
   brand?: string
+  commercial_mode?: ProductCommercialMode
   product_type?: ProductType | ''
   condition?: ProductCondition | ''
   stock_status?: StockStatus | ''
@@ -296,7 +311,7 @@ export interface PromotionFormValues {
   ends_at: string | null
 }
 
-export interface ProductFormValues {
+export interface ProductFormValues extends RentalProductFields {
   name: string
   category: number
   brand: number | null

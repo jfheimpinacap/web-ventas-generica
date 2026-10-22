@@ -21,6 +21,14 @@ const INITIAL_VALUES: ProductFormValues = {
   supplier: null,
   technical_sheet: null,
   product_type: 'machinery',
+  commercial_mode: 'sale',
+  platform_height_m: null,
+  rental_price_day: null,
+  rental_price_week: null,
+  rental_price_month: null,
+  rental_includes_technical_advice: false,
+  rental_includes_onsite_service: false,
+  rental_includes_transport_coordination: false,
   condition: 'new',
   short_description: '',
   description: '',
@@ -179,7 +187,7 @@ export function AdminProductCreatePage() {
           sidebar={
             <section className="admin-block admin-block--compact admin-product-preview">
               <h2>Vista previa pública</h2>
-                <ProductAdminPreview values={formValues} categories={categories} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} imageAlt={selectedPending?.altText.trim() || formValues.name || 'Producto'} />
+                <ProductAdminPreview values={formValues} categories={categories} brands={brands} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} imageAlt={selectedPending?.altText.trim() || formValues.name || 'Producto'} />
             </section>
           }
         />

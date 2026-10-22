@@ -22,6 +22,10 @@ export const STATIC_PAGE_SEO = {
     title: 'Maquinaria usada para cotización | JEM Nexus',
     description: 'Consulta maquinaria usada publicada por JEM Nexus, revisa su información comercial y solicita una cotización.',
   },
+  '/maquinaria-arriendo': {
+    title: 'Maquinaria para arriendo | JEM Nexus',
+    description: 'Consulta modelos de maquinaria para arriendo, sus características y tarifas por día, semana o mes. Disponibilidad sujeta a confirmación.',
+  },
   '/repuestos': {
     title: 'Repuestos para maquinaria industrial | JEM Nexus',
     description: 'Revisa repuestos industriales publicados, consulta la información de cada producto y envía una solicitud de cotización.',
@@ -131,13 +135,13 @@ export function buildProductJsonLd(product: ProductDetail, canonicalUrl: string)
   if (product.model?.trim()) payload.model = product.model.trim()
   if (product.sku?.trim()) payload.sku = product.sku.trim()
 
-  const condition = !isService ? getConditionSchema(product.condition) : undefined
+  const condition = !isService && product.commercial_mode !== 'rental' ? getConditionSchema(product.condition) : undefined
   if (condition) payload.itemCondition = condition
 
   const price = product.price?.trim()
   const numericPrice = price && /^\d+(?:\.\d+)?$/.test(price) ? Number(price) : 0
   const currency = product.price_currency
-  if (product.price_visible === true && product.stock_status !== 'sold' && numericPrice > 0 && (currency === 'CLP' || currency === 'USD')) {
+  if (product.commercial_mode !== 'rental' && product.price_visible === true && product.stock_status !== 'sold' && numericPrice > 0 && (currency === 'CLP' || currency === 'USD')) {
     const offer: Record<string, unknown> = {
       '@type': 'Offer', '@id': `${canonicalUrl}#offer`, url: canonicalUrl, price, priceCurrency: currency,
       seller: { '@id': ORGANIZATION_ID },

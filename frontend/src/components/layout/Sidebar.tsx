@@ -96,8 +96,8 @@ export function Sidebar({ data }: { data: CatalogSidebarData }) {
         <SidebarMenu items={menuItems} expandedPath={accordion.categoryPath} onToggle={(path) => dispatchAccordion({ type: 'toggleCategory', path })} selected={selections.category} options={facets.category} countsReady={countsReady} onSelect={(value) => updateFilter('category', value)} />
       </Accordion>
       <Accordion sectionKey="brand" label="Marca" openSection={accordion.openSection} onToggle={toggleAccordion}>{options('brand')}</Accordion>
-      {!context.fixedCondition ? <Accordion sectionKey="condition" label="Condición" openSection={accordion.openSection} onToggle={toggleAccordion}>{options('condition')}</Accordion> : null}
-      <Accordion sectionKey="stock" label="Stock" openSection={accordion.openSection} onToggle={toggleAccordion}>{options('stock_status')}</Accordion>
+      {context.commercialMode !== 'rental' && !context.fixedCondition ? <Accordion sectionKey="condition" label="Condición" openSection={accordion.openSection} onToggle={toggleAccordion}>{options('condition')}</Accordion> : null}
+      {context.commercialMode !== 'rental' ? <Accordion sectionKey="stock" label="Stock" openSection={accordion.openSection} onToggle={toggleAccordion}>{options('stock_status')}</Accordion> : null}
       <button type="button" className="sidebar-filters__clear" onClick={() => setSearchParams(clearCatalogFilters(searchParams, context))}>Limpiar filtros</button>
     </div>
   </aside>

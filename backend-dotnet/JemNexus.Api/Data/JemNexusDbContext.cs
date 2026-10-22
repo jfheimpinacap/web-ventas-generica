@@ -383,6 +383,15 @@ public sealed class JemNexusDbContext(DbContextOptions<JemNexusDbContext> option
             entity.Property(product => product.Name).HasMaxLength(220).IsRequired();
             entity.Property(product => product.Slug).HasMaxLength(240).IsRequired();
             entity.Property(product => product.ProductType).HasMaxLength(20).HasDefaultValue(ProductTypes.Machinery).IsRequired();
+            entity.Property(product => product.CommercialMode).HasMaxLength(20).HasDefaultValue(ProductCommercialModes.Sale).IsRequired();
+            entity.HasIndex(product => new { product.CommercialMode, product.ProductType });
+            entity.Property(product => product.RentalPriceDay).HasColumnType("decimal(12,0)");
+            entity.Property(product => product.RentalPriceWeek).HasColumnType("decimal(12,0)");
+            entity.Property(product => product.RentalPriceMonth).HasColumnType("decimal(12,0)");
+            entity.Property(product => product.RentalIncludesTechnicalAdvice).HasDefaultValue(false);
+            entity.Property(product => product.RentalIncludesOnsiteService).HasDefaultValue(false);
+            entity.Property(product => product.RentalIncludesTransportCoordination).HasDefaultValue(false);
+            entity.Property(product => product.PlatformHeightM).HasColumnType("decimal(8,2)");
             entity.Property(product => product.Condition).HasMaxLength(20).HasDefaultValue(ProductConditions.NotApplicable).IsRequired();
             entity.Property(product => product.ShortDescription).HasMaxLength(280).HasDefaultValue(string.Empty);
             entity.Property(product => product.Description).HasDefaultValue(string.Empty);

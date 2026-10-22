@@ -146,6 +146,14 @@ public sealed record ProductListReadDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
+    public string CommercialMode { get; init; } = ProductCommercialModes.Sale;
+    public decimal? RentalPriceDay { get; init; }
+    public decimal? RentalPriceWeek { get; init; }
+    public decimal? RentalPriceMonth { get; init; }
+    public decimal? PlatformHeightM { get; init; }
+    public bool RentalIncludesTechnicalAdvice { get; init; }
+    public bool RentalIncludesOnsiteService { get; init; }
+    public bool RentalIncludesTransportCoordination { get; init; }
     public static ProductListReadDto FromProduct(Product product) => new(
         product.Id,
         product.Name,
@@ -186,7 +194,17 @@ public sealed record ProductListReadDto(
             .Select(ProductImageReadDto.FromImage)
             .FirstOrDefault(),
         product.CreatedAt,
-        product.UpdatedAt);
+        product.UpdatedAt)
+    {
+        CommercialMode = product.CommercialMode,
+        RentalPriceDay = product.RentalPriceDay,
+        RentalPriceWeek = product.RentalPriceWeek,
+        RentalPriceMonth = product.RentalPriceMonth,
+        PlatformHeightM = product.PlatformHeightM,
+        RentalIncludesTechnicalAdvice = product.RentalIncludesTechnicalAdvice,
+        RentalIncludesOnsiteService = product.RentalIncludesOnsiteService,
+        RentalIncludesTransportCoordination = product.RentalIncludesTransportCoordination,
+    };
 }
 
 public sealed record ProductDetailReadDto(
@@ -226,6 +244,14 @@ public sealed record ProductDetailReadDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
+    public string CommercialMode { get; init; } = ProductCommercialModes.Sale;
+    public decimal? RentalPriceDay { get; init; }
+    public decimal? RentalPriceWeek { get; init; }
+    public decimal? RentalPriceMonth { get; init; }
+    public decimal? PlatformHeightM { get; init; }
+    public bool RentalIncludesTechnicalAdvice { get; init; }
+    public bool RentalIncludesOnsiteService { get; init; }
+    public bool RentalIncludesTransportCoordination { get; init; }
     public static ProductDetailReadDto FromProduct(Product product)
     {
         var images = product.Images
@@ -274,7 +300,17 @@ public sealed record ProductDetailReadDto(
                 .Select(ProductSpecReadDto.FromSpec)
                 .ToList(),
             product.CreatedAt,
-            product.UpdatedAt);
+            product.UpdatedAt)
+        {
+            CommercialMode = product.CommercialMode,
+            RentalPriceDay = product.RentalPriceDay,
+            RentalPriceWeek = product.RentalPriceWeek,
+            RentalPriceMonth = product.RentalPriceMonth,
+            PlatformHeightM = product.PlatformHeightM,
+            RentalIncludesTechnicalAdvice = product.RentalIncludesTechnicalAdvice,
+            RentalIncludesOnsiteService = product.RentalIncludesOnsiteService,
+            RentalIncludesTransportCoordination = product.RentalIncludesTransportCoordination,
+        };
     }
 }
 

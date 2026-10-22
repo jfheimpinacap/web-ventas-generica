@@ -291,7 +291,7 @@ public static class CommercialWriteEndpoints
         if (validation is not null) return validation;
         var relation = await ValidateProductRelationsAsync(request, dbContext, requireCategory: true, cancellationToken);
         if (relation is not null) return relation;
-        var valueValidation = ValidateProductValues(request);
+        var valueValidation = ValidateProductValues(request, await ResolveEffectiveProductTypeAsync(request, null, dbContext, cancellationToken));
         if (valueValidation is not null) return valueValidation;
         var effectiveProductType = await ResolveEffectiveProductTypeAsync(request, null, dbContext, cancellationToken);
         var skuValidation = effectiveProductType == ProductTypes.SparePart
@@ -313,7 +313,7 @@ public static class CommercialWriteEndpoints
         if (validation is not null) return validation;
         var relation = await ValidateProductRelationsAsync(request, dbContext, requireCategory: false, cancellationToken);
         if (relation is not null) return relation;
-        var valueValidation = ValidateProductValues(request);
+        var valueValidation = ValidateProductValues(request, await ResolveEffectiveProductTypeAsync(request, product, dbContext, cancellationToken), product);
         if (valueValidation is not null) return valueValidation;
         var effectiveProductType = await ResolveEffectiveProductTypeAsync(request, product, dbContext, cancellationToken);
         var skuValidation = effectiveProductType == ProductTypes.SparePart
@@ -415,6 +415,7 @@ public static class CommercialWriteEndpoints
         if (request.TechnicalSheet.ValueKind != JsonValueKind.Undefined)
             product.TechnicalSheetId = ReadTechnicalSheetId(request.TechnicalSheet, out _);
         if (request.ProductType is not null) product.ProductType = request.ProductType.Trim();
+        if (request.CommercialMode is not null) product.CommercialMode = request.CommercialMode.Trim();
         if (request.Condition is not null) product.Condition = request.Condition.Trim();
         if (request.ShortDescription is not null) product.ShortDescription = request.ShortDescription.Trim();
         if (request.Description is not null) product.Description = request.Description.Trim();
@@ -427,10 +428,11 @@ public static class CommercialWriteEndpoints
         {
             product.Sku = null;
         }
-        if (request.WorkingHeightM.HasValue) product.WorkingHeightM = request.WorkingHeightM;
+        if (request.WorkingHeightM.ValueKind != JsonValueKind.Undefined) product.WorkingHeightM = ReadOptionalNumber(request.WorkingHeightM);
+        if (request.PlatformHeightM.ValueKind != JsonValueKind.Undefined) product.PlatformHeightM = ReadOptionalNumber(request.PlatformHeightM);
         if (request.TerrainType is not null) product.TerrainType = Clean(request.TerrainType);
-        if (request.Year.HasValue) product.Year = request.Year;
-        if (request.HoursMeter.HasValue) product.HoursMeter = request.HoursMeter;
+        if (request.Year.ValueKind != JsonValueKind.Undefined) product.Year = (int?)ReadOptionalNumber(request.Year);
+        if (request.HoursMeter.ValueKind != JsonValueKind.Undefined) product.HoursMeter = (int?)ReadOptionalNumber(request.HoursMeter);
         if (request.MaximumLoadCapacityKg.HasValue) product.MaximumLoadCapacityKg = request.MaximumLoadCapacityKg;
         if (product.ProductType == ProductTypes.Machinery)
         {
@@ -443,7 +445,7 @@ public static class CommercialWriteEndpoints
             product.MachineWeightKg = null;
         }
         if (request.PowerSource is not null) product.PowerSource = request.PowerSource.Trim();
-        var defaultsToIncluded = isCreate && product.ProductType == ProductTypes.Machinery;
+        var defaultsToIncluded = isCreate && product.ProductType == ProductTypes.Machinery && product.CommercialMode == ProductCommercialModes.Sale;
         if (request.IncludesTechnicalReview.HasValue || defaultsToIncluded) product.IncludesTechnicalReview = request.IncludesTechnicalReview ?? true;
         if (request.IncludesCommercialTechnicalAdvice.HasValue || defaultsToIncluded) product.IncludesCommercialTechnicalAdvice = request.IncludesCommercialTechnicalAdvice ?? true;
         if (request.IncludesCoordinatedDelivery.HasValue || defaultsToIncluded) product.IncludesCoordinatedDelivery = request.IncludesCoordinatedDelivery ?? true;
@@ -452,6 +454,26 @@ public static class CommercialWriteEndpoints
         if (request.PriceTaxMode is not null) product.PriceTaxMode = request.PriceTaxMode.Trim().ToLowerInvariant();
         if (request.PriceVisible.HasValue) product.PriceVisible = request.PriceVisible.Value;
         if (request.StockStatus is not null) product.StockStatus = request.StockStatus.Trim();
+        if (request.RentalPriceDay.ValueKind != JsonValueKind.Undefined) product.RentalPriceDay = ReadOptionalNumber(request.RentalPriceDay);
+        if (request.RentalPriceWeek.ValueKind != JsonValueKind.Undefined) product.RentalPriceWeek = ReadOptionalNumber(request.RentalPriceWeek);
+        if (request.RentalPriceMonth.ValueKind != JsonValueKind.Undefined) product.RentalPriceMonth = ReadOptionalNumber(request.RentalPriceMonth);
+        if (request.RentalIncludesTechnicalAdvice.HasValue) product.RentalIncludesTechnicalAdvice = request.RentalIncludesTechnicalAdvice.Value;
+        if (request.RentalIncludesOnsiteService.HasValue) product.RentalIncludesOnsiteService = request.RentalIncludesOnsiteService.Value;
+        if (request.RentalIncludesTransportCoordination.HasValue) product.RentalIncludesTransportCoordination = request.RentalIncludesTransportCoordination.Value;
+        if (product.CommercialMode == ProductCommercialModes.Rental)
+        {
+            product.Condition = ProductConditions.NotApplicable;
+            product.StockStatus = StockStatuses.OnRequest;
+            product.Price = null;
+            product.PriceCurrency = ProductPriceCurrencies.Clp;
+            product.PriceTaxMode = ProductPriceTaxModes.PlusVat;
+            product.IncludesTechnicalReview = product.IncludesCommercialTechnicalAdvice = product.IncludesCoordinatedDelivery = false;
+        }
+        else
+        {
+            product.RentalPriceDay = product.RentalPriceWeek = product.RentalPriceMonth = null;
+            product.RentalIncludesTechnicalAdvice = product.RentalIncludesOnsiteService = product.RentalIncludesTransportCoordination = false;
+        }
         if (request.IsFeatured.HasValue) product.IsFeatured = request.IsFeatured.Value;
         if (request.IsPublished.HasValue) product.IsPublished = request.IsPublished.Value;
         SetAudit(product, user, isCreate);
@@ -792,8 +814,25 @@ public static class CommercialWriteEndpoints
         return null;
     }
 
-    private static IResult? ValidateProductValues(ProductWriteDto request)
+    private static IResult? ValidateProductValues(ProductWriteDto request, string productType, Product? currentProduct = null)
     {
+        var mode = request.CommercialMode?.Trim() ?? currentProduct?.CommercialMode ?? ProductCommercialModes.Sale;
+        if (mode is not ProductCommercialModes.Sale and not ProductCommercialModes.Rental) return Results.BadRequest(new { detail = "invalid commercial_mode." });
+        if (mode == ProductCommercialModes.Rental)
+        {
+            if (productType != ProductTypes.Machinery) return Results.BadRequest(new { detail = "Rental is only available for machinery." });
+            if (request.PriceCurrency is not null && request.PriceCurrency != ProductPriceCurrencies.Clp) return Results.BadRequest(new { detail = "Rental requires CLP." });
+            if (request.PriceTaxMode is not null && request.PriceTaxMode != ProductPriceTaxModes.PlusVat) return Results.BadRequest(new { detail = "Rental requires plus_vat." });
+            if (request.Price is not null) return Results.BadRequest(new { detail = "Use the independent rental prices, not price." });
+        }
+        foreach (var rate in new[] { request.RentalPriceDay, request.RentalPriceWeek, request.RentalPriceMonth })
+        {
+            if (!IsOptionalNumber(rate, 0, 999999999999m, 0)) return Results.BadRequest(new { detail = "Rental prices must be non-negative whole CLP pesos or null." });
+            if (mode != ProductCommercialModes.Rental && rate.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null) return Results.BadRequest(new { detail = "Rental prices require rental mode." });
+        }
+        if (!IsOptionalNumber(request.PlatformHeightM, 0.01m, 999999.99m, 2) || !IsOptionalNumber(request.WorkingHeightM, 0.01m, 999999.99m, 2)) return Results.BadRequest(new { detail = "Heights must be positive metres with at most two decimals, or null." });
+        if (!IsOptionalNumber(request.Year, CommercialValidation.MinReasonableYear, DateTimeOffset.UtcNow.Year + CommercialValidation.MaxFutureYearOffset, 0)) return Results.BadRequest(new { detail = "year is outside the allowed range." });
+        if (!IsOptionalNumber(request.HoursMeter, 0, int.MaxValue, 0)) return Results.BadRequest(new { detail = "hours_meter must be a non-negative integer or null." });
         if (request.ProductType is not null && !ProductTypeValues.Contains(request.ProductType.Trim())) return Results.BadRequest(new { detail = "invalid product_type." });
         if (request.Condition is not null && !ProductConditionValues.Contains(request.Condition.Trim())) return Results.BadRequest(new { detail = "invalid condition." });
         if (request.StockStatus is not null && !StockStatusValues.Contains(request.StockStatus.Trim())) return Results.BadRequest(new { detail = "invalid stock_status." });
@@ -802,13 +841,17 @@ public static class CommercialWriteEndpoints
         if (request.MaximumLoadCapacityKg is <= 0) return Results.BadRequest(new { detail = "maximum_load_capacity_kg must be greater than zero." });
         if (!TryReadMachineWeight(request.MachineWeightKg, out _, out var machineWeightError))
             return Results.BadRequest(new { detail = machineWeightError });
-        if (request.WorkingHeightM is <= 0) return Results.BadRequest(new { detail = "working_height_m must be greater than zero." });
         if (request.TerrainType is not null && !CommercialValidation.IsAllowedProductTerrainType(request.TerrainType.Trim())) return Results.BadRequest(new { detail = "invalid terrain_type. Use indoor_smooth, outdoor or outdoor_slopes_and_ramps." });
         if (request.PowerSource is not null && !CommercialValidation.IsAllowedProductPowerSource(request.PowerSource.Trim())) return Results.BadRequest(new { detail = "invalid power_source." });
-        var maxYear = DateTimeOffset.UtcNow.Year + CommercialValidation.MaxFutureYearOffset;
-        if (request.Year is not null && (request.Year < CommercialValidation.MinReasonableYear || request.Year > maxYear)) return Results.BadRequest(new { detail = $"year must be between {CommercialValidation.MinReasonableYear} and {maxYear}." });
         return null;
     }
+
+    private static decimal? ReadOptionalNumber(JsonElement value) => value.ValueKind == JsonValueKind.Number ? value.GetDecimal() : null;
+
+    private static bool IsOptionalNumber(JsonElement value, decimal min, decimal max, int decimals) =>
+        value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+        || (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
+            && number >= min && number <= max && decimal.Round(number, decimals) == number);
 
     private static bool TryReadMachineWeight(JsonElement element, out decimal? value, out string? error)
     {

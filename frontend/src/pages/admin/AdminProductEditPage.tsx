@@ -54,6 +54,14 @@ function mapProductToFormValues(
     supplier: product.supplier?.id ?? null,
     technical_sheet: product.technical_sheet?.id ?? null,
     product_type: product.product_type,
+    commercial_mode: product.commercial_mode ?? 'sale',
+    platform_height_m: product.platform_height_m ?? null,
+    rental_price_day: product.rental_price_day ?? null,
+    rental_price_week: product.rental_price_week ?? null,
+    rental_price_month: product.rental_price_month ?? null,
+    rental_includes_technical_advice: product.rental_includes_technical_advice ?? false,
+    rental_includes_onsite_service: product.rental_includes_onsite_service ?? false,
+    rental_includes_transport_coordination: product.rental_includes_transport_coordination ?? false,
     condition: product.condition,
     short_description: product.short_description,
     description: product.description,
@@ -477,7 +485,7 @@ export function AdminProductEditPage() {
             <div className="admin-product-editor-sidebar">
               <section className="admin-block admin-block--compact admin-product-preview">
                 <h2>Vista previa pública</h2>
-                <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} existingImageId={selectedPending ? null : mainImage?.id} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
+                <ProductAdminPreview values={previewValues ?? initialValues} categories={categories} brands={brands} imageUrl={selectedPending?.previewUrl || PLACEHOLDER_IMAGE} existingImageId={selectedPending ? null : mainImage?.id} imageAlt={selectedPending?.altText.trim() || mainImage?.alt_text || (previewValues ?? initialValues).name || "Producto"} />
               </section>
               {mayDelete ? <section className="admin-block admin-block--compact admin-danger-zone admin-product-delete-panel">
                 <h2>Eliminar producto</h2>

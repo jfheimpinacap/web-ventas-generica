@@ -41,9 +41,11 @@
 
 
 .machinery-carousel__slide {
-  min-width: 100%;
+  flex: 0 0 100%;
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  align-content: start;
   gap: 0.75rem;
 }
 
@@ -244,24 +246,13 @@
 
 .featured-products__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
   gap: 0.75rem;
 }
 
-@media (min-width: 600px) {
-  .featured-products__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
-@media (min-width: 1050px) {
-  .featured-products__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1400px) {
-  .featured-products__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
 
 @media (max-width: 900px) {
-  .machinery-carousel__slide,
   .spare-offers__grid,
   .repair-services__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -284,7 +275,6 @@
     padding: 0 1.7rem;
   }
 
-  .machinery-carousel__slide,
   .spare-offers__grid,
   .repair-services__grid {
     grid-template-columns: minmax(0, 1fr);
@@ -295,9 +285,7 @@
   }
 }
 
-@media (max-width: 599px) {
-  .machinery-carousel__slide { grid-template-columns: minmax(0, 1fr); }
-}
+
 
 .product-detail {
   display: grid;
@@ -436,6 +424,10 @@
 }
 
 .product-detail__price-box {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  justify-self: start;
   border: 1px solid var(--color-accent-soft);
   border-radius: var(--radius-card);
   background: var(--color-surface-soft);
@@ -458,7 +450,8 @@
 
 .product-detail__price-box strong {
   color: var(--color-primary-text);
-  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  font-size: 1.35rem;
+  white-space: nowrap;
   line-height: 1.1;
 }
 
@@ -736,7 +729,7 @@
   }
 
   .machinery-carousel__slide {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
     gap: 0.9rem;
     scroll-snap-align: start;
   }
@@ -1020,7 +1013,6 @@
   padding: 1rem;
 }
 
-.home-preview--machinery_promotions .machinery-carousel__slide,
 .home-preview--repair_services .repair-services__grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1192,15 +1184,13 @@
 }
 
 @media (max-width: 900px) {
-  .home-preview--machinery_promotions .machinery-carousel__slide,
-  .home-preview--repair_services .repair-services__grid {
+    .home-preview--repair_services .repair-services__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  .home-preview--machinery_promotions .machinery-carousel__slide,
-  .home-preview--repair_services .repair-services__grid {
+    .home-preview--repair_services .repair-services__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1261,7 +1251,7 @@
 }
 
 .admin-home-preview--machinery .machinery-carousel__slide {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
   gap: 0.42rem;
 }
 
@@ -1482,3 +1472,14 @@
 .product-technical-sheet-modal__dialog :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 @media (max-width: 640px) { .product-technical-sheet-modal__backdrop { padding: .35rem; } .product-technical-sheet-modal__dialog { width: 100%; height: calc(100dvh - .7rem); max-height: calc(100dvh - .7rem); } .product-technical-sheet-modal__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .product-technical-sheet-modal__actions a:first-child { grid-column: 1 / -1; } .product-technical-sheet-modal__actions .btn { min-height: 44px; width: 100%; } }
 @media (max-width: 640px) { .machinery-sales-section { padding: 1.5rem 0; } .machinery-sales-section__grid { grid-template-columns: minmax(0, 1fr); } }
+
+.product-detail__price-box small { max-width: 32ch; }
+.product-detail__commercial > .rental-commercial { justify-self: start; max-width: 100%; }
+
+@media (max-width: 640px) {
+  .product-detail__price-box { padding: 0.5rem; }
+  .product-detail__price-box strong { font-size: 1rem; }
+  .featured-products { padding: 0.75rem; }
+  .machinery-carousel { padding: 0 0 2.75rem; }
+  .machinery-carousel > .carousel-control { top: auto; bottom: 0; transform: none; }
+}

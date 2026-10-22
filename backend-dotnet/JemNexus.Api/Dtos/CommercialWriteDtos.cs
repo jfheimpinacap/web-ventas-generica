@@ -58,10 +58,10 @@ public sealed record ProductWriteDto(
     string? Description,
     [property: StringLength(120)] string? Model,
     [property: StringLength(120)] string? Sku,
-    [property: JsonPropertyName("working_height_m")] decimal? WorkingHeightM,
+    [property: JsonPropertyName("working_height_m")] JsonElement WorkingHeightM,
     [property: JsonPropertyName("terrain_type"), StringLength(30)] string? TerrainType,
-    int? Year,
-    [property: JsonPropertyName("hours_meter")] int? HoursMeter,
+    JsonElement Year,
+    [property: JsonPropertyName("hours_meter")] JsonElement HoursMeter,
     [property: JsonPropertyName("maximum_load_capacity_kg")] decimal? MaximumLoadCapacityKg,
     [property: JsonPropertyName("machine_weight_kg")] JsonElement MachineWeightKg,
     [property: JsonPropertyName("power_source"), StringLength(30)] string? PowerSource,
@@ -74,7 +74,15 @@ public sealed record ProductWriteDto(
     [property: JsonPropertyName("price_visible")] bool? PriceVisible,
     [property: JsonPropertyName("stock_status"), StringLength(20)] string? StockStatus,
     [property: JsonPropertyName("is_featured")] bool? IsFeatured,
-    [property: JsonPropertyName("is_published")] bool? IsPublished);
+    [property: JsonPropertyName("is_published")] bool? IsPublished,
+    [property: JsonPropertyName("commercial_mode")] string? CommercialMode,
+    [property: JsonPropertyName("rental_price_day")] JsonElement RentalPriceDay,
+    [property: JsonPropertyName("rental_price_week")] JsonElement RentalPriceWeek,
+    [property: JsonPropertyName("rental_price_month")] JsonElement RentalPriceMonth,
+    [property: JsonPropertyName("platform_height_m")] JsonElement PlatformHeightM,
+    [property: JsonPropertyName("rental_includes_technical_advice")] bool? RentalIncludesTechnicalAdvice,
+    [property: JsonPropertyName("rental_includes_onsite_service")] bool? RentalIncludesOnsiteService,
+    [property: JsonPropertyName("rental_includes_transport_coordination")] bool? RentalIncludesTransportCoordination);
 
 public sealed record ProductSpecWriteDto(
     int? Product,

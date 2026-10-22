@@ -225,7 +225,7 @@ test('rangos actúan tanto sobre resultados como contadores, sin usar precios oc
 test('la consulta pública comparte búsqueda y restricciones fijas, sin filtros por opción', () => {
   const a = model('search=SKU-123&brand=1&category=611&ordering=price')
   const b = model('search=SKU-123&brand=2&category=612&stock_status=available')
-  assert.deepEqual(catalogRequestParams(a.context, a.params), { search: 'SKU-123', product_type: 'machinery', condition: 'new' })
+  assert.deepEqual(catalogRequestParams(a.context, a.params), { search: 'SKU-123', product_type: 'machinery', condition: 'new', commercial_mode: 'sale' })
   assert.deepEqual(catalogRequestParams(a.context, a.params), catalogRequestParams(b.context, b.params))
   // The public API already applied search (including Description/SKU) to this input.
   const searched = model('search=SKU-123', newConfig, [products[1]])

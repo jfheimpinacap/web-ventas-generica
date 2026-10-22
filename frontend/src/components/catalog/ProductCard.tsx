@@ -1,3 +1,5 @@
+import { isRentalProduct } from '../../utils/rental'
+import { RentalRates } from './RentalRates'
 import { Link } from 'react-router-dom'
 
 import { resolveMediaUrl } from '../../services/api'
@@ -15,9 +17,10 @@ interface ProductCardProps {
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/111827/F3F4F6?text=Producto'
 
 export function ProductCard({ product, promotionalLabel, trackingLocation = 'catalog' }: ProductCardProps) {
+  const isRental = isRentalProduct(product)
   const imageUrl = resolveMediaUrl(product.main_image?.image) || PLACEHOLDER_IMAGE
   const model = product.model?.trim() || null
-  const hasUsedMachineryYear = product.product_type === 'machinery'
+  const hasUsedMachineryYear = !isRental && product.product_type === 'machinery'
     && product.condition === 'used'
     && Number.isInteger(product.year)
     && product.year !== null
@@ -38,20 +41,24 @@ export function ProductCard({ product, promotionalLabel, trackingLocation = 'cat
       </Link>
       <div className="product-card__content">
         <div className="product-card__badges">
-          <span className="badge badge--condition">{formatProductCondition(product)}</span>
-          <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span>
+          {isRental ? <span className="badge badge--condition">Maquinaria para arriendo</span> : <><span className="badge badge--condition">{formatProductCondition(product)}</span>
+          <span className="badge badge--stock">{formatStockStatus(product.stock_status)}</span></>}
         </div>
         <h3>{product.name}</h3>
-        {model ? <p className="product-card__model">{model}</p> : null}
+        {!isRental && model ? <p className="product-card__model">{model}</p> : null}
         <ProductTechnicalData
           productType={product.product_type}
           condition={product.condition}
           workingHeightM={product.working_height_m}
           maximumLoadCapacityKg={product.maximum_load_capacity_kg}
           powerSource={product.power_source}
+          commercialMode={product.commercial_mode}
+          brandName={product.brand?.name} model={product.model} machineWeightKg={product.machine_weight_kg} platformHeightM={product.platform_height_m}
           terrainType={product.terrain_type}
         />
-        <p className="product-card__price home-product-price">{formatPrice(product)}</p>
+        <div className="product-card__pricing">
+          {isRental ? <RentalRates product={product} /> : <p className="product-card__price home-product-price">{formatPrice(product)}</p>}
+        </div>
       </div>
       <div className="product-card__actions">
         <Link className="btn btn--accent" to={`/producto/${product.slug}`} onClick={() => trackProductDetailClick({ product_id: product.id, product_name: product.name, location: trackingLocation })}>

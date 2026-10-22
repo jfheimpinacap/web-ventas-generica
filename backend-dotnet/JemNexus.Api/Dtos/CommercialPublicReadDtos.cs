@@ -88,7 +88,7 @@ public sealed record PublicProductListReadDto(
     PublicCategoryReadDto Category,
     PublicBrandReadDto? Brand,
     string ProductType,
-    string Condition,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Condition,
     string ShortDescription,
     string? Model,
     decimal? WorkingHeightM,
@@ -100,10 +100,19 @@ public sealed record PublicProductListReadDto(
     string PriceCurrency,
     string PriceTaxMode,
     bool PriceVisible,
-    string StockStatus,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? StockStatus,
     bool IsFeatured,
     PublicProductImageReadDto? MainImage)
 {
+    public string CommercialMode { get; init; } = ProductCommercialModes.Sale;
+    public decimal? RentalPriceDay { get; init; }
+    public decimal? RentalPriceWeek { get; init; }
+    public decimal? RentalPriceMonth { get; init; }
+    public decimal? PlatformHeightM { get; init; }
+    public bool RentalIncludesTechnicalAdvice { get; init; }
+    public bool RentalIncludesOnsiteService { get; init; }
+    public bool RentalIncludesTransportCoordination { get; init; }
+    public decimal? MachineWeightKg { get; init; }
     public static PublicProductListReadDto FromProduct(Product product) => new(
         product.Id,
         product.Name,
@@ -111,7 +120,7 @@ public sealed record PublicProductListReadDto(
         PublicCategoryReadDto.FromCategory(product.Category),
         product.Brand is null ? null : PublicBrandReadDto.FromBrand(product.Brand),
         product.ProductType,
-        product.Condition,
+        product.CommercialMode == ProductCommercialModes.Rental ? null : product.Condition,
         product.ShortDescription,
         product.Model,
         product.WorkingHeightM,
@@ -119,18 +128,29 @@ public sealed record PublicProductListReadDto(
         product.PowerSource,
         product.TerrainType,
         product.Year,
-        product.Price,
+        product.CommercialMode == ProductCommercialModes.Rental ? null : product.Price,
         product.PriceCurrency,
         product.PriceTaxMode,
         product.PriceVisible,
-        product.StockStatus,
+        product.CommercialMode == ProductCommercialModes.Rental ? null : product.StockStatus,
         product.IsFeatured,
         product.Images
             .OrderByDescending(image => image.IsMain)
             .ThenBy(image => image.Order)
             .ThenBy(image => image.Id)
             .Select(PublicProductImageReadDto.FromImage)
-            .FirstOrDefault());
+            .FirstOrDefault())
+    {
+        CommercialMode = product.CommercialMode,
+        RentalPriceDay = product.PriceVisible ? product.RentalPriceDay : null,
+        RentalPriceWeek = product.PriceVisible ? product.RentalPriceWeek : null,
+        RentalPriceMonth = product.PriceVisible ? product.RentalPriceMonth : null,
+        PlatformHeightM = product.PlatformHeightM,
+        RentalIncludesTechnicalAdvice = product.RentalIncludesTechnicalAdvice,
+        RentalIncludesOnsiteService = product.RentalIncludesOnsiteService,
+        RentalIncludesTransportCoordination = product.RentalIncludesTransportCoordination,
+        MachineWeightKg = product.MachineWeightKg,
+    };
 }
 
 public sealed record PublicProductDetailReadDto(
@@ -140,7 +160,7 @@ public sealed record PublicProductDetailReadDto(
     PublicCategoryReadDto Category,
     PublicBrandReadDto? Brand,
     string ProductType,
-    string Condition,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Condition,
     string ShortDescription,
     string Description,
     string? Model,
@@ -159,13 +179,21 @@ public sealed record PublicProductDetailReadDto(
     string PriceCurrency,
     string PriceTaxMode,
     bool PriceVisible,
-    string StockStatus,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? StockStatus,
     bool IsFeatured,
     PublicProductImageReadDto? MainImage,
     IReadOnlyList<PublicProductImageReadDto> Images,
     IReadOnlyList<PublicProductSpecReadDto> Specs,
     PublicTechnicalSheetReadDto? TechnicalSheet)
 {
+    public string CommercialMode { get; init; } = ProductCommercialModes.Sale;
+    public decimal? RentalPriceDay { get; init; }
+    public decimal? RentalPriceWeek { get; init; }
+    public decimal? RentalPriceMonth { get; init; }
+    public decimal? PlatformHeightM { get; init; }
+    public bool RentalIncludesTechnicalAdvice { get; init; }
+    public bool RentalIncludesOnsiteService { get; init; }
+    public bool RentalIncludesTransportCoordination { get; init; }
     public static PublicProductDetailReadDto FromProduct(Product product)
     {
         var images = product.Images
@@ -182,7 +210,7 @@ public sealed record PublicProductDetailReadDto(
             PublicCategoryReadDto.FromCategory(product.Category),
             product.Brand is null ? null : PublicBrandReadDto.FromBrand(product.Brand),
             product.ProductType,
-            product.Condition,
+            product.CommercialMode == ProductCommercialModes.Rental ? null : product.Condition,
             product.ShortDescription,
             product.Description,
             product.Model,
@@ -197,11 +225,11 @@ public sealed record PublicProductDetailReadDto(
             product.IncludesTechnicalReview,
             product.IncludesCommercialTechnicalAdvice,
             product.IncludesCoordinatedDelivery,
-            product.Price,
+            product.CommercialMode == ProductCommercialModes.Rental ? null : product.Price,
             product.PriceCurrency,
             product.PriceTaxMode,
             product.PriceVisible,
-            product.StockStatus,
+            product.CommercialMode == ProductCommercialModes.Rental ? null : product.StockStatus,
             product.IsFeatured,
             images.FirstOrDefault(),
             images,
@@ -210,7 +238,17 @@ public sealed record PublicProductDetailReadDto(
                 .ThenBy(spec => spec.Id)
                 .Select(PublicProductSpecReadDto.FromSpec)
                 .ToList(),
-            CommercialPublicReadEndpoints.ToPublicTechnicalSheet(product));
+            CommercialPublicReadEndpoints.ToPublicTechnicalSheet(product))
+        {
+            CommercialMode = product.CommercialMode,
+            RentalPriceDay = product.PriceVisible ? product.RentalPriceDay : null,
+            RentalPriceWeek = product.PriceVisible ? product.RentalPriceWeek : null,
+            RentalPriceMonth = product.PriceVisible ? product.RentalPriceMonth : null,
+            PlatformHeightM = product.PlatformHeightM,
+            RentalIncludesTechnicalAdvice = product.RentalIncludesTechnicalAdvice,
+            RentalIncludesOnsiteService = product.RentalIncludesOnsiteService,
+            RentalIncludesTransportCoordination = product.RentalIncludesTransportCoordination,
+        };
     }
 }
 

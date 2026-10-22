@@ -35,7 +35,7 @@ if (count(template, HEAD_START) !== 1 || count(template, HEAD_END) !== 1) throw 
 process.env.NODE_ENV = 'production'
 const server = await import(pathToFileURL(serverEntry).href)
 const routes = server.PRERENDER_ROUTES
-if (!Array.isArray(routes) || routes.length !== 10 || new Set(routes).size !== routes.length) throw new Error('Allowlist de prerender inválida.')
+if (!Array.isArray(routes) || routes.length !== 11 || new Set(routes).size !== routes.length) throw new Error('Allowlist de prerender inválida.')
 
 const noindexHead = '<title>JEM Nexus | Resultados filtrados</title>\n    <meta name="description" content="Explora resultados filtrados del catálogo de JEM Nexus." />\n    <meta name="robots" content="noindex,nofollow" data-jem-seo="true" />'
 const stagingDir = join(frontendDir, '.prerender-output')

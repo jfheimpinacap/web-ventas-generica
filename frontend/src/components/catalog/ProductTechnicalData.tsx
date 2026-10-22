@@ -1,5 +1,6 @@
 import type { ProductCondition, ProductPowerSource, ProductTerrainType, ProductType } from '../../types/catalog'
 import {
+  formatMachineWeightKg,
   formatMaximumLoadCapacityKg,
   formatProductPowerSource,
   formatProductTerrainType,
@@ -12,6 +13,11 @@ interface ProductTechnicalDataProps {
   workingHeightM?: number | null
   maximumLoadCapacityKg?: number | null
   powerSource?: ProductPowerSource | null
+  commercialMode?: 'sale' | 'rental'
+  brandName?: string
+  model?: string | null
+  machineWeightKg?: number | null
+  platformHeightM?: number | null
   terrainType?: ProductTerrainType | null
 }
 
@@ -21,11 +27,17 @@ export function ProductTechnicalData({
   workingHeightM,
   maximumLoadCapacityKg,
   powerSource,
-  terrainType,
+  terrainType, commercialMode, brandName, model, machineWeightKg, platformHeightM,
 }: ProductTechnicalDataProps) {
-  if (productType !== 'machinery' || (condition !== 'new' && condition !== 'used')) return null
+  if (productType !== 'machinery' || (commercialMode !== 'rental' && condition !== 'new' && condition !== 'used')) return null
 
   const items = [
+    ...(commercialMode === 'rental' ? [
+      { label: 'Marca', value: brandName },
+      { label: 'Peso de la máquina', value: formatMachineWeightKg(machineWeightKg) },
+      { label: 'Modelo', value: model?.trim() },
+    ] : []),
+    { label: 'Altura de plataforma', value: formatWorkingHeightM(platformHeightM) },
     { label: 'Altura de trabajo', value: formatWorkingHeightM(workingHeightM) },
     { label: 'Capacidad de carga', value: formatMaximumLoadCapacityKg(maximumLoadCapacityKg) },
     { label: 'Fuente de energía', value: formatProductPowerSource(powerSource) },
