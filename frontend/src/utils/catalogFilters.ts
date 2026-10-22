@@ -1,9 +1,11 @@
+import { catalogPrice, isRentalProduct } from './rental.ts'
 import type { Brand, Category, ProductCondition, ProductListItem, ProductQueryParams, ProductType } from '../types/catalog'
 
 export interface CommercialCatalogConfig {
   title: string
   description: string
-  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada' | '/repuestos' | '/servicios'
+  canonicalPath: '/maquinaria-nueva' | '/maquinaria-usada' | '/maquinaria-arriendo' | '/repuestos' | '/servicios'
+  commercialMode?: 'sale' | 'rental'
   fixedProductType: ProductType
   fixedCondition?: 'new' | 'used'
 }
@@ -11,6 +13,7 @@ export interface CommercialCatalogConfig {
 export interface CatalogContext {
   key: string
   title: string
+  commercialMode?: 'sale' | 'rental'
   productType: ProductType | ''
   fixedCondition?: ProductCondition
   root: Category | null
@@ -50,6 +53,7 @@ export function resolveCatalogContext(categories: Category[], params: URLSearchP
   if (config) return {
     key: config.canonicalPath,
     title: config.fixedProductType === 'machinery' && config.fixedCondition ? `Maquinarias ${config.fixedCondition === 'used' ? 'usadas' : 'nuevas'}` : config.title,
+    commercialMode: config.commercialMode ?? 'sale',
     productType: config.fixedProductType,
     fixedCondition: config.fixedCondition,
     root: null,
@@ -60,7 +64,7 @@ export function resolveCatalogContext(categories: Category[], params: URLSearchP
   const root = pinned ?? commonRoot
   const legacyType = params.get('product_type') ?? ''
   const productType = root?.product_type ?? (Object.prototype.hasOwnProperty.call(TYPE_LABELS, legacyType) ? legacyType as ProductType : '')
-  return { key: root ? `root:${root.id}` : `catalog:${productType}`, title: root?.name ?? (productType ? TYPE_LABELS[productType] : 'Catálogo'), productType, root }
+  return { commercialMode: 'sale', key: root ? `root:${root.id}` : `catalog:${productType}`, title: root?.name ?? (productType ? TYPE_LABELS[productType] : 'Catálogo'), productType, root }
 }
 
 export function contextCategories(categories: Category[], context: CatalogContext): Category[] {
@@ -95,8 +99,8 @@ export function catalogSelections(params: URLSearchParams, categories: Category[
     // remain an OR option, including all its descendants alongside its siblings.
     category: categoryValues.length === 1 && categoryValues[0] === String(context.root?.id) ? [] : categoryValues,
     brand: [...new Set(normalize('brand'))],
-    condition: context.fixedCondition ? [] : readFacetValues(params, 'condition'),
-    stock_status: readFacetValues(params, 'stock_status'),
+    condition: context.fixedCondition || context.commercialMode === 'rental' ? [] : readFacetValues(params, 'condition'),
+    stock_status: context.commercialMode === 'rental' ? [] : readFacetValues(params, 'stock_status'),
   }
 }
 
@@ -104,6 +108,7 @@ export function contextProducts(products: ProductListItem[], categories: Categor
   const eligibleIds = new Set(contextCategories(categories, context).map((category) => category.id))
   return [...new Map(products.filter((product) => (
     product.is_published !== false && product.category.is_active !== false
+    && (product.commercial_mode ?? 'sale') === (context.commercialMode ?? 'sale')
     && product.brand?.is_active !== false && product.stock_status !== 'sold'
     && (!context.root || eligibleIds.has(product.category.id))
     && (!context.productType || product.product_type === context.productType)
@@ -114,7 +119,7 @@ export function contextProducts(products: ProductListItem[], categories: Categor
 export function catalogRequestParams(context: CatalogContext, params: URLSearchParams): ProductQueryParams {
   // Search stays public/server-side: it also searches Description and spare-part SKU,
   // neither of which is exposed by the public list DTO. No discrete filters here.
-  return { product_type: context.productType, condition: context.fixedCondition ?? '', search: params.get('search') ?? '' }
+  return { commercial_mode: context.commercialMode ?? 'sale', product_type: context.productType, condition: context.fixedCondition ?? '', search: params.get('search') ?? '' }
 }
 
 export function filterCatalogProducts(products: ProductListItem[], categories: Category[], selections: CatalogSelections, params: URLSearchParams, omit?: FacetKey): ProductListItem[] {
@@ -131,7 +136,7 @@ export function filterCatalogProducts(products: ProductListItem[], categories: C
     if (omit !== 'condition' && selections.condition.length && !selections.condition.includes(product.condition)) return false
     if (omit !== 'stock_status' && selections.stock_status.length && !selections.stock_status.includes(product.stock_status)) return false
     if (min !== null || max !== null) {
-      const price = product.price_visible && product.price !== null ? Number(product.price) : NaN
+      const price = catalogPrice(product) ?? NaN
       if (!Number.isFinite(price) || (min !== null && price < min) || (max !== null && price > max)) return false
     }
     return true
@@ -143,7 +148,7 @@ export function catalogFacets(base: ProductListItem[], categories: Category[], b
   const brandIds = new Set([...base.map((product) => String(product.brand?.id)), ...selections.brand])
   const brandOptions = brands.filter((brand) => brand.is_active !== false && brandIds.has(String(brand.id))).map((brand) => ({ value: String(brand.id), label: brand.name }))
   const discreteOptions = (key: 'condition' | 'stock_status', labels: Record<string, string>) => Object.entries(labels)
-    .filter(([value]) => base.some((product) => product[key] === value) || selections[key].includes(value))
+    .filter(([value]) => base.some((product) => !isRentalProduct(product) && product[key] === value) || selections[key].includes(value))
     .map(([value, label]) => ({ value, label }))
   const options = { category: categoryOptions, brand: brandOptions, condition: discreteOptions('condition', CONDITION_LABELS), stock_status: discreteOptions('stock_status', STOCK_LABELS) }
   const result = {} as Record<FacetKey, FacetOption[]>

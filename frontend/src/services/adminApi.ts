@@ -1,3 +1,4 @@
+import { parseRentalPriceInput } from '../utils/rental'
 import type {
   Brand,
   BrandFormValues,
@@ -242,6 +243,15 @@ export function normalizeProductListItem(value: unknown): ProductListItem {
       pick(record, 'product_type', 'productType'),
       'machinery',
     ) as ProductType,
+    commercial_mode: pick(record, 'commercial_mode', 'commercialMode') === 'rental' ? 'rental' : 'sale',
+    rental_price_day: toNullableString(pick(record, 'rental_price_day', 'rentalPriceDay')),
+    rental_price_week: toNullableString(pick(record, 'rental_price_week', 'rentalPriceWeek')),
+    rental_price_month: toNullableString(pick(record, 'rental_price_month', 'rentalPriceMonth')),
+    platform_height_m: toNullableFiniteNumber(pick(record, 'platform_height_m', 'platformHeightM')),
+    machine_weight_kg: toNullableFiniteNumber(pick(record, 'machine_weight_kg', 'machineWeightKg')),
+    rental_includes_technical_advice: toBoolean(pick(record, 'rental_includes_technical_advice', 'rentalIncludesTechnicalAdvice')),
+    rental_includes_onsite_service: toBoolean(pick(record, 'rental_includes_onsite_service', 'rentalIncludesOnsiteService')),
+    rental_includes_transport_coordination: toBoolean(pick(record, 'rental_includes_transport_coordination', 'rentalIncludesTransportCoordination')),
     condition: toStringValue(
       pick(record, 'condition'),
       'not_applicable',
@@ -305,10 +315,7 @@ export function normalizeProductDetail(value: unknown): ProductDetail {
     description: toStringValue(pick(record, 'description')),
     model: toStringValue(pick(record, 'model')),
     sku: toStringValue(pick(record, 'sku')),
-    hours_meter:
-      pick(record, 'hours_meter', 'hoursMeter') === null
-        ? null
-        : toNumber(pick(record, 'hours_meter', 'hoursMeter')) || null,
+    hours_meter: toNullableFiniteNumber(pick(record, 'hours_meter', 'hoursMeter')),
     maximum_load_capacity_kg: toNullableFiniteNumber(
       pick(record, 'maximum_load_capacity_kg', 'maximumLoadCapacityKg'),
     ),
@@ -531,6 +538,13 @@ function normalizeProductWritePayload<T extends Partial<ProductFormValues>>(payl
     Object.assign(nextPayload, { machine_weight_kg: payload.machine_weight_kg ?? null })
   }
 
+  for (const key of ['rental_price_day', 'rental_price_week', 'rental_price_month'] as const) {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      const parsed = parseRentalPriceInput(payload[key])
+      if (parsed.error) throw new Error(parsed.error)
+      Object.assign(nextPayload, { [key]: parsed.value })
+    }
+  }
   if (!Object.prototype.hasOwnProperty.call(payload, 'price')) return nextPayload
 
   return {

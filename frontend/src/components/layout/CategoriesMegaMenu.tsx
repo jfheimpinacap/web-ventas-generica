@@ -73,6 +73,7 @@ export function CategoriesMegaMenu({ isOpen, categories, activeCategoryId = null
     <div className="categories-modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section id="categories-mega-menu" className="categories-modal__panel" aria-label="Navegación de categorías">
         <button type="button" className="categories-modal__close" onClick={onClose} aria-label="Cerrar categorías">✕</button>
+        <Link className="categories-modal__rental-link" to="/maquinaria-arriendo" onClick={onClose}>Maquinaria para arriendo</Link>
         {roots.length ? (
           <>
             <div className="categories-modal__content">

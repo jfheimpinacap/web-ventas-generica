@@ -51,6 +51,11 @@ const usedMachineryConfig: CommercialCatalogConfig = {
   fixedCondition: 'used',
 }
 
+const rentalMachineryConfig: CommercialCatalogConfig = {
+  title: 'Maquinaria para arriendo', description: '',
+  canonicalPath: '/maquinaria-arriendo', fixedProductType: 'machinery', commercialMode: 'rental',
+}
+
 const sparePartsConfig: CommercialCatalogConfig = {
   title: 'Repuestos',
   description: 'Encuentra repuestos publicados y revisa sus datos antes de enviar una consulta o solicitud de cotización.',
@@ -72,6 +77,7 @@ export function AppRouter() {
       <Route path="/catalogo" element={<CatalogPage />} />
       <Route path="/maquinaria-nueva" element={<CatalogPage commercialConfig={newMachineryConfig} />} />
       <Route path="/maquinaria-usada" element={<CatalogPage commercialConfig={usedMachineryConfig} />} />
+      <Route path="/maquinaria-arriendo" element={<CatalogPage commercialConfig={rentalMachineryConfig} />} />
       <Route path="/repuestos" element={<CatalogPage commercialConfig={sparePartsConfig} />} />
       <Route path="/servicios" element={<CatalogPage commercialConfig={servicesConfig} />} />
       <Route path="/producto/:slug" element={<ProductDetailPage />} />

@@ -69,3 +69,9 @@
   .admin-products-filter-field--search, .admin-products-filter-actions { grid-column: auto; }
   .admin-products-filter-actions .btn { flex: 1 1 125px; }
 }
+
+.admin-rental-prices { display: grid; gap: 0.8rem; }
+.admin-rental-prices > label { display: grid; grid-template-columns: minmax(7rem, auto) minmax(0, 1fr); align-items: center; gap: 0.5rem; }
+.admin-rental-prices__input { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; min-width: 0; }
+.admin-rental-prices__input input { min-width: 0; width: 100%; }
+@media (max-width: 480px) { .admin-rental-prices > label { grid-template-columns: minmax(0, 1fr); } }

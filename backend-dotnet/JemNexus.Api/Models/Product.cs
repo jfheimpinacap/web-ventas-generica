@@ -14,6 +14,14 @@ public sealed class Product
     public int? TechnicalSheetId { get; set; }
     public TechnicalSheet? TechnicalSheet { get; set; }
     public string ProductType { get; set; } = ProductTypes.Machinery;
+    public string CommercialMode { get; set; } = ProductCommercialModes.Sale;
+    public decimal? RentalPriceDay { get; set; }
+    public decimal? RentalPriceWeek { get; set; }
+    public decimal? RentalPriceMonth { get; set; }
+    public bool RentalIncludesTechnicalAdvice { get; set; }
+    public bool RentalIncludesOnsiteService { get; set; }
+    public bool RentalIncludesTransportCoordination { get; set; }
+    public decimal? PlatformHeightM { get; set; }
     public string Condition { get; set; } = ProductConditions.NotApplicable;
     public string ShortDescription { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -97,4 +105,10 @@ public static class ProductPriceTaxModes
 {
     public const string PlusVat = "plus_vat";
     public const string VatIncluded = "vat_included";
+}
+
+public static class ProductCommercialModes
+{
+    public const string Sale = "sale";
+    public const string Rental = "rental";
 }

@@ -49,6 +49,11 @@ export async function getProductBySlug(slug: string) {
   return normalizeProductDetail(response) as ProductDetail
 }
 
+export async function getProductById(id: number) {
+  const response = await apiRequest<unknown>(publicReadPath(`/products/${id}/`))
+  return normalizeProductDetail(response) as ProductDetail
+}
+
 let categoriesRequest: Promise<Category[]> | null = null
 
 export function getCategories() {

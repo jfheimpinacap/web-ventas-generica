@@ -16,8 +16,8 @@ interface LayoutProps extends PropsWithChildren {
 
 export function Layout({ children, mobileProduct, suppressMobileConversion = false, fullWidthHero = false, catalogSidebar }: LayoutProps) {
   const location = useLocation()
-  const showSidebar = ['/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios'].includes(location.pathname)
-  const generalRoutes = ['/', '/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/repuestos', '/servicios', '/sobre-nosotros', '/preguntas-frecuentes']
+  const showSidebar = ['/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/maquinaria-arriendo', '/repuestos', '/servicios'].includes(location.pathname)
+  const generalRoutes = ['/', '/catalogo', '/maquinaria-nueva', '/maquinaria-usada', '/maquinaria-arriendo', '/repuestos', '/servicios', '/sobre-nosotros', '/preguntas-frecuentes']
   const showMobileConversion = !suppressMobileConversion && (generalRoutes.includes(location.pathname) || (location.pathname.startsWith('/producto/') && Boolean(mobileProduct)))
 
   return (

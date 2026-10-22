@@ -162,6 +162,7 @@ public static class CommercialPublicReadEndpoints
         var validationErrors = CommercialValidation.ValidateQuoteRequest(quote);
         if (validationErrors.Count > 0) return Results.BadRequest(new { detail = validationErrors });
 
+        if (product?.CommercialMode == ProductCommercialModes.Rental) quote.Message = "Solicitud de arriendo. " + quote.Message;
         dbContext.QuoteRequests.Add(quote);
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -194,13 +195,23 @@ public static class CommercialPublicReadEndpoints
         [FromQuery(Name = "category")] string? category,
         [FromQuery(Name = "brand")] string? brand,
         [FromQuery(Name = "product_type")] string? productType,
+        [FromQuery(Name = "commercial_mode")] string? commercialMode,
         [FromQuery(Name = "condition")] string? condition,
         [FromQuery(Name = "stock_status")] string? stockStatus,
         [FromQuery(Name = "is_featured")] bool? isFeatured,
         [FromQuery(Name = "ordering")] string? ordering,
         CancellationToken cancellationToken)
     {
-        var query = PublicProductQuery.Apply(PublicProductReadQuery(dbContext.Products));
+        var mode = commercialMode ?? ProductCommercialModes.Sale;
+        if (mode is not ProductCommercialModes.Sale and not ProductCommercialModes.Rental) return Results.BadRequest(new { detail = "invalid commercial_mode." });
+        var query = PublicProductQuery.Apply(PublicProductReadQuery(dbContext.Products))
+            .Where(product => product.CommercialMode == mode);
+        if (mode == ProductCommercialModes.Rental)
+        {
+            query = query.Where(product => product.ProductType == ProductTypes.Machinery);
+            condition = null;
+            stockStatus = null;
+        }
 
         if (isFeatured.HasValue)
         {
@@ -208,7 +219,7 @@ public static class CommercialPublicReadEndpoints
         }
 
         query = ApplyPublicProductSearchAndFilters(query, search, category, brand, productType, condition, stockStatus);
-        query = ApplyPublicProductOrdering(query, ordering);
+        query = ApplyPublicProductOrdering(query, ordering, mode);
 
         var products = await query.ToListAsync(cancellationToken);
         return Results.Ok(products.Select(PublicProductListReadDto.FromProduct).ToList());
@@ -349,6 +360,7 @@ public static class CommercialPublicReadEndpoints
             .Where(promotion => promotion.EndsAt == null || promotion.EndsAt >= now)
             .Where(promotion => promotion.Product == null
                 || (promotion.Product.IsPublished
+                    && promotion.Product.CommercialMode == ProductCommercialModes.Sale
                     && promotion.Product.Category.IsActive
                     && (promotion.Product.Brand == null || promotion.Product.Brand.IsActive)
                     && promotion.Product.StockStatus != StockStatuses.Sold));
@@ -375,6 +387,7 @@ public static class CommercialPublicReadEndpoints
             .Include(item => item.Product).ThenInclude(product => product.Images)
             .Where(item => item.IsActive)
             .Where(item => item.Product.IsPublished)
+            .Where(item => item.Product.CommercialMode == ProductCommercialModes.Sale)
             .Where(item => item.Product.Category.IsActive)
             .Where(item => item.Product.Brand == null || item.Product.Brand.IsActive)
             .Where(item => item.Product.StockStatus != StockStatuses.Sold);
@@ -513,12 +526,12 @@ public static class CommercialPublicReadEndpoints
         return query;
     }
 
-    private static IQueryable<Product> ApplyPublicProductOrdering(IQueryable<Product> query, string? ordering) => (ordering ?? string.Empty) switch
+    private static IQueryable<Product> ApplyPublicProductOrdering(IQueryable<Product> query, string? ordering, string mode) => (ordering ?? string.Empty) switch
     {
         "name" => query.OrderBy(product => product.Name),
         "-name" => query.OrderByDescending(product => product.Name),
-        "price" => query.OrderBy(product => product.Price),
-        "-price" => query.OrderByDescending(product => product.Price),
+        "price" => query.OrderBy(product => mode == ProductCommercialModes.Rental ? (product.PriceVisible ? product.RentalPriceDay : null) : product.Price),
+        "-price" => query.OrderByDescending(product => mode == ProductCommercialModes.Rental ? (product.PriceVisible ? product.RentalPriceDay : null) : product.Price),
         _ => query.OrderByDescending(product => product.IsFeatured).ThenBy(product => product.Name).ThenBy(product => product.Id)
     };
 

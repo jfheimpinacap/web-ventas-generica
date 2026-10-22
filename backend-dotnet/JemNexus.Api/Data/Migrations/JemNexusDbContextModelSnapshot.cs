@@ -677,6 +677,17 @@ namespace JemNexus.Api.Data.Migrations
 
                     b.HasIndex("UpdatedById");
 
+
+                    b.Property<string>("CommercialMode").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)").HasDefaultValue("sale");
+                    b.Property<decimal?>("PlatformHeightM").HasColumnType("decimal(8,2)");
+                    b.Property<decimal?>("RentalPriceDay").HasColumnType("decimal(12,0)");
+                    b.Property<decimal?>("RentalPriceWeek").HasColumnType("decimal(12,0)");
+                    b.Property<decimal?>("RentalPriceMonth").HasColumnType("decimal(12,0)");
+                    b.Property<bool>("RentalIncludesTechnicalAdvice").ValueGeneratedOnAdd().HasColumnType("bit").HasDefaultValue(false);
+                    b.Property<bool>("RentalIncludesOnsiteService").ValueGeneratedOnAdd().HasColumnType("bit").HasDefaultValue(false);
+                    b.Property<bool>("RentalIncludesTransportCoordination").ValueGeneratedOnAdd().HasColumnType("bit").HasDefaultValue(false);
+                    b.HasIndex("CommercialMode", "ProductType");
+
                     b.ToTable("Products", (string)null);
                 });
 

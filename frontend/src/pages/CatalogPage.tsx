@@ -1,3 +1,4 @@
+import { catalogPrice } from '../utils/rental'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
@@ -53,9 +54,7 @@ function normalizeLabel(value: string) {
 }
 
 function getNumericPrice(product: ProductListItem) {
-  if (!product.price_visible || !product.price) return null
-  const parsedPrice = Number(product.price)
-  return Number.isNaN(parsedPrice) ? null : parsedPrice
+  return catalogPrice(product)
 }
 
 export function CatalogPage({ commercialConfig }: { commercialConfig?: CommercialCatalogConfig }) {
@@ -330,7 +329,7 @@ export function CatalogPage({ commercialConfig }: { commercialConfig?: Commercia
             <select value={sortValue} onChange={(event) => updateFilter('ordering', event.target.value)}>
               {ORDER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {context.commercialMode === 'rental' ? option.label.replace('Precio:', 'Precio día:') : option.label}
                 </option>
               ))}
             </select>

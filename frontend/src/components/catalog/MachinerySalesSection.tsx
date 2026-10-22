@@ -11,6 +11,11 @@ const salesOptions = [
     to: '/maquinaria-usada',
     image: 'https://jem-nexus.cl/imagenes-home/maquinaria-usada.png',
   },
+  {
+    label: 'Ver catálogo de maquinaria para arriendo',
+    to: '/maquinaria-arriendo',
+    image: '/images/maquinaria-arriendo.png',
+  },
 ] as const
 
 export function MachinerySalesSection() {
@@ -20,7 +25,7 @@ export function MachinerySalesSection() {
         {salesOptions.map((option) => (
           <article className="machinery-sales-card" key={option.to}>
             <Link className="machinery-sales-card__link" to={option.to} aria-label={option.label}>
-              <img className="machinery-sales-card__image" src={option.image} alt="" />
+              <img className="machinery-sales-card__image" src={option.image} alt={option.to === '/maquinaria-arriendo' ? 'Arriendo de maquinaria. Equipos para todo tipo de obras. Brazo articulado azul.' : ''} />
             </Link>
           </article>
         ))}
